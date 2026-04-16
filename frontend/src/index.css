@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+  body {
+    @apply min-h-screen bg-night-950 text-slate-100 antialiased;
+    background-image:
+      radial-gradient(ellipse 100% 80% at 10% -10%, rgba(244, 63, 94, 0.1), transparent 45%),
+      radial-gradient(ellipse 80% 50% at 90% 10%, rgba(99, 102, 241, 0.08), transparent 40%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(251, 191, 36, 0.04), transparent 50%);
+  }
+
+  /* 扫描线 + 微弱噪点科技感 */
+  body::after {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    opacity: 0.035;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.35) 2px,
+      rgba(0, 0, 0, 0.35) 4px
+    );
+    mix-blend-mode: overlay;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-white/10 bg-white/[0.04] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl;
+  }
+
+  .glass-hover {
+    @apply transition-all duration-300 hover:border-cyan-400/25 hover:bg-white/[0.06] hover:shadow-[0_0_50px_rgba(34,211,238,0.12)];
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-cyan-200 via-fuchsia-200 to-amber-200 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-warm {
+    @apply bg-gradient-to-br from-rose-300 via-amber-200 to-violet-300 bg-clip-text text-transparent;
+  }
+
+  /* 霓虹边线卡片 */
+  .neon-card {
+    @apply relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.08] to-transparent p-1;
+    background-clip: padding-box;
+  }
+
+  .neon-card-inner {
+    @apply rounded-[0.9rem] bg-night-950/90 p-5 backdrop-blur-sm;
+  }
+
+  /* 标题下划线能量条 */
+  .tech-underline {
+    @apply relative inline-block;
+  }
+
+  .tech-underline::after {
+    content: "";
+    @apply absolute -bottom-1 left-0 h-0.5 w-full rounded-full bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-400 opacity-80;
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
+  }
+}

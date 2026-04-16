@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('evidence.detail') }}: {{ signal_id }}</h1>
+<div id="evidence-meta" class="card">
+  <p><strong>Signal:</strong> {{ evidence.signal_id }}</p>
+  <p><strong>{{ t('common.trend') }}:</strong> <a href="{{ lang_url('/trend/' + evidence.trend_key) }}">{{ evidence.trend_key }}</a></p>
+  <p><strong>{{ t('common.source') }}:</strong> {{ evidence.source }}</p>
+  <p><strong>{{ t('common.url') }}:</strong> <a href="{{ evidence.evidence_url }}" target="_blank">{{ evidence.evidence_url }}</a></p>
+  <p><strong>{{ t('common.trace') }}:</strong> trend_scores -> trend_features -> evidence_signals -> normalized_events -> raw_events</p>
+</div>
+<div class="actions">
+  <a href="{{ lang_url('/trends') }}">{{ t('nav.trends') }}</a>
+</div>
+{% endblock %}

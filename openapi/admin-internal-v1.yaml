@@ -1,0 +1,18 @@
+openapi: 3.0.3
+info:
+  title: Agent Trend Admin/Internal API
+  version: v1
+paths:
+  /internal/run:
+    post:
+      responses:
+        '200': {description: OK}
+  /internal/runs/{run_id}:
+    get:
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: OK}

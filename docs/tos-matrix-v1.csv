@@ -1,0 +1,7 @@
+source,terms_url,terms_version,allowed_usage,prohibited_usage,attribution_rule,retention_limit_days,commercial_use,last_reviewed_at
+GitHub,https://docs.github.com/en/site-policy,2026-04-13,public metadata analytics,private data scraping,show source link and fetch time,365,allowed in scope,2026-04-13
+HuggingFace,https://huggingface.co/terms-of-service,2026-04-13,public metadata analytics,bypass auth,show source link,365,allowed in scope,2026-04-13
+HackerNews,https://www.ycombinator.com/legal/,2026-04-13,public post trend assistance,bulk redistribution,show source link,180,allowed in scope,2026-04-13
+ProductHunt,https://www.producthunt.com/terms,2026-04-13,public launch trend assistance,bulk redistribution,show source link,180,allowed in scope,2026-04-13
+Reddit,https://www.redditinc.com/policies,2026-04-13,public post trend assistance,terms violating redistribution,show source link,180,allowed in scope,2026-04-13
+MCP-Skills,https://github.com,2026-04-13,public index analytics,license violating reuse,show repo link,365,license scoped,2026-04-13

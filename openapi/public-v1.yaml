@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Agent Trend Public API
+  version: v1
+paths:
+  /api/v1/dashboard/summary:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/inspirations:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/trends:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/trends/{trend_key}:
+    get:
+      parameters:
+        - in: path
+          name: trend_key
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: OK}
+  /api/v1/trends/{trend_key}/timeline:
+    get:
+      parameters:
+        - in: path
+          name: trend_key
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: OK}
+  /api/v1/categories:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/meta/methodology:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/meta/taxonomy:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/signals/new:
+    get:
+      responses:
+        '200': {description: OK}
+  /api/v1/evidences/{signal_id}:
+    get:
+      parameters:
+        - in: path
+          name: signal_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: OK}
+  /api/v1/compliance/removal-requests:
+    post:
+      responses:
+        '200': {description: OK}
+  /api/v1/compliance/removal-requests/{ticket_id}:
+    get:
+      parameters:
+        - in: path
+          name: ticket_id
+          required: true
+          schema: {type: string}
+        - in: query
+          name: token
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: OK}

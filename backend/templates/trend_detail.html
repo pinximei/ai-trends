@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('trend.detail') }}: <span id="trend-title">{{ trend_key }}</span></h1>
+<p id="trend-meta" class="muted">{{ t('common.score') }} {{ trend.trend_score }} · {{ t('common.confidence') }} {{ trend.confidence }} · {{ t('common.lifecycle') }} {{ trend.lifecycle_stage }}</p>
+<h2>{{ t('trend.timeline') }}</h2>
+<ul id="trend-points">
+  {% for period_start, score in points %}
+  <li>{{ period_start }} : {{ score }}</li>
+  {% endfor %}
+</ul>
+<h2>{{ t('trend.next_step') }}</h2>
+<p id="suggestion" class="card">{{ t('trend.next_step_text') }}</p>
+<div class="actions">
+  <a href="{{ lang_url('/evidence/sig_001') }}">{{ t('evidence.detail') }}</a>
+  <a href="{{ lang_url('/trends') }}">{{ t('nav.trends') }}</a>
+</div>
+{% endblock %}

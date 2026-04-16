@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-view="{{ view_id|default('') }}" data-trend-key="{{ trend_key|default('') }}" data-signal-id="{{ signal_id|default('') }}">
+  <div class="page-bg" aria-hidden="true"></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="{{ lang_url('/') }}">
+        <span class="brand-mark">◇</span>
+        <span class="brand-text">AISoul</span>
+      </a>
+      <nav class="nav-main" aria-label="main">
+        <a href="{{ lang_url('/') }}">{{ t('nav.dashboard') }}</a>
+        <a href="{{ lang_url('/inspirations') }}">{{ t('nav.inspirations') }}</a>
+        <a href="{{ lang_url('/trends') }}">{{ t('nav.trends') }}</a>
+        <a href="{{ lang_url('/categories') }}">{{ t('nav.categories') }}</a>
+        <a href="{{ lang_url('/signals/new') }}">{{ t('nav.new_signals') }}</a>
+        <a href="{{ lang_url('/methodology') }}">{{ t('nav.methodology') }}</a>
+      </nav>
+      <div class="header-aside">
+        <nav class="nav-meta" aria-label="meta">
+          <a href="{{ lang_url('/legal/data-sources') }}">{{ t('nav.data_sources') }}</a>
+          <a href="{{ lang_url('/legal/privacy') }}">{{ t('nav.privacy') }}</a>
+          <a href="{{ lang_url('/legal/terms') }}">{{ t('nav.terms') }}</a>
+          <a href="{{ lang_url('/legal/removal-request') }}">{{ t('nav.removal') }}</a>
+          <a href="{{ lang_url('/admin') }}">{{ t('nav.admin') }}</a>
+        </nav>
+        <div class="lang-switch" role="group" aria-label="language">
+          <a class="lang-btn{% if lang == 'zh' %} is-active{% endif %}" href="{{ switch_to_zh }}">{{ t('lang.zh') }}</a>
+          <a class="lang-btn{% if lang == 'en' %} is-active{% endif %}" href="{{ switch_to_en }}">{{ t('lang.en') }}</a>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="main-content">
+    <div id="error-box" class="error" style="display:none" role="alert"></div>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <span>{{ t('footer.tagline') }}</span>
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>
