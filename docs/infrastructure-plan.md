@@ -2,7 +2,7 @@
 
 ## Runtime
 - Backend: FastAPI (`backend/app/main.py`)
-- Frontend pages: server-rendered templates under `backend/templates`
+- Frontend: Vite apps under `frontend/`（公开站）与 `frontend/admin/`（管理端）；后端仅提供 API
 - Database: SQLite for local MVP, schema in `db/schema-v1.sql`
 
 ## Deployment Targets
@@ -17,7 +17,6 @@
 - Removal request lifecycle auditable via ticket id
 
 ## Observability and Gates
-- Contract checks: `scripts/contract_test.py`
+- API smoke tests: `pytest tests/`（见 `pyproject.toml`）
 - Data quality checks: `monitoring/data_quality_gate.py`
-- E2E/API tests: `tests/e2e/core/test_core_flow.py`
-- CI workflow: `.github/workflows/ci-contract-test.yml`
+- CI workflow: `.github/workflows/ci.yml`
