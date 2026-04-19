@@ -1,0 +1,328 @@
+{
+  "items": [
+    {
+      "source": "github",
+      "label": "GitHub",
+      "api_base": "https://api.github.com/zen",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜通用·开源协作",
+      "scope_labels": [
+        "AI｜通用·开源协作"
+      ],
+      "notes": "【模板】GitHub REST；下方为连通性探测（/zen）。正式调用请用 api.github.com 文档中的路径；高配额建议填 PAT。",
+      "enabled": true
+    },
+    {
+      "source": "huggingface",
+      "label": "Hugging Face",
+      "api_base": "https://huggingface.co/api/models?limit=1",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜大模型/生态",
+      "scope_labels": [
+        "AI｜大模型/生态"
+      ],
+      "notes": "【模板】Hugging Face Hub；读私有或提配额请在下方填 HF_TOKEN。",
+      "enabled": true
+    },
+    {
+      "source": "huggingface_spaces",
+      "label": "Hugging Face Spaces",
+      "api_base": "https://huggingface.co/api/spaces?limit=1",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜Spaces·应用",
+      "scope_labels": [
+        "AI｜Spaces·应用"
+      ],
+      "notes": "【模板】Hugging Face Spaces；线上推理请用各 Space 的 Gradio/专用 URL，或配 HF_TOKEN。",
+      "enabled": true
+    },
+    {
+      "source": "reddit",
+      "label": "Reddit",
+      "api_base": "https://www.reddit.com/r/all/hot.json?limit=1",
+      "frequency": "daily_07:00",
+      "scope_label": "通用·社区",
+      "scope_labels": [
+        "通用·社区"
+      ],
+      "notes": "【模板】下方为公开 JSON 用于探测；OAuth 应用集成请改用 oauth.reddit.com 与开发者凭据（reddit.com/prefs/apps）。",
+      "enabled": true
+    },
+    {
+      "source": "hacker_news",
+      "label": "Hacker News",
+      "api_base": "https://hacker-news.firebaseio.com/v0/maxitem.json",
+      "frequency": "daily_07:00",
+      "scope_label": "通用·技术资讯",
+      "scope_labels": [
+        "通用·技术资讯"
+      ],
+      "notes": "Hacker News 官方 Firebase JSON API，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "product_hunt",
+      "label": "Product Hunt",
+      "api_base": "https://api.producthunt.com/v1/oauth/token",
+      "frequency": "daily_07:00",
+      "scope_label": "产品·创投",
+      "scope_labels": [
+        "产品·创投"
+      ],
+      "notes": "【模板】下方为 OAuth 端点（GET 常返回 403，「测试连接」仍视为可达）；业务调用为 GraphQL v2，请在开发者后台创建应用并填 Bearer Token。",
+      "enabled": true
+    },
+    {
+      "source": "mcp_skills",
+      "label": "MCP / Skills",
+      "api_base": "https://registry.npmjs.org/react/latest",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜Agent·MCP/Skills",
+      "scope_labels": [
+        "AI｜Agent·MCP/Skills"
+      ],
+      "notes": "【模板】npm 包元数据用于探测；MCP 请将可访问的 HTTP/SSE Base 填在下方；stdio 类需自建网关。",
+      "enabled": true
+    },
+    {
+      "source": "gitlab",
+      "label": "GitLab",
+      "api_base": "https://gitlab.com/api/v4/version",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜通用·开源协作",
+      "scope_labels": [
+        "AI｜通用·开源协作"
+      ],
+      "notes": "【模板】GitLab REST v4；自建实例请改为 https://你的域名/api/v4/... ；需鉴权时填 Token，认证选 GitLab PAT。",
+      "enabled": true
+    },
+    {
+      "source": "stackoverflow",
+      "label": "Stack Overflow",
+      "api_base": "https://api.stackexchange.com/2.3/info?site=stackoverflow",
+      "frequency": "daily_07:00",
+      "scope_label": "开发·问答",
+      "scope_labels": [
+        "开发·问答"
+      ],
+      "notes": "Stack Exchange API；公开配额可用，可选填 app key 提高限额。",
+      "enabled": true
+    },
+    {
+      "source": "arxiv",
+      "label": "arXiv",
+      "api_base": "https://export.arxiv.org/api/query?search_query=all&start=0&max_results=1",
+      "frequency": "daily_07:00",
+      "scope_label": "学术·论文",
+      "scope_labels": [
+        "学术·论文"
+      ],
+      "notes": "arXiv 开放元数据与摘要，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "open_meteo",
+      "label": "Open-Meteo",
+      "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
+      "frequency": "daily_07:00",
+      "scope_label": "气象·公开数据",
+      "scope_labels": [
+        "气象·公开数据"
+      ],
+      "notes": "气象与空气质量等，免 Key、非商用友好。",
+      "enabled": true
+    },
+    {
+      "source": "coingecko",
+      "label": "CoinGecko",
+      "api_base": "https://api.coingecko.com/api/v3/ping",
+      "frequency": "daily_07:00",
+      "scope_label": "加密·行情",
+      "scope_labels": [
+        "加密·行情"
+      ],
+      "notes": "加密资产行情；公开 tier 有速率限制，Pro 填 Key。",
+      "enabled": true
+    },
+    {
+      "source": "newsapi",
+      "label": "NewsAPI",
+      "api_base": "https://newsapi.org/v2/top-headlines?country=us",
+      "frequency": "daily_07:00",
+      "scope_label": "新闻·聚合",
+      "scope_labels": [
+        "新闻·聚合"
+      ],
+      "notes": "新闻聚合；无 Key 时探测可能为 401，填 Key 后保存再测。",
+      "enabled": true
+    },
+    {
+      "source": "pypi",
+      "label": "PyPI",
+      "api_base": "https://pypi.org/pypi/pip/json",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜工具链·Python",
+      "scope_labels": [
+        "AI｜工具链·Python"
+      ],
+      "notes": "PyPI 包元数据 JSON API，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "npm",
+      "label": "npm",
+      "api_base": "https://registry.npmjs.org/react/latest",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜工具链·Node",
+      "scope_labels": [
+        "AI｜工具链·Node"
+      ],
+      "notes": "npm Registry 元数据，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "openai",
+      "label": "OpenAI",
+      "api_base": "https://api.openai.com/v1/models",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜大模型·OpenAI",
+      "scope_labels": [
+        "AI｜大模型·OpenAI"
+      ],
+      "notes": "OpenAI HTTP API；无 Key 时列表接口多为 401；在 platform.openai.com 创建密钥后填入下方再测。",
+      "enabled": true
+    },
+    {
+      "source": "anthropic",
+      "label": "Anthropic",
+      "api_base": "https://api.anthropic.com/v1/messages",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜大模型·Anthropic",
+      "scope_labels": [
+        "AI｜大模型·Anthropic"
+      ],
+      "notes": "Anthropic Messages 为 POST；GET 探测常为 405（仍视为可达）；在 console.anthropic.com 获取 API Key。",
+      "enabled": true
+    },
+    {
+      "source": "google_gemini",
+      "label": "Google Gemini",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta/models",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜大模型·Google",
+      "scope_labels": [
+        "AI｜大模型·Google"
+      ],
+      "notes": "Google AI Studio / Gemini；无 Key 时常为 403；填 Key 后保存再测。",
+      "enabled": true
+    },
+    {
+      "source": "openweather",
+      "label": "OpenWeather",
+      "api_base": "https://api.openweathermap.org/data/2.5/weather?q=London",
+      "frequency": "daily_07:00",
+      "scope_label": "气象·天气",
+      "scope_labels": [
+        "气象·天气"
+      ],
+      "notes": "OpenWeatherMap；无 Key 多为 401；在 openweathermap.org 注册后填 API Key。",
+      "enabled": true
+    },
+    {
+      "source": "finnhub",
+      "label": "Finnhub",
+      "api_base": "https://finnhub.io/api/v1/quote?symbol=AAPL",
+      "frequency": "daily_07:00",
+      "scope_label": "财经·股票",
+      "scope_labels": [
+        "财经·股票"
+      ],
+      "notes": "Finnhub；无 Token 多为 401；finnhub.io 注册免费 Token 后填入再测。",
+      "enabled": true
+    },
+    {
+      "source": "alphavantage",
+      "label": "Alpha Vantage",
+      "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
+      "frequency": "daily_07:00",
+      "scope_label": "财经·时间序列",
+      "scope_labels": [
+        "财经·时间序列"
+      ],
+      "notes": "Alpha Vantage；模板使用官方 demo key 便于探测；生产请在 alphavantage.co 申请 Key。",
+      "enabled": true
+    },
+    {
+      "source": "youtube_data",
+      "label": "YouTube Data",
+      "api_base": "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=dQw4w9WgXcQ",
+      "frequency": "daily_07:00",
+      "scope_label": "内容·视频",
+      "scope_labels": [
+        "内容·视频"
+      ],
+      "notes": "YouTube Data API v3；无 Key 多为 403；Google Cloud 启用接口后填 API Key。",
+      "enabled": true
+    },
+    {
+      "source": "mapbox",
+      "label": "Mapbox",
+      "api_base": "https://api.mapbox.com",
+      "frequency": "daily_07:00",
+      "scope_label": "地理·地图",
+      "scope_labels": [
+        "地理·地图"
+      ],
+      "notes": "Mapbox；根路径可探测；地理编码等请在 URL 中带 access_token。",
+      "enabled": true
+    },
+    {
+      "source": "docker_hub",
+      "label": "Docker Hub",
+      "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜工具链·容器",
+      "scope_labels": [
+        "AI｜工具链·容器"
+      ],
+      "notes": "Docker Hub 公开镜像元数据；高配额可填访问令牌。",
+      "enabled": true
+    },
+    {
+      "source": "crates_io",
+      "label": "crates.io",
+      "api_base": "https://crates.io/api/v1/crates/serde",
+      "frequency": "daily_07:00",
+      "scope_label": "AI｜工具链·Rust",
+      "scope_labels": [
+        "AI｜工具链·Rust"
+      ],
+      "notes": "crates.io（Rust）包元数据；公开只读一般免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "openalex",
+      "label": "OpenAlex",
+      "api_base": "https://api.openalex.org/works?per_page=1",
+      "frequency": "daily_07:00",
+      "scope_label": "学术·开放图谱",
+      "scope_labels": [
+        "学术·开放图谱"
+      ],
+      "notes": "OpenAlex 开放学术图谱；polite pool 建议填邮箱 polite 参数（可选）。",
+      "enabled": true
+    },
+    {
+      "source": "tmdb",
+      "label": "TMDb",
+      "api_base": "https://api.themoviedb.org/3/configuration",
+      "frequency": "daily_07:00",
+      "scope_label": "内容·影视元数据",
+      "scope_labels": [
+        "内容·影视元数据"
+      ],
+      "notes": "TMDb；无 api_key 多为 401；themoviedb.org 申请后在请求中携带 api_key 参数。",
+      "enabled": true
+    }
+  ]
+}

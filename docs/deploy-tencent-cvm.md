@@ -11,7 +11,7 @@
 
 ```text
 # 数据库（腾讯云 PostgreSQL 控制台复制连接串）
-AISOU_DATABASE_URL=postgresql+psycopg2://user:pass@内网或公网:5432/aisoul
+AISOU_DATABASE_URL=postgresql+psycopg://user:pass@内网或公网:5432/aisoul
 
 # CORS：你的前端访问来源
 AISOU_CORS_ORIGINS=https://你的域名,https://www.你的域名

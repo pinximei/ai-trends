@@ -68,9 +68,12 @@ class AdminSourceConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    frequency: Mapped[str] = mapped_column(String(32), default="daily")
+    frequency: Mapped[str] = mapped_column(String(32), default="daily_07:00")
     api_base: Mapped[str] = mapped_column(String(256), default="")
     api_key_masked: Mapped[str] = mapped_column(String(128), default="")
+    scope_label: Mapped[str] = mapped_column(String(128), default="")
+    # 多条「所属领域/板块」JSON 数组文本；旧行可仅有 scope_label，由读取逻辑合并。
+    scope_labels_json: Mapped[str] = mapped_column(Text, default="[]")
     notes: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

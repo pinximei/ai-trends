@@ -6,12 +6,9 @@ import { Aurora } from "./Aurora";
 import { TechAtmosphere } from "./TechAtmosphere";
 
 const nav = [
-  { to: "/", key: "navHome" },
   { to: "/trends", key: "navTrends" },
-  { to: "/inspirations", key: "navInspirations" },
-  { to: "/briefing", key: "navBriefing" },
-  { to: "/categories", key: "navCategories" },
-  { to: "/methodology", key: "navMethodology" },
+  { to: "/resources", key: "navResources" },
+  { to: "/about", key: "navAbout" },
 ] as const;
 
 export function Layout() {
@@ -43,7 +40,7 @@ export function Layout() {
       </div>
       <header className="sticky top-0 z-50 border-b border-white/10 bg-night-950/80 shadow-[0_0_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link to="/" className="group flex items-center gap-2">
+          <Link to="/trends" className="group flex items-center gap-2">
             <motion.span
               className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/30 via-fuchsia-600/30 to-amber-500/25 text-lg shadow-[0_0_24px_rgba(34,211,238,0.25)] ring-1 ring-white/20"
               whileHover={{ rotate: [0, -8, 8, 0], scale: 1.05 }}
@@ -59,7 +56,7 @@ export function Layout() {
           </Link>
           <nav className="flex flex-wrap items-center gap-1">
             {nav.map((item) => {
-              const active = loc.pathname === item.to || (item.to !== "/" && loc.pathname.startsWith(item.to));
+              const active = loc.pathname === item.to || loc.pathname.startsWith(`${item.to}/`);
               return (
                 <Link key={item.to} to={item.to}>
                   <motion.span
@@ -75,9 +72,6 @@ export function Layout() {
                 </Link>
               );
             })}
-            <Link to="/legal" className="rounded-xl px-3 py-2 text-sm text-slate-300 hover:text-white">
-              {t("navLegal")}
-            </Link>
           </nav>
           <div className="flex items-center gap-1 rounded-full border border-white/15 bg-slate-900/80 p-1">
             <button
@@ -101,12 +95,14 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="relative min-h-[calc(100vh-8rem)] w-full max-w-[1920px] mx-auto px-4 py-8 sm:px-8 lg:px-12">
+      <main className="relative z-10 min-h-[calc(100vh-8rem)] w-full max-w-[1920px] mx-auto px-4 py-8 sm:px-8 lg:px-12">
         <Outlet />
       </main>
       <footer className="border-t border-cyan-500/15 bg-black/20 py-8 text-center font-mono text-[11px] text-slate-300/80">
         <p>{t("footer")}</p>
-        <p className="mt-2 text-cyan-300/60">v0.2 · neural-ui · aisoul</p>
+        <Link to="/about" className="mt-2 inline-block text-cyan-400/80 hover:underline">
+          {t("navAbout")} · 完整说明
+        </Link>
       </footer>
     </div>
   );

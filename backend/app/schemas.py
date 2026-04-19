@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RemovalRequestCreate(BaseModel):
@@ -18,10 +18,23 @@ class InternalRunRequest(BaseModel):
 class AdminSourceConfigUpsert(BaseModel):
     source: str
     enabled: bool = True
-    frequency: str = "daily"
+    frequency: str = "daily_07:00"
     api_base: str = ""
     api_key: str = ""
     notes: str = ""
+    scope_label: str = ""
+    # 多条领域/板块；提交时优先于单字段 scope_label。
+    scope_labels: list[str] = Field(default_factory=list)
+
+
+class AdminSourceTestRequest(BaseModel):
+    """测试数据源 HTTP 可达性：已入库用 source；未入库用 api_base。api_key 仅本次请求使用，不落库。"""
+
+    source: str | None = None
+    api_base: str | None = None
+    api_key: str = ""
+    # GitLab REST 使用 PRIVATE-TOKEN；多数 OAuth 使用 Bearer。
+    auth_mode: Literal["bearer", "private_token"] = "bearer"
 
 
 class AdminLoginRequest(BaseModel):

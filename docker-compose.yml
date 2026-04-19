@@ -1,0 +1,15 @@
+# Local PostgreSQL — default for backend (see backend/.env.example).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aisoul
+      POSTGRES_PASSWORD: aisoul
+      POSTGRES_DB: aisoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - aisoul_pg_data:/var/lib/postgresql/data
+
+volumes:
+  aisoul_pg_data:

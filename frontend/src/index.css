@@ -14,14 +14,21 @@
       radial-gradient(ellipse 60% 40% at 50% 100%, rgba(251, 191, 36, 0.04), transparent 50%);
   }
 
-  /* 扫描线 + 微弱噪点科技感 */
+  /* 应用根节点必须在扫描线层之上，否则整页文字/图表会被盖住或混色后几乎不可见 */
+  #root {
+    position: relative;
+    z-index: 20;
+    isolation: isolate;
+  }
+
+  /* 扫描线 + 微弱噪点科技感（置于内容下层） */
   body::after {
     content: "";
     pointer-events: none;
     position: fixed;
     inset: 0;
-    z-index: 10;
-    opacity: 0.035;
+    z-index: 0;
+    opacity: 0.045;
     background: repeating-linear-gradient(
       0deg,
       transparent,

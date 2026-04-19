@@ -6,15 +6,17 @@ import react from "@vitejs/plugin-react";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  appType: "spa",
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },
   server: {
-    port: 5173,
+    port: 5172,
     proxy: {
-      "/api": { target: "http://127.0.0.1:8000", changeOrigin: true },
-      "/internal": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      // 与 uvicorn --port 一致（Windows 上 8000 常被保留时可改用 8080）
+      "/api": { target: "http://127.0.0.1:8080", changeOrigin: true },
+      "/internal": { target: "http://127.0.0.1:8080", changeOrigin: true },
     },
   },
 });

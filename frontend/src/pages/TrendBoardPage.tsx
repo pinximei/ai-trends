@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n";
 import { TrendTimelineChart } from "@/components/TrendTimelineChart";
 import { SegmentHeatCompareChart } from "@/components/SegmentHeatCompareChart";
 import { buildNormalizedCompareRows, rankByMeanNormalized, type SegmentSeries } from "@/lib/trendCompare";
+import { splitPrimaryOverflow } from "@/lib/segmentNav";
 
 const DAY_OPTIONS = [7, 30, 90, 180] as const;
 /** 趋势页自动与服务器对齐的周期（与后台热门快照调度一致为约每 3 天） */
@@ -54,6 +55,8 @@ export function TrendBoardPage() {
   const [metricsBySeg, setMetricsBySeg] = useState<Record<number, { key: string; name: string }[]>>({});
   const [days, setDays] = useState<number>(30);
   const [focusSegmentId, setFocusSegmentId] = useState<number | null>(null);
+  /** 多板块概览时：主 9 个板块对比 vs 余下「其他」板块对比 */
+  const [overviewBucket, setOverviewBucket] = useState<"primary" | "overflow">("primary");
   const [summary, setSummary] = useState<{ key: string; name: string; avg: number | null }[]>([]);
   const [seriesMap, setSeriesMap] = useState<Record<string, { t: string; value: number }[]>>({});
   const [hotAt, setHotAt] = useState<string | null>(null);
@@ -100,6 +103,7 @@ export function TrendBoardPage() {
 
   useEffect(() => {
     setFocusSegmentId(null);
+    setOverviewBucket("primary");
   }, [industrySlug]);
 
   useEffect(() => {
@@ -176,6 +180,16 @@ export function TrendBoardPage() {
     };
   }, [focusSegmentId, trendAutoRefreshTick]);
 
+  const { primary: primarySegments, overflow: overflowSegments } = useMemo(
+    () => splitPrimaryOverflow(segments),
+    [segments],
+  );
+
+  const trendTargetSegments = useMemo(() => {
+    if (focusSegmentId != null) return segments.filter((s) => s.id === focusSegmentId);
+    return overviewBucket === "primary" ? primarySegments : overflowSegments;
+  }, [focusSegmentId, overviewBucket, segments, primarySegments, overflowSegments]);
+
   useEffect(() => {
     if (!metaReady) return;
 
@@ -190,7 +204,7 @@ export function TrendBoardPage() {
         );
         return;
       }
-    } else if (segments.length > 0 && !segments.some((s) => (metricsBySeg[s.id]?.length ?? 0) > 0)) {
+    } else if (trendTargetSegments.length > 0 && !trendTargetSegments.some((s) => (metricsBySeg[s.id]?.length ?? 0) > 0)) {
       setTrendsLoading(false);
       setErr(lang === "en" ? "No metric metadata yet. Configure metrics per segment in the admin console." : "暂无指标元数据，请稍后在后台配置各板块指标。");
       return;
@@ -214,7 +228,7 @@ export function TrendBoardPage() {
           const ms = metricsBySeg[focusSegmentId] ?? [];
           for (const m of ms) keysToLoad.push({ segId: focusSegmentId, key: m.key });
         } else {
-          for (const s of segments) {
+          for (const s of trendTargetSegments) {
             const first = (metricsBySeg[s.id] ?? [])[0];
             if (first) keysToLoad.push({ segId: s.id, key: first.key });
           }
@@ -242,7 +256,7 @@ export function TrendBoardPage() {
     return () => {
       cancelled = true;
     };
-  }, [metaReady, industrySlug, days, focusSegmentId, segments, metricsBySeg, lang, trendAutoRefreshTick]);
+  }, [metaReady, industrySlug, days, focusSegmentId, trendTargetSegments, metricsBySeg, lang, trendAutoRefreshTick]);
 
   const chartBlocks = useMemo(() => {
     if (!metaReady) return [];
@@ -256,7 +270,7 @@ export function TrendBoardPage() {
         points: seriesMap[`${focusSegmentId}:${m.key}`] ?? [],
       }));
     }
-    return segments.map((s) => {
+    return trendTargetSegments.map((s) => {
       const first = (metricsBySeg[s.id] ?? [])[0];
       const key = first?.key ?? "";
       return {
@@ -267,7 +281,7 @@ export function TrendBoardPage() {
         points: key ? seriesMap[`${s.id}:${key}`] ?? [] : [],
       };
     });
-  }, [metaReady, focusSegmentId, segments, metricsBySeg, seriesMap]);
+  }, [metaReady, focusSegmentId, segments, trendTargetSegments, metricsBySeg, seriesMap]);
 
   /** 是否已有上一轮趋势结果；用于区分「首屏加载」与「切换筛选时的刷新」，避免整页被 loading 顶替。 */
   const hasTrendData = useMemo(() => {
@@ -276,7 +290,7 @@ export function TrendBoardPage() {
   }, [summary, seriesMap]);
 
   const overviewCompare = useMemo(() => {
-    if (focusSegmentId != null || !metaReady || segments.length < 2) return null;
+    if (focusSegmentId != null || !metaReady || trendTargetSegments.length < 2) return null;
     const series: SegmentSeries[] = chartBlocks.map((b) => ({
       segmentId: b.segmentId,
       segmentName: b.segmentName,
@@ -287,9 +301,15 @@ export function TrendBoardPage() {
     const rows = buildNormalizedCompareRows(series);
     const ranking = rankByMeanNormalized(series);
     const names: Record<number, string> = {};
-    for (const s of segments) names[s.id] = s.name;
-    return { rows, ranking, segmentIds: segments.map((s) => s.id), segmentNames: names, series };
-  }, [metaReady, focusSegmentId, segments, chartBlocks]);
+    for (const s of trendTargetSegments) names[s.id] = s.name;
+    return {
+      rows,
+      ranking,
+      segmentIds: trendTargetSegments.map((s) => s.id),
+      segmentNames: names,
+      series,
+    };
+  }, [metaReady, focusSegmentId, trendTargetSegments, chartBlocks]);
 
   const describe = lang === "en" ? describeTrendEn : describeTrendZh;
 
@@ -297,14 +317,14 @@ export function TrendBoardPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 text-slate-100">
       <h1 className="text-2xl font-semibold text-white">{t("navTrends")}</h1>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{t("trendIntro")}</p>
-      <p className="mt-2 text-xs text-slate-500">{t("publicIndustryHint")}</p>
+      <p className="mt-2 text-xs text-slate-500">{t("trendNavHint")}</p>
       <p className="mt-2 text-xs text-cyan-400/90">
         {t("trendHotSnapshot")}: {hotAt ?? t("trendHotSnapshotPending")}
       </p>
       <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-500">{t("trendAutoRefreshHint")}</p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <span className="text-xs uppercase tracking-wider text-slate-500">{t("publicIndustry")}</span>
+        <span className="text-xs uppercase tracking-wider text-slate-500">{t("uiNavTheme")}</span>
         {industries.map((ind) => (
           <button
             key={ind.id}
@@ -329,23 +349,29 @@ export function TrendBoardPage() {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs uppercase tracking-wider text-slate-500">{t("publicSegmentsInIndustry")}</span>
+        <span className="text-xs uppercase tracking-wider text-slate-500">{t("uiNavSegment")}</span>
         <button
           type="button"
-          onClick={() => setFocusSegmentId(null)}
+          onClick={() => {
+            setFocusSegmentId(null);
+            setOverviewBucket("primary");
+          }}
           className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
-            focusSegmentId == null
+            focusSegmentId == null && overviewBucket === "primary"
               ? "bg-gradient-to-r from-cyan-500/30 to-fuchsia-500/20 text-white ring-1 ring-cyan-400/40"
               : "bg-white/5 text-slate-300 hover:text-white"
           }`}
         >
           {t("trendAllSegments")}
         </button>
-        {segments.map((s) => (
+        {primarySegments.map((s) => (
           <button
             key={s.id}
             type="button"
-            onClick={() => setFocusSegmentId(s.id)}
+            onClick={() => {
+              setOverviewBucket("primary");
+              setFocusSegmentId(s.id);
+            }}
             className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
               focusSegmentId === s.id
                 ? "bg-gradient-to-r from-cyan-500/30 to-fuchsia-500/20 text-white ring-1 ring-cyan-400/40"
@@ -355,6 +381,22 @@ export function TrendBoardPage() {
             {s.name}
           </button>
         ))}
+        {overflowSegments.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              setFocusSegmentId(null);
+              setOverviewBucket("overflow");
+            }}
+            className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
+              focusSegmentId == null && overviewBucket === "overflow"
+                ? "bg-gradient-to-r from-cyan-500/30 to-fuchsia-500/20 text-white ring-1 ring-cyan-400/40"
+                : "bg-white/5 text-slate-300 hover:text-white"
+            }`}
+          >
+            {t("uiNavOther")}
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">

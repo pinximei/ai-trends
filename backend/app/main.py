@@ -5,6 +5,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+
+from .lifespan import app_lifespan
+from .routers import admin_data_browser, admin_extended, admin_product, public_v1
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +29,7 @@ from .schemas import (
     AdminChangePasswordRequest,
     AdminSettingsUpdate,
     AdminSourceConfigUpsert,
+    AdminSourceTestRequest,
     SignalOpsUpdate,
     TrendOpsUpdate,
     AdminUserCreate,
@@ -36,24 +40,28 @@ from .schemas import (
 from .security import AUTH_BOOTSTRAP_KEY, enforce_https, issue_access_token, verify_bearer_from_request, verify_hmac_signature
 from .services import clear_business_data, create_removal_ticket, envelope, get_or_create_run, seed_demo_bundle, seed_if_empty
 
-app = FastAPI(title="Agent Trend Platform")
+app = FastAPI(title="Agent Trend Platform", lifespan=app_lifespan)
 
 root = Path(__file__).resolve().parent.parent
 
+_cors = os.getenv(
+    "AISOU_CORS_ORIGINS",
+    "http://127.0.0.1:5172,http://localhost:5172,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:5174,http://localhost:5174",
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:5174",
-        "http://localhost:5174",
-    ],
+    allow_origins=[o.strip() for o in _cors if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(public_v1.router)
+app.include_router(admin_product.router)
+app.include_router(admin_extended.router)
+app.include_router(admin_data_browser.router)
+
 
 SUPPORTED_LANGS = {"zh", "en"}
 DEFAULT_LANG = "zh"
@@ -196,10 +204,71 @@ def _mask_key(raw_key: str) -> str:
     return f"{cleaned[:4]}...{cleaned[-4:]}"
 
 
+def _bootstrap_seed_demo_envelope(request: Request, db: Session):
+    seed_demo_bundle(db)
+    trend_count = db.query(Trend).count()
+    signal_count = db.query(EvidenceSignal).count()
+    source_count = db.query(AdminSourceConfig).count()
+    return api_envelope(
+        request,
+        {
+            "status": "ok",
+            "trend_count": trend_count,
+            "signal_count": signal_count,
+            "source_count": source_count,
+        },
+    )
+
+
+def _bootstrap_clear_demo_envelope(request: Request, db: Session):
+    clear_business_data(db)
+    return api_envelope(request, {"status": "ok", "message": "business data cleared"})
+
+
+def _admin_pages_plan_payload() -> dict:
+    return {
+        "items": [
+            {
+                "key": "admin-overview",
+                "title": "后台总览",
+                "description": "查看数据覆盖、趋势/信号规模、系统健康度。",
+                "status": "ready",
+            },
+            {
+                "key": "source-center",
+                "title": "数据源与 API Key 管理",
+                "description": "管理第三方数据源开关、采集频率、API Base 和 Key。",
+                "status": "ready",
+            },
+            {
+                "key": "trend-ops",
+                "title": "趋势运营",
+                "description": "管理趋势标签、阶段、分数修正和人工标注。",
+                "status": "ready",
+            },
+            {
+                "key": "signal-ops",
+                "title": "信号运营",
+                "description": "审核信号质量、处理误报、查看证据链状态。",
+                "status": "ready",
+            },
+            {
+                "key": "compliance-workbench",
+                "title": "合规工单",
+                "description": "统一处理删除/纠错工单，形成审计闭环。",
+                "status": "ready",
+            },
+        ]
+    }
+
+
 def _validate_password_policy(db: Session, raw_password: str) -> None:
     settings = DataApiService(db).get_settings()
     if len(raw_password or "") < settings["password_min_length"]:
         raise HTTPException(status_code=400, detail=f"password too short, min={settings['password_min_length']}")
+
+
+_SKIP_SIGNED = os.getenv("AISOU_SKIP_API_SIGNATURE", "").lower() in {"1", "true", "yes", "on"}
 
 
 @app.middleware("http")
@@ -210,21 +279,11 @@ async def api_security_middleware(request: Request, call_next):
     allow_unauth = {"/api/v1/auth/token", "/api/admin/v1/auth/login", "/api/admin/v1/auth/logout", "/api/admin/v1/auth/me"}
     if request.method == "OPTIONS":
         return await call_next(request)
-    if protected_signed and path not in allow_unauth:
+    if protected_signed and path not in allow_unauth and not _SKIP_SIGNED:
         body = await request.body()
         verify_hmac_signature(request, body)
         verify_bearer_from_request(request)
     return await call_next(request)
-
-
-@app.on_event("startup")
-def startup():
-    Base.metadata.create_all(bind=engine)
-    ensure_schema_compatibility()
-    db = next(get_db())
-    seed_demo_bundle(db)
-    ensure_default_admin(db)
-    db.close()
 
 
 @app.get("/api/v1/dashboard/summary")
@@ -447,55 +506,13 @@ def b2b_trends(request: Request):
     return api_envelope(request, {"items": [{"trend_key": "workflow-automation-agent", "score": 78.2}]})
 
 
-@app.get("/api/v1/admin/sources")
-def admin_sources(request: Request, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    return api_envelope(request, {"items": DataApiService(db).list_admin_sources()})
-
-
-@app.post("/api/v1/admin/sources")
-def admin_sources_upsert(
-    request: Request,
-    payload: AdminSourceConfigUpsert,
-    db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
-):
-    try:
-        data = DataApiService(db).upsert_admin_source(payload.model_dump(), _mask_key)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return api_envelope(request, data)
-
-
-@app.post("/api/v1/admin/bootstrap/seed-demo")
-def admin_seed_demo(request: Request, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    seed_demo_bundle(db)
-    trend_count = db.query(Trend).count()
-    signal_count = db.query(EvidenceSignal).count()
-    source_count = db.query(AdminSourceConfig).count()
-    return api_envelope(
-        request,
-        {
-            "status": "ok",
-            "trend_count": trend_count,
-            "signal_count": signal_count,
-            "source_count": source_count,
-        },
-    )
-
-
-@app.post("/api/v1/admin/bootstrap/clear-demo")
-def admin_clear_demo(request: Request, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    clear_business_data(db)
-    return api_envelope(request, {"status": "ok", "message": "business data cleared"})
-
-
 @app.post("/api/admin/v1/bootstrap/seed-demo")
 def admin_seed_demo_v2(
     request: Request,
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("admin")),
 ):
-    result = admin_seed_demo(request, db)
+    result = _bootstrap_seed_demo_envelope(request, db)
     audit(db, actor=session.username, action="bootstrap.seed_demo")
     return result
 
@@ -506,7 +523,7 @@ def admin_clear_demo_v2(
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("admin")),
 ):
-    result = admin_clear_demo(request, db)
+    result = _bootstrap_clear_demo_envelope(request, db)
     audit(db, actor=session.username, action="bootstrap.clear_demo")
     return result
 
@@ -529,45 +546,15 @@ def admin_db_info_v2(
     )
 
 
-@app.get("/api/v1/admin/pages-plan")
-def admin_pages_plan(request: Request, _: None = Depends(require_admin)):
-    return api_envelope(
-        request,
-        {
-            "items": [
-                {
-                    "key": "admin-overview",
-                    "title": "后台总览",
-                    "description": "查看数据覆盖、趋势/信号规模、系统健康度。",
-                    "status": "ready",
-                },
-                {
-                    "key": "source-center",
-                    "title": "数据源与 API Key 管理",
-                    "description": "管理第三方数据源开关、采集频率、API Base 和 Key。",
-                    "status": "ready",
-                },
-                {
-                    "key": "trend-ops",
-                    "title": "趋势运营",
-                    "description": "管理趋势标签、阶段、分数修正和人工标注。",
-                    "status": "ready",
-                },
-                {
-                    "key": "signal-ops",
-                    "title": "信号运营",
-                    "description": "审核信号质量、处理误报、查看证据链状态。",
-                    "status": "ready",
-                },
-                {
-                    "key": "compliance-workbench",
-                    "title": "合规工单",
-                    "description": "统一处理删除/纠错工单，形成审计闭环。",
-                    "status": "ready",
-                },
-            ]
-        },
-    )
+@app.get("/api/admin/v1/sources/presets")
+def admin_source_presets(
+    request: Request,
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    """与 services.MAINSTREAM_ADMIN_SOURCE_PRESETS 一致，供前台「新增数据源」一键填入。"""
+    from .services import build_admin_source_preset_items
+
+    return api_envelope(request, {"items": build_admin_source_preset_items()})
 
 
 @app.get("/api/admin/v1/sources")
@@ -593,6 +580,42 @@ def admin_sources_upsert_v2(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     audit(db, actor=session.username, action="source.upsert", target=data["source"], detail=f"freq={data['frequency']}")
     return api_envelope(request, data)
+
+
+@app.post("/api/admin/v1/sources/test")
+def admin_sources_test_v2(
+    request: Request,
+    payload: AdminSourceTestRequest,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    """对数据源 api_base 发起 GET；api_key 可选 Bearer 或 GitLab PRIVATE-TOKEN（不落库）。"""
+    _ = session
+    try:
+        data = DataApiService(db).test_source_connection(
+            source=(payload.source or "").strip() or None,
+            api_base=(payload.api_base or "").strip() or None,
+            api_key=(payload.api_key or "").strip() or None,
+            auth_mode=payload.auth_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return api_envelope(request, data)
+
+
+@app.delete("/api/admin/v1/sources/{source}")
+def admin_sources_delete_v2(
+    request: Request,
+    source: str,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    try:
+        deleted = DataApiService(db).delete_admin_source(source)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit(db, actor=session.username, action="source.delete", target=deleted)
+    return api_envelope(request, {"deleted": deleted})
 
 
 @app.get("/api/admin/v1/compliance/removal-requests")
@@ -625,7 +648,8 @@ def admin_pages_plan_v2(
     request: Request,
     session: AdminSession = Depends(require_role("viewer")),
 ):
-    return admin_pages_plan(request)
+    _ = session
+    return api_envelope(request, _admin_pages_plan_payload())
 
 
 @app.get("/api/admin/v1/overview")
@@ -766,12 +790,8 @@ def admin_users_update_v2(
     if not item:
         raise HTTPException(status_code=404, detail="user not found")
     if payload.role is not None:
-        if item.username == session.username and payload.role != "admin":
-            raise HTTPException(status_code=400, detail="cannot downgrade yourself")
         item.role = payload.role
     if payload.enabled is not None:
-        if item.username == session.username and payload.enabled is False:
-            raise HTTPException(status_code=400, detail="cannot disable yourself")
         item.enabled = payload.enabled
     if payload.password:
         _validate_password_policy(db, payload.password)
@@ -782,6 +802,24 @@ def admin_users_update_v2(
     db.commit()
     audit(db, actor=session.username, action="user.update", target=username)
     return api_envelope(request, {"username": item.username, "role": item.role, "enabled": item.enabled})
+
+
+@app.delete("/api/admin/v1/users/{username}")
+def admin_users_delete_v2(
+    request: Request,
+    username: str,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("admin")),
+):
+    item = db.scalar(select(AdminUser).where(AdminUser.username == username))
+    if not item:
+        raise HTTPException(status_code=404, detail="user not found")
+    if item.username == session.username:
+        raise HTTPException(status_code=400, detail="cannot delete your own account")
+    db.delete(item)
+    db.commit()
+    audit(db, actor=session.username, action="user.delete", target=username)
+    return api_envelope(request, {"deleted": username})
 
 
 @app.get("/api/admin/v1/settings")
@@ -813,24 +851,6 @@ def admin_health_v2(
 ):
     metrics = DataApiService(db).get_overview_metrics()
     return api_envelope(request, {"status": "ok", "db": "up", "metrics": metrics, "time": datetime.utcnow().isoformat()})
-
-
-@app.get("/api/v1/admin/taxonomy")
-def admin_taxonomy(request: Request, _: None = Depends(require_admin)):
-    return api_envelope(request, {"version": "v1", "items": ["workflow-automation-agent", "coding-agent"]})
-
-
-@app.get("/api/v1/admin/compliance/removal-requests")
-def admin_removal_requests(request: Request, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    return api_envelope(request, {"items": DataApiService(db).list_removal_requests()})
-
-
-@app.post("/api/v1/admin/compliance/removal-requests/{ticket_id}/resolve")
-def admin_resolve(request: Request, ticket_id: str, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    data = DataApiService(db).resolve_removal_request(ticket_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="ticket not found")
-    return api_envelope(request, data)
 
 
 @app.post("/api/v1/compliance/removal-requests")
@@ -868,6 +888,6 @@ def api_root():
         "service": "aisoul-api",
         "docs": "/docs",
         "openapi": "/openapi.json",
-        "ui": "http://127.0.0.1:5173",
+        "ui": "http://127.0.0.1:5172",
         "hint": "cd frontend && npm install && npm run dev",
     }

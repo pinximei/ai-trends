@@ -3,7 +3,7 @@
 ## Runtime
 - Backend: FastAPI (`backend/app/main.py`)
 - Frontend: Vite apps under `frontend/`（公开站）与 `frontend/admin/`（管理端）；后端仅提供 API
-- Database: SQLite for local MVP, schema in `db/schema-v1.sql`
+- Database: **PostgreSQL**（本地 `docker compose`；连接串见 `backend/.env.example`）
 
 ## Deployment Targets
 - Frontend/API web: Render or Railway (public)

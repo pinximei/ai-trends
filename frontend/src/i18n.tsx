@@ -61,9 +61,15 @@ const STRINGS: Record<Lang, Record<string, string>> = {
       "切换行业、板块或时间范围时会立即拉取最新数据。本页另约每 3 天自动同步一次趋势与热门信息；热门快照由后台按约每 3 天调度生成。",
     publicIndustry: "行业",
     publicIndustryHint: "先选择行业，再选下方板块（如大模型 / 应用 / 工具）；后续可扩展更多领域。",
-    /** 资源页：行业与板块已合并为单层「主题」 */
+    /** @deprecated 文案已由 resourcesNavHint / trendNavHint 替代 */
     publicTopicsHint:
       "主题由后台统一归类，不再分「行业」「板块」两级；任选其一即可筛选。选「全部主题」时优先展示数据源驱动的「领域」内容。",
+    uiNavTheme: "主题",
+    uiNavSegment: "板块",
+    uiNavOther: "其他",
+    resourcesNavHint:
+      "「主题」表示领域/行业；「板块」为该主题下的结构分类。每主题最多展示 9 个主板块，其余归入「其他」。",
+    trendNavHint: "先选「主题」（领域），再选「板块」；多板块概览仅对比前 9 个主板块，其余在「其他」中对比。",
     publicSegmentsInIndustry: "板块",
     trendTopic: "板块",
     trendAllSegments: "多板块概览",
@@ -92,9 +98,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     trendColUsage: "活跃指数",
     trendColSummary: "摘要",
     trendViewDetail: "查看",
-    resourcesIntro: "「全部主题」下列出全站文章；未选具体时间范围时默认仅展示「最新一个有内容的自然日」；可切换单一主题、时间范围与排序。",
+    resourcesIntro:
+      "先选「主题」再选「板块」筛选文章；未选具体时间范围时默认仅展示「最新一个有内容的自然日」。可切换时间范围与排序。",
     resourcesTopic: "主题",
     resourcesTopicAll: "全部主题",
+    resourcesSegmentAll: "全部板块",
     resourcesTimeFilter: "发布时间",
     resourcesLatestDay: "最新一日",
     resourcesTimeAll: "不限",
@@ -167,6 +175,13 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     publicIndustryHint: "Pick an industry first, then a segment (e.g. models / apps / tools). More domains can be added later.",
     publicTopicsHint:
       "Topics are a single flat list—no separate industry vs. segment step. Pick one to filter. “All topics” prefers the merged “domains” pool when present.",
+    uiNavTheme: "Theme",
+    uiNavSegment: "Segments",
+    uiNavOther: "Other",
+    resourcesNavHint:
+      "“Theme” is the domain/industry; “Segments” are structured buckets under it. Up to nine primary segments are listed; the rest are grouped under Other.",
+    trendNavHint:
+      "Pick a theme (domain), then segments. The multi-segment overview compares the first nine primary segments; use Other for the remainder.",
     publicSegmentsInIndustry: "Segments",
     trendTopic: "Topic",
     trendAllSegments: "All segments",
@@ -195,9 +210,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     trendColUsage: "Activity",
     trendColSummary: "Summary",
     trendViewDetail: "Open",
-    resourcesIntro: "All topics shows site-wide articles. With no explicit date range, only the latest calendar day that has posts is shown; you can narrow to one topic, a time window, or sort.",
+    resourcesIntro:
+      "Choose a theme, then a segment to filter articles. With no explicit date range, only the latest calendar day that has posts is shown; you can change range and sort.",
     resourcesTopic: "Topic",
     resourcesTopicAll: "All topics",
+    resourcesSegmentAll: "All segments",
     resourcesTimeFilter: "Published",
     resourcesLatestDay: "Latest day",
     resourcesTimeAll: "Any time",

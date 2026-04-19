@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import AdminSetting, AdminSourceConfig, AdminUser, AuditLog, EvidenceSignal, RemovalRequest, Trend
+from .scope_labels_util import apply_scope_labels_to_row, get_scope_labels_from_source, normalize_scope_labels_from_payload
 
 VALID_PERIODS = {"day", "week", "month", "quarter", "year"}
 
@@ -291,6 +293,8 @@ class DataApiService:
                 "frequency": i.frequency,
                 "api_base": i.api_base,
                 "api_key_masked": i.api_key_masked,
+                "scope_label": i.scope_label or "",
+                "scope_labels": get_scope_labels_from_source(i),
                 "notes": i.notes,
                 "updated_at": i.updated_at.isoformat(),
             }
@@ -306,22 +310,98 @@ class DataApiService:
             item = AdminSourceConfig(source=source)
             self.db.add(item)
         item.enabled = payload["enabled"]
-        item.frequency = payload["frequency"].strip() or "daily"
+        item.frequency = payload["frequency"].strip() or "daily_07:00"
         item.api_base = payload["api_base"].strip()
         if payload["api_key"].strip():
             item.api_key_masked = mask_func(payload["api_key"])
         item.notes = payload["notes"].strip()
+        labels = normalize_scope_labels_from_payload(payload)
+        apply_scope_labels_to_row(item, labels)
         item.updated_at = datetime.utcnow()
         self.db.commit()
+        from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
+
+        sync_product_taxonomy_from_admin_sources(self.db)
+        labels = get_scope_labels_from_source(item)
         return {
             "source": item.source,
             "enabled": item.enabled,
             "frequency": item.frequency,
             "api_base": item.api_base,
             "api_key_masked": item.api_key_masked,
+            "scope_label": item.scope_label or "",
+            "scope_labels": labels,
             "notes": item.notes,
             "updated_at": item.updated_at.isoformat(),
         }
+
+    def delete_admin_source(self, source: str) -> str:
+        source_key = source.strip().lower()
+        if not source_key:
+            raise ValueError("source required")
+        item = self.db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == source_key))
+        if not item:
+            raise ValueError("source not found")
+        self.db.delete(item)
+        self.db.commit()
+        from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
+
+        sync_product_taxonomy_from_admin_sources(self.db)
+        return source_key
+
+    def test_source_connection(
+        self,
+        source: str | None,
+        api_base: str | None,
+        api_key: str | None,
+        auth_mode: str = "bearer",
+    ) -> dict:
+        """GET 请求 api_base；密钥可选 Bearer 或 GitLab PRIVATE-TOKEN。"""
+        sk = (source or "").strip().lower() or None
+        ab = (api_base or "").strip() or None
+        if not sk and not ab:
+            raise ValueError("请提供 source（已保存的数据源标识）或 api_base（接口地址）")
+        url = ""
+        if sk:
+            row = self.db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == sk))
+            if not row:
+                raise ValueError("数据源不存在")
+            url = (row.api_base or "").strip()
+        else:
+            url = ab or ""
+        if not url:
+            raise ValueError("接口地址 api_base 为空，无法测试")
+        headers: dict[str, str] = {
+            "User-Agent": "AISoul-Admin-SourceTest/1.0",
+            "Accept": "application/json",
+        }
+        k = (api_key or "").strip()
+        if k:
+            mode = (auth_mode or "bearer").strip().lower()
+            if mode == "private_token":
+                headers["PRIVATE-TOKEN"] = k
+            else:
+                headers["Authorization"] = f"Bearer {k}"
+        try:
+            with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+                r = client.get(url, headers=headers)
+            snippet = (r.text or "")[:600]
+            code = r.status_code
+            # 2xx–3xx：正常；401/403：服务可达但需密钥；405：常见为仅支持 POST 的端点；429：限流但服务可达。
+            ok_http = (200 <= code < 400) or code in (401, 403, 405, 429)
+            return {
+                "http_status": code,
+                "snippet": snippet,
+                "ok": ok_http,
+                "url_tested": url[:512],
+            }
+        except Exception as e:
+            return {
+                "http_status": 0,
+                "snippet": str(e)[:600],
+                "ok": False,
+                "url_tested": url[:512],
+            }
 
     def list_removal_requests(self, status: str = "", keyword: str = "") -> list[dict]:
         stmt = select(RemovalRequest).order_by(RemovalRequest.submitted_at.desc())
@@ -391,6 +471,7 @@ class DataApiService:
                 "enabled": i.enabled,
                 "failed_attempts": i.failed_attempts,
                 "locked_until": i.locked_until.isoformat() if i.locked_until else None,
+                "created_at": i.created_at.isoformat(),
                 "updated_at": i.updated_at.isoformat(),
             }
             for i in items

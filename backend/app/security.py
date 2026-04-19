@@ -113,7 +113,8 @@ def enforce_https(request: Request) -> None:
         return
 
     host = (request.url.hostname or "").lower()
-    if ALLOW_INSECURE_LOCALHOST and host in {"127.0.0.1", "localhost", "::1"}:
+    # Starlette TestClient 默认 host 为 testserver，需与本地开发一并放行（仍受 REQUIRE_HTTPS/开关约束）
+    if ALLOW_INSECURE_LOCALHOST and host in {"127.0.0.1", "localhost", "::1", "testserver"}:
         return
 
     forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
