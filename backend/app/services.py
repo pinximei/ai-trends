@@ -63,10 +63,10 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "source": "product_hunt",
         "enabled": True,
         "frequency": "daily_07:00",
-        "api_base": "https://api.producthunt.com/v1/oauth/token",
+        "api_base": "https://api.producthunt.com/v2/api/graphql",
         "api_key_masked": "",
         "scope_label": "产品·创投",
-        "notes": "【模板】下方为 OAuth 端点（GET 常返回 403，「测试连接」仍视为可达）；业务调用为 GraphQL v2，请在开发者后台创建应用并填 Bearer Token。",
+        "notes": "【模板】Product Hunt GraphQL v2；请先用 client_id/client_secret 换取 access_token，再把 access_token 作为 Bearer Token 填到下方测试与调用。",
     },
     {
         "source": "mcp_skills",
@@ -249,15 +249,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "scope_label": "学术·开放图谱",
         "notes": "OpenAlex 开放学术图谱；polite pool 建议填邮箱 polite 参数（可选）。",
     },
-    {
-        "source": "tmdb",
-        "enabled": True,
-        "frequency": "daily_07:00",
-        "api_base": "https://api.themoviedb.org/3/configuration",
-        "api_key_masked": "",
-        "scope_label": "内容·影视元数据",
-        "notes": "TMDb；无 api_key 多为 401；themoviedb.org 申请后在请求中携带 api_key 参数。",
-    },
 ]
 
 # 与 admin GET /api/admin/v1/sources/presets 展示名一致；供前端静态回退 JSON 与后端共用逻辑。
@@ -288,7 +279,6 @@ PRESET_SOURCE_LABELS: dict[str, str] = {
     "docker_hub": "Docker Hub",
     "crates_io": "crates.io",
     "openalex": "OpenAlex",
-    "tmdb": "TMDb",
 }
 
 

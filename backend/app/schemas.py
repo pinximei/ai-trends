@@ -33,8 +33,10 @@ class AdminSourceTestRequest(BaseModel):
     source: str | None = None
     api_base: str | None = None
     api_key: str = ""
-    # GitLab REST 使用 PRIVATE-TOKEN；多数 OAuth 使用 Bearer。
-    auth_mode: Literal["bearer", "private_token"] = "bearer"
+    # GitLab REST 使用 PRIVATE-TOKEN；多数 OAuth 使用 Bearer；
+    # 部分开放平台需要把 key 放在 query 参数里（如 ?token=xxx / ?apiKey=xxx / ?key=xxx）。
+    auth_mode: Literal["bearer", "private_token", "query_key"] = "bearer"
+    key_param: str = "key"
 
 
 class AdminLoginRequest(BaseModel):

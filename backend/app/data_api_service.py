@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import json
 
 import httpx
 from sqlalchemy import select
@@ -355,6 +356,7 @@ class DataApiService:
         api_base: str | None,
         api_key: str | None,
         auth_mode: str = "bearer",
+        key_param: str = "key",
     ) -> dict:
         """GET 请求 api_base；密钥可选 Bearer 或 GitLab PRIVATE-TOKEN。"""
         sk = (source or "").strip().lower() or None
@@ -376,15 +378,51 @@ class DataApiService:
             "Accept": "application/json",
         }
         k = (api_key or "").strip()
+        mode = (auth_mode or "bearer").strip().lower()
         if k:
-            mode = (auth_mode or "bearer").strip().lower()
             if mode == "private_token":
                 headers["PRIVATE-TOKEN"] = k
+            elif mode == "query_key":
+                from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+                kp = (key_param or "key").strip() or "key"
+                parts = urlsplit(url)
+                q = dict(parse_qsl(parts.query, keep_blank_values=True))
+                q[kp] = k
+                url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
             else:
                 headers["Authorization"] = f"Bearer {k}"
         try:
             with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-                r = client.get(url, headers=headers)
+                # Product Hunt true data fetch: always use v2 GraphQL POST with a real query.
+                if sk == "product_hunt":
+                    if "Authorization" not in headers:
+                        raise ValueError("product_hunt 需要 Bearer Access Token（先用 client_id/client_secret 换取 access_token）")
+                    ph_url = "https://api.producthunt.com/v2/api/graphql"
+                    query = {
+                        "query": "{ posts(first: 1) { edges { node { id name tagline votesCount createdAt } } } }"
+                    }
+                    # 在部分 Windows/代理环境里，httpx 对该域名会出现异常 404；
+                    # 这里改用 urllib 保持与手工验证一致，确保能拿到真实数据。
+                    from urllib import request as ureq
+
+                    req = ureq.Request(
+                        ph_url,
+                        data=json.dumps(query).encode("utf-8"),
+                        headers={**headers, "Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with ureq.urlopen(req, timeout=20) as resp:
+                        body = resp.read().decode("utf-8", errors="ignore")
+
+                    class _Resp:
+                        status_code = 200
+                        text = body
+
+                    r = _Resp()
+                    url = ph_url
+                else:
+                    r = client.get(url, headers=headers)
             snippet = (r.text or "")[:600]
             code = r.status_code
             # 2xx–3xx：正常；401/403：服务可达但需密钥；405：常见为仅支持 POST 的端点；429：限流但服务可达。

@@ -311,18 +311,6 @@
       ],
       "notes": "OpenAlex 开放学术图谱；polite pool 建议填邮箱 polite 参数（可选）。",
       "enabled": true
-    },
-    {
-      "source": "tmdb",
-      "label": "TMDb",
-      "api_base": "https://api.themoviedb.org/3/configuration",
-      "frequency": "daily_07:00",
-      "scope_label": "内容·影视元数据",
-      "scope_labels": [
-        "内容·影视元数据"
-      ],
-      "notes": "TMDb；无 api_key 多为 401；themoviedb.org 申请后在请求中携带 api_key 参数。",
-      "enabled": true
     }
   ]
 }

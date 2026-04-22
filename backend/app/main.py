@@ -597,6 +597,7 @@ def admin_sources_test_v2(
             api_base=(payload.api_base or "").strip() or None,
             api_key=(payload.api_key or "").strip() or None,
             auth_mode=payload.auth_mode,
+            key_param=(payload.key_param or "key").strip() or "key",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
