@@ -358,7 +358,7 @@ class DataApiService:
         auth_mode: str = "bearer",
         key_param: str = "key",
     ) -> dict:
-        """GET 请求 api_base；密钥可选 Bearer 或 GitLab PRIVATE-TOKEN。"""
+        """测试数据源连通与取数（按 source 适配 GET/POST 与鉴权方式）。"""
         sk = (source or "").strip().lower() or None
         ab = (api_base or "").strip() or None
         if not sk and not ab:
@@ -421,6 +421,39 @@ class DataApiService:
 
                     r = _Resp()
                     url = ph_url
+                elif sk == "anthropic":
+                    # Anthropic Messages 仅支持 POST；用最小消息体做真实可用性测试。
+                    if "Authorization" not in headers:
+                        raise ValueError("anthropic 需要 API Key（Bearer）")
+                    an_url = "https://api.anthropic.com/v1/messages"
+                    payload = {
+                        "model": "claude-3-5-haiku-latest",
+                        "max_tokens": 16,
+                        "messages": [{"role": "user", "content": "ping"}],
+                    }
+                    an_headers = {
+                        **headers,
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01",
+                    }
+                    r = client.post(an_url, headers=an_headers, json=payload)
+                    url = an_url
+                elif sk == "alphavantage":
+                    # 某些环境对该域名 TLS 握手不稳定，失败时降级 urllib 再试一次。
+                    try:
+                        r = client.get(url, headers=headers)
+                    except Exception:
+                        from urllib import request as ureq
+
+                        req = ureq.Request(url, headers=headers, method="GET")
+                        with ureq.urlopen(req, timeout=20) as resp:
+                            body = resp.read().decode("utf-8", errors="ignore")
+
+                        class _Resp:
+                            status_code = 200
+                            text = body
+
+                        r = _Resp()
                 else:
                     r = client.get(url, headers=headers)
             snippet = (r.text or "")[:600]

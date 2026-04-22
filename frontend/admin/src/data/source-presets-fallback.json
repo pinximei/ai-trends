@@ -37,18 +37,6 @@
       "enabled": true
     },
     {
-      "source": "reddit",
-      "label": "Reddit",
-      "api_base": "https://www.reddit.com/r/all/hot.json?limit=1",
-      "frequency": "daily_07:00",
-      "scope_label": "通用·社区",
-      "scope_labels": [
-        "通用·社区"
-      ],
-      "notes": "【模板】下方为公开 JSON 用于探测；OAuth 应用集成请改用 oauth.reddit.com 与开发者凭据（reddit.com/prefs/apps）。",
-      "enabled": true
-    },
-    {
       "source": "hacker_news",
       "label": "Hacker News",
       "api_base": "https://hacker-news.firebaseio.com/v0/maxitem.json",
@@ -82,18 +70,6 @@
         "AI｜Agent·MCP/Skills"
       ],
       "notes": "【模板】npm 包元数据用于探测；MCP 请将可访问的 HTTP/SSE Base 填在下方；stdio 类需自建网关。",
-      "enabled": true
-    },
-    {
-      "source": "gitlab",
-      "label": "GitLab",
-      "api_base": "https://gitlab.com/api/v4/version",
-      "frequency": "daily_07:00",
-      "scope_label": "AI｜通用·开源协作",
-      "scope_labels": [
-        "AI｜通用·开源协作"
-      ],
-      "notes": "【模板】GitLab REST v4；自建实例请改为 https://你的域名/api/v4/... ；需鉴权时填 Token，认证选 GitLab PAT。",
       "enabled": true
     },
     {
@@ -193,18 +169,6 @@
       "enabled": true
     },
     {
-      "source": "anthropic",
-      "label": "Anthropic",
-      "api_base": "https://api.anthropic.com/v1/messages",
-      "frequency": "daily_07:00",
-      "scope_label": "AI｜大模型·Anthropic",
-      "scope_labels": [
-        "AI｜大模型·Anthropic"
-      ],
-      "notes": "Anthropic Messages 为 POST；GET 探测常为 405（仍视为可达）；在 console.anthropic.com 获取 API Key。",
-      "enabled": true
-    },
-    {
       "source": "google_gemini",
       "label": "Google Gemini",
       "api_base": "https://generativelanguage.googleapis.com/v1beta/models",
@@ -214,18 +178,6 @@
         "AI｜大模型·Google"
       ],
       "notes": "Google AI Studio / Gemini；无 Key 时常为 403；填 Key 后保存再测。",
-      "enabled": true
-    },
-    {
-      "source": "openweather",
-      "label": "OpenWeather",
-      "api_base": "https://api.openweathermap.org/data/2.5/weather?q=London",
-      "frequency": "daily_07:00",
-      "scope_label": "气象·天气",
-      "scope_labels": [
-        "气象·天气"
-      ],
-      "notes": "OpenWeatherMap；无 Key 多为 401；在 openweathermap.org 注册后填 API Key。",
       "enabled": true
     },
     {
