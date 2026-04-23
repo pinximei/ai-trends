@@ -14,7 +14,7 @@ from ..anomaly_service import compute_anomalies, get_anomaly_settings, list_anom
 from ..db import get_db
 from ..hot_service import get_hot_settings, save_hot_settings
 from ..llm_service import generate_inspiration_body
-from ..models import AdminSession
+from ..models import AdminSession, AdminSourceConfig
 from ..product_models import (
     Article,
     HotSnapshot,
@@ -218,45 +218,41 @@ def patch_connector(
 def _run_connector_request(cfg: dict) -> tuple[int, str]:
     url = (cfg or {}).get("url") or "https://httpbin.org/get"
     method = ((cfg or {}).get("method") or "GET").upper()
+    source_key = ((cfg or {}).get("source_key") or "").strip().lower()
+    auth_mode = ((cfg or {}).get("auth_mode") or "bearer").strip().lower()
+    api_key = ((cfg or {}).get("api_key") or "").strip()
+    key_param = ((cfg or {}).get("key_param") or "key").strip() or "key"
+    headers = {
+        "User-Agent": "AISoul-ConnectorSync/1.0",
+        "Accept": "application/json",
+    }
+    if api_key:
+        if auth_mode == "private_token":
+            headers["PRIVATE-TOKEN"] = api_key
+        elif auth_mode == "query_key":
+            from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+            parts = urlsplit(url)
+            q = dict(parse_qsl(parts.query, keep_blank_values=True))
+            q[key_param] = api_key
+            url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
+        else:
+            headers["Authorization"] = f"Bearer {api_key}"
     try:
         with httpx.Client(timeout=30.0) as client:
-            r = client.request(method, url)
+            if source_key == "product_hunt":
+                ph_url = "https://api.producthunt.com/v2/api/graphql"
+                query = {"query": "{ posts(first: 1) { edges { node { id name tagline votesCount createdAt } } } }"}
+                r = client.post(ph_url, headers={**headers, "Content-Type": "application/json"}, json=query)
+            else:
+                r = client.request(method, url, headers=headers)
         text = (r.text or "")[:800]
         return r.status_code, text
     except Exception as e:
         return 0, str(e)[:800]
 
 
-@router.get("/product/resolve-source/{source_key}")
-def resolve_source_segments_preview(
-    source_key: str,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    """根据后台「数据源」标识预览解析出的行业/板块（与同步入库使用同一逻辑）。"""
-    rows = resolve_admin_source_key_to_segments(db, source_key)
-    return ok({"source_key": source_key.strip().lower(), "targets": rows})
-
-
-@router.post("/product/connectors/{connector_id}/test")
-def test_connector(
-    connector_id: int,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    c = db.get(ProductConnector, connector_id)
-    if not c:
-        raise HTTPException(404, "not found")
-    status_code, snippet = _run_connector_request(c.config_json or {})
-    return ok({"http_status": status_code, "snippet": snippet})
-
-
-@router.post("/product/connectors/{connector_id}/sync")
-def sync_connector(
-    connector_id: int,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
+def run_connector_sync(db: Session, connector_id: int, actor: str = "system") -> dict:
     c = db.get(ProductConnector, connector_id)
     if not c:
         raise HTTPException(404, "not found")
@@ -269,13 +265,22 @@ def sync_connector(
     db.add(log)
     db.flush()
 
-    status_code, snippet = _run_connector_request(c.config_json or {})
+    cfg = dict(c.config_json or {})
+    ask = (c.admin_source_key or "").strip().lower()
+    if ask:
+        src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask))
+        if src:
+            cfg.setdefault("source_key", ask)
+            cfg.setdefault("url", (src.api_base or "").strip())
+            # NOTE: 当前系统仅保存 masked key，若需要真实受保护源请在 connector.config_json 里单独填 api_key。
+            cfg.setdefault("auth_mode", "bearer")
+
+    status_code, snippet = _run_connector_request(cfg)
     rows_ingested = 0
     articles_created = 0
     err = None
     if status_code and 200 <= status_code < 300:
         base_val = float(status_code % 100) / 10.0 + 0.1
-        ask = (c.admin_source_key or "").strip().lower()
         if ask:
             targets = resolve_admin_source_key_to_segments(db, ask)
             if not targets:
@@ -352,16 +357,47 @@ def sync_connector(
     log.finished_at = datetime.utcnow()
     log.rows_ingested = rows_ingested + articles_created
     db.commit()
-    audit(db, actor=session.username, action="product.connector.sync", target=str(connector_id))
-    return ok(
-        {
-            "connector_id": c.id,
-            "http_status": status_code,
-            "rows_ingested": rows_ingested,
-            "articles_created": articles_created,
-            "error": err,
-        }
-    )
+    audit(db, actor=actor, action="product.connector.sync", target=str(connector_id))
+    return {
+        "connector_id": c.id,
+        "http_status": status_code,
+        "rows_ingested": rows_ingested,
+        "articles_created": articles_created,
+        "error": err,
+    }
+
+
+@router.get("/product/resolve-source/{source_key}")
+def resolve_source_segments_preview(
+    source_key: str,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    """根据后台「数据源」标识预览解析出的行业/板块（与同步入库使用同一逻辑）。"""
+    rows = resolve_admin_source_key_to_segments(db, source_key)
+    return ok({"source_key": source_key.strip().lower(), "targets": rows})
+
+
+@router.post("/product/connectors/{connector_id}/test")
+def test_connector(
+    connector_id: int,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    c = db.get(ProductConnector, connector_id)
+    if not c:
+        raise HTTPException(404, "not found")
+    status_code, snippet = _run_connector_request(c.config_json or {})
+    return ok({"http_status": status_code, "snippet": snippet})
+
+
+@router.post("/product/connectors/{connector_id}/sync")
+def sync_connector(
+    connector_id: int,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    return ok(run_connector_sync(db, connector_id, actor=session.username))
 
 
 @router.get("/product/segments")

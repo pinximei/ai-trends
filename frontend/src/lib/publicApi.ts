@@ -1,22 +1,9 @@
-/** 开发默认走 Vite 代理（同源 `/api`）；生产构建请设 `VITE_API_BASE=https://你的API域名` */
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import { apiGet } from "../api";
 
-type Envelope<T> = { code: number; message: string; data: T };
-
-async function parse<T>(res: Response): Promise<T> {
-  const j = (await res.json()) as Envelope<T>;
-  if (!res.ok || j.code !== 0) {
-    throw new Error(j.message || `HTTP ${res.status}`);
-  }
-  return j.data;
-}
+const DEFAULT_LANG = "zh-CN";
 
 export async function publicGet<T>(path: string): Promise<T> {
-  const base = API_BASE.replace(/\/$/, "");
-  const p = path.startsWith("/") ? path : `/${path}`;
-  const url = path.startsWith("http") ? path : `${base}${p}`;
-  const res = await fetch(url);
-  return parse<T>(res);
+  return apiGet<T>(path, DEFAULT_LANG);
 }
 
 export const publicApi = {
