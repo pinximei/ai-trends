@@ -25,5 +25,8 @@ dependencies = [
   "apscheduler>=3.10.4"
 ]
 
+[project.optional-dependencies]
+deploy = ["paramiko>=3.4.0"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
