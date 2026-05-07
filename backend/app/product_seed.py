@@ -15,6 +15,7 @@ from .product_models import (
     ProductConnector,
     ProductSetting,
     Segment,
+    SoftwareDownload,
 )
 
 
@@ -95,9 +96,11 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[0].id,
             industry_id=ind.id,
             content_type="third_party_derived",
-            third_party_source="演示数据源",
+            third_party_source="hacker_news / 演示数据源",
             status="published",
             published_at=datetime.utcnow(),
+            feed_kind="news",
+            ai_categories_json='["大模型","开源","算力"]',
         ),
         Article(
             slug="app-landscape",
@@ -107,9 +110,11 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[1].id,
             industry_id=ind.id,
             content_type="application",
-            third_party_source="示例 API 提供方",
+            third_party_source="github / 演示连接器",
             status="published",
             published_at=datetime.utcnow(),
+            feed_kind="apps",
+            ai_categories_json='["应用发布","开源工具","Agent"]',
         ),
         Article(
             slug="tool-picks",
@@ -119,9 +124,11 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[2].id,
             industry_id=ind.id,
             content_type="self_tool",
-            third_party_source=None,
+            third_party_source="pypi / 自营演示",
             status="published",
             published_at=datetime.utcnow(),
+            feed_kind="apps",
+            ai_categories_json='["开发工具","开源"]',
         ),
     ]
     for a in articles:
@@ -141,6 +148,67 @@ def seed_product_if_empty(db: Session) -> None:
         )
     )
 
+    db.commit()
+
+
+def ensure_demo_software_downloads(db: Session) -> None:
+    """演示环境写入若干 iOS/Android 下载占位，便于联调分类筛选。"""
+    if db.scalar(select(SoftwareDownload.id).limit(1)):
+        return
+    rows = [
+        SoftwareDownload(
+            title="AISoul 雷达（演示 iOS）",
+            summary="占位：替换为实际 App Store 链接后可上架。",
+            platform="ios",
+            category_slug="ai_radar",
+            category_label="行业雷达",
+            store_url="https://apps.apple.com/",
+            sort_order=20,
+            status="published",
+        ),
+        SoftwareDownload(
+            title="AISoul 雷达（演示 Android）",
+            summary="占位：替换为 Google Play 或 APK 分发地址。",
+            platform="android",
+            category_slug="ai_radar",
+            category_label="行业雷达",
+            store_url="https://play.google.com/store",
+            sort_order=19,
+            status="published",
+        ),
+        SoftwareDownload(
+            title="AI 助手壳（演示 iOS）",
+            summary="应用类型示例：对话 / Agent。",
+            platform="ios",
+            category_slug="ai_assistant",
+            category_label="AI 助手",
+            store_url="https://apps.apple.com/",
+            sort_order=12,
+            status="published",
+        ),
+        SoftwareDownload(
+            title="AI 助手壳（演示 Android）",
+            summary="与 iOS 同类型，便于批量生成时按类型归类。",
+            platform="android",
+            category_slug="ai_assistant",
+            category_label="AI 助手",
+            store_url="https://play.google.com/store",
+            sort_order=11,
+            status="published",
+        ),
+        SoftwareDownload(
+            title="端侧推理工具（演示 Android）",
+            summary="应用类型示例：工具链。",
+            platform="android",
+            category_slug="devtools",
+            category_label="开发工具",
+            store_url="https://play.google.com/store",
+            sort_order=8,
+            status="published",
+        ),
+    ]
+    for r in rows:
+        db.add(r)
     db.commit()
 
 
@@ -168,6 +236,18 @@ def ensure_product_settings_and_demo_connector(db: Session) -> None:
                     "l2_z": 4.0,
                     "cooldown_hours": 48,
                     "board_k": 2,
+                },
+            )
+        )
+    if not db.get(ProductSetting, "llm"):
+        db.add(
+            ProductSetting(
+                key="llm",
+                value_json={
+                    "provider": "deepseek",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "model": "deepseek-chat",
+                    "api_key": "",
                 },
             )
         )

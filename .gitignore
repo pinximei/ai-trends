@@ -7,6 +7,14 @@ frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
 frontend/admin/node_modules/
+# 根目录密钥文件或 keys 目录，勿提交（勿 git add keys）
+/keys
+keys/
+# 本地运维脚本常含 SSH/密码，勿提交；部署见 docs/deploy-tencent-cvm.md
+scripts/remote_*.py
+scripts/fix_failed_sources.py
+scripts/resync_connectors.py
+scripts/sync_real_data.py
 .env
 .venv/
 venv/

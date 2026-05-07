@@ -66,7 +66,30 @@ type AdminUser = {
 type Health = { status: string; db: string; time: string; metrics: Record<string, number> };
 type Settings = { password_min_length: number };
 type DbInfo = { mode: string; database_url: string; test_url: string; prod_url: string };
-type TabKey = "overview" | "queries" | "sources" | "settings";
+type TabKey = "overview" | "queries" | "sources" | "ai" | "software" | "settings";
+
+type SwPkgRow = {
+  id: number;
+  title: string;
+  platform: string;
+  category_slug: string;
+  category_label: string;
+  status: string;
+  sort_order: number;
+  has_artifact: boolean;
+  store_url: string;
+  created_at: string;
+};
+
+type LlmSettingsView = {
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key_masked: string;
+  has_api_key: boolean;
+  env_fallback: boolean;
+  pipeline: Array<{ id: string; label: string }>;
+};
 
 type SourcePresetRow = {
   source: string;
@@ -129,6 +152,19 @@ export function App() {
     url_tested?: string;
   } | null>(null);
 
+  const [llmSettings, setLlmSettings] = useState<LlmSettingsView | null>(null);
+  const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
+  const [llmSaving, setLlmSaving] = useState(false);
+
+  const [swPackages, setSwPackages] = useState<SwPkgRow[]>([]);
+  const [swFile, setSwFile] = useState<File | null>(null);
+  const [swTitle, setSwTitle] = useState("");
+  const [swSummary, setSwSummary] = useState("");
+  const [swPlatform, setSwPlatform] = useState<"ios" | "android">("android");
+  const [swCatSlug, setSwCatSlug] = useState("general");
+  const [swCatLabel, setSwCatLabel] = useState("");
+  const [swBusy, setSwBusy] = useState(false);
+
   const isAuthed = useMemo(() => !!me, [me]);
   const canManageSettings = me?.role === "admin";
   const canOperate = me?.role === "admin" || me?.role === "operator";
@@ -182,6 +218,19 @@ export function App() {
     } else if (tab === "settings" && canManageSettings) {
       const u = await adminApi.users("", "");
       setUsers(u.items);
+    } else if (tab === "ai") {
+      const llm = await adminApi.getLlmSettings();
+      setLlmSettings(llm);
+      setLlmForm((p) => ({
+        ...p,
+        provider: llm.provider,
+        base_url: llm.base_url,
+        model: llm.model,
+        api_key: "",
+      }));
+    } else if (tab === "software") {
+      const pk = await adminApi.softwarePackages(100);
+      setSwPackages(pk);
     }
   }
 
@@ -323,6 +372,83 @@ export function App() {
     setUsers([]);
     setHealth(null);
     setDbInfo(null);
+    setLlmSettings(null);
+    setSwPackages([]);
+  }
+
+  async function onUploadSoftware(e: FormEvent) {
+    e.preventDefault();
+    if (!canOperate) return;
+    if (!swFile) {
+      setErr("请选择安装包文件");
+      return;
+    }
+    if (!swTitle.trim()) {
+      setErr("请填写应用名称");
+      return;
+    }
+    setSwBusy(true);
+    setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("file", swFile);
+      fd.append("title", swTitle.trim());
+      fd.append("summary", swSummary);
+      fd.append("platform", swPlatform);
+      fd.append("category_slug", (swCatSlug || "general").trim());
+      fd.append("category_label", (swCatLabel || swCatSlug || "general").trim());
+      fd.append("sort_order", "0");
+      await adminApi.uploadSoftwarePackage(fd);
+      setSwFile(null);
+      setSwTitle("");
+      setSwSummary("");
+      const pk = await adminApi.softwarePackages(100);
+      setSwPackages(pk);
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "upload failed"));
+    } finally {
+      setSwBusy(false);
+    }
+  }
+
+  async function onDeleteSoftwareRow(id: number) {
+    if (!canOperate) return;
+    if (!window.confirm(`确定删除应用包 id=${id}？文件将从磁盘移除。`)) return;
+    setErr("");
+    try {
+      await adminApi.deleteSoftwarePackage(id);
+      setSwPackages((p) => p.filter((x) => x.id !== id));
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "delete failed"));
+    }
+  }
+
+  async function onSaveLlm(e: FormEvent) {
+    e.preventDefault();
+    if (!canOperate) return;
+    setLlmSaving(true);
+    setErr("");
+    try {
+      const payload: { provider?: string; base_url?: string; model?: string; api_key?: string } = {
+        provider: llmForm.provider.trim() || undefined,
+        base_url: llmForm.base_url.trim() || undefined,
+        model: llmForm.model.trim() || undefined,
+      };
+      if (llmForm.api_key.trim()) payload.api_key = llmForm.api_key.trim();
+      const out = await adminApi.saveLlmSettings(payload);
+      setLlmSettings(out);
+      setLlmForm((p) => ({
+        ...p,
+        api_key: "",
+        provider: out.provider,
+        base_url: out.base_url,
+        model: out.model,
+      }));
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "save llm failed"));
+    } finally {
+      setLlmSaving(false);
+    }
   }
 
   async function onSaveSource(e: FormEvent) {
@@ -506,6 +632,16 @@ export function App() {
             title={!canOperate ? "需要运营或管理员角色" : undefined}
           >
             数据源管理
+          </button>
+          <button type="button" className={tab === "ai" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"} onClick={() => setTab("ai")}>
+            AI 资讯配置
+          </button>
+          <button
+            type="button"
+            className={tab === "software" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"}
+            onClick={() => setTab("software")}
+          >
+            应用分发
           </button>
           <button
             type="button"
@@ -1051,6 +1187,201 @@ export function App() {
                   ) : null}
                 </form>
               </article>
+            </div>
+          </section>
+        ) : null}
+
+        {tab === "ai" ? (
+          <section className="settings-stack ai-config-stack">
+            <div className="card ai-hero-panel">
+              <div className="ai-hero-grid">
+                <div>
+                  <p className="ai-hero-kicker">大模型 · OpenAI 兼容协议</p>
+                  <h2 className="ai-hero-title">AI 资讯生成与去重</h2>
+                  <p className="muted tiny" style={{ marginTop: 10, maxWidth: 520, lineHeight: 1.6 }}>
+                    连接器拉取原始片段 → 入库指纹去重 → 规则价值分 → DeepSeek 结构化润色（可选）→ 展示指纹去重 →
+                    发布。前台列表另用游标 + 指纹跨页去重。密钥仅存服务端库内，接口仅返回脱敏掩码。
+                  </p>
+                </div>
+                <div className="ai-hero-metrics">
+                  <div>
+                    <span className="ai-metric-label">密钥状态</span>
+                    <span className="ai-metric-value">{llmSettings?.has_api_key ? "已配置" : "未配置"}</span>
+                  </div>
+                  <div>
+                    <span className="ai-metric-label">环境变量回退</span>
+                    <span className="ai-metric-value">{llmSettings?.env_fallback ? "AISOU_LLM_* 可用" : "无"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card settings-panel ai-pipeline-card">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
+                流水线（Agent 逻辑保持线性）
+              </h3>
+              <ol className="ai-pipeline-list">
+                {(llmSettings?.pipeline ?? []).map((step, i) => (
+                  <li key={step.id}>
+                    <span className="ai-pipeline-idx">{i + 1}</span>
+                    <span>{step.label}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="card settings-panel">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
+                DeepSeek / 兼容端点
+              </h3>
+              <p className="muted tiny" style={{ marginTop: 6 }}>
+                默认 <code className="inline-code">https://api.deepseek.com/v1</code> 与{" "}
+                <code className="inline-code">deepseek-chat</code>。保存后连接器同步入库时会调用润色；未填 Key 时自动使用规则稿。
+              </p>
+              <form className="create-user-form" onSubmit={onSaveLlm} style={{ marginTop: 16 }}>
+                <div className="form-field">
+                  <label>提供商标识</label>
+                  <input
+                    value={llmForm.provider}
+                    onChange={(e) => setLlmForm((p) => ({ ...p, provider: e.target.value }))}
+                    disabled={!canOperate}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Base URL（须含 /v1 前缀）</label>
+                  <input
+                    value={llmForm.base_url}
+                    onChange={(e) => setLlmForm((p) => ({ ...p, base_url: e.target.value }))}
+                    disabled={!canOperate}
+                    placeholder="https://api.deepseek.com/v1"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>模型名</label>
+                  <input
+                    value={llmForm.model}
+                    onChange={(e) => setLlmForm((p) => ({ ...p, model: e.target.value }))}
+                    disabled={!canOperate}
+                    placeholder="deepseek-chat"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>API Key（Bearer）</label>
+                  <input
+                    type="password"
+                    value={llmForm.api_key}
+                    onChange={(e) => setLlmForm((p) => ({ ...p, api_key: e.target.value }))}
+                    disabled={!canOperate}
+                    placeholder={llmSettings?.has_api_key ? "已保存 · 输入新值可覆盖" : "sk-…"}
+                    autoComplete="new-password"
+                  />
+                  <p className="muted tiny" style={{ marginTop: 6 }}>
+                    当前掩码：<strong style={{ color: "#e2e8f0" }}>{llmSettings?.api_key_masked || "—"}</strong>
+                  </p>
+                </div>
+                <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                  <button type="submit" disabled={!canOperate || llmSaving}>
+                    {llmSaving ? "保存中…" : "保存配置"}
+                  </button>
+                  {!canOperate ? (
+                    <span className="muted tiny">只读：需要运营或管理员角色才可保存。</span>
+                  ) : null}
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {tab === "software" ? (
+          <section className="settings-stack">
+            <div className="card settings-panel">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
+                上传应用安装包
+              </h3>
+              <p className="muted tiny" style={{ marginTop: 6 }}>
+                写入 <code className="inline-code">data/software_uploads/</code> 并发布；公开站「软件下载」将显示<strong>本地下载</strong>（非商店跳转）。
+                命令行等价：<code className="inline-code">py -3.12 scripts/upload_software_app.py --file ...</code>
+              </p>
+              <form className="create-user-form" style={{ marginTop: 12 }} onSubmit={onUploadSoftware}>
+                <div className="form-field">
+                  <label>安装包文件</label>
+                  <input
+                    type="file"
+                    disabled={!canOperate || swBusy}
+                    onChange={(e) => setSwFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>应用名称</label>
+                  <input value={swTitle} disabled={!canOperate || swBusy} onChange={(e) => setSwTitle(e.target.value)} />
+                </div>
+                <div className="form-field">
+                  <label>摘要</label>
+                  <textarea value={swSummary} disabled={!canOperate || swBusy} rows={2} onChange={(e) => setSwSummary(e.target.value)} />
+                </div>
+                <div className="form-field">
+                  <label>平台</label>
+                  <select value={swPlatform} disabled={!canOperate || swBusy} onChange={(e) => setSwPlatform(e.target.value as "ios" | "android")}>
+                    <option value="android">Android</option>
+                    <option value="ios">iOS</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>分类 slug</label>
+                  <input value={swCatSlug} disabled={!canOperate || swBusy} onChange={(e) => setSwCatSlug(e.target.value)} placeholder="general" />
+                </div>
+                <div className="form-field">
+                  <label>分类展示名</label>
+                  <input value={swCatLabel} disabled={!canOperate || swBusy} onChange={(e) => setSwCatLabel(e.target.value)} placeholder="与 slug 一致可留空" />
+                </div>
+                <button type="submit" disabled={!canOperate || swBusy}>
+                  {swBusy ? "上传中…" : "上传并发布"}
+                </button>
+                {!canOperate ? <p className="muted tiny">只读账号无法上传。</p> : null}
+              </form>
+            </div>
+
+            <div className="card settings-panel">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
+                已发布包（最近 {swPackages.length} 条）
+              </h3>
+              <div style={{ overflowX: "auto", marginTop: 10 }}>
+                <table className="data-table" style={{ width: "100%", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>标题</th>
+                      <th>平台</th>
+                      <th>分类</th>
+                      <th>直链包</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {swPackages.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.id}</td>
+                        <td>{r.title}</td>
+                        <td>{r.platform}</td>
+                        <td>{r.category_label || r.category_slug}</td>
+                        <td>{r.has_artifact ? "是" : "否"}</td>
+                        <td>
+                          {canOperate ? (
+                            <button type="button" className="btn-ghost" onClick={() => void onDeleteSoftwareRow(r.id)}>
+                              删除
+                            </button>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         ) : null}

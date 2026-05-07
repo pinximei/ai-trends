@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import JSON as SAJSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -61,6 +61,23 @@ class MetricPoint(Base):
 
 class Article(Base):
     __tablename__ = "product_articles"
+    __table_args__ = (
+        Index(
+            "ix_product_articles_public_feed",
+            "industry_id",
+            "status",
+            "published_at",
+            "id",
+        ),
+        Index(
+            "ix_product_articles_public_feed_seg",
+            "industry_id",
+            "segment_id",
+            "status",
+            "published_at",
+            "id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     slug: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
@@ -71,6 +88,12 @@ class Article(Base):
     industry_id: Mapped[int] = mapped_column(Integer, ForeignKey("product_industries.id"), index=True)
     content_type: Mapped[str] = mapped_column(String(32), default="third_party_derived")
     third_party_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 连接器原始响应指纹，用于入库前去重（与标题无关）
+    ingest_fingerprint: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    # LLM 重写时给出的短标签类别 JSON 数组，例如 ["大模型","应用发布"]
+    ai_categories_json: Mapped[str] = mapped_column(Text, default="[]")
+    # 公共站泳道：news=资讯、apps=应用（入库时由数据源决定，供筛选与统计）
+    feed_kind: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -99,6 +122,30 @@ class CmsPage(Base):
     status: Mapped[str] = mapped_column(String(16), default="draft")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SoftwareDownload(Base):
+    """客户端安装包 / 应用商店入口，按平台与业务类型分类，供批量上架脚本写入。"""
+
+    __tablename__ = "product_software_downloads"
+    __table_args__ = (Index("ix_product_sw_dl_public_list", "status", "platform", "category_slug", "sort_order", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(256))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    platform: Mapped[str] = mapped_column(String(16), index=True)
+    category_slug: Mapped[str] = mapped_column(String(64), index=True)
+    category_label: Mapped[str] = mapped_column(String(128), default="")
+    store_url: Mapped[str] = mapped_column(String(1024), default="")
+    # 相对 backend/data 的包路径，例如 software_uploads/12/app.apk；有值时前台走本地下载而非外链
+    artifact_rel_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    artifact_download_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    artifact_mime: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    icon_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="published", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class LlmUsageLog(Base):

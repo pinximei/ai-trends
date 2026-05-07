@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session
 from ..admin_auth import audit, require_role
 from ..anomaly_service import compute_anomalies, get_anomaly_settings, list_anomaly_events, mark_anomaly_read, save_anomaly_settings
 from ..db import get_db
+from ..application.news_agent import pipeline_steps
 from ..hot_service import get_hot_settings, save_hot_settings
+from ..llm_settings_service import get_llm_settings_public, save_llm_settings_patch
 from ..llm_service import generate_inspiration_body
 from ..models import AdminSession, AdminSourceConfig
 from ..product_models import (
@@ -27,6 +29,11 @@ from ..product_models import (
     ProductConnector,
     ProductConnectorLog,
     Segment,
+)
+from ..software_package_service import (
+    create_software_package_with_file,
+    delete_software_package,
+    list_packages_admin,
 )
 from ..article_ingest import create_published_articles_for_connector_targets
 from ..source_segment_resolve import first_metric_for_segment, resolve_admin_source_key_to_segments
@@ -70,6 +77,34 @@ def get_anomaly_setting(
     session: AdminSession = Depends(require_role("viewer")),
 ):
     return ok(get_anomaly_settings(db))
+
+
+class LlmSettingsPatch(BaseModel):
+    provider: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = Field(None, description="非空则覆盖已存密钥；不传或空串表示保留原密钥")
+
+
+@router.get("/product/settings/llm")
+def get_llm_settings(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    data = get_llm_settings_public(db)
+    return ok({**data, "pipeline": pipeline_steps()})
+
+
+@router.put("/product/settings/llm")
+def put_llm_settings(
+    payload: LlmSettingsPatch,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    patch = {k: v for k, v in payload.model_dump().items() if v is not None}
+    merged = save_llm_settings_patch(db, patch)
+    audit(db, actor=session.username, action="product.settings.llm", target="llm", detail=str({k: v for k, v in patch.items() if k != "api_key"}))
+    return ok({**merged, "pipeline": pipeline_steps()})
 
 
 class AnomalySettingsPatch(BaseModel):
@@ -941,3 +976,66 @@ def list_connector_logs(
             for r in rows
         ]
     )
+
+
+@router.get("/product/software/packages")
+def admin_list_software_packages(
+    limit: int = Query(80, ge=1, le=200),
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    return ok(list_packages_admin(db, limit=limit))
+
+
+@router.post("/product/software/packages")
+async def admin_upload_software_package(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    summary: str = Form(""),
+    platform: str = Form(...),
+    category_slug: str = Form("general"),
+    category_label: str = Form(""),
+    sort_order: int = Form(0),
+    store_url: str = Form(""),
+):
+    body = await file.read()
+    try:
+        row = create_software_package_with_file(
+            db,
+            title=title,
+            summary=summary,
+            platform=platform,
+            category_slug=category_slug,
+            category_label=category_label or category_slug,
+            file_body=body,
+            original_filename=file.filename or "package.bin",
+            content_type=file.content_type,
+            sort_order=sort_order,
+            store_url=store_url or None,
+            status="published",
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    audit(db, actor=session.username, action="product.software.upload", target=str(row.id), detail=row.title[:120])
+    return ok(
+        {
+            "id": row.id,
+            "title": row.title,
+            "platform": row.platform,
+            "download_path": f"/api/public/v1/software/downloads/{row.id}/file",
+        }
+    )
+
+
+@router.delete("/product/software/packages/{package_id}")
+def admin_delete_software_package(
+    package_id: int,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    if not delete_software_package(db, package_id):
+        raise HTTPException(404, "not found")
+    audit(db, actor=session.username, action="product.software.delete", target=str(package_id))
+    return ok({"deleted": package_id})

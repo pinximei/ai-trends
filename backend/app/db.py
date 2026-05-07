@@ -73,6 +73,22 @@ def ensure_schema_compatibility() -> None:
         cols = _column_names(conn, "product_connectors")
         if cols and "admin_source_key" not in cols:
             conn.execute(text("ALTER TABLE product_connectors ADD COLUMN admin_source_key VARCHAR(64)"))
+        cols = _column_names(conn, "product_articles")
+        if cols:
+            if "ingest_fingerprint" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN ingest_fingerprint VARCHAR(40)"))
+            if "ai_categories_json" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN ai_categories_json TEXT DEFAULT '[]'"))
+            if "feed_kind" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN feed_kind VARCHAR(8)"))
+        cols = _column_names(conn, "product_software_downloads")
+        if cols:
+            if "artifact_rel_path" not in cols:
+                conn.execute(text("ALTER TABLE product_software_downloads ADD COLUMN artifact_rel_path VARCHAR(512)"))
+            if "artifact_download_name" not in cols:
+                conn.execute(text("ALTER TABLE product_software_downloads ADD COLUMN artifact_download_name VARCHAR(256)"))
+            if "artifact_mime" not in cols:
+                conn.execute(text("ALTER TABLE product_software_downloads ADD COLUMN artifact_mime VARCHAR(128)"))
 
 
 def get_db():

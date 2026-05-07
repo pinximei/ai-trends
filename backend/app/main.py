@@ -7,7 +7,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .lifespan import app_lifespan
-from .routers import admin_data_browser, admin_extended, admin_product, public_v1
+from .api.public.router import router as public_api_router
+from .routers import admin_data_browser, admin_extended, admin_product
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -57,7 +58,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(public_v1.router)
+app.include_router(public_api_router)
 app.include_router(admin_product.router)
 app.include_router(admin_extended.router)
 app.include_router(admin_data_browser.router)
@@ -275,7 +276,8 @@ _SKIP_SIGNED = os.getenv("AISOU_SKIP_API_SIGNATURE", "").lower() in {"1", "true"
 async def api_security_middleware(request: Request, call_next):
     enforce_https(request)
     path = request.url.path
-    protected_signed = path.startswith("/api/v1/") or path.startswith("/api/public/v1/")
+    # 仅内部 /api/v1 需 HMAC + Bearer；/api/public/v1 为站点公开只读接口，免签名（健康检查、CDN、监控可直接 GET）
+    protected_signed = path.startswith("/api/v1/")
     allow_unauth = {"/api/v1/auth/token", "/api/admin/v1/auth/login", "/api/admin/v1/auth/logout", "/api/admin/v1/auth/me"}
     if request.method == "OPTIONS":
         return await call_next(request)
@@ -288,11 +290,6 @@ async def api_security_middleware(request: Request, call_next):
 
 @app.get("/api/v1/dashboard/summary")
 def dashboard_summary(request: Request, db: Session = Depends(get_db)):
-    return api_envelope(request, DataApiService(db).get_dashboard_summary())
-
-
-@app.get("/api/public/v1/dashboard/summary")
-def dashboard_summary_public(request: Request, db: Session = Depends(get_db)):
     return api_envelope(request, DataApiService(db).get_dashboard_summary())
 
 
@@ -370,22 +367,12 @@ def trends(request: Request, period: str = "week", db: Session = Depends(get_db)
     return api_envelope(request, data)
 
 
-@app.get("/api/public/v1/trends")
-def trends_public(request: Request, period: str = "week", db: Session = Depends(get_db)):
-    return trends(request, period, db)
-
-
 @app.get("/api/v1/trends/{trend_key}")
 def trend_detail(request: Request, trend_key: str, db: Session = Depends(get_db)):
     data = DataApiService(db).get_trend_detail(trend_key)
     if not data:
         raise HTTPException(status_code=404, detail="trend not found")
     return api_envelope(request, data)
-
-
-@app.get("/api/public/v1/trends/{trend_key}")
-def trend_detail_public(request: Request, trend_key: str, db: Session = Depends(get_db)):
-    return trend_detail(request, trend_key, db)
 
 
 @app.get("/api/v1/trends/{trend_key}/timeline")
@@ -425,11 +412,6 @@ def inspirations(request: Request, period: str = "week", db: Session = Depends(g
     return api_envelope(request, data)
 
 
-@app.get("/api/public/v1/inspirations")
-def inspirations_public(request: Request, period: str = "week", db: Session = Depends(get_db)):
-    return inspirations(request, period, db)
-
-
 @app.get("/api/v1/content/briefing")
 def content_briefing(request: Request, period: str = "week", db: Session = Depends(get_db)):
     try:
@@ -439,22 +421,12 @@ def content_briefing(request: Request, period: str = "week", db: Session = Depen
     return api_envelope(request, data)
 
 
-@app.get("/api/public/v1/content/briefing")
-def content_briefing_public(request: Request, period: str = "week", db: Session = Depends(get_db)):
-    return content_briefing(request, period, db)
-
-
 @app.get("/api/v1/evidences/{signal_id}")
 def evidence(request: Request, signal_id: str, db: Session = Depends(get_db)):
     data = DataApiService(db).get_evidence(signal_id)
     if not data:
         raise HTTPException(status_code=404, detail="evidence not found")
     return api_envelope(request, data)
-
-
-@app.get("/api/public/v1/evidences/{signal_id}")
-def evidence_public(request: Request, signal_id: str, db: Session = Depends(get_db)):
-    return evidence(request, signal_id, db)
 
 
 @app.get("/api/v1/categories")

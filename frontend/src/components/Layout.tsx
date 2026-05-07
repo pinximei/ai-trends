@@ -6,8 +6,9 @@ import { Aurora } from "./Aurora";
 import { TechAtmosphere } from "./TechAtmosphere";
 
 const nav = [
-  { to: "/trends", key: "navTrends" },
-  { to: "/resources", key: "navResources" },
+  { to: "/apps", key: "navApps" },
+  { to: "/news", key: "navNews" },
+  { to: "/downloads", key: "navDownloads" },
   { to: "/about", key: "navAbout" },
 ] as const;
 
@@ -40,7 +41,7 @@ export function Layout() {
       </div>
       <header className="sticky top-0 z-50 border-b border-white/10 bg-night-950/80 shadow-[0_0_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link to="/trends" className="group flex items-center gap-2">
+          <Link to="/apps" className="group flex items-center gap-2">
             <motion.span
               className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/30 via-fuchsia-600/30 to-amber-500/25 text-lg shadow-[0_0_24px_rgba(34,211,238,0.25)] ring-1 ring-white/20"
               whileHover={{ rotate: [0, -8, 8, 0], scale: 1.05 }}
@@ -56,7 +57,9 @@ export function Layout() {
           </Link>
           <nav className="flex flex-wrap items-center gap-1">
             {nav.map((item) => {
-              const active = loc.pathname === item.to || loc.pathname.startsWith(`${item.to}/`);
+              const active =
+                loc.pathname === item.to ||
+                (item.to === "/apps" && loc.pathname.startsWith("/resources/"));
               return (
                 <Link key={item.to} to={item.to}>
                   <motion.span

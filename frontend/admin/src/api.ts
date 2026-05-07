@@ -289,4 +289,52 @@ export const adminApi = {
   productSegments: (industrySlug = "ai") =>
     request<Array<Record<string, unknown>>>(`/api/admin/v1/product/segments?industry_slug=${encodeURIComponent(industrySlug)}`),
   productMetrics: () => request<Array<Record<string, unknown>>>("/api/admin/v1/product/metrics"),
+  getLlmSettings: () =>
+    request<{
+      provider: string;
+      base_url: string;
+      model: string;
+      api_key_masked: string;
+      has_api_key: boolean;
+      env_fallback: boolean;
+      pipeline: Array<{ id: string; label: string }>;
+    }>("/api/admin/v1/product/settings/llm"),
+  saveLlmSettings: (payload: { provider?: string; base_url?: string; model?: string; api_key?: string }) =>
+    request<{
+      provider: string;
+      base_url: string;
+      model: string;
+      api_key_masked: string;
+      has_api_key: boolean;
+      env_fallback: boolean;
+      pipeline: Array<{ id: string; label: string }>;
+    }>("/api/admin/v1/product/settings/llm", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  softwarePackages: (limit = 80) =>
+    request<
+      Array<{
+        id: number;
+        title: string;
+        platform: string;
+        category_slug: string;
+        category_label: string;
+        status: string;
+        sort_order: number;
+        has_artifact: boolean;
+        store_url: string;
+        created_at: string;
+      }>
+    >(`/api/admin/v1/product/software/packages?limit=${encodeURIComponent(String(limit))}`),
+  uploadSoftwarePackage: (form: FormData) =>
+    request<{ id: number; title: string; platform: string; download_path: string }>("/api/admin/v1/product/software/packages", {
+      method: "POST",
+      body: form,
+    }),
+  deleteSoftwarePackage: (packageId: number) =>
+    request<{ deleted: number }>(`/api/admin/v1/product/software/packages/${packageId}`, {
+      method: "DELETE",
+    }),
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { publicApi } from "@/lib/publicApi";
+import { publicApi } from "@/api/public";
 import { useI18n } from "@/i18n";
 
 export function AboutSitePage() {

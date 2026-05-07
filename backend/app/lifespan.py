@@ -38,10 +38,15 @@ def _startup_sync() -> None:
         ensure_mainstream_admin_sources(db)
         if _demo_seed_enabled():
             seed_if_empty(db)
-            from .product_seed import ensure_product_settings_and_demo_connector, seed_product_if_empty
+            from .product_seed import (
+                ensure_demo_software_downloads,
+                ensure_product_settings_and_demo_connector,
+                seed_product_if_empty,
+            )
 
             seed_product_if_empty(db)
             ensure_product_settings_and_demo_connector(db)
+            ensure_demo_software_downloads(db)
         from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
         sync_product_taxonomy_from_admin_sources(db)

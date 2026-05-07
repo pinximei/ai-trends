@@ -1,12 +1,21 @@
-"""连接器同步等场景下写入「资源」文章（product_articles），供公开站 /resources 使用。"""
+"""连接器同步等场景下写入「资源」文章（product_articles），供公开站使用。"""
 from __future__ import annotations
 
 import json
 import uuid
 from datetime import datetime
 
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from .domain.articles import (
+    VALUE_SCORE_MIN,
+    display_fingerprint,
+    feed_lane,
+    ingest_duplicate_exists,
+    ingest_fingerprint,
+    rule_value_score,
+)
 from .product_models import Article
 
 
@@ -56,46 +65,107 @@ def create_published_articles_for_connector_targets(
     now: datetime,
 ) -> int:
     """
-    为每个解析出的 (industry_id, segment_id) 新增一篇 **已发布** 文章。
-    targets 项须含: industry_id, segment_id, segment_slug, label（展示用）。
-    返回新建篇数。
+    每个连接器成功响应最多入库 **一篇** 已发布文章（多板块 targets 共用同一响应正文时去重）。
+    流程：规则指纹去重 → 规则价值分（低于阈值整批丢弃）→ 达标后尝试 LLM 重写并生成类别（与热门快照 v1-rule 同级规则门槛）；
+    无 API Key 或模型失败则保留规则快照；展示指纹与近期已发布冲突则丢弃。
     """
     if not targets:
         return 0
+    t0 = targets[0]
+    industry_id = int(t0["industry_id"])
+    segment_id = int(t0["segment_id"])
+    label = (t0.get("label") or t0.get("segment_slug") or "板块")[:200]
+
     safe = (snippet or "")[:12000]
+    ing_fp = ingest_fingerprint(safe)
+    if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
+        return 0
+
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
-    src_tag = admin_source_key.strip() if admin_source_key.strip() else "未绑定数据源"
-    n = 0
-    for t in targets:
-        slug = f"sync-c{connector_id}-s{t['segment_id']}-{uuid.uuid4().hex[:16]}"[:128]
-        label = (t.get("label") or t.get("segment_slug") or "板块")[:200]
-        title = f"同步资源 · {label} · {connector_name}"[:500]
-        body = (
-            "## 连接器同步快照\n\n"
-            f"- **数据源标识**: `{src_tag}`\n"
-            f"- **领域标签**: {label}\n"
-            f"- **HTTP 状态**: {http_status}\n\n"
-            "### 内容摘要\n\n"
-            f"{readable_body}\n\n"
-            "<details>\n"
-            "<summary>原始返回片段</summary>\n\n"
-            f"```json\n{safe[:8000]}\n```\n"
-            "\n</details>\n"
+
+    vs = rule_value_score(snippet=safe, summary=summary_base, http_status=http_status or 0)
+    if vs < VALUE_SCORE_MIN:
+        return 0
+
+    src_tag = (admin_source_key or "").strip() or "未绑定数据源"
+    fk = feed_lane(src_tag)
+    slug = f"sync-c{connector_id}-s{segment_id}-{uuid.uuid4().hex[:16]}"[:128]
+    rule_title = f"同步资源 · {label} · {connector_name}"[:500]
+    rule_body = (
+        "## 连接器同步快照\n\n"
+        f"- **数据源标识**: `{src_tag}`\n"
+        f"- **领域标签**: {label}\n"
+        f"- **HTTP 状态**: {http_status}\n"
+        f"- **规则价值分**: {vs:.0f}\n\n"
+        "### 内容摘要\n\n"
+        f"{readable_body}\n\n"
+        "<details>\n"
+        "<summary>原始返回片段</summary>\n\n"
+        f"```json\n{safe[:8000]}\n```\n"
+        "\n</details>\n"
+    )
+
+    ai_categories_json = "[]"
+    title = rule_title
+    summary = summary_base
+    body = rule_body
+
+    from .llm_service import polish_connector_article
+
+    polished = polish_connector_article(
+        db,
+        snippet=safe,
+        connector_name=connector_name,
+        admin_source_key=src_tag,
+        segment_label=label,
+        rule_title=rule_title,
+        rule_summary=summary_base,
+        value_score=vs,
+        ref_id=f"c{connector_id}:{ing_fp[:12]}",
+        feed_kind=fk,
+    )
+    stored_feed_kind = fk
+    if polished:
+        title = (polished.get("title") or rule_title)[:500]
+        summary = (polished.get("summary") or summary_base)[:512]
+        body = (polished.get("body_md") or rule_body)[:50000]
+        cats = polished.get("categories")
+        if isinstance(cats, list):
+            clean = [str(x).strip() for x in cats if str(x).strip()][:8]
+            ai_categories_json = json.dumps(clean, ensure_ascii=False)
+        pfk = polished.get("feed_kind")
+        if isinstance(pfk, str) and pfk.strip().lower() in ("news", "apps"):
+            stored_feed_kind = pfk.strip().lower()
+
+    disp_fp = display_fingerprint(title, summary)
+
+    # 展示层去重：与近期已发布条目的标题+摘要指纹冲突则跳过
+    recent = db.scalars(
+        select(Article)
+        .where(Article.industry_id == industry_id, Article.status == "published")
+        .order_by(desc(Article.published_at))
+        .limit(80)
+    ).all()
+    for a in recent:
+        if display_fingerprint(a.title, a.summary or "") == disp_fp:
+            return 0
+
+    db.add(
+        Article(
+            title=title,
+            slug=slug,
+            summary=summary,
+            body=body,
+            segment_id=segment_id,
+            industry_id=industry_id,
+            content_type="third_party_derived",
+            third_party_source=f"{src_tag} / {connector_name}"[:512],
+            status="published",
+            published_at=now,
+            ingest_fingerprint=ing_fp,
+            ai_categories_json=ai_categories_json,
+            feed_kind=stored_feed_kind,
         )
-        db.add(
-            Article(
-                title=title,
-                slug=slug,
-                summary=summary_base,
-                body=body,
-                segment_id=int(t["segment_id"]),
-                industry_id=int(t["industry_id"]),
-                content_type="third_party_derived",
-                third_party_source=f"{src_tag} / {connector_name}"[:512],
-                status="published",
-                published_at=now,
-            )
-        )
-        n += 1
-    return n
+    )
+    return 1
