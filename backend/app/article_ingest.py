@@ -15,6 +15,7 @@ from .domain.articles import (
     ingest_duplicate_exists,
     ingest_fingerprint,
     rule_value_score,
+    validate_llm_polish_for_publish,
 )
 from .product_models import Article
 
@@ -66,8 +67,8 @@ def create_published_articles_for_connector_targets(
 ) -> int:
     """
     每个连接器成功响应最多入库 **一篇** 已发布文章（多板块 targets 共用同一响应正文时去重）。
-    流程：规则指纹去重 → 规则价值分（低于阈值整批丢弃）→ 达标后尝试 LLM 重写并生成类别（与热门快照 v1-rule 同级规则门槛）；
-    无 API Key 或模型失败则保留规则快照；展示指纹与近期已发布冲突则丢弃。
+    流程：规则指纹去重 → 规则价值分（低于阈值整批丢弃）→ **必须** LLM 全文重写、分类与分 tab 结构；
+    未配置模型、调用失败或 JSON 不合规则 **不入库**；展示指纹与近期已发布冲突则丢弃。
     """
     if not targets:
         return 0
@@ -106,11 +107,6 @@ def create_published_articles_for_connector_targets(
         "\n</details>\n"
     )
 
-    ai_categories_json = "[]"
-    title = rule_title
-    summary = summary_base
-    body = rule_body
-
     from .llm_service import polish_connector_article
 
     polished = polish_connector_article(
@@ -125,16 +121,25 @@ def create_published_articles_for_connector_targets(
         ref_id=f"c{connector_id}:{ing_fp[:12]}",
         feed_kind=fk,
     )
-    stored_feed_kind = fk
-    if polished:
-        title = (polished.get("title") or rule_title)[:500]
-        summary = (polished.get("summary") or summary_base)[:512]
-        body = (polished.get("body_md") or rule_body)[:50000]
-        cats = polished.get("categories")
-        if isinstance(cats, list):
-            clean = [str(x).strip() for x in cats if str(x).strip()][:8]
-            ai_categories_json = json.dumps(clean, ensure_ascii=False)
-        # 不按 LLM 覆盖 feed_kind：模型可能与数据源不一致，导致资讯/应用两列表内容雷同。
+    if not polished or not validate_llm_polish_for_publish(polished):
+        return 0
+
+    title = (polished.get("title") or "")[:500]
+    summary = (polished.get("summary") or "")[:512]
+    tabs = polished.get("tabs") or []
+    body_main = (polished.get("body_md") or "").strip()
+    if not body_main:
+        body_main = "\n\n".join(f"## {t['label']}\n\n{t['body_md']}" for t in tabs)
+    body = body_main[:50000]
+    cats = polished.get("categories")
+    clean = [str(x).strip() for x in cats if str(x).strip()][:8] if isinstance(cats, list) else []
+    ai_categories_json = json.dumps(clean, ensure_ascii=False)
+    ai_tabs_json = json.dumps(
+        [{"label": t["label"], "summary": t["summary"], "body_md": t["body_md"]} for t in tabs],
+        ensure_ascii=False,
+    )
+    fk_out = str(polished.get("feed_kind") or fk).strip().lower()
+    stored_feed_kind = fk_out if fk_out in ("news", "apps") else fk
 
     disp_fp = display_fingerprint(title, summary)
 
@@ -163,6 +168,7 @@ def create_published_articles_for_connector_targets(
             published_at=now,
             ingest_fingerprint=ing_fp,
             ai_categories_json=ai_categories_json,
+            ai_tabs_json=ai_tabs_json,
             feed_kind=stored_feed_kind,
         )
     )

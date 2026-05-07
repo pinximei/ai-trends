@@ -102,7 +102,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     trendColSummary: "摘要",
     trendViewDetail: "查看",
     resourcesIntro:
-      "仅聚焦 AI 行业：连接器拉取后经规则去重与价值过滤，达标条目由模型重写并生成分类标签；未配置模型时保留规则稿。",
+      "仅聚焦 AI 行业：连接器拉取后经规则去重与价值过滤，达标条目须由模型全文重写、生成分类与多分栏（概要+详情）；未配置模型或生成不合规则不入库。",
     resourcesTopic: "主题",
     resourcesTopicAll: "全部主题",
     resourcesSegmentAll: "全部板块",
@@ -120,7 +120,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     resourcesLoading: "加载资源…",
     resourcesEmptyTopic: "当前筛选下暂无文章。",
     resourcesRadarHint:
-      "时间范围对应已入库文章的发布窗口。列表按游标翻页，并以标题+摘要指纹去重。入库侧已做响应正文指纹去重、规则价值分与可选模型重写（含 AI 类别标签）。",
+      "时间范围对应已入库文章的发布窗口。列表按游标翻页，并以标题+摘要指纹去重。入库侧：响应指纹去重、规则价值分，达标后强制模型重写（分类 + 多 tab 正文）；详情页点 tab 查看对应 Markdown。",
     resourcesFeedNews: "最新 AI 资讯",
     resourcesFeedApps: "最新 AI 应用",
     resourcesLoadMore: "加载更多",
@@ -241,7 +241,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     trendColSummary: "Summary",
     trendViewDetail: "Open",
     resourcesIntro:
-      "AI industry only: ingested items are rule-deduped and scored; valuable items are rewritten by the model with category tags (rule draft if no API key).",
+      "AI industry only: connector payloads are rule-deduped and scored; above-threshold items must be fully rewritten by the model with categories and tabbed sections (no publish if LLM is missing or invalid).",
     resourcesTopic: "Topic",
     resourcesTopicAll: "All topics",
     resourcesSegmentAll: "All segments",
@@ -259,7 +259,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     resourcesLoading: "Loading…",
     resourcesEmptyTopic: "No articles for this filter.",
     resourcesRadarHint:
-      "Time window filters published articles. Cursor pagination plus title+summary dedupe on the feed. Ingest uses snippet fingerprints, a rule value score, and optional LLM rewrite with category tags.",
+      "Time window filters published articles. Cursor pagination plus title+summary dedupe. Ingest: snippet fingerprint dedupe, rule value score, then required LLM rewrite (categories + tabbed sections). Open an item and switch tabs for each section’s Markdown.",
     resourcesFeedNews: "Latest AI news",
     resourcesFeedApps: "Latest AI apps",
     resourcesLoadMore: "Load more",

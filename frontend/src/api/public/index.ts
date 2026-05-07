@@ -2,7 +2,7 @@ import { publicGet } from "./client";
 import type { ArticleDetail, ArticleFeedCard } from "./types";
 
 export { publicGet } from "./client";
-export type { ArticleCard, ArticleDetail, ArticleFeedCard } from "./types";
+export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary } from "./types";
 
 export const publicApi = {
   articleCategories: (opts: {

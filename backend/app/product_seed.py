@@ -1,6 +1,7 @@
 """Seed demo data for product_* tables."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -87,12 +88,18 @@ def seed_product_if_empty(db: Session) -> None:
                 )
             )
 
+    def _tabs_json(pairs: list[tuple[str, str, str]]) -> str:
+        return json.dumps(
+            [{"label": a, "summary": b, "body_md": c} for a, b, c in pairs],
+            ensure_ascii=False,
+        )
+
     articles = [
         Article(
             slug="weekly-models",
             title="大模型赛道：本周指标速览",
             summary="基于公开 API 聚合的演示数据。",
-            body="## 摘要\n\n正文为演示内容，可替换为连接器同步结果。",
+            body="## 总览\n\n演示稿结构与线上 LLM 入库一致：多分 tab 展示。",
             segment_id=segs[0].id,
             industry_id=ind.id,
             content_type="third_party_derived",
@@ -101,12 +108,18 @@ def seed_product_if_empty(db: Session) -> None:
             published_at=datetime.utcnow(),
             feed_kind="news",
             ai_categories_json='["大模型","开源","算力"]',
+            ai_tabs_json=_tabs_json(
+                [
+                    ("要点速览", "本周大模型指标与趋势提要。", "## 本周要点\n\n- 演示指标曲线\n- 可替换为连接器同步结果"),
+                    ("口径说明", "数据来源与免责声明。", "## 口径\n\n基于公开 API 演示聚合，非投资建议。"),
+                ]
+            ),
         ),
         Article(
             slug="app-landscape",
             title="AI 应用观察（演示）",
             summary="应用板块资源示例。",
-            body="## 说明\n\n**应用**类文章需标注第三方来源（演示）。",
+            body="## 总览\n\n应用类演示：双 tab 结构与正式稿一致。",
             segment_id=segs[1].id,
             industry_id=ind.id,
             content_type="application",
@@ -115,12 +128,18 @@ def seed_product_if_empty(db: Session) -> None:
             published_at=datetime.utcnow(),
             feed_kind="apps",
             ai_categories_json='["应用发布","开源工具","Agent"]',
+            ai_tabs_json=_tabs_json(
+                [
+                    ("产品动态", "应用与模型发布线索。", "## 动态\n\n**应用**类文章需标注第三方来源（演示）。"),
+                    ("生态观察", "开源与 Agent 相关提示。", "## 生态\n\n演示数据，线上由 LLM 按连接器片段重写。"),
+                ]
+            ),
         ),
         Article(
             slug="tool-picks",
             title="工具链动态（自营示例）",
             summary="自营维护条目可不写第三方来源。",
-            body="## 工具\n\n本页为 **自营工具** 类型演示。",
+            body="## 总览\n\n工具类演示条目。",
             segment_id=segs[2].id,
             industry_id=ind.id,
             content_type="self_tool",
@@ -129,6 +148,12 @@ def seed_product_if_empty(db: Session) -> None:
             published_at=datetime.utcnow(),
             feed_kind="apps",
             ai_categories_json='["开发工具","开源"]',
+            ai_tabs_json=_tabs_json(
+                [
+                    ("工具精选", "本周工具与包管理提示。", "## 工具\n\n本页为 **自营工具** 类型演示。"),
+                    ("使用建议", "集成与版本注意点。", "## 建议\n\n演示环境，生产请接真实流水线。"),
+                ]
+            ),
         ),
     ]
     for a in articles:

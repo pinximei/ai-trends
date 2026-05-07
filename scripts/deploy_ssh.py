@@ -23,6 +23,10 @@
 
 仅执行自定义远程命令:
   py scripts/deploy_ssh.py --cmd "cd /opt/aisoul && git status"
+
+首次 Linux 虚拟机建议先在机器上跑: bash scripts/bootstrap_linux_vm.sh（见 docs/deploy-tencent-cvm.md §0）
+
+本机交互登录（密码放 scripts/ssh_local.env，勿提交）: py scripts/ssh_connect.py（见 scripts/ssh_local.env.example）
 """
 from __future__ import annotations
 

@@ -155,6 +155,7 @@ export function App() {
   const [llmSettings, setLlmSettings] = useState<LlmSettingsView | null>(null);
   const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
   const [llmSaving, setLlmSaving] = useState(false);
+  const [clearIngestBusy, setClearIngestBusy] = useState(false);
 
   const [swPackages, setSwPackages] = useState<SwPkgRow[]>([]);
   const [swFile, setSwFile] = useState<File | null>(null);
@@ -505,6 +506,30 @@ export function App() {
       await loadAdminData();
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "clear failed"));
+    }
+  }
+
+  async function onClearProductIngest() {
+    if (!canManageSettings) return;
+    if (
+      !window.confirm(
+        "将删除所有已入库的资源文章、指标点、连接器同步日志、热门快照与 LLM 用量记录，并重置各连接器的上次同步时间（连接器配置、行业/板块、CMS 页、软件包保留）。确定？",
+      )
+    )
+      return;
+    setClearIngestBusy(true);
+    setErr("");
+    try {
+      const counts = await adminApi.clearProductIngestData();
+      const lines = Object.entries(counts)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n");
+      window.alert(`已清空。\n${lines}`);
+      await loadAdminData();
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "clear ingest failed"));
+    } finally {
+      setClearIngestBusy(false);
     }
   }
 
@@ -1199,8 +1224,9 @@ export function App() {
                   <p className="ai-hero-kicker">大模型 · OpenAI 兼容协议</p>
                   <h2 className="ai-hero-title">AI 资讯生成与去重</h2>
                   <p className="muted tiny" style={{ marginTop: 10, maxWidth: 520, lineHeight: 1.6 }}>
-                    连接器拉取原始片段 → 入库指纹去重 → 规则价值分 → DeepSeek 结构化润色（可选）→ 展示指纹去重 →
-                    发布。前台列表另用游标 + 指纹跨页去重。密钥仅存服务端库内，接口仅返回脱敏掩码。
+                    连接器拉取原始片段 → 入库指纹去重 → 规则价值分 → <strong>DeepSeek</strong>{" "}
+                    全文重写（分类 + 多 tab）→ 展示指纹去重 → 发布；未配置模型则不入库。密钥可仅存库内，或在服务端{" "}
+                    <code className="inline-code">AISOU_LLM_API_KEY</code>（默认 DeepSeek 端点）；接口仅返回脱敏掩码。
                   </p>
                 </div>
                 <div className="ai-hero-metrics">
@@ -1232,11 +1258,51 @@ export function App() {
 
             <div className="card settings-panel">
               <h3 className="settings-title" style={{ marginTop: 0 }}>
+                定时同步与数据清理
+              </h3>
+              <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
+                后端 APScheduler 对<strong>所有已启用</strong>的连接器，默认<strong>每 6 小时</strong>自动执行一次同步（与手动点「同步」相同逻辑）。可在环境变量{" "}
+                <code className="inline-code">AISOU_CONNECTOR_SYNC_INTERVAL_HOURS</code> 中改为 1～168（小时），重启
+                uvicorn 后生效。
+              </p>
+              {canManageSettings ? (
+                <div style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    disabled={clearIngestBusy}
+                    onClick={() => void onClearProductIngest()}
+                    style={{
+                      borderColor: "rgba(248,113,113,0.55)",
+                      color: "#fecaca",
+                      background: "rgba(127,29,29,0.25)",
+                      padding: "10px 16px",
+                      borderRadius: 10,
+                      cursor: clearIngestBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {clearIngestBusy ? "清空中…" : "清空资源入库数据"}
+                  </button>
+                  <p className="muted tiny" style={{ marginTop: 8 }}>
+                    仅管理员。用于纠正错误入库后一键清空，随后可手动同步或等待定时任务。
+                  </p>
+                </div>
+              ) : (
+                <p className="muted tiny" style={{ marginTop: 12 }}>
+                  仅管理员可清空资源入库数据。
+                </p>
+              )}
+            </div>
+
+            <div className="card settings-panel">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
                 DeepSeek / 兼容端点
               </h3>
               <p className="muted tiny" style={{ marginTop: 6 }}>
                 默认 <code className="inline-code">https://api.deepseek.com/v1</code> 与{" "}
-                <code className="inline-code">deepseek-chat</code>。保存后连接器同步入库时会调用润色；未填 Key 时自动使用规则稿。
+                <code className="inline-code">deepseek-chat</code>。连接器同步依赖 LLM：可在本页保存 Key，或在{" "}
+                <code className="inline-code">backend/.env</code> 设置 <code className="inline-code">AISOU_LLM_API_KEY</code>
+                （可选 <code className="inline-code">AISOU_LLM_BASE_URL</code> / <code className="inline-code">AISOU_LLM_MODEL</code>
+                ）；优先级为<strong>库内已存 Key</strong> → 环境变量。
               </p>
               <form className="create-user-form" onSubmit={onSaveLlm} style={{ marginTop: 16 }}>
                 <div className="form-field">

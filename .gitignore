@@ -10,6 +10,8 @@ frontend/admin/node_modules/
 # 根目录密钥文件或 keys 目录，勿提交（勿 git add keys）
 /keys
 keys/
+# 本地 SSH 凭据（从 ssh_local.env.example 复制为 ssh_local.env 后填写）
+scripts/ssh_local.env
 # 本地运维脚本常含 SSH/密码，勿提交；部署见 docs/deploy-tencent-cvm.md
 scripts/remote_*.py
 scripts/fix_failed_sources.py

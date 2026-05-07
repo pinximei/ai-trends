@@ -186,6 +186,81 @@ def parse_category_labels_json(raw: str | None) -> list[str]:
     return []
 
 
+def parse_article_tabs_json(raw: str | None) -> list[dict[str, str]]:
+    """解析 product_articles.ai_tabs_json → [{label, summary, body_md}, ...]。"""
+    if not raw or not str(raw).strip():
+        return []
+    try:
+        v = json.loads(raw)
+        if not isinstance(v, list):
+            return []
+        out: list[dict[str, str]] = []
+        for item in v[:8]:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip()
+            summary = str(item.get("summary") or "").strip()
+            body_md = str(item.get("body_md") or "").strip()
+            if not label or not summary or not body_md:
+                continue
+            out.append({"label": label[:128], "summary": summary[:2000], "body_md": body_md[:50000]})
+        return out
+    except Exception:
+        return []
+
+
+def ui_shape_warnings_for_stored_article(
+    *,
+    ai_categories_json: str | None,
+    ai_tabs_json: str | None,
+    body: str | None,
+    summary: str | None,
+) -> list[str]:
+    """
+    检查已落库字段与公开站（列表 + 详情 tab + Markdown）的契合度；返回人类可读告警文案，空列表表示无问题。
+    供管理端自检或 CI 调用；不抛异常。
+    """
+    warns: list[str] = []
+    raw_tabs = (ai_tabs_json or "").strip()
+    tabs = parse_article_tabs_json(ai_tabs_json)
+    if raw_tabs and len(tabs) < 2:
+        warns.append("ai_tabs_json 存在但解析后有效 tab 少于 2 个，详情页将回退为单栏「全文」或仅展示 body")
+    cats = parse_category_labels_json(ai_categories_json)
+    if len(cats) < 2:
+        warns.append("ai_categories_json 中有效分类少于 2 个，前台类别筛选与 LLM 入库规范不一致")
+    if not tabs and not (body or "").strip():
+        warns.append("无 tabs 且无 body，详情 Markdown 区域将为空")
+    if tabs and len((summary or "").strip()) < 4:
+        warns.append("摘要过短可能影响列表卡片展示")
+    return warns
+
+
+def validate_llm_polish_for_publish(data: dict) -> bool:
+    """连接器入库：必须含合格分类与分 tab 正文（全部由模型生成）。"""
+    title = str(data.get("title") or "").strip()
+    summary = str(data.get("summary") or "").strip()
+    if not title or not summary:
+        return False
+    cats = data.get("categories")
+    if not isinstance(cats, list) or len(cats) < 2:
+        return False
+    clean_cats = [str(x).strip() for x in cats if str(x).strip()]
+    if len(clean_cats) < 2:
+        return False
+    tabs = data.get("tabs")
+    if not isinstance(tabs, list) or len(tabs) < 2 or len(tabs) > 6:
+        return False
+    for t in tabs:
+        if not isinstance(t, dict):
+            return False
+        lab = str(t.get("label") or "").strip()
+        summ = str(t.get("summary") or "").strip()
+        body = str(t.get("body_md") or "").strip()
+        if len(lab) < 2 or len(summ) < 8 or len(body) < 16:
+            return False
+    return True
+
+
 def published_calendar_day(db: Session):
     if db.get_bind().dialect.name == "sqlite":
         return func.strftime("%Y-%m-%d", Article.published_at)

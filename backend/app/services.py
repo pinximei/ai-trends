@@ -414,6 +414,35 @@ def clear_business_data(db: Session):
     db.commit()
 
 
+def clear_product_ingest_data(db: Session) -> dict[str, int]:
+    """清空连接器入库产生的资源数据（文章、指标点、同步日志、热门快照、LLM 用量），保留连接器配置与行业/板块。"""
+    from .product_models import (
+        Article,
+        HotSnapshot,
+        LlmUsageLog,
+        MetricPoint,
+        ProductConnector,
+        ProductConnectorLog,
+    )
+
+    n_logs = int(db.query(ProductConnectorLog).delete() or 0)
+    n_points = int(db.query(MetricPoint).delete() or 0)
+    n_articles = int(db.query(Article).delete() or 0)
+    n_hot = int(db.query(HotSnapshot).delete() or 0)
+    n_llm = int(db.query(LlmUsageLog).delete() or 0)
+    for c in db.scalars(select(ProductConnector)).all():
+        c.last_sync_at = None
+        c.last_error = None
+    db.commit()
+    return {
+        "product_connector_logs": n_logs,
+        "product_metric_points": n_points,
+        "product_articles": n_articles,
+        "product_hot_snapshots": n_hot,
+        "product_llm_usage_logs": n_llm,
+    }
+
+
 def seed_demo_bundle(db: Session):
     seed_if_empty(db)
     ensure_mainstream_admin_sources(db)

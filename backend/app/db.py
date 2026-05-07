@@ -2,6 +2,30 @@ from pathlib import Path
 import json
 import os
 
+
+def _load_backend_dotenv() -> None:
+    """启动时加载 backend/.env（无 python-dotenv 依赖）；仅当环境变量尚未设置时写入。"""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.is_file():
+        return
+    try:
+        raw_text = env_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    for raw in raw_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if k and k not in os.environ:
+            os.environ[k] = v
+
+
+_load_backend_dotenv()
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -81,6 +105,8 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN ai_categories_json TEXT DEFAULT '[]'"))
             if "feed_kind" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN feed_kind VARCHAR(8)"))
+            if "ai_tabs_json" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN ai_tabs_json TEXT DEFAULT '[]'"))
         cols = _column_names(conn, "product_software_downloads")
         if cols:
             if "artifact_rel_path" not in cols:

@@ -192,6 +192,10 @@ def list_articles_feed(
                 continue
             seen_fp.add(fp)
             plat = PRESET_SOURCE_LABELS.get(ak, ak.replace("_", " ").title() if ak else "")
+            tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
+            tab_summaries = (
+                [{"label": x["label"], "summary": (x["summary"] or "")[:280]} for x in tabs_parsed[:6]] if tabs_parsed else []
+            )
             out.append(
                 {
                     "id": a.id,
@@ -207,6 +211,7 @@ def list_articles_feed(
                     "admin_source_key": ak,
                     "feed_kind": row_lane,
                     "categories": cats_list,
+                    "tab_summaries": tab_summaries,
                 }
             )
             if len(out) >= page_size:
@@ -227,6 +232,15 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
     if not a or a.status != "published":
         return None
     ak = art.admin_source_key(a.third_party_source)
+    tabs = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
+    if not tabs and (a.body or "").strip():
+        tabs = [
+            {
+                "label": "全文",
+                "summary": (a.summary or "")[:400] or "正文",
+                "body_md": (a.body or "").strip(),
+            }
+        ]
     return {
         "id": a.id,
         "slug": a.slug,
@@ -240,4 +254,5 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "categories": art.parse_category_labels_json(getattr(a, "ai_categories_json", None)),
         "feed_kind": _row_feed_lane(a),
         "admin_source_key": ak,
+        "tabs": tabs,
     }

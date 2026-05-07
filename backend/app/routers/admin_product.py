@@ -12,6 +12,7 @@ from ..db import get_db
 from ..hot_service import rebuild_hot_snapshot
 from ..models import AdminSession
 from ..product_models import Article, CmsPage, HotSnapshot, Industry
+from ..services import clear_product_ingest_data
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product"])
 
@@ -24,6 +25,17 @@ class CmsUpdate(BaseModel):
     title: str | None = None
     body_md: str | None = None
     status: str | None = None
+
+
+@router.post("/product/ingest-data/clear")
+def post_clear_product_ingest_data(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("admin")),
+):
+    """删除连接器入库相关表数据并重置连接器上次同步时间（高危，仅管理员）。"""
+    counts = clear_product_ingest_data(db)
+    audit(db, actor=session.username, action="product.ingest_data.clear", detail=str(counts))
+    return ok(counts)
 
 
 @router.post("/product/hot/rebuild")

@@ -1,0 +1,17 @@
+[Unit]
+Description=AISoul FastAPI (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+# 与 /opt/aisoul 目录所有者一致（常见为 ubuntu；勿用无法读仓库的用户）
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/aisoul
+EnvironmentFile=/opt/aisoul/backend/.env
+ExecStart=/opt/aisoul/.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

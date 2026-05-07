@@ -245,6 +245,17 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 ) : null}
                 <div className="mt-3 text-base font-semibold leading-snug text-white group-hover:text-cyan-100">{a.title}</div>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-400">{summarize(a.summary, 160)}</p>
+                {a.tab_summaries && a.tab_summaries.length > 0 ? (
+                  <div className="mt-3 space-y-1.5 rounded-xl border border-cyan-500/10 bg-gradient-to-br from-cyan-950/20 to-transparent p-2.5 ring-1 ring-white/5">
+                    {a.tab_summaries.slice(0, 3).map((t) => (
+                      <div key={t.label} className="text-[11px] leading-snug text-slate-400">
+                        <span className="font-semibold text-cyan-300/95">{t.label}</span>
+                        <span className="text-slate-600"> · </span>
+                        {summarize(t.summary, 96)}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="mt-3 text-xs font-medium text-cyan-400/80 opacity-0 transition group-hover:opacity-100">
                   {t("trendViewDetail")} →
                 </div>

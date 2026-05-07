@@ -7,6 +7,7 @@ import re
 import httpx
 from sqlalchemy.orm import Session
 
+from .domain.articles import validate_llm_polish_for_publish
 from .llm_settings_service import resolve_llm_http_config
 from .product_models import LlmUsageLog
 
@@ -53,7 +54,9 @@ def chat_completion(
     """OpenAI 兼容 Chat Completions；优先读库内「AI 资讯」配置，其次环境变量 AISOU_LLM_*。"""
     base, key, model = resolve_llm_http_config(db)
     if not key:
-        raise RuntimeError("LLM 未配置：在管理端「AI 资讯配置」填写 API Key，或设置环境变量 AISOU_LLM_API_KEY")
+        raise RuntimeError(
+            "LLM 未配置：在管理端「AI 资讯配置」填写 DeepSeek API Key，或在环境变量 / backend/.env 中设置 AISOU_LLM_API_KEY"
+        )
 
     url = base.rstrip("/") + "/chat/completions"
     body = {
@@ -106,9 +109,9 @@ def polish_connector_article(
     feed_kind: str = "news",
 ) -> dict | None:
     """
-    仅在高价值已确认后调用：重写为中文雷达卡片文体，并给出 2～5 个短类别标签。
+    仅在高价值已确认后调用：必须用模型重写全文并分类；输出含多 tab（概要 + 详情 Markdown）。
     feed_kind 为 news（资讯）或 apps（应用），决定文风与 categories 侧重。
-    失败返回 None，由调用方保留规则稿。
+    校验失败或未配置 Key 时返回 None；调用方不得再落规则快照稿。
     """
     if not resolve_llm_http_config(db)[1]:
         return None
@@ -129,10 +132,14 @@ def polish_connector_article(
     system = (
         "你是 AI 行业「趋势雷达」编辑。只根据用户提供的原始 API 片段与占位标题写稿，禁止编造未出现的名称、数字与链接。"
         f"{stream_hint}"
-        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind。"
-        "title 为单行中文标题；summary 为 1～2 句中文摘要；body_md 为 Markdown 正文，可含小节与列表；"
+        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, tabs。"
+        "title 为单行中文标题；summary 为 1～2 句中文总摘要（列表卡片用）；"
+        "body_md 为可选 Markdown 总览（可与 tabs 呼应；若无总览可写简短衔接段）；"
         "categories 为字符串数组，2～5 条，每条 2～8 个汉字，须与 feed_kind 一致；"
-        'feed_kind 只能为 JSON 字符串 "news" 或 "apps"：news 表示该稿应进「AI 资讯」列表，apps 表示应进「AI 应用」列表。'
+        'feed_kind 只能为 JSON 字符串 "news" 或 "apps"。'
+        "tabs 为数组，至少 2 个、至多 5 个对象；每个对象键 label（2～8 字 tab 标题）、"
+        "summary（1～2 句，展示在 tab 行上的概要）、body_md（该 tab 的详细正文，Markdown，可多段列表）。"
+        "tabs 应覆盖原文信息要点，结构清晰，禁止空字段。"
     )
     user = (
         f"数据源规则推断的参考泳道 feed_hint={fk}（news=资讯 / apps=应用）。请阅读片段后在输出中给出 feed_kind，"
@@ -175,9 +182,32 @@ def polish_connector_article(
             return None
         if not isinstance(cats, list):
             cats = []
+        else:
+            cats = [str(x).strip() for x in cats if str(x).strip()]
         fk_ai = str(data.get("feed_kind") or "").strip().lower()
         out_fk = fk if fk_ai not in ("news", "apps") else fk_ai
-        return {"title": title, "summary": summary, "body_md": body_md or summary, "categories": cats, "feed_kind": out_fk}
+        raw_tabs = data.get("tabs")
+        norm_tabs: list[dict[str, str]] = []
+        if isinstance(raw_tabs, list):
+            for t in raw_tabs[:6]:
+                if not isinstance(t, dict):
+                    continue
+                lab = str(t.get("label") or "").strip()
+                sm = str(t.get("summary") or "").strip()
+                bd = str(t.get("body_md") or "").strip()
+                if lab and sm and bd:
+                    norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
+        out = {
+            "title": title,
+            "summary": summary,
+            "body_md": body_md or summary,
+            "categories": cats,
+            "feed_kind": out_fk,
+            "tabs": norm_tabs,
+        }
+        if not validate_llm_polish_for_publish(out):
+            return None
+        return out
     except Exception:
         return None
 

@@ -6,7 +6,6 @@ import os
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .admin_auth import ensure_default_admin
@@ -111,9 +110,9 @@ def _job_daily_sync_connectors() -> None:
                     ok += 1
             except Exception:
                 fail += 1
-        logger.info("daily connector sync finished: ok=%s fail=%s total=%s", ok, fail, len(rows))
+        logger.info("scheduled connector sync finished: ok=%s fail=%s total=%s", ok, fail, len(rows))
     except Exception as e:
-        logger.exception("daily connector sync failed: %s", e)
+        logger.exception("scheduled connector sync failed: %s", e)
     finally:
         db.close()
 
@@ -125,7 +124,17 @@ def _start_scheduler() -> None:
     _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
     _scheduler.add_job(_job_scheduled_hot, IntervalTrigger(days=3), id="hot_snapshot_3d")
     _scheduler.add_job(_job_anomaly, "interval", hours=1, id="hourly_anomaly")
-    _scheduler.add_job(_job_daily_sync_connectors, CronTrigger(hour=7, minute=0), id="daily_connector_sync_7am")
+    _sync_h = int(os.getenv("AISOU_CONNECTOR_SYNC_INTERVAL_HOURS", "6") or "6")
+    if _sync_h < 1:
+        _sync_h = 1
+    if _sync_h > 168:
+        _sync_h = 168
+    _scheduler.add_job(
+        _job_daily_sync_connectors,
+        IntervalTrigger(hours=_sync_h),
+        id="connector_sync_interval",
+    )
+    logger.info("connector sync scheduled every %s hours (AISOU_CONNECTOR_SYNC_INTERVAL_HOURS)", _sync_h)
     _scheduler.start()
 
 

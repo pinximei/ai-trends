@@ -53,11 +53,12 @@ def resolve_llm_http_config(db: Session) -> tuple[str, str, str]:
     """
     返回 (base_url, api_key, model)。
     优先级：库内 product_settings_kv.llm → 环境变量 AISOU_LLM_*。
+    环境变量未设 base/model 时默认 **DeepSeek** OpenAI 兼容端点（与 DEFAULT_LLM 一致）。
     """
     m = _merged_stored(db)
-    base = (m.get("base_url") or "").strip() or os.getenv("AISOU_LLM_BASE_URL", "https://api.openai.com/v1").strip()
+    base = (m.get("base_url") or "").strip() or os.getenv("AISOU_LLM_BASE_URL", DEFAULT_LLM["base_url"]).strip()
     key = (m.get("api_key") or "").strip() or os.getenv("AISOU_LLM_API_KEY", "").strip()
-    model = (m.get("model") or "").strip() or os.getenv("AISOU_LLM_MODEL", "gpt-4o-mini").strip()
+    model = (m.get("model") or "").strip() or os.getenv("AISOU_LLM_MODEL", DEFAULT_LLM["model"]).strip()
     return base.rstrip("/"), key, model
 
 

@@ -188,6 +188,9 @@ export const adminApi = {
     }),
   seedDemo: () => request("/api/admin/v1/bootstrap/seed-demo", { method: "POST" }),
   clearDemo: () => request("/api/admin/v1/bootstrap/clear-demo", { method: "POST" }),
+  /** 仅管理员：清空连接器入库数据（文章/指标点/同步日志/热门快照/LLM 用量），重置连接器上次同步时间 */
+  clearProductIngestData: () =>
+    request<Record<string, number>>("/api/admin/v1/product/ingest-data/clear", { method: "POST" }),
   dbInfo: () =>
     request<{
       mode: string;

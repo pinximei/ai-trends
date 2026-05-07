@@ -92,6 +92,8 @@ class Article(Base):
     ingest_fingerprint: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     # LLM 重写时给出的短标签类别 JSON 数组，例如 ["大模型","应用发布"]
     ai_categories_json: Mapped[str] = mapped_column(Text, default="[]")
+    # LLM 生成的分 tab 结构：[{"label","summary","body_md"}, ...]，概要列在 tab 行，点击展示 body_md
+    ai_tabs_json: Mapped[str] = mapped_column(Text, default="[]")
     # 公共站泳道：news=资讯、apps=应用（入库时由数据源决定，供筛选与统计）
     feed_kind: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
