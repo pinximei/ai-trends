@@ -47,6 +47,9 @@ def _startup_sync() -> None:
             seed_product_if_empty(db)
             ensure_product_settings_and_demo_connector(db)
             ensure_demo_software_downloads(db)
+        from .product_seed import ensure_public_about_page
+
+        ensure_public_about_page(db)
         from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
         sync_product_taxonomy_from_admin_sources(db)

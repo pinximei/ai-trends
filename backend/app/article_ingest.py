@@ -134,9 +134,7 @@ def create_published_articles_for_connector_targets(
         if isinstance(cats, list):
             clean = [str(x).strip() for x in cats if str(x).strip()][:8]
             ai_categories_json = json.dumps(clean, ensure_ascii=False)
-        pfk = polished.get("feed_kind")
-        if isinstance(pfk, str) and pfk.strip().lower() in ("news", "apps"):
-            stored_feed_kind = pfk.strip().lower()
+        # 不按 LLM 覆盖 feed_kind：模型可能与数据源不一致，导致资讯/应用两列表内容雷同。
 
     disp_fp = display_fingerprint(title, summary)
 

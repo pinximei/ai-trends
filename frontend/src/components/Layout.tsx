@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, Cpu, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Aurora } from "./Aurora";
@@ -57,22 +57,22 @@ export function Layout() {
           </Link>
           <nav className="flex flex-wrap items-center gap-1">
             {nav.map((item) => {
-              const active =
-                loc.pathname === item.to ||
-                (item.to === "/apps" && loc.pathname.startsWith("/resources/"));
+              const onResourceDetail = loc.pathname.startsWith("/resources/");
               return (
-                <Link key={item.to} to={item.to}>
-                  <motion.span
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                      active
-                        ? "bg-gradient-to-r from-cyan-500/25 to-fuchsia-500/20 text-white shadow-[inset_0_0_20px_rgba(34,211,238,0.15)] ring-1 ring-cyan-400/40"
-                        : "text-slate-200 hover:text-white"
-                    }`}
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    {t(item.key)}
-                  </motion.span>
-                </Link>
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => {
+                    const active = isActive || (item.to === "/apps" && onResourceDetail);
+                    const base =
+                      "rounded-xl px-3 py-2 text-sm font-medium transition-colors active:scale-[0.98]";
+                    return active
+                      ? `${base} bg-gradient-to-r from-cyan-500/25 to-fuchsia-500/20 text-white shadow-[inset_0_0_20px_rgba(34,211,238,0.15)] ring-1 ring-cyan-400/40`
+                      : `${base} text-slate-200 hover:text-white`;
+                  }}
+                >
+                  {t(item.key)}
+                </NavLink>
               );
             })}
           </nav>

@@ -263,3 +263,23 @@ def ensure_product_settings_and_demo_connector(db: Session) -> None:
             )
         )
     db.commit()
+
+
+def ensure_public_about_page(db: Session) -> None:
+    """生产环境若未跑演示种子，仍保证「关于」页有默认 CMS，避免 /pages/about 404。"""
+    if db.get(CmsPage, "about"):
+        return
+    db.add(
+        CmsPage(
+            slug="about",
+            title="关于本站与免责声明",
+            body_md=(
+                "## 网站介绍\n\nAISoul：AI 行业趋势与资源聚合（学习项目）。\n\n"
+                "## 数据与来源\n\n数据来自配置的第三方 API 与运营录入；热门推荐由系统按周期生成快照。\n\n"
+                "## 免责声明\n\n信息仅供参考，不构成任何专业建议；使用需自担风险。"
+            ),
+            status="published",
+            published_at=datetime.utcnow(),
+        )
+    )
+    db.commit()

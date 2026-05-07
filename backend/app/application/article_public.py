@@ -12,9 +12,11 @@ from ..services import PRESET_SOURCE_LABELS
 
 
 def _row_feed_lane(a: Article) -> str:
-    fk = (getattr(a, "feed_kind", None) or "").strip().lower()
-    if fk in ("news", "apps"):
-        return fk
+    """公开列表/详情泳道：一律按数据源 admin_source_key 规则推断。
+
+    曾用 LLM 写入的 product_articles.feed_kind 若与连接器不一致，会导致「AI 资讯 / AI 应用」
+    两页拉取到同一批文章；公开站以连接器规则为准（与入库时 feed_lane 一致）。
+    """
     return art.feed_lane(art.admin_source_key(a.third_party_source))
 
 

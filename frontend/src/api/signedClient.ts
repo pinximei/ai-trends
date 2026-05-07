@@ -9,9 +9,18 @@ type AuthTokenResponse = { access_token: string; token_type: string };
 let accessToken: string | null = null;
 
 async function parse<T>(res: Response): Promise<T> {
-  const j = (await res.json()) as Envelope<T>;
+  let j: Envelope<T> & { detail?: unknown };
+  try {
+    j = (await res.json()) as Envelope<T> & { detail?: unknown };
+  } catch {
+    throw new Error(`HTTP ${res.status}（响应非 JSON）`);
+  }
   if (!res.ok || j.code !== 0) {
-    throw new Error(j.message || `HTTP ${res.status}`);
+    let msg = typeof j.message === "string" && j.message.trim() ? j.message.trim() : "";
+    if (!msg && j.detail != null) {
+      msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    }
+    throw new Error(msg || `HTTP ${res.status}`);
   }
   return j.data;
 }
