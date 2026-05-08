@@ -11,15 +11,6 @@ function zhRole(role: string | undefined) {
   return role;
 }
 
-function formatSourceFrequency(f: string | undefined): string {
-  const v = (f || "").trim();
-  if (v === "daily_07:00") return "每日 07:00";
-  if (v === "hourly") return "每小时";
-  if (v === "daily") return "每天";
-  if (v === "weekly") return "每周";
-  return v || "—";
-}
-
 function friendlyErr(msg: string): string {
   const m = msg.trim();
   if (/^not\s*found$/i.test(m) || m === "Not Found") {
@@ -47,7 +38,6 @@ type Me = { username: string; role: string; expires_at: string; password_min_len
 type Source = {
   source: string;
   enabled: boolean;
-  frequency: string;
   api_base: string;
   api_key_masked: string;
   scope_label?: string;
@@ -91,11 +81,18 @@ type LlmSettingsView = {
   pipeline: Array<{ id: string; label: string }>;
 };
 
+type SchedulerSettingsView = {
+  connector_scheduler_enabled: boolean;
+  connector_sync_interval_hours: number;
+  last_connector_batch_at: string | null;
+  gate_interval_minutes: number;
+  env_default_hours_hint: number;
+};
+
 type SourcePresetRow = {
   source: string;
   label: string;
   api_base: string;
-  frequency: string;
   scope_label: string;
   scope_labels: string[];
   notes: string;
@@ -120,7 +117,6 @@ export function App() {
   const [sourceForm, setSourceForm] = useState({
     source: "",
     enabled: true,
-    frequency: "daily_07:00",
     api_base: "",
     api_key: "",
     scope_labels: [""] as string[],
@@ -155,7 +151,14 @@ export function App() {
   const [llmSettings, setLlmSettings] = useState<LlmSettingsView | null>(null);
   const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
   const [llmSaving, setLlmSaving] = useState(false);
+  const [schedulerSettings, setSchedulerSettings] = useState<SchedulerSettingsView | null>(null);
+  const [schedulerForm, setSchedulerForm] = useState({ enabled: true, hours: 6 });
+  const [schedulerSaving, setSchedulerSaving] = useState(false);
   const [clearIngestBusy, setClearIngestBusy] = useState(false);
+  /** 与公开接口同源：便于核对后台看到的后端是否为当前部署 */
+  const [publicApiRelease, setPublicApiRelease] = useState<string | null>(null);
+
+  const adminUiRelease = import.meta.env.VITE_APP_RELEASE ?? "—";
 
   const [swPackages, setSwPackages] = useState<SwPkgRow[]>([]);
   const [swFile, setSwFile] = useState<File | null>(null);
@@ -166,6 +169,37 @@ export function App() {
   const [swCatLabel, setSwCatLabel] = useState("");
   const [swBusy, setSwBusy] = useState(false);
 
+  type RuntimeView = {
+    cors_origins_csv: string;
+    jwt_ttl_seconds: number;
+    allowed_skew_seconds: number;
+    require_https: boolean;
+    allow_insecure_localhost: boolean;
+    admin_cookie_secure: boolean;
+    app_env: string;
+    demo_seed_enabled: boolean | null;
+    demo_seed_effective: boolean;
+    legacy_admin_enabled: boolean;
+    app_release_label: string;
+    hot_llm_model: string;
+    secrets_note: string;
+  };
+  const [runtimeView, setRuntimeView] = useState<RuntimeView | null>(null);
+  const [runtimeForm, setRuntimeForm] = useState({
+    cors_origins_csv: "",
+    jwt_ttl_seconds: 1800,
+    allowed_skew_seconds: 300,
+    require_https: true,
+    allow_insecure_localhost: true,
+    admin_cookie_secure: true,
+    app_env: "dev",
+    force_demo_seed: false,
+    legacy_admin_enabled: false,
+    app_release_label: "",
+    hot_llm_model: "rule-based",
+  });
+  const [runtimeSaving, setRuntimeSaving] = useState(false);
+
   const isAuthed = useMemo(() => !!me, [me]);
   const canManageSettings = me?.role === "admin";
   const canOperate = me?.role === "admin" || me?.role === "operator";
@@ -173,6 +207,20 @@ export function App() {
   const setTab = useCallback((t: TabKey) => {
     setTabState(t);
   }, []);
+
+  useEffect(() => {
+    if (!me) return;
+    let cancelled = false;
+    void fetch("/api/public/v1/version")
+      .then((r) => r.json())
+      .then((j: { code?: number; data?: { release?: string } }) => {
+        if (!cancelled && j.code === 0 && j.data?.release) setPublicApiRelease(j.data.release);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [me]);
 
   const filteredSources = useMemo(() => {
     const q = sourceSearch.trim().toLowerCase();
@@ -217,11 +265,27 @@ export function App() {
       const src = await adminApi.sources("");
       setSources(src.items);
     } else if (tab === "settings" && canManageSettings) {
-      const u = await adminApi.users("", "");
+      const [u, rt] = await Promise.all([adminApi.users("", ""), adminApi.getRuntimeSettings()]);
       setUsers(u.items);
+      setRuntimeView(rt);
+      setRuntimeForm({
+        cors_origins_csv: rt.cors_origins_csv,
+        jwt_ttl_seconds: rt.jwt_ttl_seconds,
+        allowed_skew_seconds: rt.allowed_skew_seconds,
+        require_https: rt.require_https,
+        allow_insecure_localhost: rt.allow_insecure_localhost,
+        admin_cookie_secure: rt.admin_cookie_secure,
+        app_env: rt.app_env,
+        force_demo_seed: rt.demo_seed_enabled === true,
+        legacy_admin_enabled: rt.legacy_admin_enabled,
+        app_release_label: rt.app_release_label,
+        hot_llm_model: rt.hot_llm_model,
+      });
     } else if (tab === "ai") {
-      const llm = await adminApi.getLlmSettings();
+      const [llm, sched] = await Promise.all([adminApi.getLlmSettings(), adminApi.getSchedulerSettings()]);
       setLlmSettings(llm);
+      setSchedulerSettings(sched);
+      setSchedulerForm({ enabled: sched.connector_scheduler_enabled, hours: sched.connector_sync_interval_hours });
       setLlmForm((p) => ({
         ...p,
         provider: llm.provider,
@@ -291,7 +355,6 @@ export function App() {
       api_base: row.api_base,
       scope_labels,
       api_key: "",
-      frequency: row.frequency,
       enabled: row.enabled,
       notes: row.notes || "",
     });
@@ -452,6 +515,67 @@ export function App() {
     }
   }
 
+  async function onSaveScheduler(e: FormEvent) {
+    e.preventDefault();
+    if (!canOperate) return;
+    const h = Math.min(168, Math.max(1, Math.floor(Number(schedulerForm.hours)) || 6));
+    setSchedulerSaving(true);
+    setErr("");
+    try {
+      const out = await adminApi.saveSchedulerSettings({
+        connector_scheduler_enabled: schedulerForm.enabled,
+        connector_sync_interval_hours: h,
+      });
+      setSchedulerSettings(out);
+      setSchedulerForm({ enabled: out.connector_scheduler_enabled, hours: out.connector_sync_interval_hours });
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "save scheduler failed"));
+    } finally {
+      setSchedulerSaving(false);
+    }
+  }
+
+  async function onSaveRuntime(e: FormEvent) {
+    e.preventDefault();
+    if (!canManageSettings) return;
+    setRuntimeSaving(true);
+    setErr("");
+    try {
+      const payload: Record<string, unknown> = {
+        cors_origins_csv: runtimeForm.cors_origins_csv.trim(),
+        jwt_ttl_seconds: Math.min(864000, Math.max(60, Math.floor(Number(runtimeForm.jwt_ttl_seconds)) || 1800)),
+        allowed_skew_seconds: Math.min(3600, Math.max(30, Math.floor(Number(runtimeForm.allowed_skew_seconds)) || 300)),
+        require_https: runtimeForm.require_https,
+        allow_insecure_localhost: runtimeForm.allow_insecure_localhost,
+        admin_cookie_secure: runtimeForm.admin_cookie_secure,
+        app_env: runtimeForm.app_env.trim() || "dev",
+        demo_seed_enabled: runtimeForm.force_demo_seed ? true : null,
+        legacy_admin_enabled: runtimeForm.legacy_admin_enabled,
+        app_release_label: runtimeForm.app_release_label.trim(),
+        hot_llm_model: runtimeForm.hot_llm_model.trim() || "rule-based",
+      };
+      const rt = await adminApi.saveRuntimeSettings(payload);
+      setRuntimeView(rt);
+      setRuntimeForm({
+        cors_origins_csv: rt.cors_origins_csv,
+        jwt_ttl_seconds: rt.jwt_ttl_seconds,
+        allowed_skew_seconds: rt.allowed_skew_seconds,
+        require_https: rt.require_https,
+        allow_insecure_localhost: rt.allow_insecure_localhost,
+        admin_cookie_secure: rt.admin_cookie_secure,
+        app_env: rt.app_env,
+        force_demo_seed: rt.demo_seed_enabled === true,
+        legacy_admin_enabled: rt.legacy_admin_enabled,
+        app_release_label: rt.app_release_label,
+        hot_llm_model: rt.hot_llm_model,
+      });
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "save runtime failed"));
+    } finally {
+      setRuntimeSaving(false);
+    }
+  }
+
   async function onSaveSource(e: FormEvent) {
     e.preventDefault();
     setErr("");
@@ -459,7 +583,6 @@ export function App() {
       await adminApi.saveSource({
         source: sourceForm.source,
         enabled: sourceForm.enabled,
-        frequency: sourceForm.frequency,
         api_base: sourceForm.api_base,
         api_key: sourceForm.api_key,
         notes: sourceForm.notes,
@@ -604,6 +727,9 @@ export function App() {
           <h1>AISoul Admin</h1>
           <p>后台管理台 · 基于会话登录</p>
           <div className="muted tiny" style={{ marginTop: 10 }}>仅浏览可查数据；运营可管理数据源；管理员可管理账号。</div>
+          <div className="muted tiny" style={{ marginTop: 8, fontSize: 11, opacity: 0.85 }}>
+            前端构建 {adminUiRelease}
+          </div>
         </div>
         <form className="card grid" onSubmit={onLogin}>
           <div className="form-field">
@@ -634,6 +760,11 @@ export function App() {
         <p className="muted tiny">
           {me?.username} · {zhRole(me?.role)}
         </p>
+        <p className="muted tiny" style={{ fontSize: 10, lineHeight: 1.5, marginTop: 6 }}>
+          前端 {adminUiRelease}
+          <br />
+          API {publicApiRelease ?? "…"}
+        </p>
         <nav className="grid">
           <button
             type="button"
@@ -658,8 +789,13 @@ export function App() {
           >
             数据源管理
           </button>
-          <button type="button" className={tab === "ai" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"} onClick={() => setTab("ai")}>
-            AI 资讯配置
+          <button
+            type="button"
+            className={tab === "ai" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"}
+            onClick={() => setTab("ai")}
+            title="含 LLM、定时同步、清空资源入库数据"
+          >
+            AI 资讯与数据
           </button>
           <button
             type="button"
@@ -715,7 +851,47 @@ export function App() {
               </div>
               <div className="muted tiny">数据库: {health?.db ?? "-"}</div>
               <div className="muted tiny">更新时间: {health?.time ? new Date(health.time).toLocaleString() : "-"}</div>
+              <div className="muted tiny" style={{ marginTop: 10 }}>
+                发布标识：前端 <strong style={{ color: "#e2e8f0" }}>{adminUiRelease}</strong> · API{" "}
+                <strong style={{ color: "#e2e8f0" }}>{publicApiRelease ?? "…"}</strong>
+              </div>
             </section>
+            {canManageSettings ? (
+              <section className="card">
+                <div className="row between">
+                  <h3>清空资源入库数据</h3>
+                  <span className="tag">管理员</span>
+                </div>
+                <p className="muted tiny" style={{ marginTop: 8, lineHeight: 1.6 }}>
+                  删除连接器产生的文章、指标点、同步日志、热门快照、LLM 用量记录，并重置各连接器上次同步时间（数据源配置与账号保留）。详细说明与 LLM 在同一页：「AI
+                  资讯与数据」。
+                </p>
+                <div style={{ marginTop: 14 }}>
+                  <button
+                    type="button"
+                    disabled={clearIngestBusy}
+                    onClick={() => void onClearProductIngest()}
+                    style={{
+                      borderColor: "rgba(248,113,113,0.55)",
+                      color: "#fecaca",
+                      background: "rgba(127,29,29,0.25)",
+                      padding: "10px 16px",
+                      borderRadius: 10,
+                      cursor: clearIngestBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {clearIngestBusy ? "清空中…" : "清空资源入库数据"}
+                  </button>
+                </div>
+              </section>
+            ) : (
+              <section className="card">
+                <h3>清空资源入库数据</h3>
+                <p className="muted tiny" style={{ marginTop: 8, lineHeight: 1.6 }}>
+                  仅<strong>管理员</strong>可在「总览」使用此项，或在「AI 资讯与数据」页操作。
+                </p>
+              </section>
+            )}
             <section className="card">
               <div className="row between">
                 <h3>测试/正式数据库</h3>
@@ -745,6 +921,7 @@ export function App() {
                   <h3 style={{ margin: 0 }}>预设模板</h3>
                   <p className="muted tiny" style={{ margin: "8px 0 0" }}>
                     与后端内置站点列表同步。点击某张卡片将把标识、API Base、主题标签等填入下方表单；补全 API Key 后保存即可。已配置的标识会标为「已有」。
+                    实际拉取间隔不在此页配置：请到「AI 资讯与数据」中的<strong>定时同步</strong>设置整批间隔；连接器绑定本页数据源标识后才会按该调度参与拉取。
                     GitLab 请使用接口路径如 <code>https://gitlab.com/api/v4/version</code>，测试时授权方式选「GitLab Private Token」并粘贴 PAT；仅根路径{" "}
                     <code>/api/v4</code> 常返回 404。若本机或服务器访问 gitlab.com 超时，多为网络限制，需代理或自建 GitLab。
                   </p>
@@ -797,8 +974,8 @@ export function App() {
                             <dd className="source-card__preset-url">{p.api_base || "—"}</dd>
                           </div>
                           <div className="source-card__meta-row">
-                            <dt>同步频率</dt>
-                            <dd>{formatSourceFrequency(p.frequency)}</dd>
+                            <dt>拉取节奏</dt>
+                            <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                           </div>
                           {p.scope_label || (p.scope_labels && p.scope_labels.length > 0) ? (
                             <div className="source-card__meta-row">
@@ -932,8 +1109,8 @@ export function App() {
                         </div>
                         <dl className="source-card__meta">
                           <div className="source-card__meta-row">
-                            <dt>同步频率</dt>
-                            <dd>{formatSourceFrequency(s.frequency)}</dd>
+                            <dt>拉取节奏</dt>
+                            <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                           </div>
                           <div className="source-card__meta-row">
                             <dt>接口地址</dt>
@@ -1135,15 +1312,6 @@ export function App() {
                       autoComplete="new-password"
                     />
                   </div>
-                  <div className="form-field">
-                    <label>同步频率</label>
-                    <select value={sourceForm.frequency} onChange={(e) => setSourceForm((p) => ({ ...p, frequency: e.target.value }))}>
-                      <option value="hourly">每小时同步</option>
-                      <option value="daily_07:00">每日 07:00 同步</option>
-                      <option value="daily">每天同步（未指定时刻）</option>
-                      <option value="weekly">每周同步</option>
-                    </select>
-                  </div>
                   <label className="check-row">
                     <input type="checkbox" checked={sourceForm.enabled} onChange={(e) => setSourceForm((p) => ({ ...p, enabled: e.target.checked }))} />
                     创建或更新后启用该数据源
@@ -1261,10 +1429,49 @@ export function App() {
                 定时同步与数据清理
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                后端 APScheduler 对<strong>所有已启用</strong>的连接器，默认<strong>每 6 小时</strong>自动执行一次同步（与手动点「同步」相同逻辑）。可在环境变量{" "}
-                <code className="inline-code">AISOU_CONNECTOR_SYNC_INTERVAL_HOURS</code> 中改为 1～168（小时），重启
-                uvicorn 后生效。
+                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；若距上次<strong>整批成功</strong>已超过下方配置的间隔，则对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
+                <code className="inline-code">min_interval_seconds</code> 限制，避免定时任务被 429 静默跳过）。间隔与开关保存在库表{" "}
+                <code className="inline-code">product_settings_kv.scheduler</code>；新建库时默认小时数可来自环境变量{" "}
+                <code className="inline-code">AISOU_CONNECTOR_SYNC_INTERVAL_HOURS</code>（仅首次建行参考）。整批跑完后会根据「数据源」中的领域主题刷新前台行业/板块结构。
               </p>
+              {schedulerSettings ? (
+                <p className="muted tiny" style={{ marginTop: 8 }}>
+                  上次整批成功时间：<strong style={{ color: "#e2e8f0" }}>{schedulerSettings.last_connector_batch_at || "—（尚未成功跑过一批）"}</strong>
+                  {" · "}
+                  环境默认小时提示：{schedulerSettings.env_default_hours_hint}
+                </p>
+              ) : null}
+              {canOperate ? (
+                <form className="create-user-form" onSubmit={onSaveScheduler} style={{ marginTop: 14 }}>
+                  <div className="form-field" style={{ maxWidth: 360 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={schedulerForm.enabled}
+                        onChange={(e) => setSchedulerForm((p) => ({ ...p, enabled: e.target.checked }))}
+                      />{" "}
+                      启用定时批量同步
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 200 }}>
+                    <label>整批间隔（小时，1～168）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={schedulerForm.hours}
+                      onChange={(e) => setSchedulerForm((p) => ({ ...p, hours: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <button type="submit" disabled={schedulerSaving}>
+                    {schedulerSaving ? "保存中…" : "保存调度配置"}
+                  </button>
+                </form>
+              ) : (
+                <p className="muted tiny" style={{ marginTop: 10 }}>
+                  只读：需要运营或管理员角色才可修改调度。
+                </p>
+              )}
               {canManageSettings ? (
                 <div style={{ marginTop: 16 }}>
                   <button
@@ -1464,6 +1671,120 @@ export function App() {
 
             {canManageSettings ? (
               <>
+                <div className="card settings-panel">
+                  <h3 className="settings-title" style={{ marginTop: 0 }}>
+                    运行参数（存库，替代多数 AISOU_* 环境项）
+                  </h3>
+                  <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.65 }}>
+                    {runtimeView?.secrets_note ?? "加载中…"}
+                  </p>
+                  <p className="muted tiny" style={{ marginTop: 8 }}>
+                    演示数据种子当前是否写入：<strong style={{ color: "#e2e8f0" }}>{runtimeView?.demo_seed_effective ? "是" : "否"}</strong>
+                    （未勾选「强制开启」时由 app_env 与 AISOU_ENABLE_DEMO_SEED 推断）
+                  </p>
+                  <form className="create-user-form" onSubmit={onSaveRuntime} style={{ marginTop: 14 }}>
+                    <div className="form-field">
+                      <label>CORS 允许来源（英文逗号分隔，须含协议与端口）</label>
+                      <textarea
+                        rows={3}
+                        value={runtimeForm.cors_origins_csv}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, cors_origins_csv: e.target.value }))}
+                        style={{ width: "100%", maxWidth: 720 }}
+                      />
+                    </div>
+                    <div className="form-field" style={{ maxWidth: 200 }}>
+                      <label>JWT 有效期（秒）</label>
+                      <input
+                        type="number"
+                        min={60}
+                        max={864000}
+                        value={runtimeForm.jwt_ttl_seconds}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, jwt_ttl_seconds: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="form-field" style={{ maxWidth: 200 }}>
+                      <label>HMAC 时间戳允许偏差（秒）</label>
+                      <input
+                        type="number"
+                        min={30}
+                        max={3600}
+                        value={runtimeForm.allowed_skew_seconds}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, allowed_skew_seconds: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runtimeForm.require_https}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, require_https: e.target.checked }))}
+                      />
+                      要求 HTTPS（反代需正确传递 X-Forwarded-Proto）
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runtimeForm.allow_insecure_localhost}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, allow_insecure_localhost: e.target.checked }))}
+                      />
+                      本机 / testserver 可放行 HTTP
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runtimeForm.admin_cookie_secure}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, admin_cookie_secure: e.target.checked }))}
+                      />
+                      管理端 Cookie Secure
+                    </label>
+                    <div className="form-field" style={{ maxWidth: 280 }}>
+                      <label>运行模式 app_env</label>
+                      <select
+                        value={runtimeForm.app_env}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, app_env: e.target.value }))}
+                      >
+                        <option value="dev">dev</option>
+                        <option value="local">local</option>
+                        <option value="staging">staging</option>
+                        <option value="production">production</option>
+                      </select>
+                    </div>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runtimeForm.force_demo_seed}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, force_demo_seed: e.target.checked }))}
+                      />
+                      强制开启演示种子写入（关闭则恢复自动推断）
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runtimeForm.legacy_admin_enabled}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, legacy_admin_enabled: e.target.checked }))}
+                      />
+                      启用旧版 X-Admin-Token 内部接口
+                    </label>
+                    <div className="form-field" style={{ maxWidth: 480 }}>
+                      <label>对外版本展示文案（可选，覆盖 AISOU_APP_RELEASE）</label>
+                      <input
+                        value={runtimeForm.app_release_label}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, app_release_label: e.target.value }))}
+                        placeholder="留空则用环境变量 / pyproject 版本"
+                      />
+                    </div>
+                    <div className="form-field" style={{ maxWidth: 360 }}>
+                      <label>热门快照默认 llm_model 标签</label>
+                      <input
+                        value={runtimeForm.hot_llm_model}
+                        onChange={(e) => setRuntimeForm((p) => ({ ...p, hot_llm_model: e.target.value }))}
+                      />
+                    </div>
+                    <button type="submit" disabled={runtimeSaving}>
+                      {runtimeSaving ? "保存中…" : "保存运行参数"}
+                    </button>
+                  </form>
+                </div>
+
                 <div className="card settings-panel">
                   <div className="row between" style={{ flexWrap: "wrap", gap: 12, alignItems: "center" }}>
                     <h3 className="settings-title" style={{ margin: 0, border: "none", padding: 0 }}>

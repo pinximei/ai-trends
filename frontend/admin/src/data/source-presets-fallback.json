@@ -4,7 +4,7 @@
       "source": "github",
       "label": "GitHub",
       "api_base": "https://api.github.com/zen",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜通用·开源协作",
       "scope_labels": [
         "AI｜通用·开源协作"
@@ -16,7 +16,7 @@
       "source": "huggingface",
       "label": "Hugging Face",
       "api_base": "https://huggingface.co/api/models?limit=1",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜大模型/生态",
       "scope_labels": [
         "AI｜大模型/生态"
@@ -28,7 +28,7 @@
       "source": "huggingface_spaces",
       "label": "Hugging Face Spaces",
       "api_base": "https://huggingface.co/api/spaces?limit=1",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜Spaces·应用",
       "scope_labels": [
         "AI｜Spaces·应用"
@@ -40,7 +40,7 @@
       "source": "hacker_news",
       "label": "Hacker News",
       "api_base": "https://hacker-news.firebaseio.com/v0/maxitem.json",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "通用·技术资讯",
       "scope_labels": [
         "通用·技术资讯"
@@ -52,7 +52,7 @@
       "source": "product_hunt",
       "label": "Product Hunt",
       "api_base": "https://api.producthunt.com/v1/oauth/token",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "产品·创投",
       "scope_labels": [
         "产品·创投"
@@ -64,7 +64,7 @@
       "source": "mcp_skills",
       "label": "MCP / Skills",
       "api_base": "https://registry.npmjs.org/react/latest",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜Agent·MCP/Skills",
       "scope_labels": [
         "AI｜Agent·MCP/Skills"
@@ -76,7 +76,7 @@
       "source": "stackoverflow",
       "label": "Stack Overflow",
       "api_base": "https://api.stackexchange.com/2.3/info?site=stackoverflow",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "开发·问答",
       "scope_labels": [
         "开发·问答"
@@ -88,7 +88,7 @@
       "source": "arxiv",
       "label": "arXiv",
       "api_base": "https://export.arxiv.org/api/query?search_query=all&start=0&max_results=1",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "学术·论文",
       "scope_labels": [
         "学术·论文"
@@ -100,7 +100,7 @@
       "source": "open_meteo",
       "label": "Open-Meteo",
       "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "气象·公开数据",
       "scope_labels": [
         "气象·公开数据"
@@ -112,7 +112,7 @@
       "source": "coingecko",
       "label": "CoinGecko",
       "api_base": "https://api.coingecko.com/api/v3/ping",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "加密·行情",
       "scope_labels": [
         "加密·行情"
@@ -124,7 +124,7 @@
       "source": "newsapi",
       "label": "NewsAPI",
       "api_base": "https://newsapi.org/v2/top-headlines?country=us",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "新闻·聚合",
       "scope_labels": [
         "新闻·聚合"
@@ -136,7 +136,7 @@
       "source": "pypi",
       "label": "PyPI",
       "api_base": "https://pypi.org/pypi/pip/json",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜工具链·Python",
       "scope_labels": [
         "AI｜工具链·Python"
@@ -148,7 +148,7 @@
       "source": "npm",
       "label": "npm",
       "api_base": "https://registry.npmjs.org/react/latest",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜工具链·Node",
       "scope_labels": [
         "AI｜工具链·Node"
@@ -160,7 +160,7 @@
       "source": "openai",
       "label": "OpenAI",
       "api_base": "https://api.openai.com/v1/models",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜大模型·OpenAI",
       "scope_labels": [
         "AI｜大模型·OpenAI"
@@ -172,7 +172,7 @@
       "source": "google_gemini",
       "label": "Google Gemini",
       "api_base": "https://generativelanguage.googleapis.com/v1beta/models",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜大模型·Google",
       "scope_labels": [
         "AI｜大模型·Google"
@@ -184,7 +184,7 @@
       "source": "finnhub",
       "label": "Finnhub",
       "api_base": "https://finnhub.io/api/v1/quote?symbol=AAPL",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "财经·股票",
       "scope_labels": [
         "财经·股票"
@@ -196,7 +196,7 @@
       "source": "alphavantage",
       "label": "Alpha Vantage",
       "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "财经·时间序列",
       "scope_labels": [
         "财经·时间序列"
@@ -208,7 +208,7 @@
       "source": "youtube_data",
       "label": "YouTube Data",
       "api_base": "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=dQw4w9WgXcQ",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "内容·视频",
       "scope_labels": [
         "内容·视频"
@@ -220,7 +220,7 @@
       "source": "mapbox",
       "label": "Mapbox",
       "api_base": "https://api.mapbox.com",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "地理·地图",
       "scope_labels": [
         "地理·地图"
@@ -232,7 +232,7 @@
       "source": "docker_hub",
       "label": "Docker Hub",
       "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜工具链·容器",
       "scope_labels": [
         "AI｜工具链·容器"
@@ -244,7 +244,7 @@
       "source": "crates_io",
       "label": "crates.io",
       "api_base": "https://crates.io/api/v1/crates/serde",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "AI｜工具链·Rust",
       "scope_labels": [
         "AI｜工具链·Rust"
@@ -256,7 +256,7 @@
       "source": "openalex",
       "label": "OpenAlex",
       "api_base": "https://api.openalex.org/works?per_page=1",
-      "frequency": "daily_07:00",
+      "frequency": "scheduled",
       "scope_label": "学术·开放图谱",
       "scope_labels": [
         "学术·开放图谱"

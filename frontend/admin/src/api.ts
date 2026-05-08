@@ -65,7 +65,6 @@ export type AdminSourcePresetItem = {
   source: string;
   label: string;
   api_base: string;
-  frequency: string;
   scope_label: string;
   scope_labels: string[];
   notes: string;
@@ -153,7 +152,6 @@ export const adminApi = {
       items: Array<{
         source: string;
         enabled: boolean;
-        frequency: string;
         api_base: string;
         api_key_masked: string;
         scope_label?: string;
@@ -312,6 +310,62 @@ export const adminApi = {
       env_fallback: boolean;
       pipeline: Array<{ id: string; label: string }>;
     }>("/api/admin/v1/product/settings/llm", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  getSchedulerSettings: () =>
+    request<{
+      connector_scheduler_enabled: boolean;
+      connector_sync_interval_hours: number;
+      last_connector_batch_at: string | null;
+      gate_interval_minutes: number;
+      env_default_hours_hint: number;
+    }>("/api/admin/v1/product/settings/scheduler"),
+  getRuntimeSettings: () =>
+    request<{
+      cors_origins_csv: string;
+      jwt_ttl_seconds: number;
+      allowed_skew_seconds: number;
+      require_https: boolean;
+      allow_insecure_localhost: boolean;
+      admin_cookie_secure: boolean;
+      app_env: string;
+      demo_seed_enabled: boolean | null;
+      demo_seed_effective: boolean;
+      legacy_admin_enabled: boolean;
+      app_release_label: string;
+      hot_llm_model: string;
+      secrets_note: string;
+    }>("/api/admin/v1/product/settings/runtime"),
+  saveRuntimeSettings: (payload: Record<string, unknown>) =>
+    request<{
+      cors_origins_csv: string;
+      jwt_ttl_seconds: number;
+      allowed_skew_seconds: number;
+      require_https: boolean;
+      allow_insecure_localhost: boolean;
+      admin_cookie_secure: boolean;
+      app_env: string;
+      demo_seed_enabled: boolean | null;
+      demo_seed_effective: boolean;
+      legacy_admin_enabled: boolean;
+      app_release_label: string;
+      hot_llm_model: string;
+      secrets_note: string;
+    }>("/api/admin/v1/product/settings/runtime", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  saveSchedulerSettings: (payload: { connector_scheduler_enabled?: boolean; connector_sync_interval_hours?: number }) =>
+    request<{
+      connector_scheduler_enabled: boolean;
+      connector_sync_interval_hours: number;
+      last_connector_batch_at: string | null;
+      gate_interval_minutes: number;
+      env_default_hours_hint: number;
+    }>("/api/admin/v1/product/settings/scheduler", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

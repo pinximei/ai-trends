@@ -26,6 +26,8 @@
 
 首次 Linux 虚拟机建议先在机器上跑: bash scripts/bootstrap_linux_vm.sh（见 docs/deploy-tencent-cvm.md §0）
 
+远端 `git pull` 之后的固定步骤在 **scripts/vm_deploy.sh**（与 deploy_ssh、GitHub Actions 共用）。
+
 本机交互登录（密码放 scripts/ssh_local.env，勿提交）: py scripts/ssh_connect.py（见 scripts/ssh_local.env.example）
 """
 from __future__ import annotations
@@ -36,6 +38,27 @@ import os
 import shlex
 import sys
 from pathlib import Path
+
+
+def _load_ssh_local_env() -> None:
+    """若存在 scripts/ssh_local.env（gitignore），且变量尚未导出，则加载（见 ssh_local.env.example）。"""
+    p = Path(__file__).resolve().parent / "ssh_local.env"
+    if not p.is_file():
+        return
+    try:
+        raw = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if "=" not in s:
+            continue
+        k, _, v = s.partition("=")
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if k and k not in os.environ:
+            os.environ[k] = v
 
 
 def _require_paramiko():
@@ -63,13 +86,18 @@ def _password() -> str:
 def _default_remote_script(deploy_dir: str, branch: str, unit: str) -> str:
     return f"""set -euo pipefail
 cd {shlex.quote(deploy_dir)}
+if [[ ! -f backend/app/main.py ]]; then
+  echo "deploy: 当前目录不是 AISoul 仓库根（缺少 backend/app/main.py）: $(pwd)" >&2
+  exit 2
+fi
 git pull origin {shlex.quote(branch)}
-if [[ -d .venv ]]; then source .venv/bin/activate; fi
-python3 -m pip install -e . -q
-(cd frontend && npm install --no-fund --no-audit && npm run build)
-(cd frontend/admin && npm install --no-fund --no-audit && npm run build)
-sudo systemctl restart {shlex.quote(unit)}
-sudo systemctl is-active --quiet {shlex.quote(unit)} && echo "systemd: {unit} is active"
+if [[ ! -f scripts/vm_deploy.sh ]]; then
+  echo "deploy: git pull 后仍无 scripts/vm_deploy.sh，请检查远端分支与仓库内容: $(pwd)" >&2
+  ls -la scripts 2>/dev/null || true
+  exit 2
+fi
+export AISOU_DEPLOY_SYSTEMD_UNIT={shlex.quote(unit)}
+bash scripts/vm_deploy.sh
 """
 
 
@@ -84,6 +112,7 @@ def _configure_stdio_utf8() -> None:
 
 def main() -> int:
     _configure_stdio_utf8()
+    _load_ssh_local_env()
     paramiko = _require_paramiko()
     ap = argparse.ArgumentParser(description="SSH 部署 / 远程执行（凭据来自环境或 getpass）")
     ap.add_argument("--host", default=os.environ.get("AISOU_DEPLOY_HOST"), help="或设 AISOU_DEPLOY_HOST")

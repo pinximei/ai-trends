@@ -9,6 +9,7 @@
    脚本会安装依赖、创建 `.venv`、构建两个前端，并提示编辑 `backend/.env` 与 systemd/Nginx。
 2. systemd 示例：`deploy/systemd/aisoul-backend.service.example`（复制到 `/etc/systemd/system/` 后按需改 `User`/`WorkingDirectory`/`ExecStart` 路径）。
 3. 日常更新仍可在**你本机**用 `py scripts/deploy_ssh.py`（需能 SSH 到该主机）。若使用 **Git Bash / WSL**，也可用 **`scripts/ssh_aisoul.sh`**（`login` / `bootstrap` / `update`，凭据走环境变量与 `ssh-agent`）。
+4. **GitHub 推送自动部署（可选）**：见下文 **§2.1**。与本地部署共用远端脚本 **`scripts/vm_deploy.sh`**，避免命令两套不一致。
 
 **本机密码登录（勿把含密码的文件提交 Git）**：复制 `scripts/ssh_local.env.example` 为 **`scripts/ssh_local.env`**（已在 `.gitignore`），填写 `AISOU_DEPLOY_*` 后执行 **`py scripts/ssh_connect.py`** 打开远端 shell；生产环境更推荐 **SSH 私钥**。
 
@@ -41,6 +42,19 @@
 AISOU_DEPLOY_HOST=你的公网IP AISOU_DEPLOY_USER=ubuntu AISOU_DEPLOY_SSH_PASSWORD=... py scripts/apply_nginx_cloud.py
 ```
 
+**发布版本号**：公开站与后台顶栏会显示 **前端构建** 与 **API** 两段标识；API 来自 `GET /api/public/v1/version`。生产建议在 `backend/.env` 设置 `AISOU_APP_RELEASE`（可与 git 短 SHA 一致），与前端构建对照即可确认是否已部署到新代码。`deploy_ssh.py` 在远端构建前端时会注入 `VITE_GIT_SHA=$(git rev-parse --short HEAD)`。
+
+## 2.1 GitHub Actions（推送 `main` 自动编译部署）
+
+1. 工作流：`.github/workflows/deploy-vm.yml`。触发条件：**push 到 `main`**，或 **Actions → deploy-vm → Run workflow**；Runner 上先跑 **`pytest`**，通过后再 SSH 到 VM 执行 `git pull` 与 `scripts/vm_deploy.sh`（与本地 **`py scripts/deploy_ssh.py`** 同源，避免两套命令不一致）。
+2. 在 GitHub：**Settings → Secrets and variables → Actions → New repository secret**，至少配置：
+   - **`AISOU_DEPLOY_HOST`**：虚拟机公网 IP 或域名  
+   - **`AISOU_DEPLOY_USER`**：SSH 用户（常见 **`ubuntu`**）  
+   - **`AISOU_DEPLOY_SSH_KEY`**：能登录该 VM 的 **私钥全文**（含 `BEGIN`/`END` 行）。建议单独生成 **仅用于 CI 部署** 的密钥，公钥写入 VM 的 `~/.ssh/authorized_keys`。
+3. VM 需已存在 **`/opt/aisoul`** 且可 **`git pull` 本仓库**（公仓即可；私仓在 VM 配置 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；部署用户对目录可写；**`sudo systemctl restart aisoul-backend`** 可用（bootstrap / sudoers）。
+4. systemd unit 若不是 `aisoul-backend`，请在工作流里修改 `AISOU_DEPLOY_SYSTEMD_UNIT` 那一行（或在 Actions 里改用你自己的脚本）。
+5. 私钥带口令：当前工作流未传入 `passphrase`；可用无口令专用密钥，或自行改工作流接入 `appleboy/ssh-action` 的对应参数。
+
 ## 3. 环境变量（示例）
 
 ```text
@@ -58,7 +72,9 @@ AISOU_ENV=production
 
 首次启动后，管理员密码即为上面的 **`AISOU_ADMIN_INIT_PASSWORD`**，与本地开发默认的 `admin123456` **无关**。若遗忘，可在服务器项目目录执行 **`py scripts/reset_admin_password.py`**（交互输入新密码，需与线上同一 `AISOU_DATABASE_URL`）。
 
-已启用连接器由后端 **APScheduler 默认每 6 小时**自动同步；可用 **`AISOU_CONNECTOR_SYNC_INTERVAL_HOURS`**（1～168）调整，重启进程后生效。管理端 **「AI 资讯」→ 定时同步与数据清理」** 中，**管理员**可一键清空连接器入库相关表（文章、指标点、同步日志、热门快照、LLM 用量）并重置连接器上次同步时间。
+**运行参数（CORS、JWT 时长、HTTPS 策略、app_env、演示种子、旧版内部接口开关、版本展示串、热门默认模型等）** 已迁至库表 **`product_settings_kv.runtime`**，在管理端 **「账号管理」→「运行参数」** 修改即可；**数据库连接串、JWT_SECRET、SIGNING_KEY、AUTH_BOOTSTRAP_KEY、LLM 密钥、AISOU_ADMIN_TOKEN** 仍仅用环境变量。
+
+已启用连接器由后端 **APScheduler** 按 **库内配置**（`product_settings_kv.scheduler`：间隔小时数、是否启用）做整批同步；进程每 **15 分钟**检查一次是否到点，无需改代码或重启即可在管理端 **「AI 资讯与数据」→ 定时同步与数据清理」** 保存。新建库时若未写过库表，默认间隔可读环境变量 **`AISOU_CONNECTOR_SYNC_INTERVAL_HOURS`**（1～168）。**管理员**可在同页一键清空连接器入库相关表（文章、指标点、同步日志、热门快照、LLM 用量）并重置连接器上次同步时间。
 
 前端构建：
 

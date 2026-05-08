@@ -12,17 +12,13 @@ from sqlalchemy.orm import Session
 
 from .db import get_db
 from .models import AdminSession, AdminSetting, AdminUser, AuditLog
+from .runtime_settings_service import admin_cookie_secure_effective, effective_app_env
 
 SESSION_COOKIE = "aisoul_admin_session"
 SESSION_TTL_HOURS = 12
 ROLE_LEVEL = {"viewer": 1, "operator": 2, "admin": 3}
-ADMIN_COOKIE_SECURE = os.getenv("AISOU_ADMIN_COOKIE_SECURE", "true").lower() in {"1", "true", "yes", "on"}
 ADMIN_MAX_FAILED_ATTEMPTS = int(os.getenv("AISOU_ADMIN_MAX_FAILED_ATTEMPTS", "5"))
 ADMIN_LOCK_MINUTES = int(os.getenv("AISOU_ADMIN_LOCK_MINUTES", "15"))
-APP_ENV = os.getenv("AISOU_ENV", "dev").lower()
-
-if APP_ENV in {"dev", "local"} and os.getenv("AISOU_ADMIN_COOKIE_SECURE") is None:
-    ADMIN_COOKIE_SECURE = False
 
 
 def hash_password(password: str) -> str:
@@ -52,7 +48,7 @@ def ensure_default_admin(db: Session) -> None:
     init_username = os.getenv("AISOU_ADMIN_INIT_USERNAME")
     init_password = os.getenv("AISOU_ADMIN_INIT_PASSWORD")
     if not init_username or not init_password:
-        if APP_ENV not in {"dev", "local"}:
+        if effective_app_env() not in {"dev", "local"}:
             raise RuntimeError("missing AISOU_ADMIN_INIT_USERNAME/AISOU_ADMIN_INIT_PASSWORD")
         init_username = "admin"
         init_password = "admin123456"
@@ -113,7 +109,7 @@ def login(db: Session, response: Response, username: str, password: str) -> dict
         key=SESSION_COOKIE,
         value=sid,
         httponly=True,
-        secure=ADMIN_COOKIE_SECURE,
+        secure=admin_cookie_secure_effective(),
         samesite="lax",
         max_age=SESSION_TTL_HOURS * 3600,
         path="/",

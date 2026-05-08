@@ -1,9 +1,9 @@
-"""应用生命周期：建表、种子、调度器（约三天热门快照、异动扫描）。"""
+"""应用生命周期：建表、种子、调度器（约三天热门快照、异动扫描、连接器批量同步）。"""
 from __future__ import annotations
 
 import logging
-import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -16,14 +16,6 @@ logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 
 
-def _demo_seed_enabled() -> bool:
-    v = os.getenv("AISOU_ENABLE_DEMO_SEED")
-    if v is not None:
-        return v.lower() in {"1", "true", "yes", "on"}
-    # Default: enable in dev/local, disable in production-like environments.
-    return os.getenv("AISOU_ENV", "dev").lower() in {"dev", "local"}
-
-
 def _startup_sync() -> None:
     from . import product_models  # noqa: F401
 
@@ -31,11 +23,15 @@ def _startup_sync() -> None:
     ensure_schema_compatibility()
     db = SessionLocal()
     try:
+        from .runtime_settings_service import assert_production_security, demo_seed_enabled_effective, refresh_runtime_snapshot
+
+        refresh_runtime_snapshot(db)
+        assert_production_security()
         ensure_default_admin(db)
         from .services import ensure_mainstream_admin_sources, seed_if_empty
 
         ensure_mainstream_admin_sources(db)
-        if _demo_seed_enabled():
+        if demo_seed_enabled_effective():
             seed_if_empty(db)
             from .product_seed import (
                 ensure_demo_software_downloads,
@@ -49,6 +45,9 @@ def _startup_sync() -> None:
         from .product_seed import ensure_public_about_page
 
         ensure_public_about_page(db)
+        from .scheduler_settings_service import ensure_scheduler_settings_row
+
+        ensure_scheduler_settings_row(db)
         from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
         sync_product_taxonomy_from_admin_sources(db)
@@ -90,30 +89,86 @@ def _job_anomaly() -> None:
         db.close()
 
 
-def _job_daily_sync_connectors() -> None:
-    db = SessionLocal()
-    try:
-        from sqlalchemy import select
+def _job_connector_sync_gate() -> None:
+    """每 15 分钟检查一次：若距上次整批已超过配置的间隔，则同步所有已启用连接器（不受单连接器 min_interval 限制）。"""
+    from sqlalchemy import select, text
 
-        from .product_models import ProductConnector
-        from .routers.admin_extended import run_connector_sync
+    from fastapi import HTTPException
+
+    from .db import engine
+    from .product_models import ProductConnector
+    from .routers.admin_extended import run_connector_sync
+    from .scheduler_settings_service import (
+        ensure_scheduler_settings_row,
+        get_scheduler_settings_merged,
+        parse_last_batch_at,
+        set_last_connector_batch_at,
+    )
+
+    db = SessionLocal()
+    locked = False
+    try:
+        ensure_scheduler_settings_row(db)
+        settings = get_scheduler_settings_merged(db)
+        if not settings.get("connector_scheduler_enabled", True):
+            logger.debug("connector scheduler disabled, skip gate")
+            return
+
+        interval_h = max(1, min(168, int(settings.get("connector_sync_interval_hours") or 6)))
+        last_dt = parse_last_batch_at(settings.get("last_connector_batch_at"))
+        now = datetime.utcnow()
+        if last_dt and (now - last_dt).total_seconds() < interval_h * 3600 - 30:
+            return
+
+        if getattr(engine.dialect, "name", "") == "postgresql":
+            locked = bool(db.execute(text("SELECT pg_try_advisory_lock(928471001)")).scalar())
+            if not locked:
+                logger.debug("connector batch: advisory lock busy, skip")
+                return
 
         rows = db.scalars(select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)).all()
+        if not rows:
+            logger.info("scheduled connector batch: no enabled connectors")
+            return
+
         ok = 0
         fail = 0
         for r in rows:
             try:
-                out = run_connector_sync(db, r.id, actor="system")
+                out = run_connector_sync(db, r.id, actor="system", bypass_rate_limit=True)
                 if out.get("error"):
                     fail += 1
                 else:
                     ok += 1
+            except HTTPException:
+                fail += 1
             except Exception:
                 fail += 1
-        logger.info("scheduled connector sync finished: ok=%s fail=%s total=%s", ok, fail, len(rows))
+                logger.exception("connector sync failed id=%s", r.id)
+
+        try:
+            from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
+
+            sync_product_taxonomy_from_admin_sources(db)
+        except Exception:
+            logger.exception("taxonomy sync after connector batch failed")
+
+        if ok > 0:
+            set_last_connector_batch_at(db, now)
+            logger.info("scheduled connector batch finished: ok=%s fail=%s total=%s", ok, fail, len(rows))
+        else:
+            logger.warning(
+                "scheduled connector batch: all failed (ok=0), not advancing last_connector_batch_at — will retry on next gate",
+            )
     except Exception as e:
-        logger.exception("scheduled connector sync failed: %s", e)
+        logger.exception("scheduled connector gate failed: %s", e)
     finally:
+        if locked and getattr(engine.dialect, "name", "") == "postgresql":
+            try:
+                db.execute(text("SELECT pg_advisory_unlock(928471001)"))
+                db.commit()
+            except Exception:
+                logger.exception("advisory unlock failed")
         db.close()
 
 
@@ -124,17 +179,15 @@ def _start_scheduler() -> None:
     _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
     _scheduler.add_job(_job_scheduled_hot, IntervalTrigger(days=3), id="hot_snapshot_3d")
     _scheduler.add_job(_job_anomaly, "interval", hours=1, id="hourly_anomaly")
-    _sync_h = int(os.getenv("AISOU_CONNECTOR_SYNC_INTERVAL_HOURS", "6") or "6")
-    if _sync_h < 1:
-        _sync_h = 1
-    if _sync_h > 168:
-        _sync_h = 168
     _scheduler.add_job(
-        _job_daily_sync_connectors,
-        IntervalTrigger(hours=_sync_h),
-        id="connector_sync_interval",
+        _job_connector_sync_gate,
+        IntervalTrigger(minutes=15),
+        id="connector_sync_gate",
     )
-    logger.info("connector sync scheduled every %s hours (AISOU_CONNECTOR_SYNC_INTERVAL_HOURS)", _sync_h)
+    logger.info(
+        "connector sync gate every 15m; interval hours from DB product_settings_kv.scheduler "
+        "(interval from DB product_settings_kv.scheduler)",
+    )
     _scheduler.start()
 
 

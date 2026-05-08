@@ -1,0 +1,60 @@
+# push 到 main 且测试通过后，SSH 到 Linux 虚拟机执行 git pull + 构建 + systemd 重启。
+# 需在仓库 Settings → Secrets and variables → Actions 中配置 SSH 私钥等（勿提交仓库）。
+name: deploy-vm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vm-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # 合并进 main 后的 push 才部署；手动 workflow_dispatch 也可
+    if: github.ref == 'refs/heads/main'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoul
+          POSTGRES_PASSWORD: aisoul
+          POSTGRES_DB: aisoul
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aisoul -d aisoul"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AISOU_DATABASE_URL: postgresql+psycopg://aisoul:aisoul@127.0.0.1:5432/aisoul
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies & run tests
+        run: |
+          pip install -e .
+          python -m pytest tests/ -q
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AISOU_DEPLOY_HOST }}
+          username: ${{ secrets.AISOU_DEPLOY_USER }}
+          key: ${{ secrets.AISOU_DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 25m
+          script: |
+            set -euo pipefail
+            cd /opt/aisoul
+            git pull origin main
+            export AISOU_DEPLOY_SYSTEMD_UNIT=aisoul-backend
+            bash scripts/vm_deploy.sh

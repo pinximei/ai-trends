@@ -11,13 +11,12 @@ from .scope_labels_util import dump_scope_labels_json
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
 # scope_label：标明所属领域/板块，便于与「行业→板块」前台结构对应。
-# frequency「daily_07:00」：每日一次，默认 07:00（具体执行依赖后续调度/运维时区约定）。
+# 拉取节奏由「AI 资讯与数据」中的连接器统一定时任务控制，不在单条数据源上配置。
 # api_base：优先选用 GET 即可探测连通性的路径；业务集成时可在表单中改回官方文档中的根路径。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.github.com/zen",
         "api_key_masked": "",
         "scope_label": "AI｜通用·开源协作",
@@ -26,7 +25,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "huggingface",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://huggingface.co/api/models?limit=1",
         "api_key_masked": "",
         "scope_label": "AI｜大模型/生态",
@@ -35,7 +33,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "huggingface_spaces",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://huggingface.co/api/spaces?limit=1",
         "api_key_masked": "",
         "scope_label": "AI｜Spaces·应用",
@@ -44,7 +41,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "hacker_news",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://hacker-news.firebaseio.com/v0/maxitem.json",
         "api_key_masked": "",
         "scope_label": "通用·技术资讯",
@@ -53,7 +49,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "product_hunt",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.producthunt.com/v2/api/graphql",
         "api_key_masked": "",
         "scope_label": "产品·创投",
@@ -62,7 +57,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "mcp_skills",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://registry.npmjs.org/react/latest",
         "api_key_masked": "",
         "scope_label": "AI｜Agent·MCP/Skills",
@@ -71,7 +65,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "stackoverflow",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.stackexchange.com/2.3/info?site=stackoverflow",
         "api_key_masked": "",
         "scope_label": "开发·问答",
@@ -80,7 +73,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "arxiv",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://export.arxiv.org/api/query?search_query=all&start=0&max_results=1",
         "api_key_masked": "",
         "scope_label": "学术·论文",
@@ -89,7 +81,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "open_meteo",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
         "api_key_masked": "",
         "scope_label": "气象·公开数据",
@@ -98,7 +89,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "coingecko",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.coingecko.com/api/v3/ping",
         "api_key_masked": "",
         "scope_label": "加密·行情",
@@ -107,7 +97,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "newsapi",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://newsapi.org/v2/top-headlines?country=us",
         "api_key_masked": "",
         "scope_label": "新闻·聚合",
@@ -116,7 +105,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "pypi",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://pypi.org/pypi/pip/json",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·Python",
@@ -125,7 +113,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "npm",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://registry.npmjs.org/react/latest",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·Node",
@@ -135,7 +122,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "openai",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.openai.com/v1/models",
         "api_key_masked": "",
         "scope_label": "AI｜大模型·OpenAI",
@@ -144,7 +130,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "google_gemini",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://generativelanguage.googleapis.com/v1beta/models",
         "api_key_masked": "",
         "scope_label": "AI｜大模型·Google",
@@ -153,7 +138,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "finnhub",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://finnhub.io/api/v1/quote?symbol=AAPL",
         "api_key_masked": "",
         "scope_label": "财经·股票",
@@ -162,7 +146,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "alphavantage",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
         "api_key_masked": "",
         "scope_label": "财经·时间序列",
@@ -171,7 +154,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "youtube_data",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=dQw4w9WgXcQ",
         "api_key_masked": "",
         "scope_label": "内容·视频",
@@ -180,7 +162,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "mapbox",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.mapbox.com",
         "api_key_masked": "",
         "scope_label": "地理·地图",
@@ -189,7 +170,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "docker_hub",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·容器",
@@ -198,7 +178,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "crates_io",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://crates.io/api/v1/crates/serde",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·Rust",
@@ -207,7 +186,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "openalex",
         "enabled": True,
-        "frequency": "daily_07:00",
         "api_base": "https://api.openalex.org/works?per_page=1",
         "api_key_masked": "",
         "scope_label": "学术·开放图谱",
@@ -253,7 +231,7 @@ def build_admin_source_preset_items() -> list[dict]:
                 "source": src,
                 "label": PRESET_SOURCE_LABELS.get(src, src.replace("_", " ").title()),
                 "api_base": row["api_base"],
-                "frequency": row["frequency"],
+                "frequency": "scheduled",
                 "scope_label": sl,
                 "scope_labels": [sl] if sl else [],
                 "notes": row.get("notes") or "",
@@ -276,7 +254,7 @@ def ensure_mainstream_admin_sources(db: Session) -> int:
             AdminSourceConfig(
                 source=source,
                 enabled=row["enabled"],
-                frequency=row["frequency"],
+                frequency="scheduled",
                 api_base=row["api_base"],
                 api_key_masked=row["api_key_masked"],
                 scope_label=sl,

@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_API_BASE: string;
   /** 构建时写入：`package.json` 版本 + git 短 SHA（或 local） */
   readonly VITE_APP_RELEASE: string;
 }

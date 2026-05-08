@@ -9,6 +9,8 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/aisoul
 EnvironmentFile=/opt/aisoul/backend/.env
+# 可选：在 version 接口中展示与前端构建一致的发布号（或写入 backend/.env）
+# Environment=AISOU_APP_RELEASE=0.1.0+abc1234
 ExecStart=/opt/aisoul/.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5

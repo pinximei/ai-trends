@@ -9,6 +9,17 @@ from sqlalchemy.orm import Session
 from ..domain import articles as art
 from ..product_models import Article, Industry, Segment
 from ..services import PRESET_SOURCE_LABELS
+from ..taxonomy_from_sources import MERGED_TAXONOMY_INDUSTRY_SLUG
+
+
+def _public_industry_ids_for_slug(db: Session, ind: Industry) -> list[int]:
+    """前台 industry_slug=ai 时同时收录 taxonomy「domains」下连接器入库文章。"""
+    ids = [ind.id]
+    if (ind.slug or "").strip().lower() == "ai":
+        dom = db.scalar(select(Industry).where(Industry.slug == MERGED_TAXONOMY_INDUSTRY_SLUG))
+        if dom and dom.id not in ids:
+            ids.append(dom.id)
+    return ids
 
 
 def _row_feed_lane(a: Article) -> str:
@@ -30,7 +41,6 @@ def _base_article_query_for_scope(
     published_on_latest_day: bool,
 ) -> tuple[Industry | None, Select]:
     """已发布 + 行业/板块 + 时间窗；不含泳道、类别、游标。"""
-    industry_slug = "ai"
     ind: Industry | None
     if segment_id is not None:
         seg = db.get(Segment, segment_id)
@@ -48,8 +58,9 @@ def _base_article_query_for_scope(
         segs = db.scalars(select(Segment).where(Segment.id.in_(segment_ids))).all()
         if len(segs) != len(set(segment_ids)):
             raise ValueError("invalid segment_ids")
+        allowed_ids = set(_public_industry_ids_for_slug(db, ind))
         for s in segs:
-            if s.industry_id != ind.id:
+            if s.industry_id not in allowed_ids:
                 raise ValueError("segment_ids must belong to industry_slug")
 
     since_pub: datetime | None = None
@@ -59,10 +70,11 @@ def _base_article_query_for_scope(
     cal_day = art.published_calendar_day(db)
     latest_calendar_day = None
     if published_within_days is None and published_on_latest_day:
+        pub_ind_ids = _public_industry_ids_for_slug(db, ind) if segment_id is None and segment_ids is None else [ind.id]
         sub = (
             select(func.max(cal_day))
             .where(
-                Article.industry_id == ind.id,
+                Article.industry_id.in_(pub_ind_ids),
                 Article.status == "published",
                 Article.published_at.isnot(None),
             )
@@ -76,8 +88,11 @@ def _base_article_query_for_scope(
         if latest_calendar_day is None:
             return ind, select(Article).where(False)
 
+    article_industry_ids = (
+        _public_industry_ids_for_slug(db, ind) if segment_id is None and segment_ids is None else [ind.id]
+    )
     q = select(Article).where(
-        Article.industry_id == ind.id,
+        Article.industry_id.in_(article_industry_ids),
         Article.status == "published",
         Article.published_at.isnot(None),
     )
@@ -139,7 +154,6 @@ def list_articles_feed(
     published_on_latest_day: bool,
     category: str | None = None,
 ) -> dict:
-    industry_slug = "ai"
     scan_limit = 280
     cat_filter = (category or "").strip() or None
 

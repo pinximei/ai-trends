@@ -1,20 +1,20 @@
 """Rebuild hot snapshot (rule-based; optional LLM later)."""
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from .product_models import Article, HotSnapshot, Industry, LlmUsageLog, MetricDefinition, MetricPoint, ProductSetting
+from .runtime_settings_service import hot_llm_model_effective
 
 
 def get_hot_settings(db: Session) -> dict:
     row = db.get(ProductSetting, "hot")
     if row and row.value_json:
         return row.value_json
-    return {"top_n_trends": 5, "top_n_articles": 10, "llm_model": os.getenv("AISOU_HOT_LLM_MODEL", "rule-based")}
+    return {"top_n_trends": 5, "top_n_articles": 10, "llm_model": hot_llm_model_effective()}
 
 
 def save_hot_settings(db: Session, data: dict) -> dict:
@@ -37,7 +37,7 @@ def rebuild_hot_snapshot(db: Session, industry_slug: str = "ai", trigger: str = 
     cfg = get_hot_settings(db)
     n_trend = int(cfg.get("top_n_trends", 5))
     n_art = int(cfg.get("top_n_articles", 10))
-    model_label = str(cfg.get("llm_model") or os.getenv("AISOU_HOT_LLM_MODEL", "rule-based"))
+    model_label = str(cfg.get("llm_model") or hot_llm_model_effective())
 
     metrics = db.scalars(select(MetricDefinition).where(MetricDefinition.segment_id.isnot(None))).all()
     trend_items = []

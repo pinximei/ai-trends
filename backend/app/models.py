@@ -68,7 +68,7 @@ class AdminSourceConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    frequency: Mapped[str] = mapped_column(String(32), default="daily_07:00")
+    frequency: Mapped[str] = mapped_column(String(32), default="scheduled")
     api_base: Mapped[str] = mapped_column(String(256), default="")
     api_key_masked: Mapped[str] = mapped_column(String(128), default="")
     scope_label: Mapped[str] = mapped_column(String(128), default="")

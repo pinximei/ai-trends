@@ -1,9 +1,27 @@
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, Cpu, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { Aurora } from "./Aurora";
 import { TechAtmosphere } from "./TechAtmosphere";
+
+function apiBasePrefix(): string {
+  const b = (import.meta.env.VITE_API_BASE || "").trim().replace(/\/$/, "");
+  return b;
+}
+
+async function fetchBackendRelease(): Promise<string | null> {
+  try {
+    const url = `${apiBasePrefix()}/api/public/v1/version`;
+    const r = await fetch(url);
+    const j = (await r.json()) as { code?: number; data?: { release?: string } };
+    if (j.code === 0 && j.data?.release) return j.data.release;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 const nav = [
   { to: "/apps", key: "navApps" },
@@ -15,6 +33,18 @@ const nav = [
 export function Layout() {
   const { t, lang, setLang } = useI18n();
   const loc = useLocation();
+  const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
+  const [apiRelease, setApiRelease] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchBackendRelease().then((v) => {
+      if (!cancelled) setApiRelease(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="relative min-h-screen">
@@ -29,14 +59,30 @@ export function Layout() {
           </span>
           AISoul · Uplink
         </span>
-        <span className="hidden items-center gap-4 sm:flex">
-          <span className="flex items-center gap-1 text-fuchsia-400/90">
+        <span className="flex max-w-[62%] flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:max-w-none">
+          <span className="hidden items-center gap-1 text-fuchsia-400/90 sm:flex">
             <Cpu className="h-3 w-3" /> inference
           </span>
-          <span className="flex items-center gap-1 text-amber-400/90">
+          <span className="hidden items-center gap-1 text-amber-400/90 sm:flex">
             <Activity className="h-3 w-3" /> live
           </span>
-          <span className="text-slate-500">{new Date().toISOString().slice(0, 10)} UTC</span>
+          <span
+            className="max-w-full truncate normal-case tracking-normal text-slate-500 max-sm:text-[9px]"
+            title={`UI ${uiRelease} · API ${apiRelease ?? "…"}`}
+          >
+            build <span className="text-cyan-600/90">{uiRelease}</span>
+            {apiRelease ? (
+              <>
+                {" "}
+                · api <span className="text-fuchsia-400/80">{apiRelease}</span>
+              </>
+            ) : (
+              <span className="text-slate-600"> · api …</span>
+            )}
+          </span>
+          <span className="text-slate-500 normal-case tracking-normal max-sm:text-[9px]">
+            {new Date().toISOString().slice(0, 10)} UTC
+          </span>
         </span>
       </div>
       <header className="sticky top-0 z-50 border-b border-white/10 bg-night-950/80 shadow-[0_0_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
@@ -103,6 +149,10 @@ export function Layout() {
       </main>
       <footer className="border-t border-cyan-500/15 bg-black/20 py-8 text-center font-mono text-[11px] text-slate-300/80">
         <p>{t("footer")}</p>
+        <p className="mt-2 text-[10px] text-slate-500">
+          {lang === "zh" ? "版本" : "Release"}: UI {uiRelease}
+          {apiRelease ? ` · API ${apiRelease}` : ""}
+        </p>
         <Link to="/about" className="mt-2 inline-block text-cyan-400/80 hover:underline">
           {t("navAbout")} · 完整说明
         </Link>

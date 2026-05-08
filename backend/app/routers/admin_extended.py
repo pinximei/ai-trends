@@ -15,6 +15,8 @@ from ..db import get_db
 from ..application.news_agent import pipeline_steps
 from ..hot_service import get_hot_settings, save_hot_settings
 from ..llm_settings_service import get_llm_settings_public, save_llm_settings_patch
+from ..runtime_settings_service import get_runtime_settings_public, save_runtime_settings_patch
+from ..scheduler_settings_service import get_scheduler_settings_public, save_scheduler_settings_patch
 from ..llm_service import generate_inspiration_body
 from ..models import AdminSession, AdminSourceConfig
 from ..product_models import (
@@ -105,6 +107,65 @@ def put_llm_settings(
     merged = save_llm_settings_patch(db, patch)
     audit(db, actor=session.username, action="product.settings.llm", target="llm", detail=str({k: v for k, v in patch.items() if k != "api_key"}))
     return ok({**merged, "pipeline": pipeline_steps()})
+
+
+class SchedulerSettingsPatch(BaseModel):
+    connector_scheduler_enabled: bool | None = None
+    connector_sync_interval_hours: int | None = Field(None, ge=1, le=168)
+
+
+@router.get("/product/settings/scheduler")
+def get_scheduler_setting(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    return ok(get_scheduler_settings_public(db))
+
+
+@router.put("/product/settings/scheduler")
+def put_scheduler_setting(
+    payload: SchedulerSettingsPatch,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    patch = {k: v for k, v in payload.model_dump().items() if v is not None}
+    merged = save_scheduler_settings_patch(db, patch)
+    audit(db, actor=session.username, action="product.settings.scheduler", target="scheduler", detail=str(patch))
+    return ok(merged)
+
+
+class RuntimeSettingsPatch(BaseModel):
+    cors_origins_csv: str | None = None
+    jwt_ttl_seconds: int | None = Field(None, ge=60, le=864000)
+    allowed_skew_seconds: int | None = Field(None, ge=30, le=3600)
+    require_https: bool | None = None
+    allow_insecure_localhost: bool | None = None
+    admin_cookie_secure: bool | None = None
+    app_env: str | None = Field(None, description="dev | local | staging | production")
+    demo_seed_enabled: bool | None = None
+    legacy_admin_enabled: bool | None = None
+    app_release_label: str | None = None
+    hot_llm_model: str | None = None
+
+
+@router.get("/product/settings/runtime")
+def get_runtime_setting(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    return ok(get_runtime_settings_public(db))
+
+
+@router.put("/product/settings/runtime")
+def put_runtime_setting(
+    payload: RuntimeSettingsPatch,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("admin")),
+):
+    patch = payload.model_dump(exclude_unset=True)
+    save_runtime_settings_patch(db, patch)
+    audit(db, actor=session.username, action="product.settings.runtime", target="runtime", detail=str(patch))
+    return ok(get_runtime_settings_public(db))
 
 
 class AnomalySettingsPatch(BaseModel):
@@ -287,12 +348,19 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
         return 0, str(e)[:800]
 
 
-def run_connector_sync(db: Session, connector_id: int, actor: str = "system") -> dict:
+def run_connector_sync(
+    db: Session,
+    connector_id: int,
+    actor: str = "system",
+    *,
+    bypass_rate_limit: bool = False,
+) -> dict:
     c = db.get(ProductConnector, connector_id)
     if not c:
         raise HTTPException(404, "not found")
     now = datetime.utcnow()
-    if c.last_sync_at and c.min_interval_seconds:
+    # 定时任务整批同步须绕过「最短间隔」，否则会 429 并被静默吞掉，表现为「从未自动拉取」。
+    if not bypass_rate_limit and c.last_sync_at and c.min_interval_seconds:
         delta = (now - c.last_sync_at).total_seconds()
         if delta < c.min_interval_seconds:
             raise HTTPException(429, f"rate limited: min_interval_seconds={c.min_interval_seconds}")

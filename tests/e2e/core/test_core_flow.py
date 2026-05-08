@@ -10,6 +10,17 @@ def client():
         yield c
 
 
+def test_public_version_endpoint(client):
+    resp = client.get("/api/public/v1/version")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("code") == 0
+    data = body.get("data") or {}
+    assert "release" in data
+    assert isinstance(data["release"], str)
+    assert len(data["release"]) >= 1
+
+
 def test_dashboard_page_accessible(client):
     resp = client.get("/")
     assert resp.status_code == 200

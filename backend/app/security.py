@@ -12,30 +12,18 @@ from fastapi import HTTPException, Request
 
 
 JWT_SECRET = os.getenv("AISOU_JWT_SECRET", "change-this-jwt-secret")
-JWT_TTL_SECONDS = int(os.getenv("AISOU_JWT_TTL_SECONDS", "1800"))
 SIGNING_KEY = os.getenv("AISOU_SIGNING_KEY", "change-this-signing-key")
 AUTH_BOOTSTRAP_KEY = os.getenv("AISOU_AUTH_BOOTSTRAP_KEY", "dev-bootstrap-key")
-ALLOWED_SKEW_SECONDS = int(os.getenv("AISOU_ALLOWED_SKEW_SECONDS", "300"))
-REQUIRE_HTTPS = os.getenv("AISOU_REQUIRE_HTTPS", "true").lower() in {"1", "true", "yes", "on"}
-ALLOW_INSECURE_LOCALHOST = os.getenv("AISOU_ALLOW_INSECURE_LOCALHOST", "true").lower() in {"1", "true", "yes", "on"}
-APP_ENV = os.getenv("AISOU_ENV", "dev").lower()
-
-if APP_ENV not in {"dev", "local"}:
-    weak_defaults = {
-        "change-this-jwt-secret",
-        "change-this-signing-key",
-        "dev-bootstrap-key",
-    }
-    if JWT_SECRET in weak_defaults or SIGNING_KEY in weak_defaults or AUTH_BOOTSTRAP_KEY in weak_defaults:
-        raise RuntimeError("weak security defaults are not allowed outside dev/local")
 
 
 def issue_access_token(client_id: str) -> str:
+    from .runtime_settings_service import jwt_ttl_seconds
+
     now = int(time.time())
     payload = {
         "sub": client_id,
         "iat": now,
-        "exp": now + JWT_TTL_SECONDS,
+        "exp": now + jwt_ttl_seconds(),
         "scope": "api:read api:write",
     }
     payload_bytes = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
@@ -82,8 +70,10 @@ def verify_hmac_signature(request: Request, body: bytes) -> None:
     except ValueError as exc:
         raise HTTPException(status_code=401, detail="invalid timestamp") from exc
 
+    from .runtime_settings_service import allowed_skew_seconds
+
     now = int(time.time())
-    if abs(now - ts_value) > ALLOWED_SKEW_SECONDS:
+    if abs(now - ts_value) > allowed_skew_seconds():
         raise HTTPException(status_code=401, detail="timestamp out of range")
 
     canonical = _canonical(
@@ -109,12 +99,14 @@ def verify_bearer_from_request(request: Request) -> dict[str, Any]:
 
 
 def enforce_https(request: Request) -> None:
-    if not REQUIRE_HTTPS:
+    from .runtime_settings_service import allow_insecure_localhost_flag, require_https_flag
+
+    if not require_https_flag():
         return
 
     host = (request.url.hostname or "").lower()
     # Starlette TestClient 默认 host 为 testserver，需与本地开发一并放行（仍受 REQUIRE_HTTPS/开关约束）
-    if ALLOW_INSECURE_LOCALHOST and host in {"127.0.0.1", "localhost", "::1", "testserver"}:
+    if allow_insecure_localhost_flag() and host in {"127.0.0.1", "localhost", "::1", "testserver"}:
         return
 
     forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()

@@ -1,7 +1,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-backend/data/*.db
+# 本地 SQLite 与验证库（生产用 PostgreSQL）
+backend/data/
 frontend/node_modules/
 frontend/dist/
 frontend/playwright-report/

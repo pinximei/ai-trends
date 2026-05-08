@@ -4,9 +4,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-
 from .lifespan import app_lifespan
+from .runtime_cors_middleware import RuntimeCORSMiddleware
 from .api.public.router import router as public_api_router
 from .routers import admin_data_browser, admin_extended, admin_product
 from sqlalchemy import select
@@ -45,18 +44,7 @@ app = FastAPI(title="Agent Trend Platform", lifespan=app_lifespan)
 
 root = Path(__file__).resolve().parent.parent
 
-_cors = os.getenv(
-    "AISOU_CORS_ORIGINS",
-    "http://127.0.0.1:5172,http://localhost:5172,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:5174,http://localhost:5174",
-).split(",")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in _cors if o.strip()],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(RuntimeCORSMiddleware)
 
 app.include_router(public_api_router)
 app.include_router(admin_product.router)
@@ -158,7 +146,6 @@ I18N = {
 }
 
 ADMIN_TOKEN = os.getenv("AISOU_ADMIN_TOKEN", "")
-LEGACY_ADMIN_ENABLED = os.getenv("AISOU_LEGACY_ADMIN_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 
 
 def resolve_lang(request: Request) -> str:
@@ -187,7 +174,9 @@ def _token_ok(request: Request, token: str) -> bool:
 
 
 def require_admin(request: Request):
-    if not LEGACY_ADMIN_ENABLED:
+    from .runtime_settings_service import legacy_admin_enabled
+
+    if not legacy_admin_enabled():
         raise HTTPException(status_code=410, detail="legacy admin api disabled")
     if not ADMIN_TOKEN:
         raise HTTPException(status_code=500, detail="legacy admin token missing")
@@ -550,7 +539,7 @@ def admin_sources_upsert_v2(
         data = DataApiService(db).upsert_admin_source(payload.model_dump(), _mask_key)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    audit(db, actor=session.username, action="source.upsert", target=data["source"], detail=f"freq={data['frequency']}")
+    audit(db, actor=session.username, action="source.upsert", target=data["source"], detail="sync=scheduled_unified")
     return api_envelope(request, data)
 
 

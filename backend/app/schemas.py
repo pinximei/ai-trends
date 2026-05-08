@@ -18,7 +18,6 @@ class InternalRunRequest(BaseModel):
 class AdminSourceConfigUpsert(BaseModel):
     source: str
     enabled: bool = True
-    frequency: str = "daily_07:00"
     api_base: str = ""
     api_key: str = ""
     notes: str = ""

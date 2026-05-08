@@ -291,7 +291,7 @@ class DataApiService:
             {
                 "source": i.source,
                 "enabled": i.enabled,
-                "frequency": i.frequency,
+                "frequency": "scheduled",
                 "api_base": i.api_base,
                 "api_key_masked": i.api_key_masked,
                 "scope_label": i.scope_label or "",
@@ -311,7 +311,7 @@ class DataApiService:
             item = AdminSourceConfig(source=source)
             self.db.add(item)
         item.enabled = payload["enabled"]
-        item.frequency = payload["frequency"].strip() or "daily_07:00"
+        item.frequency = "scheduled"
         item.api_base = payload["api_base"].strip()
         if payload["api_key"].strip():
             item.api_key_masked = mask_func(payload["api_key"])
