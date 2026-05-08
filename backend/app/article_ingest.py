@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from .domain.articles import (
+    PUBLISH_CATEGORY_COUNT_MAX,
     VALUE_SCORE_MIN,
     display_fingerprint,
     feed_lane,
@@ -132,7 +133,9 @@ def create_published_articles_for_connector_targets(
         body_main = "\n\n".join(f"## {t['label']}\n\n{t['body_md']}" for t in tabs)
     body = body_main[:50000]
     cats = polished.get("categories")
-    clean = [str(x).strip() for x in cats if str(x).strip()][:8] if isinstance(cats, list) else []
+    clean = (
+        [str(x).strip() for x in cats if str(x).strip()][:PUBLISH_CATEGORY_COUNT_MAX] if isinstance(cats, list) else []
+    )
     ai_categories_json = json.dumps(clean, ensure_ascii=False)
     ai_tabs_json = json.dumps(
         [{"label": t["label"], "summary": t["summary"], "body_md": t["body_md"]} for t in tabs],

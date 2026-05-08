@@ -3,20 +3,21 @@ import { publicApi } from "@/api/public";
 import { useI18n } from "@/i18n";
 
 export function AboutSitePage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    setErr("");
     publicApi
-      .page("about")
+      .page("about", { lang })
       .then((p) => {
         setTitle(p.title);
         setBody(p.body_md);
       })
       .catch((e) => setErr(String(e)));
-  }, []);
+  }, [lang]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 text-slate-200">

@@ -5,16 +5,66 @@ import json
 
 from backend.app.domain import articles as art
 
+# 与 PUBLISH_CATEGORY_COUNT_MIN=8 对齐的测试用分类列表
+_CAT8 = ["大模型", "开源", "算力", "论文", "基准", "推理", "生态", "多模态"]
+_CAT10 = _CAT8 + ["安全", "算子"]
+_CAT13 = _CAT10 + ["监管", "合规", "市场"]
+
 
 def test_validate_llm_polish_accepts_minimal_valid_payload() -> None:
     data = {
         "title": "测试标题",
         "summary": "这是摘要句子，满足长度。",
         "body_md": "## 总览\n\n正文。",
-        "categories": ["大模型", "开源"],
+        "categories": list(_CAT8),
         "feed_kind": "news",
         "tabs": [
             {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项" * 1},
+            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
+        ],
+    }
+    assert art.validate_llm_polish_for_publish(data) is True
+
+
+def test_validate_llm_polish_rejects_too_few_categories() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": "这是摘要句子，满足长度。",
+        "body_md": "## 总览\n\n正文。",
+        "categories": _CAT8[:7],
+        "feed_kind": "news",
+        "tabs": [
+            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项"},
+            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
+        ],
+    }
+    assert art.validate_llm_polish_for_publish(data) is False
+
+
+def test_validate_llm_polish_rejects_too_many_categories() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": "这是摘要句子，满足长度。",
+        "body_md": "## 总览\n\n正文。",
+        "categories": list(_CAT13),
+        "feed_kind": "news",
+        "tabs": [
+            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项"},
+            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
+        ],
+    }
+    assert art.validate_llm_polish_for_publish(data) is False
+
+
+def test_validate_llm_polish_accepts_ten_categories() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": "这是摘要句子，满足长度。",
+        "body_md": "## 总览\n\n正文。",
+        "categories": list(_CAT10),
+        "feed_kind": "news",
+        "tabs": [
+            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项"},
             {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
         ],
     }
@@ -26,7 +76,7 @@ def test_validate_llm_polish_rejects_single_tab() -> None:
         "title": "t",
         "summary": "摘要摘要摘要摘要。",
         "body_md": "x",
-        "categories": ["a", "b"],
+        "categories": list(_CAT8),
         "feed_kind": "news",
         "tabs": [{"label": "唯一", "summary": "概要足够长度用于校验", "body_md": "body_md 必须足够十六字以上。"}],
     }
@@ -59,7 +109,7 @@ def test_ui_shape_warnings_clean_article() -> None:
         {"label": "B", "summary": "概要二二三四五六七八", "body_md": "正文二正文二正文二正文二正文二正文二正文。"},
     ]
     warns = art.ui_shape_warnings_for_stored_article(
-        ai_categories_json=json.dumps(["大模型", "论文"], ensure_ascii=False),
+        ai_categories_json=json.dumps(list(_CAT8), ensure_ascii=False),
         ai_tabs_json=json.dumps(tabs, ensure_ascii=False),
         body="## 总览",
         summary="正常摘要长度足够。",

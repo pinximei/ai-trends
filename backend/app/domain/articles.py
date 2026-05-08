@@ -38,6 +38,10 @@ def display_fingerprint(title: str, summary: str) -> str:
 
 VALUE_SCORE_MIN = 38.0
 
+# LLM 入库 categories：约十来条（不宜过少或过多）
+PUBLISH_CATEGORY_COUNT_MIN = 8
+PUBLISH_CATEGORY_COUNT_MAX = 12
+
 
 def rule_value_score(*, snippet: str, summary: str, http_status: int) -> float:
     if http_status < 200 or http_status >= 300:
@@ -74,6 +78,7 @@ def ingest_duplicate_exists(db: Session, *, industry_id: int, ingest_fp: str) ->
 
 # —— 泳道（与 admin_source_key 一致）——
 
+# 资讯：模型/API、代码托管、论文与行情等（非「上架应用」发现类）
 FEED_NEWS_KEYS = frozenset(
     {
         "hacker_news",
@@ -87,21 +92,22 @@ FEED_NEWS_KEYS = frozenset(
         "coingecko",
         "open_meteo",
         "mapbox",
-    }
-)
-FEED_APPS_KEYS = frozenset(
-    {
-        "product_hunt",
+        "github",
         "huggingface",
-        "huggingface_spaces",
         "mcp_skills",
         "docker_hub",
-        "github",
         "pypi",
         "npm",
         "crates_io",
         "openai",
         "google_gemini",
+    }
+)
+# 应用：产品上架/可运行应用发现（与「Agent 发版、GitHub 仓库」类资讯区分）
+FEED_APPS_KEYS = frozenset(
+    {
+        "product_hunt",
+        "huggingface_spaces",
     }
 )
 
@@ -226,8 +232,14 @@ def ui_shape_warnings_for_stored_article(
     if raw_tabs and len(tabs) < 2:
         warns.append("ai_tabs_json 存在但解析后有效 tab 少于 2 个，详情页将回退为单栏「全文」或仅展示 body")
     cats = parse_category_labels_json(ai_categories_json)
-    if len(cats) < 2:
-        warns.append("ai_categories_json 中有效分类少于 2 个，前台类别筛选与 LLM 入库规范不一致")
+    if len(cats) < PUBLISH_CATEGORY_COUNT_MIN:
+        warns.append(
+            f"ai_categories_json 中有效分类少于 {PUBLISH_CATEGORY_COUNT_MIN} 个，与入库规范（约十来条）不一致"
+        )
+    if len(cats) > PUBLISH_CATEGORY_COUNT_MAX:
+        warns.append(
+            f"ai_categories_json 中有效分类多于 {PUBLISH_CATEGORY_COUNT_MAX} 个，与入库规范（约十来条）不一致"
+        )
     if not tabs and not (body or "").strip():
         warns.append("无 tabs 且无 body，详情 Markdown 区域将为空")
     if tabs and len((summary or "").strip()) < 4:
@@ -242,10 +254,10 @@ def validate_llm_polish_for_publish(data: dict) -> bool:
     if not title or not summary:
         return False
     cats = data.get("categories")
-    if not isinstance(cats, list) or len(cats) < 2:
+    if not isinstance(cats, list):
         return False
     clean_cats = [str(x).strip() for x in cats if str(x).strip()]
-    if len(clean_cats) < 2:
+    if len(clean_cats) < PUBLISH_CATEGORY_COUNT_MIN or len(clean_cats) > PUBLISH_CATEGORY_COUNT_MAX:
         return False
     tabs = data.get("tabs")
     if not isinstance(tabs, list) or len(tabs) < 2 or len(tabs) > 6:

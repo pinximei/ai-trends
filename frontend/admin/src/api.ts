@@ -127,6 +127,24 @@ async function loadSourcePresetsWithOrigin(): Promise<{
   throw new Error("预设模板为空");
 }
 
+export type ThemeFetchConnectorDetail = {
+  connector_id: number;
+  name: string;
+  http_status?: number;
+  articles_created?: number;
+  rows_ingested?: number;
+  error?: string | null;
+};
+
+export type ThemeFetchResult = {
+  taxonomy_synced: boolean;
+  theme_applied_to_url: boolean;
+  connectors_total: number;
+  ok: number;
+  fail: number;
+  details: ThemeFetchConnectorDetail[];
+};
+
 export const adminApi = {
   me: () =>
     request<{ username: string; role: string; expires_at: string; password_min_length: number }>("/api/admin/v1/auth/me"),
@@ -189,6 +207,13 @@ export const adminApi = {
   /** 仅管理员：清空连接器入库数据（文章/指标点/同步日志/热门快照/LLM 用量），重置连接器上次同步时间 */
   clearProductIngestData: () =>
     request<Record<string, number>>("/api/admin/v1/product/ingest-data/clear", { method: "POST" }),
+  /** 仅管理员：先按数据源领域同步 taxonomy，再对所有已启用连接器立即拉取；可选 theme 在无 q 等参数时写入 URL 的 q */
+  themeFetchProductData: (opts?: { theme?: string }) =>
+    request<ThemeFetchResult>("/api/admin/v1/product/ingest/theme-fetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts?.theme?.trim() ? { theme: opts.theme.trim() } : {}),
+    }),
   dbInfo: () =>
     request<{
       mode: string;

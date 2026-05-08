@@ -107,7 +107,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="news",
-            ai_categories_json='["大模型","开源","算力"]',
+            ai_categories_json='["大模型","开源","算力","论文","基准","推理","生态","多模态"]',
             ai_tabs_json=_tabs_json(
                 [
                     ("要点速览", "本周大模型指标与趋势提要。", "## 本周要点\n\n- 演示指标曲线\n- 可替换为连接器同步结果"),
@@ -123,11 +123,11 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[1].id,
             industry_id=ind.id,
             content_type="application",
-            third_party_source="github / 演示连接器",
+            third_party_source="product_hunt / 演示数据源",
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
-            ai_categories_json='["应用发布","开源工具","Agent"]',
+            ai_categories_json='["应用发布","开源工具","Agent","产品","模型","API","开发者","演示"]',
             ai_tabs_json=_tabs_json(
                 [
                     ("产品动态", "应用与模型发布线索。", "## 动态\n\n**应用**类文章需标注第三方来源（演示）。"),
@@ -137,20 +137,20 @@ def seed_product_if_empty(db: Session) -> None:
         ),
         Article(
             slug="tool-picks",
-            title="工具链动态（自营示例）",
-            summary="自营维护条目可不写第三方来源。",
+            title="Spaces 应用演示（自营示例）",
+            summary="Hugging Face Spaces 类可运行应用演示条目。",
             body="## 总览\n\n工具类演示条目。",
             segment_id=segs[2].id,
             industry_id=ind.id,
             content_type="self_tool",
-            third_party_source="pypi / 自营演示",
+            third_party_source="huggingface_spaces / 演示数据源",
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
-            ai_categories_json='["开发工具","开源"]',
+            ai_categories_json='["开发工具","开源","Spaces","托管","推理","UI","协作","演示"]',
             ai_tabs_json=_tabs_json(
                 [
-                    ("工具精选", "本周工具与包管理提示。", "## 工具\n\n本页为 **自营工具** 类型演示。"),
+                    ("应用形态", "Spaces / 低代码托管类应用提示。", "## 形态\n\n演示为 **应用发现** 泳道占位。"),
                     ("使用建议", "集成与版本注意点。", "## 建议\n\n演示环境，生产请接真实流水线。"),
                 ]
             ),
@@ -167,6 +167,19 @@ def seed_product_if_empty(db: Session) -> None:
                 "## 网站介绍\n\nAISoul 演示站：AI 行业趋势与资源聚合（学习项目）。\n\n"
                 "## 数据与来源\n\n数据来自配置的第三方 API 与演示种子；热门推荐由系统按周期生成快照。\n\n"
                 "## 免责声明\n\n信息仅供参考，不构成任何专业建议；使用需自担风险。"
+            ),
+            status="published",
+            published_at=datetime.utcnow(),
+        )
+    )
+    db.add(
+        CmsPage(
+            slug="about_en",
+            title="About & disclaimer",
+            body_md=(
+                "## About\n\nAISoul demo: AI industry trends and resource aggregation (learning project).\n\n"
+                "## Data\n\nData comes from configured third-party APIs and demo seed; featured lists are rebuilt on a schedule.\n\n"
+                "## Disclaimer\n\nFor information only; not professional advice. Use at your own risk."
             ),
             status="published",
             published_at=datetime.utcnow(),
@@ -297,19 +310,32 @@ def ensure_product_settings_and_demo_connector(db: Session) -> None:
 
 def ensure_public_about_page(db: Session) -> None:
     """生产环境若未跑演示种子，仍保证「关于」页有默认 CMS，避免 /pages/about 404。"""
-    if db.get(CmsPage, "about"):
-        return
-    db.add(
-        CmsPage(
-            slug="about",
-            title="关于本站与免责声明",
-            body_md=(
-                "## 网站介绍\n\nAISoul：AI 行业趋势与资源聚合（学习项目）。\n\n"
-                "## 数据与来源\n\n数据来自配置的第三方 API 与运营录入；热门推荐由系统按周期生成快照。\n\n"
-                "## 免责声明\n\n信息仅供参考，不构成任何专业建议；使用需自担风险。"
-            ),
-            status="published",
-            published_at=datetime.utcnow(),
+    if not db.get(CmsPage, "about"):
+        db.add(
+            CmsPage(
+                slug="about",
+                title="关于本站与免责声明",
+                body_md=(
+                    "## 网站介绍\n\nAISoul：AI 行业趋势与资源聚合（学习项目）。\n\n"
+                    "## 数据与来源\n\n数据来自配置的第三方 API 与运营录入；热门推荐由系统按周期生成快照。\n\n"
+                    "## 免责声明\n\n信息仅供参考，不构成任何专业建议；使用需自担风险。"
+                ),
+                status="published",
+                published_at=datetime.utcnow(),
+            )
         )
-    )
+    if not db.get(CmsPage, "about_en"):
+        db.add(
+            CmsPage(
+                slug="about_en",
+                title="About & disclaimer",
+                body_md=(
+                    "## About\n\nAISoul: AI industry trends and resource aggregation (learning project).\n\n"
+                    "## Data\n\nData from configured third-party APIs and editorial input; featured lists are rebuilt on a schedule.\n\n"
+                    "## Disclaimer\n\nFor information only; not professional advice. Use at your own risk."
+                ),
+                status="published",
+                published_at=datetime.utcnow(),
+            )
+        )
     db.commit()

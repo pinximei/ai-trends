@@ -155,6 +155,8 @@ export function App() {
   const [schedulerForm, setSchedulerForm] = useState({ enabled: true, hours: 6 });
   const [schedulerSaving, setSchedulerSaving] = useState(false);
   const [clearIngestBusy, setClearIngestBusy] = useState(false);
+  const [themeFetchBusy, setThemeFetchBusy] = useState(false);
+  const [themeKeyword, setThemeKeyword] = useState("");
   /** 与公开接口同源：便于核对后台看到的后端是否为当前部署 */
   const [publicApiRelease, setPublicApiRelease] = useState<string | null>(null);
 
@@ -656,6 +658,39 @@ export function App() {
     }
   }
 
+  async function onThemeFetch() {
+    if (!canManageSettings) return;
+    if (
+      !window.confirm(
+        "将先根据「数据源」中的领域标签刷新行业/板块结构，再对所有已启用的连接器立即执行一次同步（不受单次最短间隔限制），会访问外网。确定继续？",
+      )
+    )
+      return;
+    setThemeFetchBusy(true);
+    setErr("");
+    try {
+      const kw = themeKeyword.trim();
+      const r = await adminApi.themeFetchProductData(kw ? { theme: kw } : {});
+      const lines = (r.details || [])
+        .map((d) => {
+          const err = d.error ? ` 错误: ${d.error}` : "";
+          return `${d.name} (#${d.connector_id}) HTTP ${d.http_status ?? "—"} 文章+${d.articles_created ?? 0}${err}`;
+        })
+        .join("\n");
+      window.alert(
+        `主题获取完成。\n领域结构已同步；已启用连接器共 ${r.connectors_total} 个，成功 ${r.ok}，失败 ${r.fail}。${
+          r.theme_applied_to_url ? `\n本次已在未自带搜索参数的 URL 上补充 q=${kw}。` : ""
+        }\n\n${lines || "（无已启用连接器）"}`,
+      );
+      setThemeKeyword("");
+      await loadAdminData();
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "theme fetch failed"));
+    } finally {
+      setThemeFetchBusy(false);
+    }
+  }
+
   async function onCreateUser(e: FormEvent) {
     e.preventDefault();
     setErr("");
@@ -881,6 +916,41 @@ export function App() {
                     }}
                   >
                     {clearIngestBusy ? "清空中…" : "清空资源入库数据"}
+                  </button>
+                </div>
+                <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid rgba(148,163,184,0.2)" }}>
+                  <h4 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600 }}>主题获取数据</h4>
+                  <p className="muted tiny" style={{ margin: "0 0 10px", lineHeight: 1.6 }}>
+                    先同步数据源领域到行业/板块，再对<strong>已启用</strong>连接器整批立即拉取（与定时任务同逻辑，且绕过单连接器最短间隔）。可选填关键词：若连接器 URL
+                    尚未带搜索参数，会在本次请求中追加 <code className="inline-code">q</code>（如 NewsAPI 等）。
+                  </p>
+                  <div className="form-field" style={{ maxWidth: 420, marginBottom: 10 }}>
+                    <label htmlFor="theme-fetch-keyword">可选主题 / 搜索词</label>
+                    <input
+                      id="theme-fetch-keyword"
+                      type="text"
+                      value={themeKeyword}
+                      onChange={(e) => setThemeKeyword(e.target.value)}
+                      placeholder="留空则仅按数据源领域拉取"
+                      disabled={themeFetchBusy || clearIngestBusy}
+                      maxLength={200}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={themeFetchBusy || clearIngestBusy}
+                    onClick={() => void onThemeFetch()}
+                    style={{
+                      borderColor: "rgba(34,211,238,0.45)",
+                      color: "#cffafe",
+                      background: "rgba(14,116,144,0.28)",
+                      padding: "10px 16px",
+                      borderRadius: 10,
+                      cursor: themeFetchBusy || clearIngestBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {themeFetchBusy ? "拉取中…" : "主题获取数据"}
                   </button>
                 </div>
               </section>
@@ -1492,6 +1562,43 @@ export function App() {
                   <p className="muted tiny" style={{ marginTop: 8 }}>
                     仅管理员。用于纠正错误入库后一键清空，随后可手动同步或等待定时任务。
                   </p>
+                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(148,163,184,0.2)" }}>
+                    <h4 className="settings-title" style={{ marginTop: 0, marginBottom: 8, fontSize: 15 }}>
+                      主题获取数据
+                    </h4>
+                    <p className="muted tiny" style={{ marginTop: 0, lineHeight: 1.6 }}>
+                      同步数据源领域 → 已启用连接器立即整批拉取；可选关键词在无搜索参数时写入 URL 的 <code className="inline-code">q</code>。
+                    </p>
+                    <div className="form-field" style={{ maxWidth: 400, marginTop: 10 }}>
+                      <label htmlFor="theme-fetch-keyword-ai">可选主题 / 搜索词</label>
+                      <input
+                        id="theme-fetch-keyword-ai"
+                        type="text"
+                        value={themeKeyword}
+                        onChange={(e) => setThemeKeyword(e.target.value)}
+                        placeholder="留空则仅按数据源领域拉取"
+                        disabled={themeFetchBusy || clearIngestBusy}
+                        maxLength={200}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={themeFetchBusy || clearIngestBusy}
+                      onClick={() => void onThemeFetch()}
+                      style={{
+                        marginTop: 10,
+                        borderColor: "rgba(34,211,238,0.45)",
+                        color: "#cffafe",
+                        background: "rgba(14,116,144,0.28)",
+                        padding: "10px 16px",
+                        borderRadius: 10,
+                        cursor: themeFetchBusy || clearIngestBusy ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {themeFetchBusy ? "拉取中…" : "主题获取数据"}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <p className="muted tiny" style={{ marginTop: 12 }}>

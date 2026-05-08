@@ -22,6 +22,10 @@ def list_article_categories(
     ),
     published_within_days: int | None = Query(None, ge=1, le=3650),
     published_on_latest_day: bool = Query(False),
+    q: str | None = Query(
+        None,
+        description="Search title and summary (case-insensitive substring); max 80 chars.",
+    ),
     db: Session = Depends(get_db),
 ):
     """当前时间/板块下、该泳道文章 AI 返回的 categories 聚合（供前台筛选）。"""
@@ -37,6 +41,7 @@ def list_article_categories(
             segment_ids=segment_ids_parsed,
             published_within_days=published_within_days,
             published_on_latest_day=published_on_latest_day,
+            search=q,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -64,6 +69,10 @@ def list_articles_feed(
         None,
         description="与 articles/categories 返回的 label 完全一致时筛选；不传表示不限类别。",
     ),
+    q: str | None = Query(
+        None,
+        description="Search title and summary (case-insensitive substring); max 80 chars.",
+    ),
     db: Session = Depends(get_db),
 ):
     segment_ids_parsed = parse_segment_ids_csv(segment_ids)
@@ -82,6 +91,7 @@ def list_articles_feed(
             published_within_days=published_within_days,
             published_on_latest_day=published_on_latest_day,
             category=category,
+            search=q,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e

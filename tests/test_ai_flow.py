@@ -104,6 +104,24 @@ def test_admin_scheduler_settings_get_and_put(client: TestClient) -> None:
     assert r2.json().get("code") == 0
 
 
+def test_admin_theme_fetch_requires_admin(client: TestClient) -> None:
+    r = client.post("/api/admin/v1/product/ingest/theme-fetch", json={})
+    assert r.status_code in (401, 403)
+
+
+def test_admin_theme_fetch_ok_for_admin(client: TestClient) -> None:
+    _admin_login(client)
+    r = client.post("/api/admin/v1/product/ingest/theme-fetch", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("code") == 0
+    data = body.get("data") or {}
+    assert data.get("taxonomy_synced") is True
+    assert "connectors_total" in data
+    assert "ok" in data and "fail" in data
+    assert isinstance(data.get("details"), list)
+
+
 def test_admin_hot_settings_get(client: TestClient) -> None:
     _admin_login(client)
     r = client.get("/api/admin/v1/product/settings/hot")
@@ -127,6 +145,57 @@ def test_public_articles_feed_news_and_apps_shape(client: TestClient) -> None:
         assert "next_cursor" in data
         for item in data["items"][:2]:
             assert "id" in item and "title" in item
+
+
+def test_public_articles_feed_search_q_filters_news(client: TestClient) -> None:
+    r = client.get(
+        "/api/public/v1/articles/feed",
+        params={"feed": "news", "industry_slug": "ai", "page_size": "12", "q": "大模型"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("code") == 0
+    items = (j.get("data") or {}).get("items") or []
+    assert len(items) >= 1
+    blob = " ".join(str(x.get("title", "")) + " " + str(x.get("summary", "")) for x in items).lower()
+    assert "大模型" in blob
+
+
+def test_public_articles_feed_search_q_filters_apps(client: TestClient) -> None:
+    base = client.get(
+        "/api/public/v1/articles/feed",
+        params={"feed": "apps", "industry_slug": "ai", "page_size": "24"},
+    )
+    assert base.status_code == 200
+    base_items = (base.json().get("data") or {}).get("items") or []
+    if not base_items:
+        pytest.skip("No published apps articles in this database; cannot assert search on apps lane.")
+    first = base_items[0]
+    needle = (str(first.get("title") or "app").strip() or "app")[:40]
+
+    r = client.get(
+        "/api/public/v1/articles/feed",
+        params={"feed": "apps", "industry_slug": "ai", "page_size": "12", "q": needle},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("code") == 0
+    items = (j.get("data") or {}).get("items") or []
+    assert len(items) >= 1
+    nlow = needle.lower()
+    assert any(nlow in f"{x.get('title', '')} {x.get('summary', '')}".lower() for x in items)
+
+
+def test_public_articles_categories_accepts_search_q(client: TestClient) -> None:
+    r = client.get(
+        "/api/public/v1/articles/categories",
+        params={"feed": "news", "industry_slug": "ai", "published_within_days": "3650", "q": "大模型"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("code") == 0
+    rows = j.get("data") or []
+    assert isinstance(rows, list)
 
 
 def test_content_briefing_envelope(client: TestClient) -> None:

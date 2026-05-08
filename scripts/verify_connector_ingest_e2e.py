@@ -26,7 +26,7 @@ def _fake_polish(*_a, **_k) -> dict:
         "title": "验证：连接器同步快照",
         "summary": "本地端到端脚本写入：模拟 LLM 润色后的摘要，用于确认 product_articles 与公开 feed 接口字段一致。",
         "body_md": "## 验证\n\n占位正文；生产环境为模型根据原始片段重写。",
-        "categories": ["大模型", "开源"],
+        "categories": ["大模型", "开源", "算力", "论文", "基准", "推理", "生态", "多模态"],
         "feed_kind": "news",
         "tabs": [
             {
@@ -65,12 +65,12 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        gh = db.query(AdminSourceConfig).filter(AdminSourceConfig.source == "github").one_or_none()
-        if not gh:
-            print("FAIL: mainstream seed missing github admin_source")
+        src = db.query(AdminSourceConfig).filter(AdminSourceConfig.source == "product_hunt").one_or_none()
+        if not src:
+            print("FAIL: mainstream seed missing product_hunt admin_source")
             return 1
-        gh.api_base = "https://httpbin.org/get"
-        gh.enabled = True
+        src.api_base = "https://httpbin.org/get"
+        src.enabled = True
         db.commit()
 
         conn = db.query(ProductConnector).order_by(ProductConnector.id).first()
@@ -78,7 +78,7 @@ def main() -> int:
             print("FAIL: no product_connectors row")
             return 1
         conn.enabled = True
-        conn.admin_source_key = "github"
+        conn.admin_source_key = "product_hunt"
         conn.min_interval_seconds = 0
         db.commit()
 
@@ -97,7 +97,7 @@ def main() -> int:
             print("FAIL: no published article")
             return 1
 
-        # github 在 domain FEED_APPS_KEYS 中，公开「AI 应用」列表用 feed=apps
+        # product_hunt 归入「AI 应用」泳道
         feed = article_app.list_articles_feed(
             db,
             feed="apps",
@@ -116,7 +116,7 @@ def main() -> int:
         if art.id not in ids:
             print("FAIL: new article not in public feed items", art.id, "feed=", feed)
             return 1
-        print("OK: article id", art.id, "present in public feed (apps lane for github)")
+        print("OK: article id", art.id, "present in public feed (apps lane for product_hunt)")
 
         d = article_app.get_published_article(db, art.id)
         assert d

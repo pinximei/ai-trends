@@ -3,13 +3,32 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, and_, desc, func, or_, select
+from sqlalchemy import Select, and_, desc, or_, select
 from sqlalchemy.orm import Session
 
 from ..domain import articles as art
 from ..product_models import Article, Industry, Segment
 from ..services import PRESET_SOURCE_LABELS
 from ..taxonomy_from_sources import MERGED_TAXONOMY_INDUSTRY_SLUG
+
+_MAX_FEED_SEARCH_LEN = 80
+
+
+def normalize_feed_search(raw: str | None) -> str | None:
+    """Strip and cap length; empty after strip → no search filter."""
+    s = (raw or "").strip()
+    if not s:
+        return None
+    if len(s) > _MAX_FEED_SEARCH_LEN:
+        s = s[:_MAX_FEED_SEARCH_LEN]
+    return s
+
+
+def _article_title_summary_matches(a: Article, needle: str) -> bool:
+    """Case-insensitive substring on title + summary (after泳道筛选，避免 SQL 先筛关键词再分页挤掉另一泳道)."""
+    n = needle.lower()
+    hay = f"{a.title or ''} {a.summary or ''}".lower()
+    return n in hay
 
 
 def _public_industry_ids_for_slug(db: Session, ind: Industry) -> list[int]:
@@ -64,29 +83,16 @@ def _base_article_query_for_scope(
                 raise ValueError("segment_ids must belong to industry_slug")
 
     since_pub: datetime | None = None
+    utc_day_start: datetime | None = None
+    utc_day_end: datetime | None = None
     if published_within_days is not None:
         since_pub = datetime.utcnow() - timedelta(days=published_within_days)
-
-    cal_day = art.published_calendar_day(db)
-    latest_calendar_day = None
-    if published_within_days is None and published_on_latest_day:
-        pub_ind_ids = _public_industry_ids_for_slug(db, ind) if segment_id is None and segment_ids is None else [ind.id]
-        sub = (
-            select(func.max(cal_day))
-            .where(
-                Article.industry_id.in_(pub_ind_ids),
-                Article.status == "published",
-                Article.published_at.isnot(None),
-            )
-            .select_from(Article)
-        )
-        if segment_id is not None:
-            sub = sub.where(Article.segment_id == segment_id)
-        elif segment_ids is not None:
-            sub = sub.where(Article.segment_id.in_(segment_ids))
-        latest_calendar_day = db.scalar(sub)
-        if latest_calendar_day is None:
-            return ind, select(Article).where(False)
+    elif published_on_latest_day:
+        # 「最新一日」= 自然日「今天」（UTC），与入库 published_at（naive UTC）一致。
+        # 旧实现用 max(日历日) 会变成「库里最新一篇是哪天就筛哪天」，易把 2025-06 等旧稿当成「今日」。
+        now = datetime.utcnow()
+        utc_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_day_end = utc_day_start + timedelta(days=1)
 
     article_industry_ids = (
         _public_industry_ids_for_slug(db, ind) if segment_id is None and segment_ids is None else [ind.id]
@@ -102,8 +108,8 @@ def _base_article_query_for_scope(
         q = q.where(Article.segment_id.in_(segment_ids))
     if since_pub is not None:
         q = q.where(Article.published_at >= since_pub)
-    elif latest_calendar_day is not None:
-        q = q.where(cal_day == latest_calendar_day)
+    elif utc_day_start is not None and utc_day_end is not None:
+        q = q.where(Article.published_at >= utc_day_start, Article.published_at < utc_day_end)
 
     return ind, q
 
@@ -117,6 +123,7 @@ def list_article_category_facets(
     segment_ids: list[int] | None,
     published_within_days: int | None,
     published_on_latest_day: bool,
+    search: str | None = None,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，由 AI categories 聚合出的可选筛选项。"""
     ind, q = _base_article_query_for_scope(
@@ -129,10 +136,13 @@ def list_article_category_facets(
     )
     if not ind:
         return []
+    n = normalize_feed_search(search)
     rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
         if _row_feed_lane(a) != feed:
+            continue
+        if n and not _article_title_summary_matches(a, n):
             continue
         for c in art.parse_category_labels_json(getattr(a, "ai_categories_json", None)):
             if c:
@@ -153,6 +163,7 @@ def list_articles_feed(
     published_within_days: int | None,
     published_on_latest_day: bool,
     category: str | None = None,
+    search: str | None = None,
 ) -> dict:
     scan_limit = 280
     cat_filter = (category or "").strip() or None
@@ -167,6 +178,7 @@ def list_articles_feed(
     )
     if not ind:
         return {"items": [], "next_cursor": None, "has_more": False, "page_size": page_size}
+    n = normalize_feed_search(search)
 
     exclude = art.parse_exclude_fingerprints(exclude_fp)
     seen_fp: set[str] = set(exclude)
@@ -200,6 +212,8 @@ def list_articles_feed(
                 continue
             cats_list = art.parse_category_labels_json(getattr(a, "ai_categories_json", None))
             if cat_filter and cat_filter not in cats_list:
+                continue
+            if n and not _article_title_summary_matches(a, n):
                 continue
             fp = art.display_fingerprint(a.title, a.summary or "")
             if fp in seen_fp:

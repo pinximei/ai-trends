@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from ..hot_service import rebuild_hot_snapshot
 from ..models import AdminSession
 from ..product_models import Article, CmsPage, HotSnapshot, Industry
 from ..services import clear_product_ingest_data
+from .admin_extended import run_theme_fetch_batch
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product"])
 
@@ -27,6 +28,12 @@ class CmsUpdate(BaseModel):
     status: str | None = None
 
 
+class ThemeFetchPayload(BaseModel):
+    """可选搜索主题：若填写，仅在连接器 URL 尚未带 q/query/keywords/search_query 时追加 ``q``。"""
+
+    theme: str | None = Field(default=None, max_length=200)
+
+
 @router.post("/product/ingest-data/clear")
 def post_clear_product_ingest_data(
     db: Session = Depends(get_db),
@@ -36,6 +43,17 @@ def post_clear_product_ingest_data(
     counts = clear_product_ingest_data(db)
     audit(db, actor=session.username, action="product.ingest_data.clear", detail=str(counts))
     return ok(counts)
+
+
+@router.post("/product/ingest/theme-fetch")
+def post_theme_fetch_ingest(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("admin")),
+    payload: ThemeFetchPayload = ThemeFetchPayload(),
+):
+    """按数据源领域刷新 taxonomy，并对所有已启用连接器立即同步（可选主题词写入 URL 的 q）。"""
+    data = run_theme_fetch_batch(db, actor=session.username, theme=payload.theme)
+    return ok(data)
 
 
 @router.post("/product/hot/rebuild")

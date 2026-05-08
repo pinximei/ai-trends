@@ -154,7 +154,7 @@ export function Layout() {
           {apiRelease ? ` · API ${apiRelease}` : ""}
         </p>
         <Link to="/about" className="mt-2 inline-block text-cyan-400/80 hover:underline">
-          {t("navAbout")} · 完整说明
+          {t("navAbout")} · {t("footerAboutFull")}
         </Link>
       </footer>
     </div>

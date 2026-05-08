@@ -311,6 +311,23 @@ def patch_connector(
     return ok({"id": c.id})
 
 
+def apply_theme_to_connector_url(url: str, theme: str) -> str:
+    """单次拉取：可选主题词写入 GET 查询参数 ``q``（仅当尚未配置 q/query/keywords/search_query）。"""
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    t = (theme or "").strip()
+    u = (url or "").strip()
+    if not t or not u:
+        return url
+    parts = urlsplit(u)
+    q = dict(parse_qsl(parts.query, keep_blank_values=True))
+    search_keys = ("q", "query", "keywords", "search_query")
+    if any(str(q.get(k) or "").strip() for k in search_keys):
+        return url
+    q["q"] = t
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q, encoding="utf-8"), parts.fragment))
+
+
 def _run_connector_request(cfg: dict) -> tuple[int, str]:
     url = (cfg or {}).get("url") or "https://httpbin.org/get"
     method = ((cfg or {}).get("method") or "GET").upper()
@@ -354,6 +371,7 @@ def run_connector_sync(
     actor: str = "system",
     *,
     bypass_rate_limit: bool = False,
+    theme: str | None = None,
 ) -> dict:
     c = db.get(ProductConnector, connector_id)
     if not c:
@@ -377,6 +395,12 @@ def run_connector_sync(
             cfg.setdefault("url", (src.api_base or "").strip())
             # NOTE: 当前系统仅保存 masked key，若需要真实受保护源请在 connector.config_json 里单独填 api_key。
             cfg.setdefault("auth_mode", "bearer")
+
+    tnorm = (theme or "").strip() or None
+    if tnorm:
+        u0 = (cfg.get("url") or "").strip()
+        if u0:
+            cfg["url"] = apply_theme_to_connector_url(u0, tnorm)
 
     status_code, snippet = _run_connector_request(cfg)
     rows_ingested = 0
@@ -467,6 +491,53 @@ def run_connector_sync(
         "rows_ingested": rows_ingested,
         "articles_created": articles_created,
         "error": err,
+    }
+
+
+def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict:
+    """按后台数据源领域标签刷新 taxonomy，并对所有已启用连接器立即同步（不受单连接器最短间隔限制）。"""
+    from ..taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
+
+    sync_product_taxonomy_from_admin_sources(db)
+    tnorm = (theme or "").strip() or None
+    rows = db.scalars(
+        select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)
+    ).all()
+    details: list[dict] = []
+    ok_n = 0
+    fail_n = 0
+    for c in rows:
+        try:
+            out = run_connector_sync(db, c.id, actor=actor, bypass_rate_limit=True, theme=tnorm)
+            err = out.get("error")
+            if err:
+                fail_n += 1
+            else:
+                ok_n += 1
+            details.append(
+                {
+                    "connector_id": c.id,
+                    "name": c.name,
+                    "http_status": out.get("http_status"),
+                    "articles_created": out.get("articles_created"),
+                    "rows_ingested": out.get("rows_ingested"),
+                    "error": err,
+                }
+            )
+        except HTTPException as e:
+            fail_n += 1
+            details.append({"connector_id": c.id, "name": c.name, "error": str(e.detail)})
+        except Exception as e:
+            fail_n += 1
+            details.append({"connector_id": c.id, "name": c.name, "error": str(e)[:240]})
+    audit(db, actor=actor, action="product.ingest.theme_fetch", detail=f"theme={tnorm!r}, ok={ok_n}, fail={fail_n}")
+    return {
+        "taxonomy_synced": True,
+        "theme_applied_to_url": bool(tnorm),
+        "connectors_total": len(rows),
+        "ok": ok_n,
+        "fail": fail_n,
+        "details": details,
     }
 
 
