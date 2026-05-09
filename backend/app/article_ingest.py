@@ -12,6 +12,7 @@ from .domain.articles import (
     VALUE_SCORE_MIN,
     display_fingerprint,
     feed_lane,
+    feed_lane_for_article,
     ingest_duplicate_exists,
     ingest_fingerprint,
     primary_canonical_from_raw_labels,
@@ -20,6 +21,41 @@ from .domain.articles import (
     FACET_ALL_LABELS,
 )
 from .product_models import Article
+
+
+def _snippet_to_markdown_appendix(snippet: str, *, max_len: int = 14000) -> str:
+    """原始连接器片段 → Markdown 附录（详情页保底可读）。"""
+    s = (snippet or "").strip()
+    if not s:
+        return ""
+    s = s[:max_len]
+    intro = (
+        "> **原始摘录**：以下为连接器返回的片段节选（未经模型扩写），便于核对接口字段与原文。\n\n"
+    )
+    try:
+        payload = json.loads(s)
+        if isinstance(payload, (dict, list)):
+            pretty = json.dumps(payload, ensure_ascii=False, indent=2)
+            if len(pretty) > max_len:
+                pretty = pretty[:max_len] + "\n…"
+            return intro + "```json\n" + pretty + "\n```"
+    except Exception:
+        pass
+    return intro + "```text\n" + s + "\n```"
+
+
+def _merge_raw_appendix_if_tabs_thin(tabs: list[dict], snippet: str, *, min_total: int = 1600) -> None:
+    """模型输出的 tab 正文过短时，在最后一个 tab 末尾附带原始片段，避免详情只有一两句概要。"""
+    if not tabs:
+        return
+    total = sum(len(str((t.get("body_md") or "")).strip()) for t in tabs if isinstance(t, dict))
+    if total >= min_total:
+        return
+    last = tabs[-1]
+    if not isinstance(last, dict):
+        return
+    extra = _snippet_to_markdown_appendix(snippet)
+    last["body_md"] = str(last.get("body_md") or "").rstrip() + "\n\n" + extra
 
 
 def _render_readable_snapshot(snippet: str) -> tuple[str, str]:
@@ -126,12 +162,19 @@ def create_published_articles_for_connector_targets(
     if not polished or not validate_llm_polish_for_publish(polished):
         return 0
 
+    tabs = polished.get("tabs") or []
+    _merge_raw_appendix_if_tabs_thin(tabs, safe)
+
     title = (polished.get("title") or "")[:500]
     summary = (polished.get("summary") or "")[:512]
-    tabs = polished.get("tabs") or []
     body_main = (polished.get("body_md") or "").strip()
-    if not body_main:
-        body_main = "\n\n".join(f"## {t['label']}\n\n{t['body_md']}" for t in tabs)
+    joined_tabs = "\n\n".join(
+        f"## {t['label']}\n\n{t.get('body_md', '')}" for t in tabs if isinstance(t, dict) and t.get("label")
+    )[:50000]
+    if len(body_main) < 400 and joined_tabs.strip():
+        body_main = joined_tabs
+    elif not body_main:
+        body_main = joined_tabs
     body = body_main[:50000]
     cats = polished.get("categories")
     raw_list = [str(x).strip() for x in cats if str(x).strip()] if isinstance(cats, list) else []
@@ -142,11 +185,20 @@ def create_published_articles_for_connector_targets(
     clean = [one]
     ai_categories_json = json.dumps(clean, ensure_ascii=False)
     ai_tabs_json = json.dumps(
-        [{"label": t["label"], "summary": t["summary"], "body_md": t["body_md"]} for t in tabs],
+        [
+            {"label": str(t.get("label") or ""), "summary": str(t.get("summary") or ""), "body_md": str(t.get("body_md") or "")}
+            for t in tabs
+            if isinstance(t, dict)
+        ],
         ensure_ascii=False,
     )
-    fk_out = str(polished.get("feed_kind") or fk).strip().lower()
-    stored_feed_kind = fk_out if fk_out in ("news", "apps") else fk
+    stored_feed_kind = feed_lane_for_article(
+        src_tag,
+        title=title,
+        summary=summary,
+        ai_categories_json=ai_categories_json,
+        ai_tabs_json=ai_tabs_json,
+    )
 
     disp_fp = display_fingerprint(title, summary)
 

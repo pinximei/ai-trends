@@ -143,8 +143,25 @@ def test_public_articles_feed_news_and_apps_shape(client: TestClient) -> None:
         data = j.get("data") or {}
         assert "items" in data and isinstance(data["items"], list)
         assert "next_cursor" in data
+        assert "has_more" in data
         for item in data["items"][:2]:
             assert "id" in item and "title" in item
+
+
+def test_public_articles_feed_day_pagination_shape(client: TestClient) -> None:
+    r = client.get(
+        "/api/public/v1/articles/feed",
+        params={"feed": "news", "industry_slug": "ai", "paginate_by": "day", "page": "1"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("code") == 0
+    data = j.get("data") or {}
+    assert data.get("paginate_by") == "day"
+    assert "items" in data and isinstance(data["items"], list)
+    assert "page" in data and "total_pages" in data
+    assert "has_prev" in data and "has_next" in data
+    assert "days_scan_truncated" in data
 
 
 def test_public_articles_feed_search_q_filters_news(client: TestClient) -> None:

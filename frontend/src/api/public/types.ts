@@ -32,3 +32,25 @@ export type ArticleDetail = ArticleCard & {
   /** 分 tab：label + 概要 + Markdown 详情 */
   tabs?: ArticleTab[];
 };
+
+/** 公开资讯/应用列表：按条数游标（默认） */
+export type ArticlesFeedCursorResponse = {
+  items: ArticleFeedCard[];
+  next_cursor: string | null;
+  has_more: boolean;
+  page_size: number;
+};
+
+/** 公开资讯/应用列表：按 UTC 自然日整页 */
+export type ArticlesFeedDayResponse = {
+  items: ArticleFeedCard[];
+  paginate_by: "day";
+  page: number;
+  total_pages: number;
+  day_utc: string | null;
+  has_prev: boolean;
+  has_next: boolean;
+  days_scan_truncated: boolean;
+};
+
+export type ArticlesFeedResponse = ArticlesFeedCursorResponse | ArticlesFeedDayResponse;

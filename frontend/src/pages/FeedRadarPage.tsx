@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
+import type { ArticlesFeedDayResponse } from "@/api/public/types";
 import { useI18n } from "@/i18n";
 
 const INDUSTRY_SLUG = "ai";
@@ -38,16 +39,25 @@ function formatFeedDateLabel(isoDay: string, locale: "zh" | "en"): string {
   return d.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "long", timeZone: "UTC" });
 }
 
+function isDayFeedResponse(d: unknown): d is ArticlesFeedDayResponse {
+  return Boolean(d && typeof d === "object" && (d as ArticlesFeedDayResponse).paginate_by === "day");
+}
+
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t, lang } = useI18n();
   const [timeKey, setTimeKey] = useState<TimeKey>("d30");
+  const [feedPage, setFeedPage] = useState(1);
+  const [jumpDraft, setJumpDraft] = useState("1");
   const [list, setList] = useState<ArticleFeedCard[]>([]);
-  const [fingerprints, setFingerprints] = useState<string[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [pageMeta, setPageMeta] = useState({
+    total_pages: 0,
+    day_utc: null as string | null,
+    has_prev: false,
+    has_next: false,
+    days_scan_truncated: false,
+  });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [categoryKey, setCategoryKey] = useState<string | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
@@ -56,8 +66,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const timeParams = useMemo(() => timeKeyToArticleParams(timeKey), [timeKey]);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setSearchQ(searchDraft.trim()), 350);
-    return () => window.clearTimeout(t);
+    const tm = window.setTimeout(() => setSearchQ(searchDraft.trim()), 350);
+    return () => window.clearTimeout(tm);
   }, [searchDraft]);
 
   const pageTitle = mode === "apps" ? t("resourcesFeedApps") : t("resourcesFeedNews");
@@ -71,6 +81,10 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     }
     return Array.from(m.entries()).sort((x, y) => (x[0] < y[0] ? 1 : x[0] > y[0] ? -1 : 0));
   }, [list]);
+
+  useEffect(() => {
+    setFeedPage(1);
+  }, [mode, timeKey, categoryKey, searchQ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,33 +111,37 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     let cancelled = false;
     setLoading(true);
     setErr("");
-    setList([]);
-    setFingerprints([]);
-    setNextCursor(null);
-    setHasMore(false);
 
     publicApi
       .articlesFeed({
         feed: mode,
         industry_slug: INDUSTRY_SLUG,
-        page_size: 18,
+        paginate_by: "day",
+        page: feedPage,
         ...timeParams,
         category: categoryKey,
         q: searchQ || null,
       })
       .then((d) => {
         if (cancelled) return;
-        const fp = new Set<string>();
-        const items: ArticleFeedCard[] = [];
-        for (const it of d.items) {
-          if (fp.has(it.fingerprint)) continue;
-          fp.add(it.fingerprint);
-          items.push(it);
+        if (!isDayFeedResponse(d)) {
+          setErr("Unexpected feed response");
+          setLoading(false);
+          return;
         }
-        setList(items);
-        setFingerprints(Array.from(fp));
-        setNextCursor(d.next_cursor);
-        setHasMore(Boolean(d.has_more));
+        if (d.total_pages > 0 && feedPage > d.total_pages) {
+          setFeedPage(d.total_pages);
+          return;
+        }
+        setList(d.items);
+        setPageMeta({
+          total_pages: d.total_pages,
+          day_utc: d.day_utc,
+          has_prev: d.has_prev,
+          has_next: d.has_next,
+          days_scan_truncated: d.days_scan_truncated,
+        });
+        setJumpDraft(String(Math.min(feedPage, Math.max(1, d.total_pages)) || 1));
         setLoading(false);
       })
       .catch((e) => {
@@ -136,45 +154,26 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeKey, timeParams, categoryKey, searchQ]);
+  }, [mode, timeParams, categoryKey, searchQ, feedPage]);
 
-  const onLoadMore = async () => {
-    if (loadingMore || !nextCursor) return;
-    setLoadingMore(true);
-    setErr("");
-    try {
-      const excludeCsv = fingerprints.slice(-120).join(",") || undefined;
-      const d = await publicApi.articlesFeed({
-        feed: mode,
-        industry_slug: INDUSTRY_SLUG,
-        page_size: 18,
-        cursor: nextCursor,
-        exclude_fp: excludeCsv,
-        ...timeParams,
-        category: categoryKey,
-        q: searchQ || null,
-      });
-      setList((prev) => {
-        const seen = new Set(prev.map((x) => x.fingerprint));
-        const add = d.items.filter((x) => !seen.has(x.fingerprint));
-        return [...prev, ...add];
-      });
-      setFingerprints((prev) => {
-        const s = new Set(prev);
-        for (const x of d.items) s.add(x.fingerprint);
-        return Array.from(s);
-      });
-      setNextCursor(d.next_cursor);
-      if (d.items.length === 0 && !d.has_more) {
-        setNextCursor(null);
-      }
-      setHasMore(Boolean(d.has_more));
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setLoadingMore(false);
+  useEffect(() => {
+    if (!loading) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  }, [feedPage, loading]);
+
+  const onJump = () => {
+    const n = Number.parseInt(jumpDraft.trim(), 10);
+    if (!Number.isFinite(n) || pageMeta.total_pages < 1) return;
+    const clamped = Math.min(Math.max(1, Math.floor(n)), pageMeta.total_pages);
+    setFeedPage(clamped);
+    setJumpDraft(String(clamped));
   };
+
+  const pageSummaryText =
+    pageMeta.total_pages > 0
+      ? t("resourcesPageSummary").replace("{page}", String(feedPage)).replace("{total}", String(pageMeta.total_pages))
+      : "";
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 text-slate-100 sm:px-6 sm:py-8">
@@ -258,6 +257,65 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             </button>
           ))}
         </div>
+
+        <p className="mt-4 text-[11px] leading-relaxed text-slate-500">{t("resourcesFeedDayHint")}</p>
+
+        {!loading && pageMeta.total_pages > 0 ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="text-sm text-slate-300">
+              <span className="font-medium text-cyan-200/95">{pageSummaryText}</span>
+              {pageMeta.day_utc ? (
+                <span className="ml-2 text-slate-500">
+                  · UTC {formatFeedDateLabel(pageMeta.day_utc, lang)}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={!pageMeta.has_prev || loading}
+                onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+                className="rounded-xl border border-white/15 bg-white/[0.06] px-3.5 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {t("resourcesPagePrev")}
+              </button>
+              <button
+                type="button"
+                disabled={!pageMeta.has_next || loading}
+                onClick={() => setFeedPage((p) => p + 1)}
+                className="rounded-xl border border-white/15 bg-white/[0.06] px-3.5 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {t("resourcesPageNext")}
+              </button>
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="sr-only">{t("resourcesPageJumpPlaceholder")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, pageMeta.total_pages)}
+                  value={jumpDraft}
+                  onChange={(e) => setJumpDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onJump();
+                  }}
+                  className="w-20 rounded-lg border border-white/10 bg-night-950/80 px-2 py-1.5 font-mono text-sm text-white"
+                  aria-label={t("resourcesPageJumpPlaceholder")}
+                />
+                <button
+                  type="button"
+                  onClick={() => onJump()}
+                  className="rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
+                >
+                  {t("resourcesPageGo")}
+                </button>
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        {pageMeta.days_scan_truncated ? (
+          <p className="mt-3 text-xs text-amber-200/90">{t("resourcesDaysTruncated")}</p>
+        ) : null}
       </div>
 
       {err ? <p className="mt-6 text-sm text-red-400">{err}</p> : null}
@@ -335,20 +393,25 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             </p>
           ) : null}
 
-          {list.length > 0 && hasMore && nextCursor ? (
-            <div className="mt-10 flex flex-col items-center gap-2">
+          {list.length > 0 && pageMeta.total_pages > 0 ? (
+            <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <button
                 type="button"
-                disabled={loadingMore}
-                onClick={() => void onLoadMore()}
-                className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-6 py-2.5 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!pageMeta.has_prev}
+                onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+                className="rounded-xl border border-white/15 bg-white/[0.06] px-5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
               >
-                {loadingMore ? t("resourcesLoadingMore") : t("resourcesLoadMore")}
+                {t("resourcesPagePrev")}
               </button>
-              <p className="max-w-lg text-center text-[11px] text-slate-500">{t("resourcesCursorHint")}</p>
+              <button
+                type="button"
+                disabled={!pageMeta.has_next}
+                onClick={() => setFeedPage((p) => p + 1)}
+                className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-5 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {t("resourcesPageNext")}
+              </button>
             </div>
-          ) : list.length > 0 ? (
-            <p className="mt-8 text-center text-xs text-slate-500">{t("resourcesNoMore")}</p>
           ) : null}
         </>
       ) : null}

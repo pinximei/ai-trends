@@ -1,9 +1,9 @@
 import { publicGet } from "./client";
-import type { ArticleDetail, ArticleFeedCard } from "./types";
+import type { ArticleDetail, ArticleFeedCard, ArticlesFeedResponse } from "./types";
 import type { Lang } from "@/i18n";
 
 export { publicGet } from "./client";
-export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary } from "./types";
+export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse } from "./types";
 
 export const publicApi = {
   articleCategories: (opts: {
@@ -24,6 +24,8 @@ export const publicApi = {
   articlesFeed: (opts: {
     feed: "news" | "apps";
     industry_slug?: string;
+    paginate_by?: "cursor" | "day";
+    page?: number;
     page_size?: number;
     cursor?: string | null;
     exclude_fp?: string;
@@ -35,6 +37,8 @@ export const publicApi = {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
     if (opts.industry_slug) sp.set("industry_slug", opts.industry_slug);
+    if (opts.paginate_by) sp.set("paginate_by", opts.paginate_by);
+    if (opts.page != null) sp.set("page", String(opts.page));
     if (opts.page_size != null) sp.set("page_size", String(opts.page_size));
     if (opts.cursor) sp.set("cursor", opts.cursor);
     if (opts.exclude_fp) sp.set("exclude_fp", opts.exclude_fp);
@@ -42,9 +46,7 @@ export const publicApi = {
     if (opts.published_on_latest_day) sp.set("published_on_latest_day", "true");
     if (opts.category) sp.set("category", opts.category);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
-    return publicGet<{ items: ArticleFeedCard[]; next_cursor: string | null; has_more: boolean; page_size: number }>(
-      `/api/public/v1/articles/feed?${sp.toString()}`
-    );
+    return publicGet<ArticlesFeedResponse>(`/api/public/v1/articles/feed?${sp.toString()}`);
   },
   article: (id: number) => publicGet<ArticleDetail>(`/api/public/v1/articles/${id}`),
   page: (slug: string, opts?: { lang?: Lang }) => {

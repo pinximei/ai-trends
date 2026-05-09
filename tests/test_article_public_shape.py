@@ -145,3 +145,63 @@ def test_ui_shape_warnings_bad_tabs_json() -> None:
     )
     assert any("ai_tabs_json" in w for w in warns)
     assert any("分类" in w for w in warns)
+
+
+def test_feed_lane_product_hunt_model_story_is_news() -> None:
+    assert (
+        art.feed_lane_for_article(
+            "product_hunt",
+            title="Llama 3.1 评测摘要",
+            summary="开源权重与推理表现对比。",
+            ai_categories_json=json.dumps(["大模型"], ensure_ascii=False),
+        )
+        == "news"
+    )
+
+
+def test_feed_lane_product_hunt_store_install_is_apps() -> None:
+    assert (
+        art.feed_lane_for_article(
+            "product_hunt",
+            title="Focus Timer",
+            summary="Pomodoro for teams; download on Google Play and App Store.",
+            ai_categories_json=json.dumps(["应用产品"], ensure_ascii=False),
+        )
+        == "apps"
+    )
+
+
+def test_feed_lane_github_stays_news_even_with_install_words() -> None:
+    assert (
+        art.feed_lane_for_article(
+            "github",
+            title="CLI tool",
+            summary="brew install — desktop workflow",
+            ai_categories_json=json.dumps(["开源工具"], ensure_ascii=False),
+        )
+        == "news"
+    )
+
+
+def test_feed_lane_hf_space_agent_tooling_is_news() -> None:
+    assert (
+        art.feed_lane_for_article(
+            "huggingface_spaces",
+            title="Demo",
+            summary="LangChain agent playground in the browser.",
+            ai_categories_json=json.dumps(["Agent"], ensure_ascii=False),
+        )
+        == "news"
+    )
+
+
+def test_merge_raw_appendix_when_model_tabs_are_thin() -> None:
+    from backend.app import article_ingest as ing
+
+    tabs = [
+        {"label": "要点", "summary": "概要一二三四五六七八九十个字说明放在这里", "body_md": "正文稍微短一点。"},
+        {"label": "细节", "summary": "第二栏概要同样要足够八个字以上长度", "body_md": "另一段也很短。"},
+    ]
+    ing._merge_raw_appendix_if_tabs_thin(tabs, '{"repo":"demo","stars":42}', min_total=8000)
+    assert "原始摘录" in tabs[-1]["body_md"]
+    assert "stars" in tabs[-1]["body_md"]

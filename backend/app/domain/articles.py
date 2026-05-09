@@ -162,13 +162,125 @@ FEED_NEWS_KEYS = frozenset(
         "google_gemini",
     }
 )
-# 应用：产品上架/可运行应用发现（与「Agent 发版、GitHub 仓库」类资讯区分）
+# 应用：来自下列数据源的条目**仍须**通过 ``feed_lane_for_article`` 校验（可安装产品）才进 apps；
+# Agent / 大模型 / 纯模型或 API 资讯一律视为 news。
 FEED_APPS_KEYS = frozenset(
     {
         "product_hunt",
         "huggingface_spaces",
     }
 )
+
+# 规范大类：在此集合中的一律不进「应用」泳道（仅对 FEED_APPS_KEYS 源二次筛选）
+_FEED_PRIMARY_FORCE_NEWS: frozenset[str] = frozenset(
+    {
+        "Agent",
+        "大模型",
+        "论文研究",
+        "平台API",
+        "开源工具",
+        "数据算力",
+        "安全合规",
+        "政策市场",
+        "多模态",
+    }
+)
+
+
+def _feed_lane_text_blob(
+    *,
+    title: str,
+    summary: str,
+    ai_tabs_json: str | None,
+    max_chars: int = 12000,
+) -> str:
+    parts: list[str] = [title or "", summary or ""]
+    for t in parse_article_tabs_json(ai_tabs_json)[:5]:
+        parts.append(str(t.get("summary") or ""))
+        parts.append(str(t.get("body_md") or "")[:1600])
+    return normalize_ws("\n".join(parts))[:max_chars]
+
+
+def _blob_suggests_agent_or_model_news(blob: str) -> bool:
+    """Agent、模型、学术/API 工具链等倾向 → 不进应用泳道。"""
+    if not blob.strip():
+        return False
+    low = normalize_ws(blob).lower()
+    zh = blob
+    if re.search(r"\bagents?\b", low):
+        return True
+    if re.search(r"\b(llm|mcp|langchain|langgraph|rag)\b", low):
+        return True
+    if re.search(r"\b(model weights|foundation model|open-weights)\b", low):
+        return True
+    for s in (
+        "智能体",
+        "多智能体",
+        "大模型",
+        "语言模型",
+        "基座模型",
+        "推理模型",
+        "开源模型",
+        "模型发布",
+        "微调",
+        "论文",
+        "arxiv",
+    ):
+        if s.lower() in low or s in zh:
+            return True
+    if re.search(r"gpt-[34]\b", low) or "gpt-4o" in low:
+        return True
+    if "fine-tun" in low:
+        return True
+    return False
+
+
+def _blob_suggests_installable_consumer_app(blob: str) -> bool:
+    """用户可安装的客户端/插件/商店分发 → 应用泳道候选。"""
+    if not blob.strip():
+        return False
+    low = normalize_ws(blob).lower()
+    zh = blob
+    en_hits = (
+        "app store",
+        "apple store",
+        "google play",
+        "play store",
+        "galaxy store",
+        "microsoft store",
+        "mac app store",
+        "testflight",
+        "chrome web store",
+        "firefox add-on",
+        "edge add-on",
+        ".apk",
+        ".ipa",
+        ".dmg",
+        ".exe",
+        ".msi",
+        ".appimage",
+        "download for windows",
+        "download for mac",
+        "download on ios",
+        "download on android",
+        "ios app",
+        "android app",
+        "iphone app",
+        "ipad app",
+        "mobile app",
+        "desktop app",
+        "vscode extension",
+        "visual studio code extension",
+        "jetbrains plugin",
+        "snap install",
+        "flatpak",
+        "homebrew --cask",
+        "brew install --cask",
+    )
+    if any(h in low for h in en_hits):
+        return True
+    zh_hits = ("应用商店", "安装包", "安卓下载", "苹果商店", "上架 app", "客户端下载", "桌面版下载", "插件商店")
+    return any(h in zh for h in zh_hits)
 
 
 def admin_source_key(third_party_source: str | None) -> str:
@@ -178,6 +290,7 @@ def admin_source_key(third_party_source: str | None) -> str:
 
 
 def feed_lane(admin_key: str) -> str:
+    """按数据源默认泳道（连接器入口）；公开列表请以 ``feed_lane_for_article`` 为准。"""
     k = (admin_key or "").strip().lower()
     if not k or k == "未绑定数据源":
         return "news"
@@ -185,6 +298,36 @@ def feed_lane(admin_key: str) -> str:
         return "apps"
     if k in FEED_NEWS_KEYS:
         return "news"
+    return "news"
+
+
+def feed_lane_for_article(
+    admin_key: str,
+    *,
+    title: str = "",
+    summary: str = "",
+    ai_categories_json: str | None = None,
+    ai_tabs_json: str | None = None,
+) -> str:
+    """公开站泳道：apps 仅「可安装的客户端/商店分发」类产品；Agent/大模型/模型资讯等为 news。
+
+    对 ``FEED_APPS_KEYS`` 数据源按标题/摘要/tab 正文二次判别；其余数据源与 ``feed_lane`` 一致。
+    """
+    k = (admin_key or "").strip().lower()
+    if not k or k == "未绑定数据源":
+        return "news"
+    if k not in FEED_APPS_KEYS:
+        return feed_lane(k)
+
+    primary = primary_canonical_from_raw_labels(parse_category_labels_json(ai_categories_json))
+    if primary in _FEED_PRIMARY_FORCE_NEWS:
+        return "news"
+
+    blob = _feed_lane_text_blob(title=title, summary=summary, ai_tabs_json=ai_tabs_json)
+    if _blob_suggests_agent_or_model_news(blob):
+        return "news"
+    if _blob_suggests_installable_consumer_app(blob):
+        return "apps"
     return "news"
 
 

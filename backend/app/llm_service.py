@@ -50,6 +50,7 @@ def chat_completion(
     ref_id: str,
     admin_user_id: int | None = None,
     response_json: bool = False,
+    max_tokens: int | None = None,
 ) -> tuple[str, int, int]:
     """OpenAI 兼容 Chat Completions；优先读库内「AI 资讯」配置，其次环境变量 AITRENDS_LLM_*。"""
     base, key, model = resolve_llm_http_config(db)
@@ -64,6 +65,8 @@ def chat_completion(
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "temperature": 0.4,
     }
+    if max_tokens is not None and max_tokens > 0:
+        body["max_tokens"] = max_tokens
     if response_json:
         body["response_format"] = {"type": "json_object"}
     with httpx.Client(timeout=120.0) as client:
@@ -118,7 +121,8 @@ def polish_connector_article(
     fk = (feed_kind or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    snippet_cut = (snippet or "")[:6000]
+    # 与入库 fingerprint 上限对齐，避免模型只看到半截 JSON
+    snippet_cut = (snippet or "")[:12000]
     if fk == "apps":
         stream_hint = (
             "当前条目归类为 **AI 应用** 泳道：面向产品/可运行应用发布与能力更新；语气偏产品速递与开发者向。"
@@ -138,11 +142,14 @@ def polish_connector_article(
         f"{stream_hint}"
         "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, tabs。"
         "title 为单行中文标题；summary 为 1～2 句中文总摘要（列表卡片用）；"
-        "body_md 为可选 Markdown 总览（可与 tabs 呼应；若无总览可写简短衔接段）；"
+        "body_md 为 **必选** Markdown 总览：不少于约 400 汉字（或等价英文篇幅），"
+        "须分多段，可用二级标题与小标题，尽量概括片段中的实体、时间、数字、链接或字段含义（片段里有什么写什么，勿臆造）。"
         "categories 为 **恰好含 1 个元素** 的字符串数组，且该元素必须是上述 11 字面值之一；"
         'feed_kind 只能为 JSON 字符串 "news" 或 "apps"。'
         "tabs 为数组，至少 2 个、至多 5 个对象；每个对象键 label（2～8 字 tab 标题）、"
-        "summary（1～2 句，展示在 tab 行上的概要）、body_md（该 tab 的详细正文，Markdown，可多段列表）。"
+        "summary（1～2 句，展示在 tab 行上的概要）、body_md（该 tab 的详细正文，Markdown，可多段、列表、小标题）。"
+        "**每个 tabs[].body_md 合计应有实质信息量**：优先根据原始片段展开说明背景、要点、差异与可核对事实；"
+        "禁止仅用一两句话敷衍；若片段为 JSON/列表，应用叙述或表格化改写要点并保留关键字段名。"
         "tabs 应覆盖原文信息要点，结构清晰，禁止空字段。"
     )
     user = (
@@ -164,6 +171,7 @@ def polish_connector_article(
                 ref_type="connector_article",
                 ref_id=ref_id[:64],
                 response_json=True,
+                max_tokens=8192,
             )
         except Exception:
             raw, _, _ = chat_completion(
@@ -174,6 +182,7 @@ def polish_connector_article(
                 ref_type="connector_article",
                 ref_id=ref_id[:64],
                 response_json=False,
+                max_tokens=8192,
             )
         data = _extract_json_object(raw)
         if not data:

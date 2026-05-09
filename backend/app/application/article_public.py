@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import Select, and_, desc, or_, select
 from sqlalchemy.orm import Session
@@ -42,12 +42,18 @@ def _public_industry_ids_for_slug(db: Session, ind: Industry) -> list[int]:
 
 
 def _row_feed_lane(a: Article) -> str:
-    """公开列表/详情泳道：一律按数据源 admin_source_key 规则推断。
+    """公开列表/详情泳道：可安装应用 vs 资讯（见 ``feed_lane_for_article``）。
 
-    曾用 LLM 写入的 product_articles.feed_kind 若与连接器不一致，会导致「AI 资讯 / AI 应用」
-    两页拉取到同一批文章；公开站以连接器规则为准（与入库时 feed_lane 一致）。
+    曾用 LLM 写入的 product_articles.feed_kind 若与规则不一致，会导致两页串稿；
+    公开站以 connector key + 正文规则为准。
     """
-    return art.feed_lane(art.admin_source_key(a.third_party_source))
+    return art.feed_lane_for_article(
+        art.admin_source_key(a.third_party_source),
+        title=a.title or "",
+        summary=a.summary or "",
+        ai_categories_json=getattr(a, "ai_categories_json", None),
+        ai_tabs_json=getattr(a, "ai_tabs_json", None),
+    )
 
 
 def _base_article_query_for_scope(
@@ -112,6 +118,186 @@ def _base_article_query_for_scope(
         q = q.where(Article.published_at >= utc_day_start, Article.published_at < utc_day_end)
 
     return ind, q
+
+
+def _apply_published_keyset(stmt: Select, pos: tuple[datetime, int] | None) -> Select:
+    if not pos:
+        return stmt
+    pub_c, id_c = pos
+    return stmt.where(
+        or_(
+            Article.published_at < pub_c,
+            and_(Article.published_at == pub_c, Article.id < id_c),
+        )
+    )
+
+
+def _feed_card_from_article(a: Article) -> dict:
+    ak = art.admin_source_key(a.third_party_source)
+    row_lane = _row_feed_lane(a)
+    plat = PRESET_SOURCE_LABELS.get(ak, ak.replace("_", " ").title() if ak else "")
+    tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
+    tab_summaries = (
+        [{"label": x["label"], "summary": (x["summary"] or "")[:280]} for x in tabs_parsed[:6]] if tabs_parsed else []
+    )
+    cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    fp = art.display_fingerprint(a.title, a.summary or "")
+    return {
+        "id": a.id,
+        "slug": a.slug,
+        "title": a.title,
+        "summary": a.summary,
+        "segment_id": a.segment_id,
+        "content_type": a.content_type,
+        "third_party_source": a.third_party_source,
+        "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
+        "fingerprint": fp,
+        "platform_label": plat,
+        "admin_source_key": ak,
+        "feed_kind": row_lane,
+        "categories": cats_list,
+        "tab_summaries": tab_summaries,
+    }
+
+
+def _collect_ordered_days_for_feed(
+    db: Session,
+    base_q: Select,
+    *,
+    feed: str,
+    cat_filter: str | None,
+    search_n: str | None,
+    max_scan: int = 40000,
+    batch: int = 400,
+) -> tuple[list[date], bool]:
+    """按 published_at 从新到旧扫描，收集首次出现的 UTC 日历日（仅统计通过泳道/类别/搜索筛选的文章）。"""
+    ordered_days: list[date] = []
+    seen: set[date] = set()
+    internal: tuple[datetime, int] | None = None
+    scanned = 0
+
+    while scanned < max_scan:
+        q2 = _apply_published_keyset(base_q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        rows = db.scalars(q2.limit(batch)).all()
+        if not rows:
+            break
+        for a in rows:
+            scanned += 1
+            if _row_feed_lane(a) != feed:
+                continue
+            cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+            if cat_filter and cats_list and cats_list[0] != cat_filter:
+                continue
+            if search_n and not _article_title_summary_matches(a, search_n):
+                continue
+            d = a.published_at.date()
+            if d not in seen:
+                seen.add(d)
+                ordered_days.append(d)
+            if scanned >= max_scan:
+                break
+        last = rows[-1]
+        internal = (last.published_at, last.id)
+        if len(rows) < batch:
+            break
+        if scanned >= max_scan:
+            break
+
+    truncated = scanned >= max_scan
+    return ordered_days, truncated
+
+
+def list_articles_feed_by_day_page(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    segment_id: int | None,
+    segment_ids: list[int] | None,
+    page: int,
+    published_within_days: int | None,
+    published_on_latest_day: bool,
+    category: str | None = None,
+    search: str | None = None,
+) -> dict:
+    """按 UTC 自然日分页：第 1 页为最新一个有内容的日历日，整页包含该日全部匹配文章（指纹去重）。"""
+    cat_filter = (category or "").strip() or None
+    n = normalize_feed_search(search)
+
+    ind, q = _base_article_query_for_scope(
+        db,
+        industry_slug=industry_slug,
+        segment_id=segment_id,
+        segment_ids=segment_ids,
+        published_within_days=published_within_days,
+        published_on_latest_day=published_on_latest_day,
+    )
+    empty = {
+        "items": [],
+        "paginate_by": "day",
+        "page": page,
+        "total_pages": 0,
+        "day_utc": None,
+        "has_prev": False,
+        "has_next": False,
+        "days_scan_truncated": False,
+    }
+    if not ind:
+        return empty
+
+    ordered_days, truncated = _collect_ordered_days_for_feed(
+        db, q, feed=feed, cat_filter=cat_filter, search_n=n
+    )
+    total_pages = len(ordered_days)
+    if total_pages == 0:
+        return {**empty, "days_scan_truncated": truncated}
+
+    safe_page = max(1, page)
+    if safe_page > total_pages:
+        return {
+            "items": [],
+            "paginate_by": "day",
+            "page": safe_page,
+            "total_pages": total_pages,
+            "day_utc": None,
+            "has_prev": total_pages > 0,
+            "has_next": False,
+            "days_scan_truncated": truncated,
+        }
+
+    target_day = ordered_days[safe_page - 1]
+    day_start = datetime.combine(target_day, datetime.min.time())
+    day_end = day_start + timedelta(days=1)
+
+    q_day = q.where(Article.published_at >= day_start, Article.published_at < day_end)
+    rows = db.scalars(q_day.order_by(desc(Article.published_at), desc(Article.id))).all()
+
+    seen_fp: set[str] = set()
+    out: list[dict] = []
+    for a in rows:
+        if _row_feed_lane(a) != feed:
+            continue
+        cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+        if cat_filter and cats_list and cats_list[0] != cat_filter:
+            continue
+        if n and not _article_title_summary_matches(a, n):
+            continue
+        fp = art.display_fingerprint(a.title, a.summary or "")
+        if fp in seen_fp:
+            continue
+        seen_fp.add(fp)
+        out.append(_feed_card_from_article(a))
+
+    return {
+        "items": out,
+        "paginate_by": "day",
+        "page": safe_page,
+        "total_pages": total_pages,
+        "day_utc": target_day.isoformat(),
+        "has_prev": safe_page > 1,
+        "has_next": safe_page < total_pages,
+        "days_scan_truncated": truncated,
+    }
 
 
 def list_article_category_facets(
@@ -188,26 +374,14 @@ def list_articles_feed(
     last_scanned: tuple[datetime, int] | None = None
     has_more = False
 
-    def _apply_keyset(stmt, pos: tuple[datetime, int] | None):
-        if not pos:
-            return stmt
-        pub_c, id_c = pos
-        return stmt.where(
-            or_(
-                Article.published_at < pub_c,
-                and_(Article.published_at == pub_c, Article.id < id_c),
-            )
-        )
-
     while len(out) < page_size:
-        q2 = _apply_keyset(q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        q2 = _apply_published_keyset(q, internal).order_by(desc(Article.published_at), desc(Article.id))
         rows = db.scalars(q2.limit(scan_limit)).all()
         if not rows:
             break
         has_more = len(rows) >= scan_limit
         for a in rows:
             last_scanned = (a.published_at, a.id)
-            ak = art.admin_source_key(a.third_party_source)
             row_lane = _row_feed_lane(a)
             if row_lane != feed:
                 continue
@@ -220,29 +394,7 @@ def list_articles_feed(
             if fp in seen_fp:
                 continue
             seen_fp.add(fp)
-            plat = PRESET_SOURCE_LABELS.get(ak, ak.replace("_", " ").title() if ak else "")
-            tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
-            tab_summaries = (
-                [{"label": x["label"], "summary": (x["summary"] or "")[:280]} for x in tabs_parsed[:6]] if tabs_parsed else []
-            )
-            out.append(
-                {
-                    "id": a.id,
-                    "slug": a.slug,
-                    "title": a.title,
-                    "summary": a.summary,
-                    "segment_id": a.segment_id,
-                    "content_type": a.content_type,
-                    "third_party_source": a.third_party_source,
-                    "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
-                    "fingerprint": fp,
-                    "platform_label": plat,
-                    "admin_source_key": ak,
-                    "feed_kind": row_lane,
-                    "categories": cats_list,
-                    "tab_summaries": tab_summaries,
-                }
-            )
+            out.append(_feed_card_from_article(a))
             if len(out) >= page_size:
                 break
         internal = last_scanned

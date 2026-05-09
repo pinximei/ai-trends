@@ -57,6 +57,12 @@ def list_articles_feed(
         None,
         description="Comma-separated segment ids; mutually exclusive with segment_id.",
     ),
+    paginate_by: str = Query(
+        "cursor",
+        pattern="^(cursor|day)$",
+        description="cursor=按条数游标分页；day=按 UTC 日历日整页，一页为一整天全部条目。",
+    ),
+    page: int | None = Query(None, ge=1, le=5000, description="paginate_by=day 时页码，从 1 开始（最新日为第 1 页）。"),
     page_size: int = Query(18, ge=1, le=48),
     cursor: str | None = Query(None, description="Keyset cursor from previous response (next_cursor)."),
     exclude_fp: str | None = Query(
@@ -79,20 +85,34 @@ def list_articles_feed(
     if segment_id is not None and segment_ids_parsed is not None:
         raise HTTPException(400, "segment_id and segment_ids are mutually exclusive")
     try:
-        data = article_app.list_articles_feed(
-            db,
-            feed=feed,
-            industry_slug=industry_slug,
-            segment_id=segment_id,
-            segment_ids=segment_ids_parsed,
-            page_size=page_size,
-            cursor=cursor,
-            exclude_fp=exclude_fp,
-            published_within_days=published_within_days,
-            published_on_latest_day=published_on_latest_day,
-            category=category,
-            search=q,
-        )
+        if paginate_by == "day":
+            data = article_app.list_articles_feed_by_day_page(
+                db,
+                feed=feed,
+                industry_slug=industry_slug,
+                segment_id=segment_id,
+                segment_ids=segment_ids_parsed,
+                page=page or 1,
+                published_within_days=published_within_days,
+                published_on_latest_day=published_on_latest_day,
+                category=category,
+                search=q,
+            )
+        else:
+            data = article_app.list_articles_feed(
+                db,
+                feed=feed,
+                industry_slug=industry_slug,
+                segment_id=segment_id,
+                segment_ids=segment_ids_parsed,
+                page_size=page_size,
+                cursor=cursor,
+                exclude_fp=exclude_fp,
+                published_within_days=published_within_days,
+                published_on_latest_day=published_on_latest_day,
+                category=category,
+                search=q,
+            )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return success(data)
