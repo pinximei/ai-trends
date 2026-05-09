@@ -1,4 +1,4 @@
-# AISoul 产品需求主文档（Master v1）
+# AiTrends 产品需求主文档（Master v1）
 
 > **文档定位**：单一事实来源（SSOT），汇总当前已对齐的产品范围与规则。  
 > **实现与技术设计**：见 `implementation-architecture-api-db-security-v1.md`。  

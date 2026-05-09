@@ -57,7 +57,7 @@ export function Layout() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          AISoul · Uplink
+          AiTrends · Uplink
         </span>
         <span className="flex max-w-[62%] flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:max-w-none">
           <span className="hidden items-center gap-1 text-fuchsia-400/90 sm:flex">

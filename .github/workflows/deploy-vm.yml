@@ -20,18 +20,18 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: aisoul
-          POSTGRES_PASSWORD: aisoul
-          POSTGRES_DB: aisoul
+          POSTGRES_USER: aitrends
+          POSTGRES_PASSWORD: aitrends
+          POSTGRES_DB: aitrends
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U aisoul -d aisoul"
+          --health-cmd "pg_isready -U aitrends -d aitrends"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      AISOU_DATABASE_URL: postgresql+psycopg://aisoul:aisoul@127.0.0.1:5432/aisoul
+      AITRENDS_DATABASE_URL: postgresql+psycopg://aitrends:aitrends@127.0.0.1:5432/aitrends
     steps:
       - uses: actions/checkout@v4
 
@@ -47,14 +47,14 @@ jobs:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.AISOU_DEPLOY_HOST }}
-          username: ${{ secrets.AISOU_DEPLOY_USER }}
-          key: ${{ secrets.AISOU_DEPLOY_SSH_KEY }}
+          host: ${{ secrets.AITRENDS_DEPLOY_HOST }}
+          username: ${{ secrets.AITRENDS_DEPLOY_USER }}
+          key: ${{ secrets.AITRENDS_DEPLOY_SSH_KEY }}
           script_stop: true
           command_timeout: 25m
           script: |
             set -euo pipefail
-            cd /opt/aisoul
+            cd /opt/aitrends
             git pull origin main
-            export AISOU_DEPLOY_SYSTEMD_UNIT=aisoul-backend
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT=aitrends-backend
             bash scripts/vm_deploy.sh

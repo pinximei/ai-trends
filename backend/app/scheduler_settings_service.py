@@ -13,7 +13,7 @@ SCHEDULER_KEY = "scheduler"
 
 
 def _env_default_hours() -> int:
-    raw = os.getenv("AISOU_CONNECTOR_SYNC_INTERVAL_HOURS", "").strip()
+    raw = os.getenv("AITRENDS_CONNECTOR_SYNC_INTERVAL_HOURS", "").strip()
     if not raw:
         return 6
     try:

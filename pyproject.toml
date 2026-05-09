@@ -7,7 +7,7 @@ where = ["."]
 include = ["backend*"]
 
 [project]
-name = "aisoul-agent-trend-platform"
+name = "aitrends-agent-trend-platform"
 version = "0.1.0"
 description = "Agent trend insight platform"
 requires-python = ">=3.10"

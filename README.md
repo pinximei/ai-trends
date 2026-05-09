@@ -1,4 +1,4 @@
-# aisoul
+# aitrends
 
 单仓双目录架构：
 
@@ -28,7 +28,7 @@
 docker compose up -d
 ```
 
-默认账号库：`postgresql+psycopg://aisoul:aisoul@127.0.0.1:5432/aisoul`（见 `backend/.env.example`）。
+默认账号库：`postgresql+psycopg://aitrends:aitrends@127.0.0.1:5432/aitrends`（见 `backend/.env.example`）。
 
 **2) 后端 API**
 
@@ -67,11 +67,11 @@ npm run dev -- --host 127.0.0.1 --port 5174
 ## 测试/正式数据库切换
 
 - **默认使用 PostgreSQL**，不再默认 SQLite。本地推荐 `docker compose up -d`。
-- 默认使用测试库模式：`AISOU_DB_MODE=test`
-- 切到正式库模式：`AISOU_DB_MODE=prod`
-- 一条 URL 覆盖：`AISOU_DATABASE_URL=postgresql+psycopg://用户:密码@主机:5432/库名`
-- 或分别指定：`AISOU_DB_URL_TEST` / `AISOU_DB_URL_PROD`（默认见 `backend/app/db.py`）
-- 仅在明确需要时可通过 `AISOU_DATABASE_URL=sqlite:///...` 使用 SQLite（不推荐）
+- 默认使用测试库模式：`AITRENDS_DB_MODE=test`
+- 切到正式库模式：`AITRENDS_DB_MODE=prod`
+- 一条 URL 覆盖：`AITRENDS_DATABASE_URL=postgresql+psycopg://用户:密码@主机:5432/库名`
+- 或分别指定：`AITRENDS_DB_URL_TEST` / `AITRENDS_DB_URL_PROD`（默认见 `backend/app/db.py`）
+- 仅在明确需要时可通过 `AITRENDS_DATABASE_URL=sqlite:///...` 使用 SQLite（不推荐）
 - 修改后需重启后端生效
 
 ## API 分层与鉴权
@@ -118,15 +118,15 @@ npm run dev -- --host 127.0.0.1 --port 5174
 
 ## HTTPS 强制要求
 
-- 默认强制 HTTPS：`AISOU_REQUIRE_HTTPS=true`
-- 本地允许 HTTP：`AISOU_ALLOW_INSECURE_LOCALHOST=true`
+- 默认强制 HTTPS：`AITRENDS_REQUIRE_HTTPS=true`
+- 本地允许 HTTP：`AITRENDS_ALLOW_INSECURE_LOCALHOST=true`
 - 生产建议：
-  - `AISOU_REQUIRE_HTTPS=true`
-  - `AISOU_ALLOW_INSECURE_LOCALHOST=false`
+  - `AITRENDS_REQUIRE_HTTPS=true`
+  - `AITRENDS_ALLOW_INSECURE_LOCALHOST=false`
 
 ## 验证
 
-- 后端测试（需本机 PostgreSQL 已启动，连接串与默认一致或已设 `AISOU_DATABASE_URL`）：`py -m pytest tests/ -q`
+- 后端测试（需本机 PostgreSQL 已启动，连接串与默认一致或已设 `AITRENDS_DATABASE_URL`）：`py -m pytest tests/ -q`
 - 后端语法：`py -m py_compile backend/app/main.py backend/app/admin_auth.py backend/app/data_api_service.py`
 - 公开前台构建：`cd frontend && npm run build`
 - 后台前端构建：`cd frontend/admin && npm run build`

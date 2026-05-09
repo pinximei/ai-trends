@@ -35,12 +35,12 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # 默认 PostgreSQL（本地可用 docker compose up -d）。不再默认 SQLite。
-_DEFAULT_PG = "postgresql+psycopg://aisoul:aisoul@127.0.0.1:5432/aisoul"
+_DEFAULT_PG = "postgresql+psycopg://aitrends:aitrends@127.0.0.1:5432/aitrends"
 
-DB_MODE = os.getenv("AISOU_DB_MODE", "test").lower()
-DB_URL_TEST = os.getenv("AISOU_DB_URL_TEST", _DEFAULT_PG)
-DB_URL_PROD = os.getenv("AISOU_DB_URL_PROD", _DEFAULT_PG)
-DB_URL = os.getenv("AISOU_DATABASE_URL")
+DB_MODE = os.getenv("AITRENDS_DB_MODE", "test").lower()
+DB_URL_TEST = os.getenv("AITRENDS_DB_URL_TEST", _DEFAULT_PG)
+DB_URL_PROD = os.getenv("AITRENDS_DB_URL_PROD", _DEFAULT_PG)
+DB_URL = os.getenv("AITRENDS_DATABASE_URL")
 if DB_URL:
     DATABASE_URL = DB_URL
     DB_MODE = "custom"

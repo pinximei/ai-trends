@@ -140,7 +140,7 @@ class DataApiService:
                 else "No trends in current database. Seed demo data or run ingestion first.",
                 "period": period,
                 "generated_at": datetime.utcnow().isoformat(),
-                "hero": {"kicker": "AISoul Briefing", "headline": "No data", "subheadline": "Seed data and retry"},
+                "hero": {"kicker": "AiTrends Briefing", "headline": "No data", "subheadline": "Seed data and retry"},
                 "sections": [],
                 "facts": [],
                 "media": [],
@@ -256,7 +256,7 @@ class DataApiService:
             else f"This briefing includes {len(trends)} trends and {len(recent_signals)} signals. Every statement is citation-backed and traceable."
         )
         return {
-            "title": f"AISoul {period.title()} Briefing",
+            "title": f"AiTrends {period.title()} Briefing",
             "summary": summary,
             "period": period,
             "generated_at": datetime.utcnow().isoformat(),
@@ -374,7 +374,7 @@ class DataApiService:
         if not url:
             raise ValueError("接口地址 api_base 为空，无法测试")
         headers: dict[str, str] = {
-            "User-Agent": "AISoul-Admin-SourceTest/1.0",
+            "User-Agent": "AiTrends-Admin-SourceTest/1.0",
             "Accept": "application/json",
         }
         k = (api_key or "").strip()

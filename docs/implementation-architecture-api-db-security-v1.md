@@ -198,7 +198,7 @@
 **引擎与「数据不可丢」（对齐需求 Master §4.1）**
 
 - **默认与上线**：**PostgreSQL**（托管库自带备份最佳）；连接串走环境变量；本地见仓库根目录 `docker-compose.yml`。  
-- **SQLite**：仅作 **非默认** 的应急/遗留连接（`AISOU_DATABASE_URL=sqlite:///...`）；**不要**把 SQLite 文件放在无持久存储的免费 Serverless 实例上。  
+- **SQLite**：仅作 **非默认** 的应急/遗留连接（`AITRENDS_DATABASE_URL=sqlite:///...`）；**不要**把 SQLite 文件放在无持久存储的免费 Serverless 实例上。  
 - **备份**：生产路径下配置 **定期 dump** 或云厂商自动备份；发版前人工导出亦可作为兜底。
 
 ---

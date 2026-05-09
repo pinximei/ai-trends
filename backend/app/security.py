@@ -11,9 +11,9 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 
-JWT_SECRET = os.getenv("AISOU_JWT_SECRET", "change-this-jwt-secret")
-SIGNING_KEY = os.getenv("AISOU_SIGNING_KEY", "change-this-signing-key")
-AUTH_BOOTSTRAP_KEY = os.getenv("AISOU_AUTH_BOOTSTRAP_KEY", "dev-bootstrap-key")
+JWT_SECRET = os.getenv("AITRENDS_JWT_SECRET", "change-this-jwt-secret")
+SIGNING_KEY = os.getenv("AITRENDS_SIGNING_KEY", "change-this-signing-key")
+AUTH_BOOTSTRAP_KEY = os.getenv("AITRENDS_AUTH_BOOTSTRAP_KEY", "dev-bootstrap-key")
 
 
 def issue_access_token(client_id: str) -> str:

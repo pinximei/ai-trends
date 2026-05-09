@@ -6,7 +6,7 @@
   py -3.12 scripts/upload_software_app.py --file ./app.apk --title "演示包" --platform android \\
     --category-slug tools --category-label 工具链
 
-可选: AISOU_DATABASE_URL=sqlite:///... 指向与线上一致的数据库。
+可选: AITRENDS_DATABASE_URL=sqlite:///... 指向与线上一致的数据库。
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def main() -> int:
         return 2
 
     body = fp.read_bytes()
-    if os.environ.get("AISOU_DATABASE_URL"):
+    if os.environ.get("AITRENDS_DATABASE_URL"):
         pass  # 已在子进程前由调用方设置
 
     from backend.app.db import SessionLocal

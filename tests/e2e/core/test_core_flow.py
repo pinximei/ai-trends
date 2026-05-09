@@ -24,7 +24,7 @@ def test_public_version_endpoint(client):
 def test_dashboard_page_accessible(client):
     resp = client.get("/")
     assert resp.status_code == 200
-    assert resp.json().get("service") == "aisoul-api"
+    assert resp.json().get("service") == "aitrends-api"
 
 
 def test_trend_to_evidence_flow(client):

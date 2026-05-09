@@ -14,11 +14,11 @@ from .db import get_db
 from .models import AdminSession, AdminSetting, AdminUser, AuditLog
 from .runtime_settings_service import admin_cookie_secure_effective, effective_app_env
 
-SESSION_COOKIE = "aisoul_admin_session"
+SESSION_COOKIE = "aitrends_admin_session"
 SESSION_TTL_HOURS = 12
 ROLE_LEVEL = {"viewer": 1, "operator": 2, "admin": 3}
-ADMIN_MAX_FAILED_ATTEMPTS = int(os.getenv("AISOU_ADMIN_MAX_FAILED_ATTEMPTS", "5"))
-ADMIN_LOCK_MINUTES = int(os.getenv("AISOU_ADMIN_LOCK_MINUTES", "15"))
+ADMIN_MAX_FAILED_ATTEMPTS = int(os.getenv("AITRENDS_ADMIN_MAX_FAILED_ATTEMPTS", "5"))
+ADMIN_LOCK_MINUTES = int(os.getenv("AITRENDS_ADMIN_LOCK_MINUTES", "15"))
 
 
 def hash_password(password: str) -> str:
@@ -45,11 +45,11 @@ def verify_password(raw_password: str, stored_hash: str) -> bool:
 def ensure_default_admin(db: Session) -> None:
     if db.scalar(select(AdminUser.id).limit(1)):
         return
-    init_username = os.getenv("AISOU_ADMIN_INIT_USERNAME")
-    init_password = os.getenv("AISOU_ADMIN_INIT_PASSWORD")
+    init_username = os.getenv("AITRENDS_ADMIN_INIT_USERNAME")
+    init_password = os.getenv("AITRENDS_ADMIN_INIT_PASSWORD")
     if not init_username or not init_password:
         if effective_app_env() not in {"dev", "local"}:
-            raise RuntimeError("missing AISOU_ADMIN_INIT_USERNAME/AISOU_ADMIN_INIT_PASSWORD")
+            raise RuntimeError("missing AITRENDS_ADMIN_INIT_USERNAME/AITRENDS_ADMIN_INIT_PASSWORD")
         init_username = "admin"
         init_password = "admin123456"
     user = AdminUser(

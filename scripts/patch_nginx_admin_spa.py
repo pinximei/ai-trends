@@ -6,10 +6,10 @@
   py scripts/apply_nginx_cloud.py
 
 用法（在仓库根目录，需已 pip install paramiko）:
-  AISOU_DEPLOY_HOST=... AISOU_DEPLOY_USER=ubuntu AISOU_DEPLOY_SSH_PASSWORD=... \\
+  AITRENDS_DEPLOY_HOST=... AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_SSH_PASSWORD=... \\
   py scripts/patch_nginx_admin_spa.py
 
-默认改 /etc/nginx/sites-available/aisoul；可用 AISOU_NGINX_SITE=文件名（不含路径）覆盖。
+默认改 /etc/nginx/sites-available/aitrends；可用 AITRENDS_NGINX_SITE=文件名（不含路径）覆盖。
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import sys
 # 兼容行尾空格或细微差异
 OLD_PATTERN = re.compile(
     r"\n    location /admin/ \{\n"
-    r"        alias /opt/aisoul/frontend/admin/dist/;\n"
+    r"        alias /opt/aitrends/frontend/admin/dist/;\n"
     r"        try_files \$uri \$uri/ /admin/index\.html;\n"
     r"    \}",
 )
@@ -31,11 +31,11 @@ NEW = """    location = /admin {
     }
 
     location = /admin/index.html {
-        alias /opt/aisoul/frontend/admin/dist/index.html;
+        alias /opt/aitrends/frontend/admin/dist/index.html;
     }
 
     location ^~ /admin/ {
-        alias /opt/aisoul/frontend/admin/dist/;
+        alias /opt/aitrends/frontend/admin/dist/;
         try_files $uri $uri/ @admin_spa_fallback;
     }
 
@@ -51,13 +51,13 @@ def main() -> int:
         print("pip install paramiko", file=sys.stderr)
         return 2
 
-    host = os.environ.get("AISOU_DEPLOY_HOST")
-    user = os.environ.get("AISOU_DEPLOY_USER", "ubuntu")
-    password = os.environ.get("AISOU_DEPLOY_SSH_PASSWORD", "")
-    site_name = os.environ.get("AISOU_NGINX_SITE", "aisoul")
+    host = os.environ.get("AITRENDS_DEPLOY_HOST")
+    user = os.environ.get("AITRENDS_DEPLOY_USER", "ubuntu")
+    password = os.environ.get("AITRENDS_DEPLOY_SSH_PASSWORD", "")
+    site_name = os.environ.get("AITRENDS_NGINX_SITE", "aitrends")
     site = f"/etc/nginx/sites-available/{site_name}"
     if not host or not password:
-        print("需要 AISOU_DEPLOY_HOST 与 AISOU_DEPLOY_SSH_PASSWORD", file=sys.stderr)
+        print("需要 AITRENDS_DEPLOY_HOST 与 AITRENDS_DEPLOY_SSH_PASSWORD", file=sys.stderr)
         return 2
 
     c = paramiko.SSHClient()

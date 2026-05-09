@@ -7,22 +7,22 @@
   或: pip install -e ".[deploy]"
 
 环境变量（推荐）:
-  AISOU_DEPLOY_HOST          必填，公网 IP 或域名
-  AISOU_DEPLOY_USER          默认 ubuntu
-  AISOU_DEPLOY_SSH_PASSWORD  可选；不设则在交互终端里隐式输入
-  AISOU_DEPLOY_KEY_PATH      可选；若设置则优先用密钥登录（如 ~/.ssh/id_rsa）
-  AISOU_DEPLOY_KEY_PASSPHRASE  加密私钥时的口令，可选
-  AISOU_DEPLOY_DIR           默认 /opt/aisoul
-  AISOU_DEPLOY_GIT_BRANCH    默认 main
-  AISOU_DEPLOY_SYSTEMD_UNIT  默认 aisoul-backend（按你机器上实际 unit 名改）
+  AITRENDS_DEPLOY_HOST          必填，公网 IP 或域名
+  AITRENDS_DEPLOY_USER          默认 ubuntu
+  AITRENDS_DEPLOY_SSH_PASSWORD  可选；不设则在交互终端里隐式输入
+  AITRENDS_DEPLOY_KEY_PATH      可选；若设置则优先用密钥登录（如 ~/.ssh/id_rsa）
+  AITRENDS_DEPLOY_KEY_PASSPHRASE  加密私钥时的口令，可选
+  AITRENDS_DEPLOY_DIR           默认 /opt/aitrends
+  AITRENDS_DEPLOY_GIT_BRANCH    默认 main
+  AITRENDS_DEPLOY_SYSTEMD_UNIT  默认 aitrends-backend（按你机器上实际 unit 名改）
 
 示例（PowerShell，密码用环境变量仅当前会话，勿写入脚本文件）:
-  $env:AISOU_DEPLOY_HOST="1.2.3.4"
-  $env:AISOU_DEPLOY_SSH_PASSWORD="你的密码"
+  $env:AITRENDS_DEPLOY_HOST="1.2.3.4"
+  $env:AITRENDS_DEPLOY_SSH_PASSWORD="你的密码"
   py scripts/deploy_ssh.py
 
 仅执行自定义远程命令:
-  py scripts/deploy_ssh.py --cmd "cd /opt/aisoul && git status"
+  py scripts/deploy_ssh.py --cmd "cd /opt/aitrends && git status"
 
 首次 Linux 虚拟机建议先在机器上跑: bash scripts/bootstrap_linux_vm.sh（见 docs/deploy-tencent-cvm.md §0）
 
@@ -74,12 +74,12 @@ def _require_paramiko():
 
 
 def _password() -> str:
-    p = os.environ.get("AISOU_DEPLOY_SSH_PASSWORD", "").strip()
+    p = os.environ.get("AITRENDS_DEPLOY_SSH_PASSWORD", "").strip()
     if p:
         return p
     if sys.stdin.isatty():
         return getpass.getpass("SSH 密码: ")
-    print("非交互环境请设置环境变量 AISOU_DEPLOY_SSH_PASSWORD", file=sys.stderr)
+    print("非交互环境请设置环境变量 AITRENDS_DEPLOY_SSH_PASSWORD", file=sys.stderr)
     sys.exit(2)
 
 
@@ -87,7 +87,7 @@ def _default_remote_script(deploy_dir: str, branch: str, unit: str) -> str:
     return f"""set -euo pipefail
 cd {shlex.quote(deploy_dir)}
 if [[ ! -f backend/app/main.py ]]; then
-  echo "deploy: 当前目录不是 AISoul 仓库根（缺少 backend/app/main.py）: $(pwd)" >&2
+  echo "deploy: 当前目录不是 AiTrends 仓库根（缺少 backend/app/main.py）: $(pwd)" >&2
   exit 2
 fi
 git pull origin {shlex.quote(branch)}
@@ -96,7 +96,7 @@ if [[ ! -f scripts/vm_deploy.sh ]]; then
   ls -la scripts 2>/dev/null || true
   exit 2
 fi
-export AISOU_DEPLOY_SYSTEMD_UNIT={shlex.quote(unit)}
+export AITRENDS_DEPLOY_SYSTEMD_UNIT={shlex.quote(unit)}
 bash scripts/vm_deploy.sh
 """
 
@@ -115,29 +115,29 @@ def main() -> int:
     _load_ssh_local_env()
     paramiko = _require_paramiko()
     ap = argparse.ArgumentParser(description="SSH 部署 / 远程执行（凭据来自环境或 getpass）")
-    ap.add_argument("--host", default=os.environ.get("AISOU_DEPLOY_HOST"), help="或设 AISOU_DEPLOY_HOST")
-    ap.add_argument("--user", default=os.environ.get("AISOU_DEPLOY_USER", "ubuntu"))
-    ap.add_argument("--dir", default=os.environ.get("AISOU_DEPLOY_DIR", "/opt/aisoul"))
-    ap.add_argument("--branch", default=os.environ.get("AISOU_DEPLOY_GIT_BRANCH", "main"))
+    ap.add_argument("--host", default=os.environ.get("AITRENDS_DEPLOY_HOST"), help="或设 AITRENDS_DEPLOY_HOST")
+    ap.add_argument("--user", default=os.environ.get("AITRENDS_DEPLOY_USER", "ubuntu"))
+    ap.add_argument("--dir", default=os.environ.get("AITRENDS_DEPLOY_DIR", "/opt/aitrends"))
+    ap.add_argument("--branch", default=os.environ.get("AITRENDS_DEPLOY_GIT_BRANCH", "main"))
     ap.add_argument(
         "--systemd-unit",
-        default=os.environ.get("AISOU_DEPLOY_SYSTEMD_UNIT", "aisoul-backend"),
-        help="或设 AISOU_DEPLOY_SYSTEMD_UNIT",
+        default=os.environ.get("AITRENDS_DEPLOY_SYSTEMD_UNIT", "aitrends-backend"),
+        help="或设 AITRENDS_DEPLOY_SYSTEMD_UNIT",
     )
     ap.add_argument(
         "--cmd",
         default="",
         help="若指定则只执行该远程命令（bash -lc），忽略默认部署脚本",
     )
-    ap.add_argument("--port", type=int, default=int(os.environ.get("AISOU_DEPLOY_SSH_PORT", "22")))
+    ap.add_argument("--port", type=int, default=int(os.environ.get("AITRENDS_DEPLOY_SSH_PORT", "22")))
     ap.add_argument(
         "--identity-file",
-        default=os.environ.get("AISOU_DEPLOY_KEY_PATH", ""),
-        help="或设 AISOU_DEPLOY_KEY_PATH；与密码二选一（优先密钥）",
+        default=os.environ.get("AITRENDS_DEPLOY_KEY_PATH", ""),
+        help="或设 AITRENDS_DEPLOY_KEY_PATH；与密码二选一（优先密钥）",
     )
     args = ap.parse_args()
     if not args.host:
-        ap.error("请提供 --host 或环境变量 AISOU_DEPLOY_HOST")
+        ap.error("请提供 --host 或环境变量 AITRENDS_DEPLOY_HOST")
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -148,7 +148,7 @@ def main() -> int:
         if not p.is_file():
             print(f"私钥文件不存在: {p}", file=sys.stderr)
             return 2
-        passphrase = os.environ.get("AISOU_DEPLOY_KEY_PASSPHRASE") or None
+        passphrase = os.environ.get("AITRENDS_DEPLOY_KEY_PASSPHRASE") or None
         key = None
         for loader in (
             paramiko.RSAKey.from_private_key_file,

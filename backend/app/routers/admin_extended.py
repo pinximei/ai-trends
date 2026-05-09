@@ -336,7 +336,7 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
     api_key = ((cfg or {}).get("api_key") or "").strip()
     key_param = ((cfg or {}).get("key_param") or "key").strip() or "key"
     headers = {
-        "User-Agent": "AISoul-ConnectorSync/1.0",
+        "User-Agent": "AiTrends-ConnectorSync/1.0",
         "Accept": "application/json",
     }
     if api_key:

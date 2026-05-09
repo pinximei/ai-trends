@@ -131,7 +131,7 @@ I18N = {
     "admin.taxonomy.desc": {"zh": "管理趋势分类版本。", "en": "Manage trend taxonomy versions."},
     "admin.sources.desc": {"zh": "管理数据源开关和调度频率。", "en": "Manage source switches and schedule frequencies."},
     "signals.new.desc": {"zh": "用于下一轮迭代机会识别的新信号列表。", "en": "Emerging signal list for next iteration opportunities."},
-    "legal.privacy.desc": {"zh": "运营方：AISoul 项目运营者。联系方式：legal@aisoul.local", "en": "Operator: AISoul Project Operator. Contact: legal@aisoul.local"},
+    "legal.privacy.desc": {"zh": "运营方：AiTrends 项目运营者。联系方式：legal@ai-trends.news", "en": "Operator: AiTrends Project Operator. Contact: legal@ai-trends.news"},
     "legal.terms.desc": {
         "zh": "适用法律：运营方注册地法律。争议解决：注册地有管辖权法院。",
         "en": "Applicable law: operator registration jurisdiction. Dispute: competent court of that jurisdiction.",
@@ -141,11 +141,11 @@ I18N = {
         "en": "GitHub, Hugging Face, Hacker News, Product Hunt, Reddit, MCP/Skills indexes.",
     },
     "legal.removal.desc": {"zh": "通过 API 提交：POST /api/v1/compliance/removal-requests", "en": "Submit through API: POST /api/v1/compliance/removal-requests"},
-    "footer.tagline": {"zh": "AISoul · Agent 趋势与灵感信号", "en": "AISoul · agent trends & inspiration signals"},
+    "footer.tagline": {"zh": "AiTrends · Agent 趋势与灵感信号", "en": "AiTrends · agent trends & inspiration signals"},
     "api.ok": {"zh": "成功", "en": "ok"},
 }
 
-ADMIN_TOKEN = os.getenv("AISOU_ADMIN_TOKEN", "")
+ADMIN_TOKEN = os.getenv("AITRENDS_ADMIN_TOKEN", "")
 
 
 def resolve_lang(request: Request) -> str:
@@ -258,7 +258,7 @@ def _validate_password_policy(db: Session, raw_password: str) -> None:
         raise HTTPException(status_code=400, detail=f"password too short, min={settings['password_min_length']}")
 
 
-_SKIP_SIGNED = os.getenv("AISOU_SKIP_API_SIGNATURE", "").lower() in {"1", "true", "yes", "on"}
+_SKIP_SIGNED = os.getenv("AITRENDS_SKIP_API_SIGNATURE", "").lower() in {"1", "true", "yes", "on"}
 
 
 @app.middleware("http")
@@ -847,7 +847,7 @@ def internal_run_status(request: Request, run_id: str, db: Session = Depends(get
 def api_root():
     """前后端分离：用户界面由 `frontend/`（Vite）提供，此处仅 API 入口说明。"""
     return {
-        "service": "aisoul-api",
+        "service": "aitrends-api",
         "docs": "/docs",
         "openapi": "/openapi.json",
         "ui": "http://127.0.0.1:5172",

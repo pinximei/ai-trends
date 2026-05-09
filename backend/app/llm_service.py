@@ -51,11 +51,11 @@ def chat_completion(
     admin_user_id: int | None = None,
     response_json: bool = False,
 ) -> tuple[str, int, int]:
-    """OpenAI 兼容 Chat Completions；优先读库内「AI 资讯」配置，其次环境变量 AISOU_LLM_*。"""
+    """OpenAI 兼容 Chat Completions；优先读库内「AI 资讯」配置，其次环境变量 AITRENDS_LLM_*。"""
     base, key, model = resolve_llm_http_config(db)
     if not key:
         raise RuntimeError(
-            "LLM 未配置：在管理端「AI 资讯配置」填写 DeepSeek API Key，或在环境变量 / backend/.env 中设置 AISOU_LLM_API_KEY"
+            "LLM 未配置：在管理端「AI 资讯配置」填写 DeepSeek API Key，或在环境变量 / backend/.env 中设置 AITRENDS_LLM_API_KEY"
         )
 
     url = base.rstrip("/") + "/chat/completions"
@@ -122,16 +122,16 @@ def polish_connector_article(
     if fk == "apps":
         stream_hint = (
             "当前条目归类为 **AI 应用** 泳道：面向产品/可运行应用发布与能力更新；语气偏产品速递与开发者向。"
-            "categories 需要 **约 10 个** 中文短标签（**8～12 条**，以 9～11 条为佳）："
-            "前 1～2 条可稍长表示主主题，其余为更短的具体角度（产品形态、场景、技术栈、受众等），"
-            "彼此少重复；不要只写 2～3 个大词糊弄，也不要超过 12 条刷屏。"
+            "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列 **11** 个固定大类中选其一（禁止自造近义词）："
+            "大模型、开源工具、应用产品、数据算力、安全合规、政策市场、论文研究、平台API、Agent、多模态、其他。"
+            "选最能概括本条的那一个；不要输出多条。"
         )
     else:
         stream_hint = (
             "当前条目归类为 **AI 资讯** 泳道：面向行业动态、论文、社区与技术新闻；语气偏信息摘要与要点。"
-            "categories 需要 **约 10 个** 中文短标签（**8～12 条**，以 9～11 条为佳）："
-            "前 1～2 条可稍长表示主叙事，其余为更短的信息维度（主体、事件类型、领域、影响等），"
-            "彼此少重复；不要只写 2～3 个大词糊弄，也不要超过 12 条刷屏。"
+            "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列 **11** 个固定大类中选其一（禁止自造近义词）："
+            "大模型、开源工具、应用产品、数据算力、安全合规、政策市场、论文研究、平台API、Agent、多模态、其他。"
+            "选最能概括本条的那一个；不要输出多条。"
         )
     system = (
         "你是 AI 行业「趋势雷达」编辑。只根据用户提供的原始 API 片段与占位标题写稿，禁止编造未出现的名称、数字与链接。"
@@ -139,8 +139,7 @@ def polish_connector_article(
         "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, tabs。"
         "title 为单行中文标题；summary 为 1～2 句中文总摘要（列表卡片用）；"
         "body_md 为可选 Markdown 总览（可与 tabs 呼应；若无总览可写简短衔接段）；"
-        "categories 为字符串数组，**8～12 条（含边界）**，每条 2～10 个汉字为宜、须为中文，"
-        "总量以 **9～11 条** 为目标；须与 feed_kind 自洽；"
+        "categories 为 **恰好含 1 个元素** 的字符串数组，且该元素必须是上述 11 字面值之一；"
         'feed_kind 只能为 JSON 字符串 "news" 或 "apps"。'
         "tabs 为数组，至少 2 个、至多 5 个对象；每个对象键 label（2～8 字 tab 标题）、"
         "summary（1～2 句，展示在 tab 行上的概要）、body_md（该 tab 的详细正文，Markdown，可多段列表）。"

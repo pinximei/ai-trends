@@ -144,10 +144,11 @@ def list_article_category_facets(
             continue
         if n and not _article_title_summary_matches(a, n):
             continue
-        for c in art.parse_category_labels_json(getattr(a, "ai_categories_json", None)):
-            if c:
-                ctr[c] += 1
-    return [{"label": k, "count": int(v)} for k, v in ctr.most_common(80)]
+        primary = art.primary_canonical_from_raw_labels(
+            art.parse_category_labels_json(getattr(a, "ai_categories_json", None))
+        )
+        ctr[primary] += 1
+    return [{"label": lab, "count": int(ctr[lab])} for lab in art.FACET_DISPLAY_ORDER if ctr.get(lab, 0) > 0]
 
 
 def list_articles_feed(
@@ -210,8 +211,8 @@ def list_articles_feed(
             row_lane = _row_feed_lane(a)
             if row_lane != feed:
                 continue
-            cats_list = art.parse_category_labels_json(getattr(a, "ai_categories_json", None))
-            if cat_filter and cat_filter not in cats_list:
+            cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+            if cat_filter and cats_list and cats_list[0] != cat_filter:
                 continue
             if n and not _article_title_summary_matches(a, n):
                 continue
@@ -279,7 +280,7 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "content_type": a.content_type,
         "third_party_source": a.third_party_source,
         "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
-        "categories": art.parse_category_labels_json(getattr(a, "ai_categories_json", None)),
+        "categories": art.display_categories_for_article(getattr(a, "ai_categories_json", None)),
         "feed_kind": _row_feed_lane(a),
         "admin_source_key": ak,
         "tabs": tabs,

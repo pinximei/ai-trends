@@ -2,8 +2,8 @@
 """
 从本机 **scripts/ssh_local.env**（勿提交，见 .gitignore）读取 SSH 变量，用 Paramiko 打开交互 shell。
 
-与 deploy_ssh.py 使用相同变量名：AISOU_DEPLOY_HOST / AISOU_DEPLOY_USER /
-AISOU_DEPLOY_SSH_PASSWORD / AISOU_DEPLOY_SSH_PORT。
+与 deploy_ssh.py 使用相同变量名：AITRENDS_DEPLOY_HOST / AITRENDS_DEPLOY_USER /
+AITRENDS_DEPLOY_SSH_PASSWORD / AITRENDS_DEPLOY_SSH_PORT。
 
 准备步骤:
   1. copy scripts\\ssh_local.env.example scripts\\ssh_local.env
@@ -50,15 +50,15 @@ def _require_paramiko():
 
 def main() -> int:
     _load_env_file()
-    host = (os.environ.get("AISOU_DEPLOY_HOST") or "").strip()
-    user = (os.environ.get("AISOU_DEPLOY_USER") or "ubuntu").strip()
-    password = (os.environ.get("AISOU_DEPLOY_SSH_PASSWORD") or "").strip()
-    port = int((os.environ.get("AISOU_DEPLOY_SSH_PORT") or "22").strip() or "22")
+    host = (os.environ.get("AITRENDS_DEPLOY_HOST") or "").strip()
+    user = (os.environ.get("AITRENDS_DEPLOY_USER") or "ubuntu").strip()
+    password = (os.environ.get("AITRENDS_DEPLOY_SSH_PASSWORD") or "").strip()
+    port = int((os.environ.get("AITRENDS_DEPLOY_SSH_PORT") or "22").strip() or "22")
     if not host:
-        print("ssh_local.env 中需设置 AISOU_DEPLOY_HOST", file=sys.stderr)
+        print("ssh_local.env 中需设置 AITRENDS_DEPLOY_HOST", file=sys.stderr)
         return 2
     if not password:
-        print("ssh_local.env 中需设置 AISOU_DEPLOY_SSH_PASSWORD（或改用密钥 + deploy_ssh.py）", file=sys.stderr)
+        print("ssh_local.env 中需设置 AITRENDS_DEPLOY_SSH_PASSWORD（或改用密钥 + deploy_ssh.py）", file=sys.stderr)
         return 2
 
     paramiko = _require_paramiko()

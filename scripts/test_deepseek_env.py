@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-从 backend/.env（优先）或当前环境变量读取 AISOU_LLM_*，向 DeepSeek OpenAI 兼容接口发一条最小请求，用于验证 Key / base / model。
+从 backend/.env（优先）或当前环境变量读取 AITRENDS_LLM_*，向 DeepSeek OpenAI 兼容接口发一条最小请求，用于验证 Key / base / model。
 
 用法（在仓库根目录）:
   py scripts/test_deepseek_env.py
@@ -36,12 +36,12 @@ def _load_env_file(path: Path) -> None:
 def main() -> int:
     _load_env_file(ENV_BACKEND)
 
-    base = (os.environ.get("AISOU_LLM_BASE_URL") or "https://api.deepseek.com/v1").strip().rstrip("/")
-    key = (os.environ.get("AISOU_LLM_API_KEY") or "").strip()
-    model = (os.environ.get("AISOU_LLM_MODEL") or "deepseek-chat").strip()
+    base = (os.environ.get("AITRENDS_LLM_BASE_URL") or "https://api.deepseek.com/v1").strip().rstrip("/")
+    key = (os.environ.get("AITRENDS_LLM_API_KEY") or "").strip()
+    model = (os.environ.get("AITRENDS_LLM_MODEL") or "deepseek-chat").strip()
 
     if not key:
-        print("未找到 AISOU_LLM_API_KEY。请在 backend/.env 中填写，或导出到环境变量。", file=sys.stderr)
+        print("未找到 AITRENDS_LLM_API_KEY。请在 backend/.env 中填写，或导出到环境变量。", file=sys.stderr)
         print(f"已读取: {ENV_BACKEND}（存在则已加载）", file=sys.stderr)
         return 2
 

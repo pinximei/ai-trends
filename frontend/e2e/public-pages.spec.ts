@@ -48,7 +48,7 @@ test.describe("公开站 · 接口与交互", () => {
     const pg = page.waitForResponse((r) => r.url().includes("/api/public/v1/pages/about") && r.status() === 200);
     await page.goto("/about");
     await expectEnvelopeOk(await pg);
-    await expect(page.getByText(/网站介绍|AISoul|免责/u).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/网站介绍|AiTrends|免责/u).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("顶栏导航切换不报错", async ({ page }) => {

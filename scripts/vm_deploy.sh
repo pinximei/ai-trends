@@ -6,7 +6,7 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
-UNIT="${AISOU_DEPLOY_SYSTEMD_UNIT:-aisoul-backend}"
+UNIT="${AITRENDS_DEPLOY_SYSTEMD_UNIT:-aitrends-backend}"
 
 if [[ -d .venv ]]; then
   # shellcheck source=/dev/null

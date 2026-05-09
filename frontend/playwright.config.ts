@@ -44,8 +44,8 @@ export default defineConfig({
       url: "http://127.0.0.1:8000/api/public/v1/health",
       env: {
         ...process.env,
-        AISOU_SKIP_API_SIGNATURE: "1",
-        AISOU_ENV: "dev",
+        AITRENDS_SKIP_API_SIGNATURE: "1",
+        AITRENDS_ENV: "dev",
       },
       reuseExistingServer: true,
       timeout: 120_000,

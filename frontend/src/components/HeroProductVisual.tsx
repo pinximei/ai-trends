@@ -24,7 +24,7 @@ export function HeroProductVisual() {
             <span className="h-3 w-3 rounded-full bg-emerald-500/80" />
           </div>
           <div className="ml-4 flex-1 rounded-md border border-white/5 bg-black/30 px-3 py-1 text-center font-mono text-[10px] text-slate-500">
-            aisoul.app / radar
+            ai-trends.news / radar
           </div>
         </div>
         <div className="grid gap-0 md:grid-cols-12">

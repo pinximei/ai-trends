@@ -38,9 +38,68 @@ def display_fingerprint(title: str, summary: str) -> str:
 
 VALUE_SCORE_MIN = 38.0
 
-# LLM 入库 categories：约十来条（不宜过少或过多）
-PUBLISH_CATEGORY_COUNT_MIN = 8
-PUBLISH_CATEGORY_COUNT_MAX = 12
+# 前台筛选与入库：固定 10 个大类 + 「其他」，每篇文章只展示/归入其中一类（合并细标签）
+FACET_PRIMARY_CATEGORIES: tuple[str, ...] = (
+    "大模型",
+    "开源工具",
+    "应用产品",
+    "数据算力",
+    "安全合规",
+    "政策市场",
+    "论文研究",
+    "平台API",
+    "Agent",
+    "多模态",
+)
+FACET_CATEGORY_OTHER = "其他"
+FACET_ALL_LABELS: frozenset[str] = frozenset((*FACET_PRIMARY_CATEGORIES, FACET_CATEGORY_OTHER))
+FACET_DISPLAY_ORDER: tuple[str, ...] = (*FACET_PRIMARY_CATEGORIES, FACET_CATEGORY_OTHER)
+
+# (canonical, keyword_substrings) — 按顺序匹配，专用规则在前
+_CATEGORY_KEYWORD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Agent", ("agent", "智能体", "工作流", "自动化")),
+    ("平台API", ("api", "sdk", "开发者", "云平台", "接口")),
+    ("论文研究", ("论文", "研究", "学术", "arxiv")),
+    ("政策市场", ("政策", "监管", "市场", "融资", "并购")),
+    ("安全合规", ("安全", "对齐", "合规", "隐私", "风险")),
+    ("数据算力", ("数据", "算力", "芯片", "训练", "gpu", "集群")),
+    ("应用产品", ("应用", "产品", "发布", "上架", "product")),
+    ("开源工具", ("开源", "工具", "生态", "仓库")),
+    ("多模态", ("多模态", "图像", "语音", "视频", "生成")),
+    ("大模型", ("大模型", "推理", "模型", "llm", "基座")),
+)
+
+
+def map_raw_label_to_canonical(raw: str) -> str:
+    """将模型或历史库中的任意短标签映射到 10+其他 之一。"""
+    s = normalize_ws(raw)
+    if not s:
+        return FACET_CATEGORY_OTHER
+    if s in FACET_ALL_LABELS:
+        return s
+    low = s.lower()
+    for canon, keys in _CATEGORY_KEYWORD_RULES:
+        for k in keys:
+            if k.lower() in low or k in s:
+                return canon
+    return FACET_CATEGORY_OTHER
+
+
+def primary_canonical_from_raw_labels(labels: list[str]) -> str:
+    """多条旧分类合并为一条主类：优先首个非「其他」的映射。"""
+    if not labels:
+        return FACET_CATEGORY_OTHER
+    mapped = [map_raw_label_to_canonical(x) for x in labels]
+    for m in mapped:
+        if m != FACET_CATEGORY_OTHER:
+            return m
+    return FACET_CATEGORY_OTHER
+
+
+def display_categories_for_article(ai_categories_json: str | None) -> list[str]:
+    """公开列表/详情展示用：始终返回恰好一个规范大类。"""
+    raw = parse_category_labels_json(ai_categories_json)
+    return [primary_canonical_from_raw_labels(raw)]
 
 
 def rule_value_score(*, snippet: str, summary: str, http_status: int) -> float:
@@ -186,7 +245,7 @@ def parse_category_labels_json(raw: str | None) -> list[str]:
     try:
         v = json.loads(raw)
         if isinstance(v, list):
-            return [str(x).strip() for x in v if str(x).strip()][:12]
+            return [str(x).strip() for x in v if str(x).strip()][:40]
     except Exception:
         pass
     return []
@@ -232,13 +291,11 @@ def ui_shape_warnings_for_stored_article(
     if raw_tabs and len(tabs) < 2:
         warns.append("ai_tabs_json 存在但解析后有效 tab 少于 2 个，详情页将回退为单栏「全文」或仅展示 body")
     cats = parse_category_labels_json(ai_categories_json)
-    if len(cats) < PUBLISH_CATEGORY_COUNT_MIN:
+    if not cats:
+        warns.append("ai_categories_json 无有效分类，前台将显示为「其他」")
+    elif len(cats) > 1:
         warns.append(
-            f"ai_categories_json 中有效分类少于 {PUBLISH_CATEGORY_COUNT_MIN} 个，与入库规范（约十来条）不一致"
-        )
-    if len(cats) > PUBLISH_CATEGORY_COUNT_MAX:
-        warns.append(
-            f"ai_categories_json 中有效分类多于 {PUBLISH_CATEGORY_COUNT_MAX} 个，与入库规范（约十来条）不一致"
+            "ai_categories_json 含多条标签；公开站已合并为单一大类展示，建议新稿仅保留规范列表中一条"
         )
     if not tabs and not (body or "").strip():
         warns.append("无 tabs 且无 body，详情 Markdown 区域将为空")
@@ -257,7 +314,9 @@ def validate_llm_polish_for_publish(data: dict) -> bool:
     if not isinstance(cats, list):
         return False
     clean_cats = [str(x).strip() for x in cats if str(x).strip()]
-    if len(clean_cats) < PUBLISH_CATEGORY_COUNT_MIN or len(clean_cats) > PUBLISH_CATEGORY_COUNT_MAX:
+    if len(clean_cats) != 1:
+        return False
+    if clean_cats[0] not in FACET_ALL_LABELS:
         return False
     tabs = data.get("tabs")
     if not isinstance(tabs, list) or len(tabs) < 2 or len(tabs) > 6:

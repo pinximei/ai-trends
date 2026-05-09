@@ -45,20 +45,20 @@ def get_llm_settings_public(db: Session) -> dict:
         "model": str(m.get("model") or DEFAULT_LLM["model"]),
         "api_key_masked": _mask_key(key),
         "has_api_key": bool(key),
-        "env_fallback": bool(os.getenv("AISOU_LLM_API_KEY", "").strip()),
+        "env_fallback": bool(os.getenv("AITRENDS_LLM_API_KEY", "").strip()),
     }
 
 
 def resolve_llm_http_config(db: Session) -> tuple[str, str, str]:
     """
     返回 (base_url, api_key, model)。
-    优先级：库内 product_settings_kv.llm → 环境变量 AISOU_LLM_*。
+    优先级：库内 product_settings_kv.llm → 环境变量 AITRENDS_LLM_*。
     环境变量未设 base/model 时默认 **DeepSeek** OpenAI 兼容端点（与 DEFAULT_LLM 一致）。
     """
     m = _merged_stored(db)
-    base = (m.get("base_url") or "").strip() or os.getenv("AISOU_LLM_BASE_URL", DEFAULT_LLM["base_url"]).strip()
-    key = (m.get("api_key") or "").strip() or os.getenv("AISOU_LLM_API_KEY", "").strip()
-    model = (m.get("model") or "").strip() or os.getenv("AISOU_LLM_MODEL", DEFAULT_LLM["model"]).strip()
+    base = (m.get("base_url") or "").strip() or os.getenv("AITRENDS_LLM_BASE_URL", DEFAULT_LLM["base_url"]).strip()
+    key = (m.get("api_key") or "").strip() or os.getenv("AITRENDS_LLM_API_KEY", "").strip()
+    model = (m.get("model") or "").strip() or os.getenv("AITRENDS_LLM_MODEL", DEFAULT_LLM["model"]).strip()
     return base.rstrip("/"), key, model
 
 

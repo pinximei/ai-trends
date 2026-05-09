@@ -759,7 +759,7 @@ export function App() {
     return (
       <main className="login-screen">
         <div className="login-brand">
-          <h1>AISoul Admin</h1>
+          <h1>AiTrends Admin</h1>
           <p>后台管理台 · 基于会话登录</p>
           <div className="muted tiny" style={{ marginTop: 10 }}>仅浏览可查数据；运营可管理数据源；管理员可管理账号。</div>
           <div className="muted tiny" style={{ marginTop: 8, fontSize: 11, opacity: 0.85 }}>
@@ -791,7 +791,7 @@ export function App() {
   return (
     <main className="shell">
       <aside className="sidebar card">
-        <h2 style={{ marginTop: 0 }}>AISoul Admin</h2>
+        <h2 style={{ marginTop: 0 }}>AiTrends Admin</h2>
         <p className="muted tiny">
           {me?.username} · {zhRole(me?.role)}
         </p>
@@ -898,7 +898,7 @@ export function App() {
                   <span className="tag">管理员</span>
                 </div>
                 <p className="muted tiny" style={{ marginTop: 8, lineHeight: 1.6 }}>
-                  删除连接器产生的文章、指标点、同步日志、热门快照、LLM 用量记录，并重置各连接器上次同步时间（数据源配置与账号保留）。详细说明与 LLM 在同一页：「AI
+                  删除连接器产生的文章、指标点、同步日志、热门快照、LLM 用量记录；同步清空由数据源合并的「领域」行业及其下属板块（主题分类）；并重置各连接器上次同步时间（连接器与数据源账号配置保留，演示用「AI」等行业不受影响）。详细说明与 LLM 在同一页：「AI
                   资讯与数据」。
                 </p>
                 <div style={{ marginTop: 14 }}>
@@ -972,7 +972,7 @@ export function App() {
                   <div className="muted tiny">current: {dbInfo?.database_url ?? "-"}</div>
                   <div className="muted tiny">test: {dbInfo?.test_url ?? "-"}</div>
                   <div className="muted tiny">prod: {dbInfo?.prod_url ?? "-"}</div>
-                  <div className="muted tiny">切换方式：设置后端环境变量 `AISOU_DB_MODE=test|prod`，然后重启后端服务。</div>
+                  <div className="muted tiny">切换方式：设置后端环境变量 `AITRENDS_DB_MODE=test|prod`，然后重启后端服务。</div>
                 </>
               ) : (
                 <div className="muted tiny">数据库环境、初始化模拟数据和清空业务数据仅对管理员开放，其他角色可查看业务概览但不展示敏感环境信息。</div>
@@ -1464,7 +1464,7 @@ export function App() {
                   <p className="muted tiny" style={{ marginTop: 10, maxWidth: 520, lineHeight: 1.6 }}>
                     连接器拉取原始片段 → 入库指纹去重 → 规则价值分 → <strong>DeepSeek</strong>{" "}
                     全文重写（分类 + 多 tab）→ 展示指纹去重 → 发布；未配置模型则不入库。密钥可仅存库内，或在服务端{" "}
-                    <code className="inline-code">AISOU_LLM_API_KEY</code>（默认 DeepSeek 端点）；接口仅返回脱敏掩码。
+                    <code className="inline-code">AITRENDS_LLM_API_KEY</code>（默认 DeepSeek 端点）；接口仅返回脱敏掩码。
                   </p>
                 </div>
                 <div className="ai-hero-metrics">
@@ -1474,7 +1474,7 @@ export function App() {
                   </div>
                   <div>
                     <span className="ai-metric-label">环境变量回退</span>
-                    <span className="ai-metric-value">{llmSettings?.env_fallback ? "AISOU_LLM_* 可用" : "无"}</span>
+                    <span className="ai-metric-value">{llmSettings?.env_fallback ? "AITRENDS_LLM_* 可用" : "无"}</span>
                   </div>
                 </div>
               </div>
@@ -1502,7 +1502,7 @@ export function App() {
                 进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；若距上次<strong>整批成功</strong>已超过下方配置的间隔，则对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
                 <code className="inline-code">min_interval_seconds</code> 限制，避免定时任务被 429 静默跳过）。间隔与开关保存在库表{" "}
                 <code className="inline-code">product_settings_kv.scheduler</code>；新建库时默认小时数可来自环境变量{" "}
-                <code className="inline-code">AISOU_CONNECTOR_SYNC_INTERVAL_HOURS</code>（仅首次建行参考）。整批跑完后会根据「数据源」中的领域主题刷新前台行业/板块结构。
+                <code className="inline-code">AITRENDS_CONNECTOR_SYNC_INTERVAL_HOURS</code>（仅首次建行参考）。整批跑完后会根据「数据源」中的领域主题刷新前台行业/板块结构。
               </p>
               {schedulerSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
@@ -1560,7 +1560,7 @@ export function App() {
                     {clearIngestBusy ? "清空中…" : "清空资源入库数据"}
                   </button>
                   <p className="muted tiny" style={{ marginTop: 8 }}>
-                    仅管理员。用于纠正错误入库后一键清空，随后可手动同步或等待定时任务。
+                    仅管理员。含数据源合并的领域主题板块清理；用于纠正错误入库后一键清空，随后可主题获取或手动同步以重建分类。
                   </p>
                   <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(148,163,184,0.2)" }}>
                     <h4 className="settings-title" style={{ marginTop: 0, marginBottom: 8, fontSize: 15 }}>
@@ -1614,8 +1614,8 @@ export function App() {
               <p className="muted tiny" style={{ marginTop: 6 }}>
                 默认 <code className="inline-code">https://api.deepseek.com/v1</code> 与{" "}
                 <code className="inline-code">deepseek-chat</code>。连接器同步依赖 LLM：可在本页保存 Key，或在{" "}
-                <code className="inline-code">backend/.env</code> 设置 <code className="inline-code">AISOU_LLM_API_KEY</code>
-                （可选 <code className="inline-code">AISOU_LLM_BASE_URL</code> / <code className="inline-code">AISOU_LLM_MODEL</code>
+                <code className="inline-code">backend/.env</code> 设置 <code className="inline-code">AITRENDS_LLM_API_KEY</code>
+                （可选 <code className="inline-code">AITRENDS_LLM_BASE_URL</code> / <code className="inline-code">AITRENDS_LLM_MODEL</code>
                 ）；优先级为<strong>库内已存 Key</strong> → 环境变量。
               </p>
               <form className="create-user-form" onSubmit={onSaveLlm} style={{ marginTop: 16 }}>
@@ -1780,14 +1780,14 @@ export function App() {
               <>
                 <div className="card settings-panel">
                   <h3 className="settings-title" style={{ marginTop: 0 }}>
-                    运行参数（存库，替代多数 AISOU_* 环境项）
+                    运行参数（存库，替代多数 AITRENDS_* 环境项）
                   </h3>
                   <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.65 }}>
                     {runtimeView?.secrets_note ?? "加载中…"}
                   </p>
                   <p className="muted tiny" style={{ marginTop: 8 }}>
                     演示数据种子当前是否写入：<strong style={{ color: "#e2e8f0" }}>{runtimeView?.demo_seed_effective ? "是" : "否"}</strong>
-                    （未勾选「强制开启」时由 app_env 与 AISOU_ENABLE_DEMO_SEED 推断）
+                    （未勾选「强制开启」时由 app_env 与 AITRENDS_ENABLE_DEMO_SEED 推断）
                   </p>
                   <form className="create-user-form" onSubmit={onSaveRuntime} style={{ marginTop: 14 }}>
                     <div className="form-field">
@@ -1872,7 +1872,7 @@ export function App() {
                       启用旧版 X-Admin-Token 内部接口
                     </label>
                     <div className="form-field" style={{ maxWidth: 480 }}>
-                      <label>对外版本展示文案（可选，覆盖 AISOU_APP_RELEASE）</label>
+                      <label>对外版本展示文案（可选，覆盖 AITRENDS_APP_RELEASE）</label>
                       <input
                         value={runtimeForm.app_release_label}
                         onChange={(e) => setRuntimeForm((p) => ({ ...p, app_release_label: e.target.value }))}

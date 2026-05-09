@@ -205,3 +205,30 @@ def test_content_briefing_envelope(client: TestClient) -> None:
     assert "data" in body
     data = body.get("data") or {}
     assert "title" in data or "sections" in data or "facts" in data
+
+
+def test_clear_product_ingest_clears_domains_taxonomy(client: TestClient) -> None:
+    from sqlalchemy import select
+
+    from backend.app.db import SessionLocal
+    from backend.app.product_models import Industry
+    from backend.app.taxonomy_from_sources import MERGED_TAXONOMY_INDUSTRY_SLUG
+
+    _admin_login(client)
+    client.post("/api/admin/v1/product/ingest/theme-fetch", json={})
+    with SessionLocal() as db:
+        dom = db.scalar(select(Industry).where(Industry.slug == MERGED_TAXONOMY_INDUSTRY_SLUG))
+        if dom is None:
+            pytest.skip("domains industry not created; depends on admin sources / DB")
+
+    r = client.post("/api/admin/v1/product/ingest-data/clear")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("code") == 0, body
+    data = body.get("data") or {}
+    assert data.get("product_domains_industry_removed") == 1
+
+    with SessionLocal() as db:
+        dom_after = db.scalar(select(Industry).where(Industry.slug == MERGED_TAXONOMY_INDUSTRY_SLUG))
+        assert dom_after is None
+

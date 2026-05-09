@@ -9,14 +9,15 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from .domain.articles import (
-    PUBLISH_CATEGORY_COUNT_MAX,
     VALUE_SCORE_MIN,
     display_fingerprint,
     feed_lane,
     ingest_duplicate_exists,
     ingest_fingerprint,
+    primary_canonical_from_raw_labels,
     rule_value_score,
     validate_llm_polish_for_publish,
+    FACET_ALL_LABELS,
 )
 from .product_models import Article
 
@@ -133,9 +134,12 @@ def create_published_articles_for_connector_targets(
         body_main = "\n\n".join(f"## {t['label']}\n\n{t['body_md']}" for t in tabs)
     body = body_main[:50000]
     cats = polished.get("categories")
-    clean = (
-        [str(x).strip() for x in cats if str(x).strip()][:PUBLISH_CATEGORY_COUNT_MAX] if isinstance(cats, list) else []
-    )
+    raw_list = [str(x).strip() for x in cats if str(x).strip()] if isinstance(cats, list) else []
+    if len(raw_list) == 1 and raw_list[0] in FACET_ALL_LABELS:
+        one = raw_list[0]
+    else:
+        one = primary_canonical_from_raw_labels(raw_list)
+    clean = [one]
     ai_categories_json = json.dumps(clean, ensure_ascii=False)
     ai_tabs_json = json.dumps(
         [{"label": t["label"], "summary": t["summary"], "body_md": t["body_md"]} for t in tabs],

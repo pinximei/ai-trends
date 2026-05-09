@@ -3,13 +3,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: aisoul
-      POSTGRES_PASSWORD: aisoul
-      POSTGRES_DB: aisoul
+      POSTGRES_USER: aitrends
+      POSTGRES_PASSWORD: aitrends
+      POSTGRES_DB: aitrends
     ports:
       - "5432:5432"
     volumes:
-      - aisoul_pg_data:/var/lib/postgresql/data
+      - aitrends_pg_data:/var/lib/postgresql/data
 
 volumes:
-  aisoul_pg_data:
+  aitrends_pg_data:

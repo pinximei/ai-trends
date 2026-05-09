@@ -4,7 +4,7 @@ export type Lang = "zh" | "en";
 
 const STRINGS: Record<Lang, Record<string, string>> = {
   zh: {
-    brand: "AISoul",
+    brand: "AiTrends",
     tagline: "AI 行业 · 应用与资讯雷达",
     navHome: "首页",
     navTrends: "趋势",
@@ -149,7 +149,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     downloadsCtaNone: "暂无下载地址",
   },
   en: {
-    brand: "AISoul",
+    brand: "AiTrends",
     tagline: "AI industry · apps & news radar",
     navHome: "Home",
     navTrends: "Trends",

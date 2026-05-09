@@ -1,6 +1,6 @@
 """
 运行时可调参数：存 product_settings_kv.runtime，供管理端修改。
-密钥类（JWT_SECRET、SIGNING_KEY、AISOU_DATABASE_URL 等）仍仅用环境变量，不入库。
+密钥类（JWT_SECRET、SIGNING_KEY、AITRENDS_DATABASE_URL 等）仍仅用环境变量，不入库。
 """
 from __future__ import annotations
 
@@ -24,23 +24,23 @@ _DEFAULT_CORS = (
 
 
 def _env_defaults() -> dict[str, Any]:
-    app_env = os.getenv("AISOU_ENV", "dev").lower()
-    cookie_secure = os.getenv("AISOU_ADMIN_COOKIE_SECURE", "true").lower() in {"1", "true", "yes", "on"}
-    if app_env in {"dev", "local"} and os.getenv("AISOU_ADMIN_COOKIE_SECURE") is None:
+    app_env = os.getenv("AITRENDS_ENV", "dev").lower()
+    cookie_secure = os.getenv("AITRENDS_ADMIN_COOKIE_SECURE", "true").lower() in {"1", "true", "yes", "on"}
+    if app_env in {"dev", "local"} and os.getenv("AITRENDS_ADMIN_COOKIE_SECURE") is None:
         cookie_secure = False
     return {
-        "cors_origins_csv": os.getenv("AISOU_CORS_ORIGINS", _DEFAULT_CORS).strip(),
-        "jwt_ttl_seconds": int(os.getenv("AISOU_JWT_TTL_SECONDS", "1800") or "1800"),
-        "allowed_skew_seconds": int(os.getenv("AISOU_ALLOWED_SKEW_SECONDS", "300") or "300"),
-        "require_https": os.getenv("AISOU_REQUIRE_HTTPS", "true").lower() in {"1", "true", "yes", "on"},
-        "allow_insecure_localhost": os.getenv("AISOU_ALLOW_INSECURE_LOCALHOST", "true").lower()
+        "cors_origins_csv": os.getenv("AITRENDS_CORS_ORIGINS", _DEFAULT_CORS).strip(),
+        "jwt_ttl_seconds": int(os.getenv("AITRENDS_JWT_TTL_SECONDS", "1800") or "1800"),
+        "allowed_skew_seconds": int(os.getenv("AITRENDS_ALLOWED_SKEW_SECONDS", "300") or "300"),
+        "require_https": os.getenv("AITRENDS_REQUIRE_HTTPS", "true").lower() in {"1", "true", "yes", "on"},
+        "allow_insecure_localhost": os.getenv("AITRENDS_ALLOW_INSECURE_LOCALHOST", "true").lower()
         in {"1", "true", "yes", "on"},
         "admin_cookie_secure": cookie_secure,
         "app_env": app_env,
-        "demo_seed_enabled": None,  # None = 按 AISOU_ENABLE_DEMO_SEED 或 app_env 推断
-        "legacy_admin_enabled": os.getenv("AISOU_LEGACY_ADMIN_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
+        "demo_seed_enabled": None,  # None = 按 AITRENDS_ENABLE_DEMO_SEED 或 app_env 推断
+        "legacy_admin_enabled": os.getenv("AITRENDS_LEGACY_ADMIN_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
         "app_release_label": "",
-        "hot_llm_model": os.getenv("AISOU_HOT_LLM_MODEL", "rule-based").strip() or "rule-based",
+        "hot_llm_model": os.getenv("AITRENDS_HOT_LLM_MODEL", "rule-based").strip() or "rule-based",
     }
 
 
@@ -154,8 +154,8 @@ def _demo_seed_effective_from_merged(merged: dict[str, Any]) -> bool:
     v = merged.get("demo_seed_enabled")
     if v is not None:
         return bool(v)
-    if os.getenv("AISOU_ENABLE_DEMO_SEED") is not None:
-        return os.getenv("AISOU_ENABLE_DEMO_SEED", "").lower() in {"1", "true", "yes", "on"}
+    if os.getenv("AITRENDS_ENABLE_DEMO_SEED") is not None:
+        return os.getenv("AITRENDS_ENABLE_DEMO_SEED", "").lower() in {"1", "true", "yes", "on"}
     ae = str(merged.get("app_env") or "dev").lower()
     return ae in {"dev", "local"}
 
@@ -176,7 +176,7 @@ def get_runtime_settings_public(db: Session) -> dict[str, Any]:
         "legacy_admin_enabled": merged["legacy_admin_enabled"],
         "app_release_label": merged["app_release_label"],
         "hot_llm_model": merged["hot_llm_model"],
-        "secrets_note": "JWT_SECRET / SIGNING_KEY / AISOU_AUTH_BOOTSTRAP_KEY / AISOU_DATABASE_URL / AISOU_ADMIN_TOKEN 仍仅通过环境变量配置，不入库。",
+        "secrets_note": "JWT_SECRET / SIGNING_KEY / AITRENDS_AUTH_BOOTSTRAP_KEY / AITRENDS_DATABASE_URL / AITRENDS_ADMIN_TOKEN 仍仅通过环境变量配置，不入库。",
     }
 
 
@@ -221,11 +221,11 @@ def assert_production_security() -> None:
     if ae in {"dev", "local"}:
         return
     weak = {"change-this-jwt-secret", "change-this-signing-key", "dev-bootstrap-key"}
-    jwt_s = os.getenv("AISOU_JWT_SECRET", "change-this-jwt-secret")
-    sig_s = os.getenv("AISOU_SIGNING_KEY", "change-this-signing-key")
-    boot = os.getenv("AISOU_AUTH_BOOTSTRAP_KEY", "dev-bootstrap-key")
+    jwt_s = os.getenv("AITRENDS_JWT_SECRET", "change-this-jwt-secret")
+    sig_s = os.getenv("AITRENDS_SIGNING_KEY", "change-this-signing-key")
+    boot = os.getenv("AITRENDS_AUTH_BOOTSTRAP_KEY", "dev-bootstrap-key")
     if jwt_s in weak or sig_s in weak or boot in weak:
-        raise RuntimeError("weak security defaults are not allowed outside dev/local (set AISOU_JWT_SECRET etc.)")
+        raise RuntimeError("weak security defaults are not allowed outside dev/local (set AITRENDS_JWT_SECRET etc.)")
 
 
 with _LOCK:

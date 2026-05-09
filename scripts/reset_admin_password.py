@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-在数据库中重置后台管理员密码（需在应用同一套 AISOU_DATABASE_URL 的环境下运行）。
+在数据库中重置后台管理员密码（需在应用同一套 AITRENDS_DATABASE_URL 的环境下运行）。
 
-典型用法（云主机 /opt/aisoul，已 venv + pip install -e .）:
+典型用法（云主机 /opt/aitrends，已 venv + pip install -e .）:
 
-  cd /opt/aisoul
+  cd /opt/aitrends
   source .venv/bin/activate
   py scripts/reset_admin_password.py
   py scripts/reset_admin_password.py --username admin
 
 说明:
-  - 生产环境首次建号用的是 AISOU_ADMIN_INIT_*，不是 admin123456。
+  - 生产环境首次建号用的是 AITRENDS_ADMIN_INIT_*，不是 admin123456。
   - 本脚本会清除失败次数与锁定时间，避免「多次输错被锁」导致无法登录。
 """
 from __future__ import annotations

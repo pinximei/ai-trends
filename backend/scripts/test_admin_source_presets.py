@@ -37,7 +37,7 @@ def main() -> int:
                 timeout=25.0,
                 follow_redirects=True,
                 headers={
-                    "User-Agent": "AISoul-Admin-SourceTest/1.0",
+                    "User-Agent": "AiTrends-Admin-SourceTest/1.0",
                     "Accept": "application/json, */*",
                 },
             )

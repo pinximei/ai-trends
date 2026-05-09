@@ -393,7 +393,10 @@ def clear_business_data(db: Session):
 
 
 def clear_product_ingest_data(db: Session) -> dict[str, int]:
-    """清空连接器入库产生的资源数据（文章、指标点、同步日志、热门快照、LLM 用量），保留连接器配置与行业/板块。"""
+    """清空连接器入库产生的资源数据（文章、指标点、同步日志、热门快照、LLM 用量），并重置各连接器上次同步时间。
+
+    同时移除由数据源合并生成的「领域」行业（slug=domains）及其下属板块与关联指标/分类侧数据；连接器配置与数据源账号、演示用 ``ai`` 等行业保留。
+    """
     from .product_models import (
         Article,
         HotSnapshot,
@@ -402,12 +405,14 @@ def clear_product_ingest_data(db: Session) -> dict[str, int]:
         ProductConnector,
         ProductConnectorLog,
     )
+    from .taxonomy_from_sources import clear_merged_domains_taxonomy
 
     n_logs = int(db.query(ProductConnectorLog).delete() or 0)
     n_points = int(db.query(MetricPoint).delete() or 0)
     n_articles = int(db.query(Article).delete() or 0)
     n_hot = int(db.query(HotSnapshot).delete() or 0)
     n_llm = int(db.query(LlmUsageLog).delete() or 0)
+    tax = clear_merged_domains_taxonomy(db)
     for c in db.scalars(select(ProductConnector)).all():
         c.last_sync_at = None
         c.last_error = None
@@ -418,6 +423,7 @@ def clear_product_ingest_data(db: Session) -> dict[str, int]:
         "product_articles": n_articles,
         "product_hot_snapshots": n_hot,
         "product_llm_usage_logs": n_llm,
+        **tax,
     }
 
 

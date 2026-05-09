@@ -107,7 +107,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="news",
-            ai_categories_json='["大模型","开源","算力","论文","基准","推理","生态","多模态"]',
+            ai_categories_json='["大模型"]',
             ai_tabs_json=_tabs_json(
                 [
                     ("要点速览", "本周大模型指标与趋势提要。", "## 本周要点\n\n- 演示指标曲线\n- 可替换为连接器同步结果"),
@@ -127,7 +127,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
-            ai_categories_json='["应用发布","开源工具","Agent","产品","模型","API","开发者","演示"]',
+            ai_categories_json='["应用产品"]',
             ai_tabs_json=_tabs_json(
                 [
                     ("产品动态", "应用与模型发布线索。", "## 动态\n\n**应用**类文章需标注第三方来源（演示）。"),
@@ -147,7 +147,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
-            ai_categories_json='["开发工具","开源","Spaces","托管","推理","UI","协作","演示"]',
+            ai_categories_json='["应用产品"]',
             ai_tabs_json=_tabs_json(
                 [
                     ("应用形态", "Spaces / 低代码托管类应用提示。", "## 形态\n\n演示为 **应用发现** 泳道占位。"),
@@ -164,7 +164,7 @@ def seed_product_if_empty(db: Session) -> None:
             slug="about",
             title="关于本站与免责声明",
             body_md=(
-                "## 网站介绍\n\nAISoul 演示站：AI 行业趋势与资源聚合（学习项目）。\n\n"
+                "## 网站介绍\n\nAiTrends 演示站：AI 行业趋势与资源聚合（学习项目）。\n\n"
                 "## 数据与来源\n\n数据来自配置的第三方 API 与演示种子；热门推荐由系统按周期生成快照。\n\n"
                 "## 免责声明\n\n信息仅供参考，不构成任何专业建议；使用需自担风险。"
             ),
@@ -177,7 +177,7 @@ def seed_product_if_empty(db: Session) -> None:
             slug="about_en",
             title="About & disclaimer",
             body_md=(
-                "## About\n\nAISoul demo: AI industry trends and resource aggregation (learning project).\n\n"
+                "## About\n\nAiTrends demo: AI industry trends and resource aggregation (learning project).\n\n"
                 "## Data\n\nData comes from configured third-party APIs and demo seed; featured lists are rebuilt on a schedule.\n\n"
                 "## Disclaimer\n\nFor information only; not professional advice. Use at your own risk."
             ),
@@ -195,7 +195,7 @@ def ensure_demo_software_downloads(db: Session) -> None:
         return
     rows = [
         SoftwareDownload(
-            title="AISoul 雷达（演示 iOS）",
+            title="AiTrends 雷达（演示 iOS）",
             summary="占位：替换为实际 App Store 链接后可上架。",
             platform="ios",
             category_slug="ai_radar",
@@ -205,7 +205,7 @@ def ensure_demo_software_downloads(db: Session) -> None:
             status="published",
         ),
         SoftwareDownload(
-            title="AISoul 雷达（演示 Android）",
+            title="AiTrends 雷达（演示 Android）",
             summary="占位：替换为 Google Play 或 APK 分发地址。",
             platform="android",
             category_slug="ai_radar",
@@ -316,7 +316,7 @@ def ensure_public_about_page(db: Session) -> None:
                 slug="about",
                 title="关于本站与免责声明",
                 body_md=(
-                    "## 网站介绍\n\nAISoul：AI 行业趋势与资源聚合（学习项目）。\n\n"
+                    "## 网站介绍\n\nAiTrends：AI 行业趋势与资源聚合（学习项目）。\n\n"
                     "## 数据与来源\n\n数据来自配置的第三方 API 与运营录入；热门推荐由系统按周期生成快照。\n\n"
                     "## 免责声明\n\n信息仅供参考，不构成任何专业建议；使用需自担风险。"
                 ),
@@ -330,7 +330,7 @@ def ensure_public_about_page(db: Session) -> None:
                 slug="about_en",
                 title="About & disclaimer",
                 body_md=(
-                    "## About\n\nAISoul: AI industry trends and resource aggregation (learning project).\n\n"
+                    "## About\n\nAiTrends: AI industry trends and resource aggregation (learning project).\n\n"
                     "## Data\n\nData from configured third-party APIs and editorial input; featured lists are rebuilt on a schedule.\n\n"
                     "## Disclaimer\n\nFor information only; not professional advice. Use at your own risk."
                 ),

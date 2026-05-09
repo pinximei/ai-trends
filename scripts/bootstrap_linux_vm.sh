@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# 在 Linux 虚拟机上**首次**部署 AISoul：装系统依赖、Python venv、npm 构建、提示 systemd。
+# 在 Linux 虚拟机上**首次**部署 AiTrends：装系统依赖、Python venv、npm 构建、提示 systemd。
 # 用法（在仓库根目录，或任意目录传入绝对路径）:
 #   bash scripts/bootstrap_linux_vm.sh
-#   AISOU_REPO=/opt/aisoul bash scripts/bootstrap_linux_vm.sh
+#   AITRENDS_REPO=/opt/aitrends bash scripts/bootstrap_linux_vm.sh
 set -euo pipefail
 
-REPO="${AISOU_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+REPO="${AITRENDS_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$REPO"
 
 if [[ ! -f backend/app/main.py ]]; then
-  echo "错误: 未在 AISoul 仓库根目录找到 backend/app/main.py（当前: $REPO）" >&2
+  echo "错误: 未在 AiTrends 仓库根目录找到 backend/app/main.py（当前: $REPO）" >&2
   exit 1
 fi
 
@@ -61,11 +61,11 @@ echo "==> npm 构建公开站与管理端…"
 
 echo ""
 echo "----- 接下来请你手工完成（需编辑机密） -----"
-echo "1) 编辑 $REPO/backend/.env ：AISOU_DATABASE_URL、AISOU_ENV=production、AISOU_CORS_ORIGINS、"
-echo "   AISOU_ADMIN_INIT_*、AISOU_LLM_API_KEY 等。"
-echo "2) 安装 systemd 单元（示例在 deploy/systemd/aisoul-backend.service.example），把路径改成 $REPO ，然后:"
-echo "   sudo cp deploy/systemd/aisoul-backend.service.example /etc/systemd/system/aisoul-backend.service"
-echo "   sudo systemctl daemon-reload && sudo systemctl enable --now aisoul-backend"
-echo "3) 配置 Nginx：参考 deploy/nginx/aisoul.conf 与 docs/deploy-tencent-cvm.md"
-echo "4) 日后在你本机执行: py scripts/deploy_ssh.py（需 AISOU_DEPLOY_HOST 等）"
+echo "1) 编辑 $REPO/backend/.env ：AITRENDS_DATABASE_URL、AITRENDS_ENV=production、AITRENDS_CORS_ORIGINS、"
+echo "   AITRENDS_ADMIN_INIT_*、AITRENDS_LLM_API_KEY 等。"
+echo "2) 安装 systemd 单元（示例在 deploy/systemd/aitrends-backend.service.example），把路径改成 $REPO ，然后:"
+echo "   sudo cp deploy/systemd/aitrends-backend.service.example /etc/systemd/system/aitrends-backend.service"
+echo "   sudo systemctl daemon-reload && sudo systemctl enable --now aitrends-backend"
+echo "3) 配置 Nginx：参考 deploy/nginx/aitrends.conf 与 docs/deploy-tencent-cvm.md"
+echo "4) 日后在你本机执行: py scripts/deploy_ssh.py（需 AITRENDS_DEPLOY_HOST 等）"
 echo "----- bootstrap 脚本结束 -----"

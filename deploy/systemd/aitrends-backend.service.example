@@ -1,0 +1,19 @@
+[Unit]
+Description=AiTrends FastAPI (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+# 与 /opt/aitrends 目录所有者一致（常见为 ubuntu；勿用无法读仓库的用户）
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/aitrends
+EnvironmentFile=/opt/aitrends/backend/.env
+# 可选：在 version 接口中展示与前端构建一致的发布号（或写入 backend/.env）
+# Environment=AITRENDS_APP_RELEASE=0.1.0+abc1234
+ExecStart=/opt/aitrends/.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
