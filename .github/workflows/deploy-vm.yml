@@ -67,7 +67,14 @@ jobs:
           echo "ready=${{ (secrets.AITRENDS_DEPLOY_HOST != '' || vars.AITRENDS_DEPLOY_HOST != '') && (secrets.AITRENDS_DEPLOY_USER != '' || vars.AITRENDS_DEPLOY_USER != '') && (secrets.AITRENDS_DEPLOY_SSH_KEY != '' || secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '') }}" >> "$GITHUB_OUTPUT"
           echo "method=${{ secrets.AITRENDS_DEPLOY_SSH_KEY != '' && 'key' || (secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '' && 'password' || 'none') }}" >> "$GITHUB_OUTPUT"
 
-      # 路径与 systemd 名在 Runner 侧展开后写入 script，避免 drone-ssh 的 envs 未注入导致远端 set -u 报 VM_REPO_DIR unbound。
+      # composite action 的 script 里 ${{ vars.* }} 有时不会按仓库 Variables 解析，退回默认 /opt/aitrends；先在普通 step 里固定成 step output。
+      - name: Resolve VM paths for SSH
+        id: vm_paths
+        if: steps.deploy.outputs.ready == 'true'
+        run: |
+          echo "repo_dir=${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || vars.AITRENDS_REMOTE_REPO_DIR || '/opt/aitrends' }}" >> "$GITHUB_OUTPUT"
+          echo "systemd_unit=${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || vars.AITRENDS_REMOTE_SYSTEMD_UNIT || 'aitrends-backend' }}" >> "$GITHUB_OUTPUT"
+
       - name: Deploy over SSH (private key)
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'key'
         uses: appleboy/ssh-action@v1.2.5
@@ -80,10 +87,10 @@ jobs:
           request_pty: true
           script: |
             set -euo pipefail
-            cd "${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}"
+            cd "${{ steps.vm_paths.outputs.repo_dir }}"
             git fetch origin main
             git reset --hard origin/main
-            export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}"
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ steps.vm_paths.outputs.systemd_unit }}"
             bash scripts/vm_deploy.sh
 
       - name: Deploy over SSH (password)
@@ -98,10 +105,10 @@ jobs:
           request_pty: true
           script: |
             set -euo pipefail
-            cd "${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}"
+            cd "${{ steps.vm_paths.outputs.repo_dir }}"
             git fetch origin main
             git reset --hard origin/main
-            export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}"
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ steps.vm_paths.outputs.systemd_unit }}"
             bash scripts/vm_deploy.sh
 
       - name: Skip deploy (missing credentials)
@@ -116,5 +123,5 @@ jobs:
           echo "  • 登录方式（二选一）："
           echo "      – Secrets → AITRENDS_DEPLOY_SSH_KEY（推荐，私钥全文）"
           echo "      – Secrets → AITRENDS_DEPLOY_SSH_PASSWORD（密码勿放在 Variables，会明文可见）"
-          echo "  • 可选 Variables：AITRENDS_VM_REPO_DIR / AITRENDS_DEPLOY_VM_REPO_DIR、AITRENDS_VM_SYSTEMD_UNIT / AITRENDS_DEPLOY_VM_SYSTEMD_UNIT"
+          echo "  • 可选 Variables：AITRENDS_VM_REPO_DIR / AITRENDS_DEPLOY_VM_REPO_DIR / AITRENDS_REMOTE_REPO_DIR；AITRENDS_VM_SYSTEMD_UNIT / AITRENDS_DEPLOY_VM_SYSTEMD_UNIT / AITRENDS_REMOTE_SYSTEMD_UNIT"
           echo "说明见 docs/deploy-tencent-cvm.md §2.1"
