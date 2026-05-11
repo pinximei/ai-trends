@@ -67,21 +67,18 @@ jobs:
           echo "ready=${{ (secrets.AITRENDS_DEPLOY_HOST != '' || vars.AITRENDS_DEPLOY_HOST != '') && (secrets.AITRENDS_DEPLOY_USER != '' || vars.AITRENDS_DEPLOY_USER != '') && (secrets.AITRENDS_DEPLOY_SSH_KEY != '' || secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '') }}" >> "$GITHUB_OUTPUT"
           echo "method=${{ secrets.AITRENDS_DEPLOY_SSH_KEY != '' && 'key' || (secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '' && 'password' || 'none') }}" >> "$GITHUB_OUTPUT"
 
-      # 远端目录与 systemd：Actions → Variables（AITRENDS_VM_*）；默认值见下方 env。
+      # 远端目录：务必用 VM_REPO_DIR / VM_SYSTEMD_UNIT（见 docs §2.1）。appleboy v1.2.5 的 envs 须为 key=value,key2=value2（仅写变量名时 drone-ssh 可能收不到 step env，会退回默认 /opt/aitrends）。
       - name: Deploy over SSH (private key)
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'key'
         uses: appleboy/ssh-action@v1.2.5
-        env:
-          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}
-          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
         with:
           host: ${{ secrets.AITRENDS_DEPLOY_HOST || vars.AITRENDS_DEPLOY_HOST }}
           username: ${{ secrets.AITRENDS_DEPLOY_USER || vars.AITRENDS_DEPLOY_USER }}
           key: ${{ secrets.AITRENDS_DEPLOY_SSH_KEY }}
           port: 22
-          script_stop: true
           command_timeout: 25m
-          envs: VM_REPO_DIR,VM_SYSTEMD_UNIT
+          request_pty: true
+          envs: VM_REPO_DIR=${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }},VM_SYSTEMD_UNIT=${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
           script: |
             set -euo pipefail
             cd "$VM_REPO_DIR"
@@ -93,17 +90,14 @@ jobs:
       - name: Deploy over SSH (password)
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'password'
         uses: appleboy/ssh-action@v1.2.5
-        env:
-          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}
-          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
         with:
           host: ${{ secrets.AITRENDS_DEPLOY_HOST || vars.AITRENDS_DEPLOY_HOST }}
           username: ${{ secrets.AITRENDS_DEPLOY_USER || vars.AITRENDS_DEPLOY_USER }}
           password: ${{ secrets.AITRENDS_DEPLOY_SSH_PASSWORD }}
           port: 22
-          script_stop: true
           command_timeout: 25m
-          envs: VM_REPO_DIR,VM_SYSTEMD_UNIT
+          request_pty: true
+          envs: VM_REPO_DIR=${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }},VM_SYSTEMD_UNIT=${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
           script: |
             set -euo pipefail
             cd "$VM_REPO_DIR"
@@ -124,5 +118,5 @@ jobs:
           echo "  • 登录方式（二选一）："
           echo "      – Secrets → AITRENDS_DEPLOY_SSH_KEY（推荐，私钥全文）"
           echo "      – Secrets → AITRENDS_DEPLOY_SSH_PASSWORD（密码勿放在 Variables，会明文可见）"
-          echo "  • 可选 Variables：AITRENDS_VM_REPO_DIR、AITRENDS_VM_SYSTEMD_UNIT"
+          echo "  • 可选 Variables：AITRENDS_VM_REPO_DIR / AITRENDS_DEPLOY_VM_REPO_DIR、AITRENDS_VM_SYSTEMD_UNIT / AITRENDS_DEPLOY_VM_SYSTEMD_UNIT"
           echo "说明见 docs/deploy-tencent-cvm.md §2.1"
