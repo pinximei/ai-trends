@@ -1,0 +1,97 @@
+# 本地「一键」预览（在你自己的电脑上执行，不依赖 GitHub tag）
+#
+# 前置：安装 Docker Desktop 并启动；仓库根目录执行：
+#   docker compose -f docker-compose.local.yml up --build
+#
+# 浏览器：
+#   公开站  http://127.0.0.1:5172
+#   管理端  http://127.0.0.1:5174
+#   API    http://127.0.0.1:8000/docs
+#
+# 可选：若需沿用 backend/.env 里其它变量（LLM 等），确保该文件存在；
+# 数据库连接已由下方 environment 注入（覆盖 .env 里 Postgres 主机名）。
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aitrends
+      POSTGRES_PASSWORD: aitrends
+      POSTGRES_DB: aitrends
+    ports:
+      - "5432:5432"
+    volumes:
+      - aitrends_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitrends -d aitrends"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  api:
+    image: python:3.12-slim
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      AITRENDS_DATABASE_URL: postgresql+psycopg://aitrends:aitrends@postgres:5432/aitrends
+      AITRENDS_ENV: dev
+      AITRENDS_ALLOW_INSECURE_LOCALHOST: "true"
+      AITRENDS_REQUIRE_HTTPS: "false"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - bash
+      - -lc
+      - |
+        set -e
+        pip install --no-cache-dir -q -e /workspace
+        exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    image: node:20-alpine
+    working_dir: /workspace/frontend
+    volumes:
+      - .:/workspace
+    ports:
+      - "5172:5172"
+    environment:
+      # 容器内 Vite 把 /api 转发到 compose 服务名 api，不要用 127.0.0.1
+      VITE_DEV_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        cd /workspace/frontend
+        npm install
+        exec npm run dev -- --host 0.0.0.0 --port 5172
+
+  admin:
+    image: node:20-alpine
+    working_dir: /workspace/frontend/admin
+    volumes:
+      - .:/workspace
+    ports:
+      - "5174:5174"
+    environment:
+      VITE_DEV_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        cd /workspace/frontend/admin
+        npm install
+        exec npm run dev -- --host 0.0.0.0 --port 5174
+
+volumes:
+  aitrends_pg_data:

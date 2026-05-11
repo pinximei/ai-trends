@@ -30,6 +30,21 @@
 
 ## 本地运行
 
+**0) Docker 一键预览（在你自己的电脑上执行；无需单独安装 Python / Node）**
+
+安装并启动 [Docker Desktop](https://www.docker.com/products/docker-desktop/)，在仓库根目录执行：
+
+```text
+docker compose -f docker-compose.local.yml up --build
+```
+
+- 公开站：<http://127.0.0.1:5172>
+- 管理端：<http://127.0.0.1:5174>
+- API 文档：<http://127.0.0.1:8000/docs>
+
+停止（保留数据库卷）：`docker compose -f docker-compose.local.yml down`  
+若本机已在运行其它占用 `5432` / `8000` / `5172` / `5174` 的服务，请先停止或修改 `docker-compose.local.yml` 中的端口映射。
+
 **1) PostgreSQL（默认，必需）**
 
 ```text
