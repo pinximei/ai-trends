@@ -1,11 +1,13 @@
-# push 到 main：先跑 pytest（本 job 内 PostgreSQL service），测试通过后可选 SSH 部署到 Linux。
-# 若未配置部署 Secrets，跳过 SSH（工作流仍为绿色）；配置完整后再推送即可部署。
+# 仅在推送版本 tag（v*）或手动 Run workflow 时：pytest → SSH 部署。
+# 日常 push main 只跑 .github/workflows/ci.yml，不触发本工作流。
+# 发布示例：git tag v0.1.2 && git push origin v0.1.2
 # 详见 docs/deploy-tencent-cvm.md §2.1 / §2.2。
 name: deploy-vm
 
 on:
   push:
-    branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -15,7 +17,6 @@ concurrency:
 jobs:
   test-and-deploy:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     services:
       postgres:
         image: postgres:16-alpine
@@ -35,6 +36,8 @@ jobs:
       CI: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -90,8 +93,8 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ steps.vm_paths.outputs.repo_dir }}"
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin
+            git reset --hard ${{ github.sha }}
             export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ steps.vm_paths.outputs.systemd_unit }}"
             bash scripts/vm_deploy.sh
 
@@ -108,8 +111,8 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ steps.vm_paths.outputs.repo_dir }}"
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin
+            git reset --hard ${{ github.sha }}
             export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ steps.vm_paths.outputs.systemd_unit }}"
             bash scripts/vm_deploy.sh
 

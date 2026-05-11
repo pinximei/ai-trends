@@ -44,9 +44,10 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 
 **发布版本号**：公开站与后台顶栏会显示 **前端构建** 与 **API** 两段标识；API 来自 `GET /api/public/v1/version`。生产建议在 `backend/.env` 设置 `AITRENDS_APP_RELEASE`（可与 git 短 SHA 一致），与前端构建对照即可确认是否已部署到新代码。`deploy_ssh.py` 在远端构建前端时会注入 `VITE_GIT_SHA=$(git rev-parse --short HEAD)`。
 
-## 2.1 GitHub Actions（推送 `main` 自动编译部署）
+## 2.1 GitHub Actions（按版本 tag 部署）
 
-1. 工作流：`.github/workflows/deploy-vm.yml`。触发条件：**push 到 `main`**，或 **Actions → deploy-vm → Run workflow**；Runner 上先跑 **`pytest`**，通过后再 SSH 到 VM 执行 `git pull` 与 `scripts/vm_deploy.sh`（与本地 **`py scripts/deploy_ssh.py`** 同源，避免两套命令不一致）。
+1. **分工**：日常 **`push` 到 `main`** 仅触发 **`.github/workflows/ci.yml`**（pytest）；**不会**自动 SSH 部署。**`.github/workflows/deploy-vm.yml`** 在下列情况运行：**推送匹配 `v*` 的版本 tag**（例如 `v0.1.2`），或 **Actions → deploy-vm → Run workflow** 手动运行。Runner 上先跑 **`pytest`**，通过后 SSH 到 VM：远端 **`git fetch`** 后对应当次提交的 **`${{ github.sha }}`** 执行 **`git reset --hard`**，再 **`bash scripts/vm_deploy.sh`**（与本地 **`py scripts/deploy_ssh.py`** 同源逻辑）。  
+   **发布示例**：先把提交推到 `main`，再执行 `git tag v0.1.2 && git push origin v0.1.2`（tag 必须指向已存在于 GitHub 的提交）。
 2. 在 GitHub：**Settings → Secrets and variables → Actions**  
    - **Secrets（敏感）**：至少具备 **SSH 登录方式之一**：  
      - **`AITRENDS_DEPLOY_SSH_KEY`**：私钥全文（推荐）；或  
@@ -63,7 +64,7 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 - **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（工作流已加入 `pg_isready` 等待，仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
 - **凭据不完整被跳过**：须同时具备 **HOST + USER**（Secrets 或 Variables 均可）以及 **私钥或密码之一**（**`AITRENDS_DEPLOY_SSH_KEY` / `AITRENDS_DEPLOY_SSH_PASSWORD` 只能放在 Secrets**）。仅把密码写在 Variables 无效且不安全。
 - **SSH 报 `cd: /opt/aitrends: No such file`** 或 **`VM_REPO_DIR: unbound variable`**：在 **Variables 或 Secrets** 配置远端路径（**`AITRENDS_DEPLOY_VM_REPO_DIR`** / **`AITRENDS_DEPLOY_DIR`** 等）与 **`AITRENDS_DEPLOY_SYSTEMD_UNIT`**（或 Variables 里 **`AITRENDS_VM_*`**）。**「Resolve VM paths for SSH」** 会把解析结果写入 step output 再 SSH；若路径只写在 Secrets 里，须使用已合并读取 secrets 的工作流版本。
-- **SSH 其它报错**：在 VM 上确认 Variables 中的目录存在且 **`git fetch` + `reset --hard origin/main`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；手动执行：  
+- **SSH 其它报错**：在 VM 上确认远端目录可 **`git fetch`**，且 **`git reset --hard <目标提交>`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；手动执行：  
   `cd <你的仓库根> && bash scripts/vm_deploy.sh`  
   查看是否缺 **Node/npm**、**pip**、或 **`sudo systemctl restart …`** 权限（sudoers）。若日志里出现 **`appleboy/ssh-action@v1.0.x`** 等旧版本，请合并最新 **`main`**（当前工作流使用 **`v1.2.5`**）。
 - **不用 GitHub Actions**：在本机配置 `scripts/ssh_local.env` 或环境变量后执行 **`py scripts/deploy_ssh.py`**，与 Actions 调用同一套远端脚本。
