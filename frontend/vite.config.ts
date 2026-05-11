@@ -9,6 +9,8 @@ const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "ut
 const gitShort =
   (process.env.VITE_GIT_SHA || process.env.GITHUB_SHA || "").trim().slice(0, 7) || "local";
 const appRelease = `${pkg.version ?? "0.0.0"}+${gitShort}`;
+/** 本地默认直连宿主机 uvicorn；Docker 用 compose.local 注入 http://api:8000 */
+const devProxyTarget = (process.env.VITE_DEV_PROXY_TARGET || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 export default defineConfig({
   appType: "spa",
@@ -22,9 +24,8 @@ export default defineConfig({
   server: {
     port: 5172,
     proxy: {
-      // 与 uvicorn --port 一致（Windows 上 8000 常被保留时可改用 8080）
-      "/api": { target: "http://127.0.0.1:8080", changeOrigin: true },
-      "/internal": { target: "http://127.0.0.1:8080", changeOrigin: true },
+      "/api": { target: devProxyTarget, changeOrigin: true },
+      "/internal": { target: devProxyTarget, changeOrigin: true },
     },
   },
 });

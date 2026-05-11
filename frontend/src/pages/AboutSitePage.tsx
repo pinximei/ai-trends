@@ -20,11 +20,23 @@ export function AboutSitePage() {
   }, [lang]);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 text-slate-200">
-      <h1 className="text-2xl font-semibold text-white">{t("navAbout")}</h1>
-      {err ? <p className="mt-4 text-red-400">{err}</p> : null}
-      {title ? <h2 className="mt-8 text-xl text-white">{title}</h2> : null}
-      <div className="prose prose-invert mt-6 max-w-none whitespace-pre-wrap text-slate-300">{body}</div>
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <div className="glass-light p-5 sm:p-7">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{t("navAbout")}</h1>
+        {err ? <p className="mt-4 text-sm font-medium text-rose-600">{err}</p> : null}
+        {!err && (title || body) ? (
+          <div className="mt-6 rounded-3xl border border-slate-100 bg-slate-50/60 p-6 sm:p-8">
+            <div className="mx-auto max-w-3xl">
+              {title ? <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h2> : null}
+              <div
+                className={`max-w-none whitespace-pre-wrap text-slate-600 [&_a]:font-medium [&_a]:text-violet-600 hover:[&_a]:underline ${title ? "mt-6" : ""}`}
+              >
+                {body}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

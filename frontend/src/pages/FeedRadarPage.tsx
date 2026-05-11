@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Search, Box } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse } from "@/api/public/types";
 import { useI18n } from "@/i18n";
+import { FeedSidebar } from "@/components/FeedSidebar";
 
 const INDUSTRY_SLUG = "ai";
 
@@ -175,181 +177,187 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       ? t("resourcesPageSummary").replace("{page}", String(feedPage)).replace("{total}", String(pageMeta.total_pages))
       : "";
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-6 text-slate-100 sm:px-6 sm:py-8">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 shadow-[inset_0_0_32px_rgba(0,0,0,0.2)] sm:px-6 sm:py-5">
-        <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">{pageTitle}</h1>
-
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-xl">
-            <span className="text-xs uppercase tracking-wider text-slate-500">{t("resourcesSearchLabel")}</span>
-            <input
-              type="search"
-              enterKeyHint="search"
-              value={searchDraft}
-              onChange={(e) => setSearchDraft(e.target.value)}
-              placeholder={t("resourcesSearchPlaceholder")}
-              className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-400/40"
-              aria-label={t("resourcesSearchPlaceholder")}
-            />
-          </div>
-          {searchDraft.trim() ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchDraft("");
-                setSearchQ("");
-              }}
-              className="shrink-0 rounded-xl border border-white/15 bg-white/[0.06] px-3.5 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white"
-            >
-              {t("resourcesSearchClear")}
-            </button>
-          ) : null}
+  const filterPanel = (
+    <div className="glass-light relative overflow-hidden p-5 sm:p-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{pageTitle}</h1>
+          <p className="mt-1 max-w-xl text-sm text-slate-500">{t("resourcesFeedDayHint")}</p>
         </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-slate-500">{t("resourcesTimeFilter")}</span>
-          {TIME_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => {
-                setTimeKey(f.key);
-                setCategoryKey(null);
-              }}
-              className={`rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-                timeKey === f.key
-                  ? "bg-gradient-to-r from-fuchsia-500/30 to-cyan-500/20 text-white shadow-[inset_0_0_20px_rgba(217,70,239,0.15)] ring-1 ring-fuchsia-400/35"
-                  : "bg-white/[0.06] text-slate-300 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              {t(f.labelKey)}
-            </button>
-          ))}
+        <div
+          className="relative hidden h-24 w-24 shrink-0 items-center justify-center rounded-3xl border border-violet-200/80 bg-gradient-to-br from-violet-100/90 via-white to-sky-100/80 shadow-ui sm:flex"
+          aria-hidden
+        >
+          <Box className="h-12 w-12 text-violet-500 opacity-90 drop-shadow-md" strokeWidth={1.25} />
         </div>
+      </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4">
-          <span className="text-xs uppercase tracking-wider text-slate-500">{t("resourcesCategoryFilter")}</span>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="relative min-w-0 flex-1 sm:max-w-xl">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {t("resourcesSearchLabel")}
+          </span>
+          <Search className="pointer-events-none absolute bottom-3 left-4 h-4 w-4 text-slate-400" />
+          <input
+            type="search"
+            enterKeyHint="search"
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            placeholder={t("resourcesSearchPlaceholder")}
+            className="w-full rounded-full border border-slate-200 bg-slate-50/90 py-3 pl-11 pr-4 text-sm text-slate-800 shadow-inner outline-none ring-violet-400/25 placeholder:text-slate-400 focus:border-violet-300 focus:ring-2"
+            aria-label={t("resourcesSearchPlaceholder")}
+          />
+        </div>
+        {searchDraft.trim() ? (
           <button
             type="button"
-            onClick={() => setCategoryKey(null)}
-            className={`rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-              categoryKey == null
-                ? "bg-gradient-to-r from-cyan-500/25 to-violet-500/20 text-white ring-1 ring-cyan-400/35"
-                : "bg-white/[0.06] text-slate-300 hover:bg-white/10 hover:text-white"
-            }`}
+            onClick={() => {
+              setSearchDraft("");
+              setSearchQ("");
+            }}
+            className="shrink-0 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
           >
-            {t("resourcesCategoryAll")}
+            {t("resourcesSearchClear")}
           </button>
-          {categoryOptions.map((row) => (
-            <button
-              key={row.label}
-              type="button"
-              onClick={() => setCategoryKey(row.label)}
-              className={`rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-                categoryKey === row.label
-                  ? "bg-gradient-to-r from-cyan-500/25 to-violet-500/20 text-white ring-1 ring-cyan-400/35"
-                  : "bg-white/[0.06] text-slate-300 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              {row.label}
-              <span className="ml-1 font-mono text-[10px] text-slate-500">({row.count})</span>
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-4 text-[11px] leading-relaxed text-slate-500">{t("resourcesFeedDayHint")}</p>
-
-        {!loading && pageMeta.total_pages > 0 ? (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="text-sm text-slate-300">
-              <span className="font-medium text-cyan-200/95">{pageSummaryText}</span>
-              {pageMeta.day_utc ? (
-                <span className="ml-2 text-slate-500">
-                  · UTC {formatFeedDateLabel(pageMeta.day_utc, lang)}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={!pageMeta.has_prev || loading}
-                onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-                className="rounded-xl border border-white/15 bg-white/[0.06] px-3.5 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t("resourcesPagePrev")}
-              </button>
-              <button
-                type="button"
-                disabled={!pageMeta.has_next || loading}
-                onClick={() => setFeedPage((p) => p + 1)}
-                className="rounded-xl border border-white/15 bg-white/[0.06] px-3.5 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t("resourcesPageNext")}
-              </button>
-              <label className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="sr-only">{t("resourcesPageJumpPlaceholder")}</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={Math.max(1, pageMeta.total_pages)}
-                  value={jumpDraft}
-                  onChange={(e) => setJumpDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") onJump();
-                  }}
-                  className="w-20 rounded-lg border border-white/10 bg-night-950/80 px-2 py-1.5 font-mono text-sm text-white"
-                  aria-label={t("resourcesPageJumpPlaceholder")}
-                />
-                <button
-                  type="button"
-                  onClick={() => onJump()}
-                  className="rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
-                >
-                  {t("resourcesPageGo")}
-                </button>
-              </label>
-            </div>
-          </div>
-        ) : null}
-
-        {pageMeta.days_scan_truncated ? (
-          <p className="mt-3 text-xs text-amber-200/90">{t("resourcesDaysTruncated")}</p>
         ) : null}
       </div>
 
-      {err ? <p className="mt-6 text-sm text-red-400">{err}</p> : null}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <span className="w-full text-xs font-semibold uppercase tracking-wider text-slate-500 sm:w-auto sm:mr-1">
+          {t("resourcesTimeFilter")}
+        </span>
+        {TIME_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => {
+              setTimeKey(f.key);
+              setCategoryKey(null);
+            }}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              timeKey === f.key ? "pill-active shadow-md" : "pill-idle"
+            }`}
+          >
+            {t(f.labelKey)}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+        <span className="w-full text-xs font-semibold uppercase tracking-wider text-slate-500 sm:w-auto sm:mr-1">
+          {t("resourcesCategoryFilter")}
+        </span>
+        <button
+          type="button"
+          onClick={() => setCategoryKey(null)}
+          className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+            categoryKey == null ? "pill-active shadow-md" : "pill-idle"
+          }`}
+        >
+          {t("resourcesCategoryAll")}
+        </button>
+        {categoryOptions.map((row) => (
+          <button
+            key={row.label}
+            type="button"
+            onClick={() => setCategoryKey(row.label)}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              categoryKey === row.label ? "pill-active shadow-md" : "pill-idle"
+            }`}
+          >
+            {row.label}
+            <span className="ml-1 font-mono text-[10px] text-slate-500">({row.count})</span>
+          </button>
+        ))}
+      </div>
+
+      {!loading && pageMeta.total_pages > 0 ? (
+        <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
+            <span className="font-semibold text-violet-700">{pageSummaryText}</span>
+            {pageMeta.day_utc ? (
+              <span className="ml-2 text-slate-500">· UTC {formatFeedDateLabel(pageMeta.day_utc, lang)}</span>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!pageMeta.has_prev || loading}
+              onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+              className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {t("resourcesPagePrev")}
+            </button>
+            <button
+              type="button"
+              disabled={!pageMeta.has_next || loading}
+              onClick={() => setFeedPage((p) => p + 1)}
+              className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {t("resourcesPageNext")}
+            </button>
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="sr-only">{t("resourcesPageJumpPlaceholder")}</span>
+              <input
+                type="number"
+                min={1}
+                max={Math.max(1, pageMeta.total_pages)}
+                value={jumpDraft}
+                onChange={(e) => setJumpDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onJump();
+                }}
+                className="w-20 rounded-xl border border-slate-200 bg-white px-2 py-1.5 font-mono text-sm text-slate-800"
+                aria-label={t("resourcesPageJumpPlaceholder")}
+              />
+              <button
+                type="button"
+                onClick={() => onJump()}
+                className="rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+              >
+                {t("resourcesPageGo")}
+              </button>
+            </label>
+          </div>
+        </div>
+      ) : null}
+
+      {pageMeta.days_scan_truncated ? (
+        <p className="mt-3 text-xs font-medium text-amber-700">{t("resourcesDaysTruncated")}</p>
+      ) : null}
+    </div>
+  );
+
+  const listSection = (
+    <>
+      {err ? <p className="mt-6 text-sm font-medium text-rose-600">{err}</p> : null}
       {loading ? <p className="mt-8 text-sm text-slate-500">{t("resourcesLoading")}</p> : null}
 
       {!loading ? (
         <>
-          <p className="mt-6 text-center text-[11px] text-slate-500">{t("resourcesByDate")}</p>
+          <p className="mt-8 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400">{t("resourcesByDate")}</p>
           <div className="mt-6 space-y-12">
             {listByDate.map(([dayKey, rows]) => (
               <Fragment key={dayKey}>
                 <div className="flex items-center gap-3 px-1">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400/90">
+                  <span className="text-xs font-bold uppercase tracking-wider text-violet-600">
                     {formatFeedDateLabel(dayKey, lang)}
                   </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-cyan-500/35 to-transparent" aria-hidden />
+                  <span className="h-px flex-1 bg-gradient-to-r from-violet-200 to-transparent" aria-hidden />
                 </div>
-                <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="mt-5 grid gap-5 sm:grid-cols-2">
                   {rows.map((a) => (
                     <Link
                       key={a.id}
                       to={`/resources/${a.id}`}
-                      className="group relative flex min-h-[210px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.07] via-night-950/40 to-night-950/90 p-5 shadow-[0_16px_48px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-300 hover:border-cyan-400/30 hover:shadow-[0_20px_56px_rgba(34,211,238,0.08)]"
+                      className="group relative flex min-h-[200px] flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-white p-5 shadow-card transition duration-300 hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-ui"
                     >
-                      <span
-                        className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-cyan-500/10 blur-2xl transition group-hover:bg-cyan-400/15"
-                        aria-hidden
-                      />
                       <div className="flex items-start justify-between gap-2">
-                        <span className="inline-flex max-w-[70%] truncate rounded-lg bg-slate-900/80 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-cyan-300/90 ring-1 ring-cyan-500/25">
+                        <span className="inline-flex max-w-[72%] truncate rounded-lg bg-emerald-50 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200">
                           {a.platform_label || t("source")}
                         </span>
                         {a.published_at ? (
-                          <span className="shrink-0 font-mono text-[10px] text-slate-500">{a.published_at.slice(0, 10)}</span>
+                          <span className="shrink-0 font-mono text-[10px] text-slate-400">{a.published_at.slice(0, 10)}</span>
                         ) : null}
                       </div>
                       {a.categories && a.categories.length > 0 ? (
@@ -357,27 +365,27 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                           {a.categories.slice(0, 4).map((c) => (
                             <span
                               key={c}
-                              className="rounded-md bg-fuchsia-500/15 px-2 py-0.5 text-[10px] font-medium text-fuchsia-200/90 ring-1 ring-fuchsia-500/25"
+                              className="rounded-lg bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-800 ring-1 ring-violet-100"
                             >
                               {c}
                             </span>
                           ))}
                         </div>
                       ) : null}
-                      <div className="mt-3 text-base font-semibold leading-snug text-white group-hover:text-cyan-100">{a.title}</div>
-                      <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-400">{summarize(a.summary, 160)}</p>
+                      <div className="mt-3 text-base font-bold leading-snug text-slate-900 group-hover:text-violet-700">{a.title}</div>
+                      <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-600">{summarize(a.summary, 160)}</p>
                       {a.tab_summaries && a.tab_summaries.length > 0 ? (
-                        <div className="mt-3 space-y-1.5 rounded-xl border border-cyan-500/10 bg-gradient-to-br from-cyan-950/20 to-transparent p-2.5 ring-1 ring-white/5">
+                        <div className="mt-3 space-y-1.5 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
                           {a.tab_summaries.slice(0, 3).map((tab) => (
-                            <div key={tab.label} className="text-[11px] leading-snug text-slate-400">
-                              <span className="font-semibold text-cyan-300/95">{tab.label}</span>
-                              <span className="text-slate-600"> · </span>
+                            <div key={tab.label} className="text-[11px] leading-snug text-slate-600">
+                              <span className="font-semibold text-violet-700">{tab.label}</span>
+                              <span className="text-slate-400"> · </span>
                               {summarize(tab.summary, 96)}
                             </div>
                           ))}
                         </div>
                       ) : null}
-                      <div className="mt-3 text-xs font-medium text-cyan-400/80 opacity-0 transition group-hover:opacity-100">
+                      <div className="mt-3 text-xs font-semibold text-violet-600 opacity-0 transition group-hover:opacity-100">
                         {t("trendViewDetail")} →
                       </div>
                     </Link>
@@ -399,7 +407,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 type="button"
                 disabled={!pageMeta.has_prev}
                 onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-                className="rounded-xl border border-white/15 bg-white/[0.06] px-5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+                className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {t("resourcesPagePrev")}
               </button>
@@ -407,7 +415,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 type="button"
                 disabled={!pageMeta.has_next}
                 onClick={() => setFeedPage((p) => p + 1)}
-                className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-5 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-35"
+                className="rounded-full bg-gradient-to-r from-violet-600 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {t("resourcesPageNext")}
               </button>
@@ -415,6 +423,25 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           ) : null}
         </>
       ) : null}
+    </>
+  );
+
+  return (
+    <div className="mx-auto max-w-[1400px] px-2 sm:px-4">
+      <div className="grid gap-8 xl:grid-cols-[1fr_300px] xl:items-start">
+        <div className="min-w-0 space-y-6">
+          {filterPanel}
+          {listSection}
+        </div>
+        <aside className="hidden min-w-0 xl:block">
+          <div className="sticky top-24">
+            <FeedSidebar mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
+          </div>
+        </aside>
+      </div>
+      <aside className="mt-10 xl:hidden">
+        <FeedSidebar mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
+      </aside>
     </div>
   );
 }

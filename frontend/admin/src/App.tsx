@@ -757,16 +757,31 @@ export function App() {
 
   if (!isAuthed) {
     return (
-      <main className="login-screen">
-        <div className="login-brand">
-          <h1>AiTrends Admin</h1>
-          <p>后台管理台 · 基于会话登录</p>
-          <div className="muted tiny" style={{ marginTop: 10 }}>仅浏览可查数据；运营可管理数据源；管理员可管理账号。</div>
-          <div className="muted tiny" style={{ marginTop: 8, fontSize: 11, opacity: 0.85 }}>
-            前端构建 {adminUiRelease}
-          </div>
+      <>
+        <div className="admin-status-strip" aria-hidden="false">
+          <span className="admin-status-strip__left">
+            <span className="admin-status-pulse" />
+            AISoul Admin · Uplink
+          </span>
+          <span className="admin-status-strip__right">
+            <span className="admin-status-meta">
+              build <span className="admin-status-build">{adminUiRelease}</span>
+            </span>
+            <span className="admin-status-meta">{new Date().toISOString().slice(0, 10)} UTC</span>
+          </span>
         </div>
-        <form className="card grid" onSubmit={onLogin}>
+        <main className="login-screen">
+          <div className="login-brand">
+            <h1>AISoul Admin</h1>
+            <p>后台管理台 · 基于会话登录</p>
+            <div className="muted tiny" style={{ marginTop: 10 }}>
+              仅浏览可查数据；运营可管理数据源；管理员可管理账号。
+            </div>
+            <div className="muted tiny" style={{ marginTop: 8, fontSize: 11, opacity: 0.85 }}>
+              前端构建 {adminUiRelease}
+            </div>
+          </div>
+          <form className="card grid login-card" onSubmit={onLogin}>
           <div className="form-field">
             <label>用户名</label>
             <input value={loginForm.username} onChange={(e) => setLoginForm((p) => ({ ...p, username: e.target.value }))} placeholder="请输入用户名" autoComplete="username" />
@@ -783,15 +798,37 @@ export function App() {
           </div>
           <button type="submit" disabled={loginSubmitting}>{loginSubmitting ? "登录中..." : "登录"}</button>
           {err ? <div className="err-text">{err}</div> : null}
-        </form>
-      </main>
+          </form>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="shell">
-      <aside className="sidebar card">
-        <h2 style={{ marginTop: 0 }}>AiTrends Admin</h2>
+    <>
+      <div className="admin-status-strip">
+        <span className="admin-status-strip__left">
+          <span className="admin-status-pulse" />
+          AISoul Admin · Uplink
+        </span>
+        <span className="admin-status-strip__right">
+          <span className="admin-status-meta">
+            build <span className="admin-status-build">{adminUiRelease}</span>
+            {publicApiRelease ? (
+              <>
+                {" "}
+                · api <span className="admin-status-api">{publicApiRelease}</span>
+              </>
+            ) : (
+              <span className="admin-status-wait"> · api …</span>
+            )}
+          </span>
+          <span className="admin-status-meta">{new Date().toISOString().slice(0, 10)} UTC</span>
+        </span>
+      </div>
+      <main className="shell">
+      <aside className="sidebar">
+        <h2 style={{ marginTop: 0 }}>AISoul Admin</h2>
         <p className="muted tiny">
           {me?.username} · {zhRole(me?.role)}
         </p>
@@ -2064,6 +2101,7 @@ export function App() {
           </section>
         ) : null}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

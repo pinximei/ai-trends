@@ -79,12 +79,14 @@ export function SoftwareDownloadsPage() {
   }, [platform, categorySlug]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 text-slate-100 sm:px-6 sm:py-8">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 shadow-[inset_0_0_32px_rgba(0,0,0,0.2)] sm:px-6 sm:py-5">
-        <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">{t("navDownloads")}</h1>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <div className="glass-light p-5 sm:p-6">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{t("navDownloads")}</h1>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-slate-500">{t("downloadsPlatform")}</span>
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <span className="w-full text-xs font-semibold uppercase tracking-wider text-slate-500 sm:w-auto sm:mr-1">
+            {t("downloadsPlatform")}
+          </span>
           {(
             [
               { key: "all" as const, labelKey: "downloadsPlatformAll" },
@@ -96,10 +98,8 @@ export function SoftwareDownloadsPage() {
               key={tab.key}
               type="button"
               onClick={() => setPlatform(tab.key)}
-              className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
-                platform === tab.key
-                  ? "bg-gradient-to-r from-emerald-500/35 to-cyan-500/25 text-white ring-1 ring-emerald-400/45"
-                  : "bg-white/5 text-slate-300 hover:text-white"
+              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                platform === tab.key ? "pill-active shadow-md" : "pill-idle"
               }`}
             >
               {t(tab.labelKey)}
@@ -107,16 +107,14 @@ export function SoftwareDownloadsPage() {
           ))}
         </div>
 
-        <div className="mt-3 border-t border-white/10 pt-4">
-          <div className="text-xs uppercase tracking-wider text-slate-500">{t("downloadsAppType")}</div>
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t("downloadsAppType")}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setCategorySlug(null)}
-              className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
-                categorySlug == null
-                  ? "bg-fuchsia-500/25 text-white ring-1 ring-fuchsia-400/40"
-                  : "bg-white/5 text-slate-300 hover:text-white"
+              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                categorySlug == null ? "pill-active shadow-md" : "pill-idle"
               }`}
             >
               {t("downloadsCategoryAll")}
@@ -126,10 +124,8 @@ export function SoftwareDownloadsPage() {
                 key={c.slug}
                 type="button"
                 onClick={() => setCategorySlug(c.slug)}
-                className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
-                  categorySlug === c.slug
-                    ? "bg-fuchsia-500/25 text-white ring-1 ring-fuchsia-400/40"
-                    : "bg-white/5 text-slate-300 hover:text-white"
+                className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                  categorySlug === c.slug ? "pill-active shadow-md" : "pill-idle"
                 }`}
               >
                 {c.label}
@@ -138,9 +134,11 @@ export function SoftwareDownloadsPage() {
             ))}
           </div>
         </div>
+
+        <p className="mt-4 text-[11px] leading-relaxed text-slate-500">{t("downloadsIntro")}</p>
       </div>
 
-      {err ? <p className="mt-6 text-sm text-red-400">{err}</p> : null}
+      {err ? <p className="mt-6 text-sm font-medium text-rose-600">{err}</p> : null}
       {loading ? <p className="mt-8 text-sm text-slate-500">{t("downloadsLoading")}</p> : null}
 
       {!loading ? (
@@ -153,42 +151,43 @@ export function SoftwareDownloadsPage() {
             {items.map((row) => (
               <div
                 key={row.id}
-                className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-[inset_0_0_36px_rgba(0,0,0,0.18)]"
+                className="group relative flex flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-ui"
               >
-                <div className="flex items-start gap-3">
+                <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br from-violet-100 to-sky-100 opacity-70 blur-2xl transition group-hover:opacity-100" />
+                <div className="relative flex items-start gap-3">
                   {row.icon_url ? (
-                    <img src={row.icon_url} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-white/10" />
+                    <img src={row.icon_url} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-slate-200" />
                   ) : (
-                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-900/80 ring-1 ring-white/10">
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-100 ring-1 ring-slate-200">
                       <Smartphone className="h-7 w-7 text-slate-400" />
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`rounded-md px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ring-1 ${
+                        className={`rounded-lg px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide ring-1 ${
                           row.platform === "ios"
-                            ? "bg-sky-500/15 text-sky-200 ring-sky-500/30"
-                            : "bg-lime-500/15 text-lime-100 ring-lime-500/30"
+                            ? "bg-sky-50 text-sky-800 ring-sky-100"
+                            : "bg-lime-50 text-lime-800 ring-lime-100"
                         }`}
                       >
                         {row.platform}
                       </span>
                       {row.category_label ? (
-                        <span className="rounded-md bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100 ring-1 ring-fuchsia-500/25">
+                        <span className="rounded-lg bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-900 ring-1 ring-violet-100">
                           {row.category_label}
                         </span>
                       ) : null}
                     </div>
-                    <h2 className="mt-2 text-base font-semibold text-white">{row.title}</h2>
-                    {row.summary ? <p className="mt-1 text-sm text-slate-400">{row.summary}</p> : null}
+                    <h2 className="mt-2 text-base font-bold text-slate-900">{row.title}</h2>
+                    {row.summary ? <p className="mt-1 text-sm text-slate-600">{row.summary}</p> : null}
                   </div>
                 </div>
                 {row.download_mode === "direct" && row.download_url ? (
                   <a
                     href={row.download_url}
                     download
-                    className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500/20 py-2.5 text-sm font-semibold text-emerald-100 ring-1 ring-emerald-400/35 transition hover:bg-emerald-500/30"
+                    className="relative mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-emerald-700"
                   >
                     <Download className="h-4 w-4" />
                     {t("downloadsCtaDirect")}
@@ -198,13 +197,13 @@ export function SoftwareDownloadsPage() {
                     href={row.download_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 py-2.5 text-sm font-semibold text-slate-100 ring-1 ring-white/20 transition hover:bg-white/15"
+                    className="relative mt-4 inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
                   >
                     <Download className="h-4 w-4" />
                     {t("downloadsCtaExternal")}
                   </a>
                 ) : (
-                  <span className="mt-4 block rounded-xl bg-slate-800/60 py-2.5 text-center text-sm text-slate-500 ring-1 ring-white/10">
+                  <span className="relative mt-4 block rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-center text-sm text-slate-500">
                     {t("downloadsCtaNone")}
                   </span>
                 )}
