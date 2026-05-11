@@ -67,7 +67,7 @@ jobs:
           echo "ready=${{ (secrets.AITRENDS_DEPLOY_HOST != '' || vars.AITRENDS_DEPLOY_HOST != '') && (secrets.AITRENDS_DEPLOY_USER != '' || vars.AITRENDS_DEPLOY_USER != '') && (secrets.AITRENDS_DEPLOY_SSH_KEY != '' || secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '') }}" >> "$GITHUB_OUTPUT"
           echo "method=${{ secrets.AITRENDS_DEPLOY_SSH_KEY != '' && 'key' || (secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '' && 'password' || 'none') }}" >> "$GITHUB_OUTPUT"
 
-      # 远端目录：务必用 VM_REPO_DIR / VM_SYSTEMD_UNIT（见 docs §2.1）。appleboy v1.2.5 的 envs 须为 key=value,key2=value2（仅写变量名时 drone-ssh 可能收不到 step env，会退回默认 /opt/aitrends）。
+      # 路径与 systemd 名在 Runner 侧展开后写入 script，避免 drone-ssh 的 envs 未注入导致远端 set -u 报 VM_REPO_DIR unbound。
       - name: Deploy over SSH (private key)
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'key'
         uses: appleboy/ssh-action@v1.2.5
@@ -78,13 +78,12 @@ jobs:
           port: 22
           command_timeout: 25m
           request_pty: true
-          envs: VM_REPO_DIR=${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }},VM_SYSTEMD_UNIT=${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
           script: |
             set -euo pipefail
-            cd "$VM_REPO_DIR"
+            cd "${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}"
             git fetch origin main
             git reset --hard origin/main
-            export AITRENDS_DEPLOY_SYSTEMD_UNIT="$VM_SYSTEMD_UNIT"
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}"
             bash scripts/vm_deploy.sh
 
       - name: Deploy over SSH (password)
@@ -97,13 +96,12 @@ jobs:
           port: 22
           command_timeout: 25m
           request_pty: true
-          envs: VM_REPO_DIR=${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }},VM_SYSTEMD_UNIT=${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
           script: |
             set -euo pipefail
-            cd "$VM_REPO_DIR"
+            cd "${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}"
             git fetch origin main
             git reset --hard origin/main
-            export AITRENDS_DEPLOY_SYSTEMD_UNIT="$VM_SYSTEMD_UNIT"
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT="${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}"
             bash scripts/vm_deploy.sh
 
       - name: Skip deploy (missing credentials)

@@ -63,7 +63,7 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 
 - **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（工作流已加入 `pg_isready` 等待，仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
 - **凭据不完整被跳过**：须同时具备 **HOST + USER**（Secrets 或 Variables 均可）以及 **私钥或密码之一**（**`AITRENDS_DEPLOY_SSH_KEY` / `AITRENDS_DEPLOY_SSH_PASSWORD` 只能放在 Secrets**）。仅把密码写在 Variables 无效且不安全。
-- **SSH 报 `cd: /opt/aitrends: No such file`**：代码实际在 **`/opt/aisoul`** 等路径时，须在仓库 **Variables** 设置 **`AITRENDS_VM_REPO_DIR`**（或 **`AITRENDS_DEPLOY_VM_REPO_DIR`**）与 **`AITRENDS_VM_SYSTEMD_UNIT`**（或 **`AITRENDS_DEPLOY_VM_SYSTEMD_UNIT`**）。工作流通过 `appleboy/ssh-action` 的 **`envs`** 把路径传到远端；若仍失败，确认 **Actions 日志里用的 workflow 已是最新 `main`**。
+- **SSH 报 `cd: /opt/aitrends: No such file`** 或 **`VM_REPO_DIR: unbound variable`**：须在仓库 **Variables** 设置 **`AITRENDS_VM_REPO_DIR`**（或 **`AITRENDS_DEPLOY_VM_REPO_DIR`**）与 **`AITRENDS_VM_SYSTEMD_UNIT`**（或 **`AITRENDS_DEPLOY_VM_SYSTEMD_UNIT`**）；工作流在 **`script` 中展开** 这些值（不依赖 `envs` 注入）。仍失败时确认 Actions 使用的 **`main` 上 workflow 已最新**。
 - **SSH 其它报错**：在 VM 上确认 Variables 中的目录存在且 **`git fetch` + `reset --hard origin/main`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；手动执行：  
   `cd <你的仓库根> && bash scripts/vm_deploy.sh`  
   查看是否缺 **Node/npm**、**pip**、或 **`sudo systemctl restart …`** 权限（sudoers）。若日志里出现 **`appleboy/ssh-action@v1.0.x`** 等旧版本，请合并最新 **`main`**（当前工作流使用 **`v1.2.5`**）。
