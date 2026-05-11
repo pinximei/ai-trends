@@ -8,7 +8,7 @@ include = ["backend*"]
 
 [project]
 name = "aitrends-agent-trend-platform"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agent trend insight platform"
 requires-python = ">=3.10"
 dependencies = [
