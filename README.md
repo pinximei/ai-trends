@@ -7,6 +7,12 @@
   - `frontend/admin/`（后台管理端，端口 `5174`）
 - `backend/`：后端 API（FastAPI，端口 `8000`）
 
+## 线上体验
+
+公开站点可直接访问：**[https://www.ai-trends.news](https://www.ai-trends.news)**（同域 `/api` 提供公开 JSON API）。页面内容为 AI 趋势资讯与学习向演示，不构成采购或合规结论；欢迎试用与反馈 Issue。
+
+后台管理路径为 **`/admin/`**，不向访客开放账号；如需自建实例见下文「本地运行」与 `docs/deploy-tencent-cvm.md`。
+
 ## 产品需求与实现设计
 
 - 需求主文档：`docs/requirements-master-v1.md`（含 **项目定位**：学习向、可全量重写、部署后议）
