@@ -1,5 +1,6 @@
-# push 到 main 且测试通过后，SSH 到 Linux 虚拟机执行 git pull + 构建 + systemd 重启。
-# 需在仓库 Settings → Secrets and variables → Actions 中配置 SSH 私钥等（勿提交仓库）。
+# push 到 main：先跑 pytest（本 job 内 PostgreSQL service），测试通过后可选 SSH 部署到 Linux。
+# 若未配置部署 Secrets，跳过 SSH（工作流仍为绿色）；配置完整后再推送即可部署。
+# 详见 docs/deploy-tencent-cvm.md §2.1 / §2.2。
 name: deploy-vm
 
 on:
@@ -12,9 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  test-and-deploy:
     runs-on: ubuntu-latest
-    # 合并进 main 后的 push 才部署；手动 workflow_dispatch 也可
     if: github.ref == 'refs/heads/main'
     services:
       postgres:
@@ -32,6 +32,7 @@ jobs:
           --health-retries 10
     env:
       AITRENDS_DATABASE_URL: postgresql+psycopg://aitrends:aitrends@127.0.0.1:5432/aitrends
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -39,13 +40,40 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Wait for PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          for i in $(seq 1 45); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U aitrends -d aitrends; then
+              echo "PostgreSQL is ready."
+              exit 0
+            fi
+            echo "waiting for postgres ($i/45)..."
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time."
+          exit 1
+
       - name: Install dependencies & run tests
         run: |
           pip install -e .
           python -m pytest tests/ -q
 
+      - name: Detect deploy secrets
+        id: deploy
+        run: |
+          if [ -n "${{ secrets.AITRENDS_DEPLOY_HOST }}" ] && \
+             [ -n "${{ secrets.AITRENDS_DEPLOY_USER }}" ] && \
+             [ -n "${{ secrets.AITRENDS_DEPLOY_SSH_KEY }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+        if: steps.deploy.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.AITRENDS_DEPLOY_HOST }}
           username: ${{ secrets.AITRENDS_DEPLOY_USER }}
@@ -58,3 +86,11 @@ jobs:
             git pull origin main
             export AITRENDS_DEPLOY_SYSTEMD_UNIT=aitrends-backend
             bash scripts/vm_deploy.sh
+
+      - name: Skip deploy (missing secrets)
+        if: steps.deploy.outputs.ready != 'true'
+        run: |
+          echo "::notice::未配置完整的 GitHub Actions Secrets，已跳过远端 Linux 部署。"
+          echo "请在仓库 Settings → Secrets and variables → Actions 中设置："
+          echo "  AITRENDS_DEPLOY_HOST、AITRENDS_DEPLOY_USER、AITRENDS_DEPLOY_SSH_KEY"
+          echo "说明见 docs/deploy-tencent-cvm.md §2.1"

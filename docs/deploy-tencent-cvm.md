@@ -55,6 +55,15 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 4. systemd unit 若不是 `aitrends-backend`，请在工作流里修改 `AITRENDS_DEPLOY_SYSTEMD_UNIT` 那一行（或在 Actions 里改用你自己的脚本）。
 5. 私钥带口令：当前工作流未传入 `passphrase`；可用无口令专用密钥，或自行改工作流接入 `appleboy/ssh-action` 的对应参数。
 
+### 2.2 Actions / SSH 部署失败排查
+
+- **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（工作流已加入 `pg_isready` 等待，仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
+- **三项 Secrets 未配齐**：缺少 `AITRENDS_DEPLOY_HOST`、`AITRENDS_DEPLOY_USER`、`AITRENDS_DEPLOY_SSH_KEY` 任一时，工作流会 **跳过 SSH 部署** 并输出 Notice（流水线仍为成功），**不会**自动部署到 Linux；配齐后再 push 或手动 **Run workflow** 即可。
+- **SSH 步骤报错**：在 VM 上确认 **`/opt/aitrends`** 存在且 **`git pull origin main`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；用部署用户登录后手动执行：  
+  `cd /opt/aitrends && bash scripts/vm_deploy.sh`  
+  查看是否缺 **Node/npm**、**pip**、或 **`sudo systemctl restart aitrends-backend`** 权限（sudoers）。
+- **不用 GitHub Actions**：在本机配置 `scripts/ssh_local.env` 或环境变量后执行 **`py scripts/deploy_ssh.py`**，与 Actions 调用同一套远端脚本。
+
 ## 3. 环境变量（示例）
 
 ```text
