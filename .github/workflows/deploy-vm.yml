@@ -74,6 +74,8 @@ jobs:
         run: |
           echo "repo_dir=${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || vars.AITRENDS_REMOTE_REPO_DIR || '/opt/aitrends' }}" >> "$GITHUB_OUTPUT"
           echo "systemd_unit=${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || vars.AITRENDS_REMOTE_SYSTEMD_UNIT || 'aitrends-backend' }}" >> "$GITHUB_OUTPUT"
+          echo "--- Resolved VM paths (from repo Variables) ---"
+          cat "$GITHUB_OUTPUT"
 
       - name: Deploy over SSH (private key)
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'key'
