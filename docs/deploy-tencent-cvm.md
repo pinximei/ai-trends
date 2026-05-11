@@ -54,16 +54,15 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
    - **HOST / USER**：可放在 **Secrets** 或 **Variables**（工作流对二者均可：`secrets.* || vars.*`）。名称：**`AITRENDS_DEPLOY_HOST`**、**`AITRENDS_DEPLOY_USER`**。  
    - **Variables（非密钥配置）**：**`AITRENDS_VM_REPO_DIR`**、**`AITRENDS_VM_SYSTEMD_UNIT`**（远端仓库路径与 systemd 单元名）。
 3. VM 上需已有 **克隆好的仓库目录**（文档示例为 **`/opt/aitrends`**；若你装在 **`/opt/aisoul`** 等路径，见下方 **Variables**）。目录须能 **`git fetch` / `reset --hard`**（公仓即可；私仓在 VM 配置 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；部署用户对目录可写；**`sudo systemctl restart <你的后端 unit>`** 可用（bootstrap / sudoers）。
-4. **可选：仓库 Variables**（Settings → Secrets and variables → Actions → **Variables**）：与工作流 `.github/workflows/deploy-vm.yml` 对齐远端路径与 systemd 名，避免 SSH 步骤里 **`cd` 目录不存在** 导致失败。  
-   - **`AITRENDS_VM_REPO_DIR`**：远端仓库根路径，默认 **`/opt/aitrends`**（未设置 Variable 时使用）。例如：`/opt/aisoul`。  
-   - **`AITRENDS_VM_SYSTEMD_UNIT`**：后端 service 名（不含 `.service`），默认 **`aitrends-backend`**。例如：`aisoul-backend`。
-5. 私钥带口令：当前工作流未传入 `passphrase`；可用无口令专用密钥，或自行改工作流接入 `appleboy/ssh-action` 的对应参数。
+   - **远端仓库路径 / systemd 单元**：可放在 **Variables** 或 **Repository secrets**（名称 **`AITRENDS_DEPLOY_VM_REPO_DIR`**，或备用 **`AITRENDS_DEPLOY_DIR`**；**`AITRENDS_DEPLOY_SYSTEMD_UNIT`**）。工作流会合并读取 vars + secrets；仅写在 Secrets 时先前若未在工作流里读 secrets，会误用默认 `/opt/aitrends`。  
+   - **SSH 端口（可选）**：Secret **`AITRENDS_DEPLOY_SSH_PORT`**（默认 22）。
+4. 私钥带口令：当前工作流未传入 `passphrase`；可用无口令专用密钥，或自行改工作流接入 `appleboy/ssh-action` 的对应参数。
 
 ### 2.2 Actions / SSH 部署失败排查
 
 - **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（工作流已加入 `pg_isready` 等待，仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
 - **凭据不完整被跳过**：须同时具备 **HOST + USER**（Secrets 或 Variables 均可）以及 **私钥或密码之一**（**`AITRENDS_DEPLOY_SSH_KEY` / `AITRENDS_DEPLOY_SSH_PASSWORD` 只能放在 Secrets**）。仅把密码写在 Variables 无效且不安全。
-- **SSH 报 `cd: /opt/aitrends: No such file`** 或 **`VM_REPO_DIR: unbound variable`**：在仓库 **Variables** 设置远端仓库根路径（**`AITRENDS_VM_REPO_DIR`** 或 **`AITRENDS_DEPLOY_VM_REPO_DIR`** 或 **`AITRENDS_REMOTE_REPO_DIR`**）及 systemd 单元（对应 **`AITRENDS_*_SYSTEMD_UNIT`** 三名之一）。工作流在 **「Resolve VM paths for SSH」** 步骤把 Variables 写成 step output，再交给 SSH（避免 composite action 内 **`vars` 未解析** 一直落到默认 `/opt/aitrends`）。
+- **SSH 报 `cd: /opt/aitrends: No such file`** 或 **`VM_REPO_DIR: unbound variable`**：在 **Variables 或 Secrets** 配置远端路径（**`AITRENDS_DEPLOY_VM_REPO_DIR`** / **`AITRENDS_DEPLOY_DIR`** 等）与 **`AITRENDS_DEPLOY_SYSTEMD_UNIT`**（或 Variables 里 **`AITRENDS_VM_*`**）。**「Resolve VM paths for SSH」** 会把解析结果写入 step output 再 SSH；若路径只写在 Secrets 里，须使用已合并读取 secrets 的工作流版本。
 - **SSH 其它报错**：在 VM 上确认 Variables 中的目录存在且 **`git fetch` + `reset --hard origin/main`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；手动执行：  
   `cd <你的仓库根> && bash scripts/vm_deploy.sh`  
   查看是否缺 **Node/npm**、**pip**、或 **`sudo systemctl restart …`** 权限（sudoers）。若日志里出现 **`appleboy/ssh-action@v1.0.x`** 等旧版本，请合并最新 **`main`**（当前工作流使用 **`v1.2.5`**）。
