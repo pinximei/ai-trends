@@ -5,8 +5,6 @@ on:
 
 jobs:
   test:
-    # 版本 tag 推送由 deploy-vm 负责跑 pytest+部署；此处跳过避免与 deploy-vm 重复
-    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     services:
       postgres:

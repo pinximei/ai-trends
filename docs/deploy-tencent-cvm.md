@@ -46,8 +46,8 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 
 ## 2.1 GitHub Actions（按版本 tag 部署）
 
-1. **分工**：日常 **`push` 到 `main`** 仅触发 **`.github/workflows/ci.yml`**（pytest）；**不会**自动 SSH 部署。**`.github/workflows/deploy-vm.yml`** 在下列情况运行：**推送匹配 `v*` 的版本 tag**（例如 `v0.1.2`），或 **Actions → deploy-vm → Run workflow** 手动运行。Runner 上先跑 **`pytest`**，通过后 SSH 到 VM：远端 **`git fetch`** 后对应当次提交的 **`${{ github.sha }}`** 执行 **`git reset --hard`**，再 **`bash scripts/vm_deploy.sh`**（与本地 **`py scripts/deploy_ssh.py`** 同源逻辑）。  
-   **发布示例**：先把提交推到 `main`，再执行 `git tag v0.1.2 && git push origin v0.1.2`（tag 必须指向已存在于 GitHub 的提交）。
+1. **分工**：**`push` 到 `main`** 会触发 **`.github/workflows/ci.yml`**（pytest）与 **`.github/workflows/deploy-vm.yml`**（先在同一 Runner 上再跑 pytest，凭据齐全则 SSH 部署）。也可在 **Actions → deploy-vm → Run workflow** 手动运行。部署任务在通过测试后 SSH 到 VM：远端 **`git fetch`** 后对应当次提交的 **`${{ github.sha }}`** 执行 **`git reset --hard`**，再 **`bash scripts/vm_deploy.sh`**（与本地 **`py scripts/deploy_ssh.py`** 同源逻辑）。  
+   **发布示例**：`git push origin main` 即会尝试部署（不再要求打 `v*` tag）。若仍习惯用 tag 做发行标记，可自行 `git tag v0.1.2 && git push origin v0.1.2`，但 **不再** 由 tag 单独触发 `deploy-vm`。
 2. 在 GitHub：**Settings → Secrets and variables → Actions**  
    - **Secrets（敏感）**：至少具备 **SSH 登录方式之一**：  
      - **`AITRENDS_DEPLOY_SSH_KEY`**：私钥全文（推荐）；或  

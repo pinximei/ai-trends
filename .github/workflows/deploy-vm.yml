@@ -1,13 +1,12 @@
-# 仅在推送版本 tag（v*）或手动 Run workflow 时：pytest → SSH 部署。
-# 日常 push main 只跑 .github/workflows/ci.yml，不触发本工作流。
-# 发布示例：git tag v0.1.2 && git push origin v0.1.2
+# 推送到默认分支 main：pytest →（凭据齐全时）SSH 部署。
+# 也可在 Actions 里手动 Run workflow。不再依赖打 v* tag。
 # 详见 docs/deploy-tencent-cvm.md §2.1 / §2.2。
 name: deploy-vm
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:

@@ -27,7 +27,7 @@
 | 后端 | `backend/app/`（FastAPI + SQLAlchemy） |
 | 数据库 | 默认 **PostgreSQL**（`backend/app/db.py`，连接串见 `backend/.env.example`） |
 | 调度 | `backend/app/lifespan.py`：**APScheduler** — 约三天热门快照、异动扫描、连接器批量同步闸门（约 15 分钟检查一次间隔） |
-| 部署 | Linux：`scripts/vm_deploy.sh`；本机 SSH：`scripts/deploy_ssh.py`；GitHub：**推送 `v*` tag** 触发 `.github/workflows/deploy-vm.yml`（日常 `main` 仅 `ci.yml` pytest） |
+| 部署 | Linux：`scripts/vm_deploy.sh`；本机 SSH：`scripts/deploy_ssh.py`；GitHub：**`push` 到 `main`** 触发 `.github/workflows/deploy-vm.yml`（pytest 通过后 SSH 部署；亦可手动 Run workflow） |
 
 环境变量前缀统一为 **`AITRENDS_*`**（生产 systemd 勿再用已废弃的 `AISOU_*`）。
 
