@@ -72,8 +72,8 @@ jobs:
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'key'
         uses: appleboy/ssh-action@v1.2.5
         env:
-          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || '/opt/aitrends' }}
-          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
+          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}
+          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
         with:
           host: ${{ secrets.AITRENDS_DEPLOY_HOST || vars.AITRENDS_DEPLOY_HOST }}
           username: ${{ secrets.AITRENDS_DEPLOY_USER || vars.AITRENDS_DEPLOY_USER }}
@@ -94,8 +94,8 @@ jobs:
         if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'password'
         uses: appleboy/ssh-action@v1.2.5
         env:
-          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || '/opt/aitrends' }}
-          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
+          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || vars.AITRENDS_DEPLOY_VM_REPO_DIR || '/opt/aitrends' }}
+          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || vars.AITRENDS_DEPLOY_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
         with:
           host: ${{ secrets.AITRENDS_DEPLOY_HOST || vars.AITRENDS_DEPLOY_HOST }}
           username: ${{ secrets.AITRENDS_DEPLOY_USER || vars.AITRENDS_DEPLOY_USER }}
