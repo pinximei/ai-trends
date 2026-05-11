@@ -90,7 +90,8 @@ if [[ ! -f backend/app/main.py ]]; then
   echo "deploy: 当前目录不是 AiTrends 仓库根（缺少 backend/app/main.py）: $(pwd)" >&2
   exit 2
 fi
-git pull origin {shlex.quote(branch)}
+git fetch origin {shlex.quote(branch)}
+git reset --hard {shlex.quote(f"origin/{branch}")}
 if [[ ! -f scripts/vm_deploy.sh ]]; then
   echo "deploy: git pull 后仍无 scripts/vm_deploy.sh，请检查远端分支与仓库内容: $(pwd)" >&2
   ls -la scripts 2>/dev/null || true

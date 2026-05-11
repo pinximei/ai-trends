@@ -47,22 +47,28 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 ## 2.1 GitHub Actions（推送 `main` 自动编译部署）
 
 1. 工作流：`.github/workflows/deploy-vm.yml`。触发条件：**push 到 `main`**，或 **Actions → deploy-vm → Run workflow**；Runner 上先跑 **`pytest`**，通过后再 SSH 到 VM 执行 `git pull` 与 `scripts/vm_deploy.sh`（与本地 **`py scripts/deploy_ssh.py`** 同源，避免两套命令不一致）。
-2. 在 GitHub：**Settings → Secrets and variables → Actions → New repository secret**，至少配置：
-   - **`AITRENDS_DEPLOY_HOST`**：虚拟机公网 IP 或域名  
-   - **`AITRENDS_DEPLOY_USER`**：SSH 用户（常见 **`ubuntu`**）  
-   - **`AITRENDS_DEPLOY_SSH_KEY`**：能登录该 VM 的 **私钥全文**（含 `BEGIN`/`END` 行）。建议单独生成 **仅用于 CI 部署** 的密钥，公钥写入 VM 的 `~/.ssh/authorized_keys`。
-3. VM 需已存在 **`/opt/aitrends`** 且可 **`git pull` 本仓库**（公仓即可；私仓在 VM 配置 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；部署用户对目录可写；**`sudo systemctl restart aitrends-backend`** 可用（bootstrap / sudoers）。
-4. systemd unit 若不是 `aitrends-backend`，请在工作流里修改 `AITRENDS_DEPLOY_SYSTEMD_UNIT` 那一行（或在 Actions 里改用你自己的脚本）。
+2. 在 GitHub：**Settings → Secrets and variables → Actions**  
+   - **Secrets（敏感）**：至少具备 **SSH 登录方式之一**：  
+     - **`AITRENDS_DEPLOY_SSH_KEY`**：私钥全文（推荐）；或  
+     - **`AITRENDS_DEPLOY_SSH_PASSWORD`**：SSH 密码（**勿**写在 Variables，Variables 会在界面明文展示）。  
+   - **HOST / USER**：可放在 **Secrets** 或 **Variables**（工作流对二者均可：`secrets.* || vars.*`）。名称：**`AITRENDS_DEPLOY_HOST`**、**`AITRENDS_DEPLOY_USER`**。  
+   - **Variables（非密钥配置）**：**`AITRENDS_VM_REPO_DIR`**、**`AITRENDS_VM_SYSTEMD_UNIT`**（远端仓库路径与 systemd 单元名）。
+3. VM 上需已有 **克隆好的仓库目录**（文档示例为 **`/opt/aitrends`**；若你装在 **`/opt/aisoul`** 等路径，见下方 **Variables**）。目录须能 **`git fetch` / `reset --hard`**（公仓即可；私仓在 VM 配置 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；部署用户对目录可写；**`sudo systemctl restart <你的后端 unit>`** 可用（bootstrap / sudoers）。
+4. **可选：仓库 Variables**（Settings → Secrets and variables → Actions → **Variables**）：与工作流 `.github/workflows/deploy-vm.yml` 对齐远端路径与 systemd 名，避免 SSH 步骤里 **`cd` 目录不存在** 导致失败。  
+   - **`AITRENDS_VM_REPO_DIR`**：远端仓库根路径，默认 **`/opt/aitrends`**（未设置 Variable 时使用）。例如：`/opt/aisoul`。  
+   - **`AITRENDS_VM_SYSTEMD_UNIT`**：后端 service 名（不含 `.service`），默认 **`aitrends-backend`**。例如：`aisoul-backend`。
 5. 私钥带口令：当前工作流未传入 `passphrase`；可用无口令专用密钥，或自行改工作流接入 `appleboy/ssh-action` 的对应参数。
 
 ### 2.2 Actions / SSH 部署失败排查
 
 - **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（工作流已加入 `pg_isready` 等待，仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
-- **三项 Secrets 未配齐**：缺少 `AITRENDS_DEPLOY_HOST`、`AITRENDS_DEPLOY_USER`、`AITRENDS_DEPLOY_SSH_KEY` 任一时，工作流会 **跳过 SSH 部署** 并输出 Notice（流水线仍为成功），**不会**自动部署到 Linux；配齐后再 push 或手动 **Run workflow** 即可。
-- **SSH 步骤报错**：在 VM 上确认 **`/opt/aitrends`** 存在且 **`git pull origin main`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；用部署用户登录后手动执行：  
-  `cd /opt/aitrends && bash scripts/vm_deploy.sh`  
-  查看是否缺 **Node/npm**、**pip**、或 **`sudo systemctl restart aitrends-backend`** 权限（sudoers）。
+- **凭据不完整被跳过**：须同时具备 **HOST + USER**（Secrets 或 Variables 均可）以及 **私钥或密码之一**（**`AITRENDS_DEPLOY_SSH_KEY` / `AITRENDS_DEPLOY_SSH_PASSWORD` 只能放在 Secrets**）。仅把密码写在 Variables 无效且不安全。
+- **SSH 步骤立刻失败 / `cd: ... No such file`**：工作流默认 **`cd /opt/aitrends`**；若你的代码在 **`/opt/aisoul`** 等路径，请在仓库 **Actions Variables** 设置 **`AITRENDS_VM_REPO_DIR`**（及 **`AITRENDS_VM_SYSTEMD_UNIT`**，若 unit 不是 `aitrends-backend`）。或在 VM 上建立与 Variables 一致的目录并完成 `git clone`。  
+- **SSH 其它报错**：在 VM 上确认 Variables 中的目录存在且 **`git fetch` + `reset --hard origin/main`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；手动执行：  
+  `cd <你的仓库根> && bash scripts/vm_deploy.sh`  
+  查看是否缺 **Node/npm**、**pip**、或 **`sudo systemctl restart …`** 权限（sudoers）。若日志里出现 **`appleboy/ssh-action@v1.0.x`** 等旧版本，请合并最新 **`main`**（当前工作流使用 **`v1.2.5`**）。
 - **不用 GitHub Actions**：在本机配置 `scripts/ssh_local.env` 或环境变量后执行 **`py scripts/deploy_ssh.py`**，与 Actions 调用同一套远端脚本。
+- **浏览器报 HTTP 502、前端提示「响应非 JSON」**：通常是 Nginx 反代 `/api` 时连不上本机 Uvicorn（`127.0.0.1:8000`）。在 VM 上执行 **`systemctl status`**（你的后端 unit，例如 `aisoul-backend` / `aitrends-backend`）与 **`journalctl -u <unit> -n 80`**。若日志里是 **PostgreSQL 认证失败**，且 systemd 里仍使用旧前缀 **`AISOU_*`**：当前后端只读取 **`AITRENDS_*`**，请把 unit 中的环境变量全部改为 `AITRENDS_`（例如 `AITRENDS_DATABASE_URL`），或改用 **`EnvironmentFile=/path/to/repo/backend/.env`**（文件内同样使用 `AITRENDS_`）。修复后 **`curl -sS http://127.0.0.1:8000/api/public/v1/version`** 应返回 JSON。
 
 ## 3. 环境变量（示例）
 

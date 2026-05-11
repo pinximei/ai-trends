@@ -60,37 +60,69 @@ jobs:
           pip install -e .
           python -m pytest tests/ -q
 
-      - name: Detect deploy secrets
+      # HOST/USER 可读 Variables 或 Secrets；认证须二选一：Secret 私钥，或 Secret 密码（勿把密码放在 Variables，会在界面明文展示）。
+      - name: Detect deploy credentials
         id: deploy
         run: |
-          if [ -n "${{ secrets.AITRENDS_DEPLOY_HOST }}" ] && \
-             [ -n "${{ secrets.AITRENDS_DEPLOY_USER }}" ] && \
-             [ -n "${{ secrets.AITRENDS_DEPLOY_SSH_KEY }}" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "ready=${{ (secrets.AITRENDS_DEPLOY_HOST != '' || vars.AITRENDS_DEPLOY_HOST != '') && (secrets.AITRENDS_DEPLOY_USER != '' || vars.AITRENDS_DEPLOY_USER != '') && (secrets.AITRENDS_DEPLOY_SSH_KEY != '' || secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '') }}" >> "$GITHUB_OUTPUT"
+          echo "method=${{ secrets.AITRENDS_DEPLOY_SSH_KEY != '' && 'key' || (secrets.AITRENDS_DEPLOY_SSH_PASSWORD != '' && 'password' || 'none') }}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy over SSH
-        if: steps.deploy.outputs.ready == 'true'
+      # 远端目录与 systemd：Actions → Variables（AITRENDS_VM_*）；默认值见下方 env。
+      - name: Deploy over SSH (private key)
+        if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'key'
         uses: appleboy/ssh-action@v1.2.5
+        env:
+          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || '/opt/aitrends' }}
+          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
         with:
-          host: ${{ secrets.AITRENDS_DEPLOY_HOST }}
-          username: ${{ secrets.AITRENDS_DEPLOY_USER }}
+          host: ${{ secrets.AITRENDS_DEPLOY_HOST || vars.AITRENDS_DEPLOY_HOST }}
+          username: ${{ secrets.AITRENDS_DEPLOY_USER || vars.AITRENDS_DEPLOY_USER }}
           key: ${{ secrets.AITRENDS_DEPLOY_SSH_KEY }}
+          port: 22
           script_stop: true
           command_timeout: 25m
+          envs: VM_REPO_DIR,VM_SYSTEMD_UNIT
           script: |
             set -euo pipefail
-            cd /opt/aitrends
-            git pull origin main
-            export AITRENDS_DEPLOY_SYSTEMD_UNIT=aitrends-backend
+            cd "$VM_REPO_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT="$VM_SYSTEMD_UNIT"
             bash scripts/vm_deploy.sh
 
-      - name: Skip deploy (missing secrets)
+      - name: Deploy over SSH (password)
+        if: steps.deploy.outputs.ready == 'true' && steps.deploy.outputs.method == 'password'
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          VM_REPO_DIR: ${{ vars.AITRENDS_VM_REPO_DIR || '/opt/aitrends' }}
+          VM_SYSTEMD_UNIT: ${{ vars.AITRENDS_VM_SYSTEMD_UNIT || 'aitrends-backend' }}
+        with:
+          host: ${{ secrets.AITRENDS_DEPLOY_HOST || vars.AITRENDS_DEPLOY_HOST }}
+          username: ${{ secrets.AITRENDS_DEPLOY_USER || vars.AITRENDS_DEPLOY_USER }}
+          password: ${{ secrets.AITRENDS_DEPLOY_SSH_PASSWORD }}
+          port: 22
+          script_stop: true
+          command_timeout: 25m
+          envs: VM_REPO_DIR,VM_SYSTEMD_UNIT
+          script: |
+            set -euo pipefail
+            cd "$VM_REPO_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            export AITRENDS_DEPLOY_SYSTEMD_UNIT="$VM_SYSTEMD_UNIT"
+            bash scripts/vm_deploy.sh
+
+      - name: Skip deploy (missing credentials)
         if: steps.deploy.outputs.ready != 'true'
         run: |
-          echo "::notice::未配置完整的 GitHub Actions Secrets，已跳过远端 Linux 部署。"
-          echo "请在仓库 Settings → Secrets and variables → Actions 中设置："
-          echo "  AITRENDS_DEPLOY_HOST、AITRENDS_DEPLOY_USER、AITRENDS_DEPLOY_SSH_KEY"
+          echo "::notice::部署凭据不完整，已跳过远端 Linux 部署。"
+          echo "常见原因：把 HOST/USER/密码填在了 Variables，但此前工作流只读 Secrets；或缺少私钥/密码 Secret。"
+          echo ""
+          echo "请核对（名称须一致）："
+          echo "  • HOST：Secrets 或 Variables 任一设置 AITRENDS_DEPLOY_HOST"
+          echo "  • USER：Secrets 或 Variables 任一设置 AITRENDS_DEPLOY_USER"
+          echo "  • 登录方式（二选一）："
+          echo "      – Secrets → AITRENDS_DEPLOY_SSH_KEY（推荐，私钥全文）"
+          echo "      – Secrets → AITRENDS_DEPLOY_SSH_PASSWORD（密码勿放在 Variables，会明文可见）"
+          echo "  • 可选 Variables：AITRENDS_VM_REPO_DIR、AITRENDS_VM_SYSTEMD_UNIT"
           echo "说明见 docs/deploy-tencent-cvm.md §2.1"
