@@ -13,6 +13,8 @@
 
 后台管理路径为 **`/admin/`**，不向访客开放账号；如需自建实例见下文「本地运行」与 `docs/deploy-tencent-cvm.md`。
 
+**外部 Agent（含飞书机器人）接续开发**：请先阅读 **`docs/HANDOFF_AGENT_FEISHU.md`**（业务、路由、API、调度与部署导航）。
+
 ## 产品需求与实现设计
 
 - 需求主文档：`docs/requirements-master-v1.md`（含 **项目定位**：学习向、可全量重写、部署后议）
