@@ -1036,7 +1036,7 @@ export function App() {
                 <div>
                   <h3 style={{ margin: 0 }}>数据源</h3>
                   <p className="muted tiny" style={{ margin: "8px 0 0" }}>
-                    与后端内置列表一致：未入库时卡片为模板默认值；保存后展示<strong>库内实际</strong>接口与主题。定时拉取在「AI 资讯与数据」配置；连接器绑定标识后参与调度。
+                    与后端内置列表一致：未入库时卡片为模板默认值；保存后展示<strong>库内实际</strong>接口与主题。内置条数仅为模板数量，<strong>不限制</strong>你在下方表单添加的数据源总数。定时拉取在「AI 资讯与数据」配置；连接器绑定标识后参与调度。
                     GitLab 请用 <code>https://gitlab.com/api/v4/version</code> 等具体路径，测试时选「GitLab Private Token」并粘贴 PAT。
                   </p>
                   {sourcePresetsOrigin === "fallback" ? (

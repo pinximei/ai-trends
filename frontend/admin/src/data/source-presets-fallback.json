@@ -49,6 +49,18 @@
       "enabled": true
     },
     {
+      "source": "stackoverflow",
+      "label": "Stack Overflow",
+      "api_base": "https://api.stackexchange.com/2.3/info?site=stackoverflow",
+      "frequency": "scheduled",
+      "scope_label": "开发·问答",
+      "scope_labels": [
+        "开发·问答"
+      ],
+      "notes": "Stack Exchange API；公开配额可用，可选填 app key 提高限额。",
+      "enabled": true
+    },
+    {
       "source": "arxiv",
       "label": "arXiv",
       "api_base": "https://export.arxiv.org/api/query?search_query=all&start=0&max_results=1",
@@ -58,6 +70,90 @@
         "学术·论文"
       ],
       "notes": "arXiv 开放元数据与摘要，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "open_meteo",
+      "label": "Open-Meteo",
+      "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
+      "frequency": "scheduled",
+      "scope_label": "气象·公开数据",
+      "scope_labels": [
+        "气象·公开数据"
+      ],
+      "notes": "Open-Meteo 预报 JSON，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "coingecko",
+      "label": "CoinGecko",
+      "api_base": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=5&page=1&sparkline=false",
+      "frequency": "scheduled",
+      "scope_label": "加密·行情",
+      "scope_labels": [
+        "加密·行情"
+      ],
+      "notes": "CoinGecko 公开市场列表 JSON（公开 tier 有速率限制；勿用 /ping 短响应）。",
+      "enabled": true
+    },
+    {
+      "source": "pypi",
+      "label": "PyPI",
+      "api_base": "https://pypi.org/pypi/pip/json",
+      "frequency": "scheduled",
+      "scope_label": "AI｜工具链·Python",
+      "scope_labels": [
+        "AI｜工具链·Python"
+      ],
+      "notes": "PyPI 包元数据 JSON API，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "npm",
+      "label": "npm",
+      "api_base": "https://registry.npmjs.org/react/latest",
+      "frequency": "scheduled",
+      "scope_label": "AI｜工具链·Node",
+      "scope_labels": [
+        "AI｜工具链·Node"
+      ],
+      "notes": "npm Registry 包元数据，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "alphavantage",
+      "label": "Alpha Vantage",
+      "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
+      "frequency": "scheduled",
+      "scope_label": "财经·时间序列",
+      "scope_labels": [
+        "财经·时间序列"
+      ],
+      "notes": "Alpha Vantage 官方 demo key，仅用于连通与示例；生产请换自有 Key。",
+      "enabled": true
+    },
+    {
+      "source": "docker_hub",
+      "label": "Docker Hub",
+      "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
+      "frequency": "scheduled",
+      "scope_label": "AI｜工具链·容器",
+      "scope_labels": [
+        "AI｜工具链·容器"
+      ],
+      "notes": "Docker Hub 公开镜像元数据，免 Key。",
+      "enabled": true
+    },
+    {
+      "source": "crates_io",
+      "label": "crates.io",
+      "api_base": "https://crates.io/api/v1/crates/serde",
+      "frequency": "scheduled",
+      "scope_label": "AI｜工具链·Rust",
+      "scope_labels": [
+        "AI｜工具链·Rust"
+      ],
+      "notes": "crates.io 包元数据，免 Key。",
       "enabled": true
     },
     {

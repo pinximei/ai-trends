@@ -10,7 +10,9 @@ from .scope_labels_util import dump_scope_labels_json
 
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
-# 仅保留与「AI 资讯 / 模型 / 学术」直接相关、免密钥且响应足够长的公开端点；其它请在后台手动添加。
+# 下列为 **免密钥 GET 即可稳定 200** 且响应足够长的公开端点（便于连通与入库探测）。
+# 系统对「数据源」总条数 **没有上限**：后台「添加数据源」可任意新增标识并填写 Key；下列仅为内置一键模板。
+# 需 OAuth / 必 Key 的源（Product Hunt、NewsAPI、OpenAI 等）不在此插入，请自行在后台添加。
 # scope_label：标明所属领域/板块，便于与「行业→板块」前台结构对应。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
@@ -46,12 +48,76 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "notes": "Hacker News 官方 Firebase API：热门 story id 列表（免 Key）。勿用 maxitem 单数字端点（响应过短无法入库）。",
     },
     {
+        "source": "stackoverflow",
+        "enabled": True,
+        "api_base": "https://api.stackexchange.com/2.3/info?site=stackoverflow",
+        "api_key_masked": "",
+        "scope_label": "开发·问答",
+        "notes": "Stack Exchange API；公开配额可用，可选填 app key 提高限额。",
+    },
+    {
         "source": "arxiv",
         "enabled": True,
         "api_base": "https://export.arxiv.org/api/query?search_query=all&start=0&max_results=1",
         "api_key_masked": "",
         "scope_label": "学术·论文",
         "notes": "arXiv 开放元数据与摘要，免 Key。",
+    },
+    {
+        "source": "open_meteo",
+        "enabled": True,
+        "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
+        "api_key_masked": "",
+        "scope_label": "气象·公开数据",
+        "notes": "Open-Meteo 预报 JSON，免 Key。",
+    },
+    {
+        "source": "coingecko",
+        "enabled": True,
+        "api_base": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=5&page=1&sparkline=false",
+        "api_key_masked": "",
+        "scope_label": "加密·行情",
+        "notes": "CoinGecko 公开市场列表 JSON（公开 tier 有速率限制；勿用 /ping 短响应）。",
+    },
+    {
+        "source": "pypi",
+        "enabled": True,
+        "api_base": "https://pypi.org/pypi/pip/json",
+        "api_key_masked": "",
+        "scope_label": "AI｜工具链·Python",
+        "notes": "PyPI 包元数据 JSON API，免 Key。",
+    },
+    {
+        "source": "npm",
+        "enabled": True,
+        "api_base": "https://registry.npmjs.org/react/latest",
+        "api_key_masked": "",
+        "scope_label": "AI｜工具链·Node",
+        "notes": "npm Registry 包元数据，免 Key。",
+    },
+    {
+        "source": "alphavantage",
+        "enabled": True,
+        "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
+        "api_key_masked": "",
+        "scope_label": "财经·时间序列",
+        "notes": "Alpha Vantage 官方 demo key，仅用于连通与示例；生产请换自有 Key。",
+    },
+    {
+        "source": "docker_hub",
+        "enabled": True,
+        "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
+        "api_key_masked": "",
+        "scope_label": "AI｜工具链·容器",
+        "notes": "Docker Hub 公开镜像元数据，免 Key。",
+    },
+    {
+        "source": "crates_io",
+        "enabled": True,
+        "api_base": "https://crates.io/api/v1/crates/serde",
+        "api_key_masked": "",
+        "scope_label": "AI｜工具链·Rust",
+        "notes": "crates.io 包元数据，免 Key。",
     },
     {
         "source": "openalex",
@@ -69,13 +135,20 @@ PRESET_SOURCE_LABELS: dict[str, str] = {
     "huggingface": "Hugging Face",
     "huggingface_spaces": "Hugging Face Spaces",
     "hacker_news": "Hacker News",
+    "stackoverflow": "Stack Overflow",
     "arxiv": "arXiv",
+    "open_meteo": "Open-Meteo",
+    "coingecko": "CoinGecko",
+    "pypi": "PyPI",
+    "npm": "npm",
+    "alphavantage": "Alpha Vantage",
+    "docker_hub": "Docker Hub",
+    "crates_io": "crates.io",
     "openalex": "OpenAlex",
 }
 
-# 历史上由 ensure_mainstream_admin_sources 写入、但已从 MAINSTREAM_ADMIN_SOURCE_PRESETS 撤下的 source。
-# 应用启动时会删除 admin_source_configs 对应行及 admin_source_key 相同的 ProductConnector。
-# 注意：若自建数据源使用了与下列相同的 source 标识，也会被一并删除；请改用不与内置冲突的标识。
+# 历史上由 ensure_mainstream_admin_sources 写入、但已从产品移除的 source；启动时删库内对应行及同 admin_source_key 的连接器。
+# 勿把仍保留在 MAINSTREAM_ADMIN_SOURCE_PRESETS 中的标识放进本集合，否则会误删运营已配置的 Key。
 DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
     {
         "product_hunt",
@@ -86,14 +159,6 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "finnhub",
         "youtube_data",
         "mapbox",
-        "stackoverflow",
-        "open_meteo",
-        "coingecko",
-        "pypi",
-        "npm",
-        "alphavantage",
-        "docker_hub",
-        "crates_io",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
