@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from .domain.articles import (
     VALUE_SCORE_MIN,
     display_fingerprint,
+    extract_source_original_url_from_connector_snippet,
     feed_lane,
     feed_lane_for_article,
     ingest_duplicate_exists,
@@ -120,6 +121,8 @@ def create_published_articles_for_connector_targets(
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
         return 0
 
+    source_original_url = extract_source_original_url_from_connector_snippet(safe)
+
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
 
@@ -223,6 +226,7 @@ def create_published_articles_for_connector_targets(
             industry_id=industry_id,
             content_type="third_party_derived",
             third_party_source=f"{src_tag} / {connector_name}"[:512],
+            source_original_url=(source_original_url[:2048] if source_original_url else None),
             status="published",
             published_at=now,
             ingest_fingerprint=ing_fp,

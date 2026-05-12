@@ -6,6 +6,8 @@ export type ArticleCard = {
   segment_id: number;
   content_type: string;
   third_party_source: string | null;
+  /** 连接器原始条目 URL（若有） */
+  source_original_url?: string | null;
   published_at: string | null;
   categories?: string[];
 };

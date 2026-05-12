@@ -107,6 +107,8 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN feed_kind VARCHAR(8)"))
             if "ai_tabs_json" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN ai_tabs_json TEXT DEFAULT '[]'"))
+            if "source_original_url" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN source_original_url VARCHAR(2048)"))
         cols = _column_names(conn, "product_software_downloads")
         if cols:
             if "artifact_rel_path" not in cols:

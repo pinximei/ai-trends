@@ -88,6 +88,8 @@ class Article(Base):
     industry_id: Mapped[int] = mapped_column(Integer, ForeignKey("product_industries.id"), index=True)
     content_type: Mapped[str] = mapped_column(String(32), default="third_party_derived")
     third_party_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 连接器原始条目 URL（与 third_party_source 数据源标签互补，供追溯原文）
+    source_original_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     # 连接器原始响应指纹，用于入库前去重（与标题无关）
     ingest_fingerprint: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     # LLM 重写时给出的短标签类别 JSON 数组，例如 ["大模型","应用发布"]

@@ -81,6 +81,16 @@ export function ResourceDetailPage() {
               {t("source")}: {a.third_party_source}
             </span>
           ) : null}
+          {a.source_original_url ? (
+            <a
+              href={a.source_original_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-sky-600 hover:underline"
+            >
+              {t("sourceOriginal")}
+            </a>
+          ) : null}
         </div>
         {a.categories && a.categories.length > 0 ? (
           <div className="mt-4 flex flex-wrap gap-2">

@@ -46,6 +46,7 @@ const STRINGS: Record<string, string> = {
   evidence: "证据",
   source: "来源",
   link: "链接",
+  sourceOriginal: "原文链接",
   trace: "追溯链",
   categories: "分类分布",
   methodology: "方法论说明",

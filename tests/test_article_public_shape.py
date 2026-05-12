@@ -205,3 +205,18 @@ def test_merge_raw_appendix_when_model_tabs_are_thin() -> None:
     ing._merge_raw_appendix_if_tabs_thin(tabs, '{"repo":"demo","stars":42}', min_total=8000)
     assert "原始摘录" in tabs[-1]["body_md"]
     assert "stars" in tabs[-1]["body_md"]
+
+
+def test_extract_source_original_url_json_html_url() -> None:
+    payload = json.dumps({"title": "x", "html_url": "https://github.com/a/b/issues/1"}, ensure_ascii=False)
+    assert art.extract_source_original_url_from_connector_snippet(payload) == "https://github.com/a/b/issues/1"
+
+
+def test_extract_source_original_url_plain_text() -> None:
+    s = 'noise See https://example.com/path?q=1 for more.'
+    assert art.extract_source_original_url_from_connector_snippet(s) == "https://example.com/path?q=1"
+
+
+def test_extract_source_original_url_nested_list() -> None:
+    payload = json.dumps([{"url": "https://news.ycombinator.com/item?id=1"}], ensure_ascii=False)
+    assert art.extract_source_original_url_from_connector_snippet(payload) == "https://news.ycombinator.com/item?id=1"

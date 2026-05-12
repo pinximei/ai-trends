@@ -34,6 +34,77 @@ def display_fingerprint(title: str, summary: str) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:20]
 
 
+# —— 连接器片段 → 原始条目 URL（追溯用）——
+
+_URL_JSON_KEYS: tuple[str, ...] = (
+    "url",
+    "html_url",
+    "link",
+    "permalink",
+    "web_url",
+    "webUrl",
+    "article_url",
+    "story_url",
+    "href",
+    "canonical_url",
+    "uri",
+    "comments_url",
+)
+
+
+def _first_http_url_in_text(s: str) -> str | None:
+    m = re.search(r"https?://[^\s\"'<>)\]]{4,2000}", s, re.I)
+    if not m:
+        return None
+    return m.group(0).rstrip(".,);]}")
+
+
+def _extract_url_from_json_obj(obj: object, *, depth: int = 0) -> str | None:
+    if depth > 8:
+        return None
+    if isinstance(obj, str):
+        t = obj.strip()
+        if t.startswith(("http://", "https://")) and len(t) >= 12:
+            return t[:2048]
+        return None
+    if isinstance(obj, dict):
+        for k in _URL_JSON_KEYS:
+            if k in obj:
+                u = _extract_url_from_json_obj(obj[k], depth=depth + 1)
+                if u:
+                    return u
+        for v in obj.values():
+            u = _extract_url_from_json_obj(v, depth=depth + 1)
+            if u:
+                return u
+    if isinstance(obj, list):
+        for it in obj[:40]:
+            u = _extract_url_from_json_obj(it, depth=depth + 1)
+            if u:
+                return u
+    return None
+
+
+def extract_source_original_url_from_connector_snippet(snippet: str) -> str | None:
+    """
+    从连接器 HTTP 响应正文中尽量解析「原始条目」可点击 URL，供前台与后台与改写稿对应。
+
+    优先 JSON 常见字段（url/html_url/permalink 等），否则在文本中抓首条 http(s) 链接。
+    """
+    s = (snippet or "").strip()
+    if not s:
+        return None
+    head = s[:12000]
+    try:
+        payload = json.loads(head)
+    except Exception:
+        return (_first_http_url_in_text(head) or None)
+    u = _extract_url_from_json_obj(payload)
+    if u:
+        return u[:2048]
+    return _first_http_url_in_text(head)
+
+
 # —— 价值（规则，非 LLM）——
 
 VALUE_SCORE_MIN = 38.0

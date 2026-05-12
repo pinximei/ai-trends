@@ -768,6 +768,7 @@ def list_articles(
                 "published_at": r.published_at.isoformat() + "Z" if r.published_at else None,
                 "is_featured": r.is_featured,
                 "updated_at": r.updated_at.isoformat() + "Z" if r.updated_at else None,
+                "source_original_url": getattr(r, "source_original_url", None),
             }
             for r in rows
         ]
@@ -794,6 +795,7 @@ def get_article(
             "industry_id": a.industry_id,
             "content_type": a.content_type,
             "third_party_source": a.third_party_source,
+            "source_original_url": getattr(a, "source_original_url", None),
             "status": a.status,
             "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
             "is_featured": a.is_featured,
@@ -810,6 +812,7 @@ class ArticleCreate(BaseModel):
     industry_id: int
     content_type: str = "third_party_derived"
     third_party_source: str | None = None
+    source_original_url: str | None = None
     status: str = "draft"
     is_featured: bool = False
 
@@ -822,6 +825,7 @@ class ArticlePatch(BaseModel):
     segment_id: int | None = None
     content_type: str | None = None
     third_party_source: str | None = None
+    source_original_url: str | None = None
     status: str | None = None
     is_featured: bool | None = None
 
@@ -843,6 +847,7 @@ def create_article(
         industry_id=payload.industry_id,
         content_type=payload.content_type,
         third_party_source=payload.third_party_source,
+        source_original_url=(payload.source_original_url or "").strip() or None,
         status=payload.status,
         is_featured=payload.is_featured,
         published_at=datetime.utcnow() if payload.status == "published" else None,
@@ -865,6 +870,9 @@ def patch_article(
     if not a:
         raise HTTPException(404, "not found")
     data = payload.model_dump(exclude_unset=True)
+    if "source_original_url" in data:
+        v = data.get("source_original_url")
+        data["source_original_url"] = (v or "").strip() or None
     for k, v in data.items():
         setattr(a, k, v)
     if data.get("status") == "published" and not a.published_at:
