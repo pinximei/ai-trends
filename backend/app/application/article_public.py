@@ -31,6 +31,64 @@ def _article_title_summary_matches(a: Article, needle: str) -> bool:
     return n in hay
 
 
+def _feed_row_matches_list_filters(
+    a: Article,
+    *,
+    feed: str,
+    cat_filter: str | None,
+    search_n: str | None,
+) -> bool:
+    """与公开列表一致的泳道 / 类别 / 搜索筛选。"""
+    if _row_feed_lane(a) != feed:
+        return False
+    cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    if cat_filter and cats_list and cats_list[0] != cat_filter:
+        return False
+    if search_n and not _article_title_summary_matches(a, search_n):
+        return False
+    return True
+
+
+def _build_feed_fingerprint_winner_ids(
+    db: Session,
+    base_q: Select,
+    *,
+    feed: str,
+    cat_filter: str | None,
+    search_n: str | None,
+    max_scan_rows: int = 48_000,
+    batch: int = 500,
+) -> frozenset[int]:
+    """
+    从新到旧扫描 base_q 范围内文章，对每个「标题+摘要」展示指纹只保留 **最新一篇** 的 id。
+
+    解决连接器多日重复拉取、或 LLM 摘要微差导致 ingest 指纹不同而多次入库时，前台「昨天/今天」反复看到同一故事的问题。
+    仅影响公开 feed / 分类统计；不删库。
+    """
+    winner_by_fp: dict[str, int] = {}
+    internal: tuple[datetime, int] | None = None
+    scanned = 0
+    while scanned < max_scan_rows:
+        q2 = _apply_published_keyset(base_q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        rows = db.scalars(q2.limit(batch)).all()
+        if not rows:
+            break
+        for a in rows:
+            scanned += 1
+            if scanned > max_scan_rows:
+                break
+            if not _feed_row_matches_list_filters(a, feed=feed, cat_filter=cat_filter, search_n=search_n):
+                continue
+            fp = art.display_fingerprint(a.title, a.summary or "")
+            if fp not in winner_by_fp:
+                winner_by_fp[fp] = a.id
+        last = rows[-1]
+        internal = (last.published_at, last.id)
+        if len(rows) < batch or scanned >= max_scan_rows:
+            break
+    return frozenset(winner_by_fp.values())
+
+
 def _public_industry_ids_for_slug(db: Session, ind: Industry) -> list[int]:
     """前台 industry_slug=ai 时同时收录 taxonomy「domains」下连接器入库文章。"""
     ids = [ind.id]
@@ -167,6 +225,7 @@ def _collect_ordered_days_for_feed(
     feed: str,
     cat_filter: str | None,
     search_n: str | None,
+    winner_ids: frozenset[int],
     max_scan: int = 40000,
     batch: int = 400,
 ) -> tuple[list[date], bool]:
@@ -189,6 +248,8 @@ def _collect_ordered_days_for_feed(
             if cat_filter and cats_list and cats_list[0] != cat_filter:
                 continue
             if search_n and not _article_title_summary_matches(a, search_n):
+                continue
+            if a.id not in winner_ids:
                 continue
             d = a.published_at.date()
             if d not in seen:
@@ -245,8 +306,10 @@ def list_articles_feed_by_day_page(
     if not ind:
         return empty
 
+    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
+
     ordered_days, truncated = _collect_ordered_days_for_feed(
-        db, q, feed=feed, cat_filter=cat_filter, search_n=n
+        db, q, feed=feed, cat_filter=cat_filter, search_n=n, winner_ids=winner_ids
     )
     total_pages = len(ordered_days)
     if total_pages == 0:
@@ -281,6 +344,8 @@ def list_articles_feed_by_day_page(
         if cat_filter and cats_list and cats_list[0] != cat_filter:
             continue
         if n and not _article_title_summary_matches(a, n):
+            continue
+        if a.id not in winner_ids:
             continue
         fp = art.display_fingerprint(a.title, a.summary or "")
         if fp in seen_fp:
@@ -323,12 +388,15 @@ def list_article_category_facets(
     if not ind:
         return []
     n = normalize_feed_search(search)
+    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=None, search_n=n)
     rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
         if _row_feed_lane(a) != feed:
             continue
         if n and not _article_title_summary_matches(a, n):
+            continue
+        if a.id not in winner_ids:
             continue
         primary = art.primary_canonical_from_raw_labels(
             art.parse_category_labels_json(getattr(a, "ai_categories_json", None))
@@ -367,6 +435,8 @@ def list_articles_feed(
         return {"items": [], "next_cursor": None, "has_more": False, "page_size": page_size}
     n = normalize_feed_search(search)
 
+    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
+
     exclude = art.parse_exclude_fingerprints(exclude_fp)
     seen_fp: set[str] = set(exclude)
     out: list[dict] = []
@@ -389,6 +459,8 @@ def list_articles_feed(
             if cat_filter and cats_list and cats_list[0] != cat_filter:
                 continue
             if n and not _article_title_summary_matches(a, n):
+                continue
+            if a.id not in winner_ids:
                 continue
             fp = art.display_fingerprint(a.title, a.summary or "")
             if fp in seen_fp:

@@ -207,7 +207,7 @@ def create_published_articles_for_connector_targets(
         select(Article)
         .where(Article.industry_id == industry_id, Article.status == "published")
         .order_by(desc(Article.published_at))
-        .limit(80)
+        .limit(500)
     ).all()
     for a in recent:
         if display_fingerprint(a.title, a.summary or "") == disp_fp:
