@@ -3,7 +3,7 @@ import { publicApi } from "@/api/public";
 import { useI18n } from "@/i18n";
 
 export function AboutSitePage() {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [err, setErr] = useState("");
@@ -11,13 +11,13 @@ export function AboutSitePage() {
   useEffect(() => {
     setErr("");
     publicApi
-      .page("about", { lang })
+      .page("about")
       .then((p) => {
         setTitle(p.title);
         setBody(p.body_md);
       })
       .catch((e) => setErr(String(e)));
-  }, [lang]);
+  }, []);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">

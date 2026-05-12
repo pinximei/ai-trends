@@ -1,6 +1,5 @@
 import { publicGet } from "./client";
 import type { ArticleDetail, ArticleFeedCard, ArticlesFeedResponse } from "./types";
-import type { Lang } from "@/i18n";
 
 export { publicGet } from "./client";
 export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse } from "./types";
@@ -49,12 +48,9 @@ export const publicApi = {
     return publicGet<ArticlesFeedResponse>(`/api/public/v1/articles/feed?${sp.toString()}`);
   },
   article: (id: number) => publicGet<ArticleDetail>(`/api/public/v1/articles/${id}`),
-  page: (slug: string, opts?: { lang?: Lang }) => {
-    const sp = new URLSearchParams();
-    if (opts?.lang === "en") sp.set("lang", "en");
-    const qs = sp.toString();
+  page: (slug: string) => {
     return publicGet<{ title: string; body_md: string; updated_at: string }>(
-      `/api/public/v1/pages/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`,
+      `/api/public/v1/pages/${encodeURIComponent(slug)}`,
     );
   },
   softwareCategories: () =>

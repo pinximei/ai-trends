@@ -34,11 +34,11 @@ function summarize(text: string, max: number) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-function formatFeedDateLabel(isoDay: string, locale: "zh" | "en"): string {
+function formatFeedDateLabel(isoDay: string): string {
   if (!isoDay || isoDay === "_") return "—";
   const d = new Date(`${isoDay}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return isoDay;
-  return d.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "long", timeZone: "UTC" });
+  return d.toLocaleDateString("zh-CN", { dateStyle: "long", timeZone: "UTC" });
 }
 
 function isDayFeedResponse(d: unknown): d is ArticlesFeedDayResponse {
@@ -46,7 +46,7 @@ function isDayFeedResponse(d: unknown): d is ArticlesFeedDayResponse {
 }
 
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [timeKey, setTimeKey] = useState<TimeKey>("d30");
   const [feedPage, setFeedPage] = useState(1);
   const [jumpDraft, setJumpDraft] = useState("1");
@@ -276,7 +276,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           <div className="text-sm text-slate-600">
             <span className="font-semibold text-violet-700">{pageSummaryText}</span>
             {pageMeta.day_utc ? (
-              <span className="ml-2 text-slate-500">· UTC {formatFeedDateLabel(pageMeta.day_utc, lang)}</span>
+              <span className="ml-2 text-slate-500">· 世界时 {formatFeedDateLabel(pageMeta.day_utc)}</span>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -341,7 +341,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
               <Fragment key={dayKey}>
                 <div className="flex items-center gap-3 px-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-violet-600">
-                    {formatFeedDateLabel(dayKey, lang)}
+                    {formatFeedDateLabel(dayKey)}
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-violet-200 to-transparent" aria-hidden />
                 </div>

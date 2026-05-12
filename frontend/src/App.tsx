@@ -14,7 +14,7 @@ export default function App() {
   return (
     <I18nProvider>
       <BrowserRouter>
-        <Suspense fallback={<div className="px-6 py-12 text-sm text-slate-500">Loading…</div>}>
+        <Suspense fallback={<div className="px-6 py-12 text-sm text-slate-500">加载中…</div>}>
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Navigate to="/apps" replace />} />

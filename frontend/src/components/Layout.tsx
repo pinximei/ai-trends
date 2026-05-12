@@ -32,7 +32,7 @@ const nav = [
 ] as const;
 
 export function Layout() {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const loc = useLocation();
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
@@ -61,24 +61,24 @@ export function Layout() {
         </span>
         <span className="flex max-w-[62%] flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:max-w-none">
           <span className="hidden items-center gap-1 text-sky-600/90 sm:flex">
-            <Cpu className="h-3 w-3" /> link
+            <Cpu className="h-3 w-3" /> 链路
           </span>
           <span
             className="max-w-full truncate normal-case tracking-normal text-slate-500 max-sm:text-[9px]"
-            title={`UI ${uiRelease} · API ${apiRelease ?? "…"}`}
+            title={`界面 ${uiRelease} · 接口 ${apiRelease ?? "…"}`}
           >
-            build <span className="text-violet-600">{uiRelease}</span>
+            构建 <span className="text-violet-600">{uiRelease}</span>
             {apiRelease ? (
               <>
                 {" "}
-                · api <span className="text-sky-600">{apiRelease}</span>
+                · 接口 <span className="text-sky-600">{apiRelease}</span>
               </>
             ) : (
-              <span className="text-slate-400"> · api …</span>
+              <span className="text-slate-400"> · 接口 …</span>
             )}
           </span>
           <span className="text-slate-500 normal-case tracking-normal max-sm:text-[9px]">
-            {new Date().toISOString().slice(0, 10)} UTC
+            {new Date().toISOString().slice(0, 10)} 世界时
           </span>
         </span>
       </div>
@@ -118,26 +118,6 @@ export function Layout() {
             })}
           </nav>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50/90 p-1">
-              <button
-                type="button"
-                onClick={() => setLang("zh")}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                  lang === "zh" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                中文
-              </button>
-              <button
-                type="button"
-                onClick={() => setLang("en")}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                  lang === "en" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                EN
-              </button>
-            </div>
             <button
               type="button"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-amber-500 shadow-sm"
@@ -155,8 +135,8 @@ export function Layout() {
       <footer className="relative z-10 border-t border-slate-200/80 bg-white/60 py-8 text-center text-[11px] text-slate-500 backdrop-blur-sm">
         <p className="font-medium text-slate-600">{t("footer")}</p>
         <p className="mt-2 text-[10px] text-slate-400">
-          {lang === "zh" ? "版本" : "Release"}: UI {uiRelease}
-          {apiRelease ? ` · API ${apiRelease}` : ""}
+          版本：界面 {uiRelease}
+          {apiRelease ? ` · 接口 ${apiRelease}` : ""}
         </p>
         <Link to="/about" className="mt-2 inline-block text-violet-600 hover:underline">
           {t("navAbout")} · {t("footerAboutFull")}

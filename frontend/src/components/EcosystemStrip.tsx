@@ -2,19 +2,17 @@ import { motion } from "framer-motion";
 import { Github, Globe, Layers, Radio } from "lucide-react";
 
 const items = [
-  { icon: Github, label: "GitHub" },
-  { icon: Layers, label: "Hugging Face" },
-  { icon: Radio, label: "Hacker News" },
-  { icon: Globe, label: "Product Hunt" },
+  { icon: Github, label: "代码协作" },
+  { icon: Layers, label: "模型社区" },
+  { icon: Radio, label: "技术聚类" },
+  { icon: Globe, label: "产品发现" },
 ];
 
-/** 参考 Stripe / Vercel：生态来源条，带图标 */
-export function EcosystemStrip({ lang }: { lang: "zh" | "en" }) {
+/** 生态来源条（图标示意，名称已中文化） */
+export function EcosystemStrip() {
   return (
     <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-6 py-8">
-      <p className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.25em] text-slate-500">
-        {lang === "zh" ? "开放生态 · 多源汇聚" : "Open ecosystem · multi-source"}
-      </p>
+      <p className="mb-6 text-center font-mono text-[10px] tracking-[0.2em] text-slate-500">开放生态 · 多源汇聚</p>
       <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
         {items.map(({ icon: Icon, label }, i) => (
           <motion.div

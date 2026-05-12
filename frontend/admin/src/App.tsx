@@ -761,7 +761,7 @@ export function App() {
         <div className="admin-status-strip" aria-hidden="false">
           <span className="admin-status-strip__left">
             <span className="admin-status-pulse" />
-            AISoul Admin · Uplink
+            Ai-trends趋势 管理
           </span>
           <span className="admin-status-strip__right">
             <span className="admin-status-meta">
@@ -772,7 +772,7 @@ export function App() {
         </div>
         <main className="login-screen">
           <div className="login-brand">
-            <h1>AISoul Admin</h1>
+            <h1>Ai-trends趋势 管理</h1>
             <p>后台管理台 · 基于会话登录</p>
             <div className="muted tiny" style={{ marginTop: 10 }}>
               仅浏览可查数据；运营可管理数据源；管理员可管理账号。
@@ -809,7 +809,7 @@ export function App() {
       <div className="admin-status-strip">
         <span className="admin-status-strip__left">
           <span className="admin-status-pulse" />
-          AISoul Admin · Uplink
+          Ai-trends趋势 管理
         </span>
         <span className="admin-status-strip__right">
           <span className="admin-status-meta">
@@ -828,7 +828,7 @@ export function App() {
       </div>
       <main className="shell">
       <aside className="sidebar">
-        <h2 style={{ marginTop: 0 }}>AISoul Admin</h2>
+        <h2 style={{ marginTop: 0 }}>Ai-trends趋势 管理</h2>
         <p className="muted tiny">
           {me?.username} · {zhRole(me?.role)}
         </p>
@@ -924,8 +924,8 @@ export function App() {
               <div className="muted tiny">数据库: {health?.db ?? "-"}</div>
               <div className="muted tiny">更新时间: {health?.time ? new Date(health.time).toLocaleString() : "-"}</div>
               <div className="muted tiny" style={{ marginTop: 10 }}>
-                发布标识：前端 <strong style={{ color: "#e2e8f0" }}>{adminUiRelease}</strong> · API{" "}
-                <strong style={{ color: "#e2e8f0" }}>{publicApiRelease ?? "…"}</strong>
+                发布标识：前端 <strong style={{ color: "#312e81" }}>{adminUiRelease}</strong> · API{" "}
+                <strong style={{ color: "#312e81" }}>{publicApiRelease ?? "…"}</strong>
               </div>
             </section>
             {canManageSettings ? (
@@ -944,9 +944,10 @@ export function App() {
                     disabled={clearIngestBusy}
                     onClick={() => void onClearProductIngest()}
                     style={{
-                      borderColor: "rgba(248,113,113,0.55)",
-                      color: "#fecaca",
-                      background: "rgba(127,29,29,0.25)",
+                      border: "1px solid rgba(220, 38, 38, 0.45)",
+                      color: "#991b1b",
+                      background: "rgba(254, 226, 226, 0.95)",
+                      fontWeight: 600,
                       padding: "10px 16px",
                       borderRadius: 10,
                       cursor: clearIngestBusy ? "not-allowed" : "pointer",
@@ -979,9 +980,10 @@ export function App() {
                     disabled={themeFetchBusy || clearIngestBusy}
                     onClick={() => void onThemeFetch()}
                     style={{
-                      borderColor: "rgba(34,211,238,0.45)",
-                      color: "#cffafe",
-                      background: "rgba(14,116,144,0.28)",
+                      border: "1px solid rgba(14, 165, 233, 0.45)",
+                      color: "#0c4a6e",
+                      background: "rgba(224, 242, 254, 0.95)",
+                      fontWeight: 600,
                       padding: "10px 16px",
                       borderRadius: 10,
                       cursor: themeFetchBusy || clearIngestBusy ? "not-allowed" : "pointer",
@@ -1543,7 +1545,7 @@ export function App() {
               </p>
               {schedulerSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
-                  上次整批成功时间：<strong style={{ color: "#e2e8f0" }}>{schedulerSettings.last_connector_batch_at || "—（尚未成功跑过一批）"}</strong>
+                  上次整批成功时间：<strong style={{ color: "#312e81" }}>{schedulerSettings.last_connector_batch_at || "—（尚未成功跑过一批）"}</strong>
                   {" · "}
                   环境默认小时提示：{schedulerSettings.env_default_hours_hint}
                 </p>
@@ -1586,9 +1588,10 @@ export function App() {
                     disabled={clearIngestBusy}
                     onClick={() => void onClearProductIngest()}
                     style={{
-                      borderColor: "rgba(248,113,113,0.55)",
-                      color: "#fecaca",
-                      background: "rgba(127,29,29,0.25)",
+                      border: "1px solid rgba(220, 38, 38, 0.45)",
+                      color: "#991b1b",
+                      background: "rgba(254, 226, 226, 0.95)",
+                      fontWeight: 600,
                       padding: "10px 16px",
                       borderRadius: 10,
                       cursor: clearIngestBusy ? "not-allowed" : "pointer",
@@ -1625,9 +1628,10 @@ export function App() {
                       onClick={() => void onThemeFetch()}
                       style={{
                         marginTop: 10,
-                        borderColor: "rgba(34,211,238,0.45)",
-                        color: "#cffafe",
-                        background: "rgba(14,116,144,0.28)",
+                        border: "1px solid rgba(14, 165, 233, 0.45)",
+                        color: "#0c4a6e",
+                        background: "rgba(224, 242, 254, 0.95)",
+                        fontWeight: 600,
                         padding: "10px 16px",
                         borderRadius: 10,
                         cursor: themeFetchBusy || clearIngestBusy ? "not-allowed" : "pointer",
@@ -1696,7 +1700,7 @@ export function App() {
                     autoComplete="new-password"
                   />
                   <p className="muted tiny" style={{ marginTop: 6 }}>
-                    当前掩码：<strong style={{ color: "#e2e8f0" }}>{llmSettings?.api_key_masked || "—"}</strong>
+                    当前掩码：<strong style={{ color: "#312e81" }}>{llmSettings?.api_key_masked || "—"}</strong>
                   </p>
                 </div>
                 <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -1823,7 +1827,7 @@ export function App() {
                     {runtimeView?.secrets_note ?? "加载中…"}
                   </p>
                   <p className="muted tiny" style={{ marginTop: 8 }}>
-                    演示数据种子当前是否写入：<strong style={{ color: "#e2e8f0" }}>{runtimeView?.demo_seed_effective ? "是" : "否"}</strong>
+                    演示数据种子当前是否写入：<strong style={{ color: "#312e81" }}>{runtimeView?.demo_seed_effective ? "是" : "否"}</strong>
                     （未勾选「强制开启」时由 app_env 与 AITRENDS_ENABLE_DEMO_SEED 推断）
                   </p>
                   <form className="create-user-form" onSubmit={onSaveRuntime} style={{ marginTop: 14 }}>
@@ -1973,7 +1977,7 @@ export function App() {
                         <form className="create-user-form" onSubmit={onSaveSelectedAccount}>
                           <div className="user-detail-readonly muted tiny" style={{ marginBottom: 8 }}>
                             <div>
-                              登录名：<strong style={{ color: "#f8fafc" }}>{cur.username}</strong>
+                              登录名：<strong style={{ color: "#1e1b4b" }}>{cur.username}</strong>
                             </div>
                             <div style={{ marginTop: 4 }}>
                               失败次数：{cur.failed_attempts}
