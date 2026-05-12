@@ -223,14 +223,25 @@ export function App() {
     };
   }, [me]);
 
-  const filteredSources = useMemo(() => {
+  const filteredPresets = useMemo(() => {
     const q = sourceSearch.trim().toLowerCase();
-    if (!q) return sources;
-    return sources.filter((s) => s.source.toLowerCase().includes(q));
-  }, [sources, sourceSearch]);
+    if (!q) return sourcePresets;
+    return sourcePresets.filter(
+      (p) =>
+        p.source.toLowerCase().includes(q) ||
+        (p.label || "").toLowerCase().includes(q) ||
+        (p.api_base || "").toLowerCase().includes(q),
+    );
+  }, [sourcePresets, sourceSearch]);
 
-  /** 「全部数据源」不展示与上方「预设模板」同标识的库内占位行 */
-  const sourcesForBoard = useMemo(() => filteredSources, [filteredSources]);
+  const presetSourceIds = useMemo(() => new Set(sourcePresets.map((p) => p.source)), [sourcePresets]);
+
+  const customSourcesOnly = useMemo(() => {
+    const q = sourceSearch.trim().toLowerCase();
+    const base = sources.filter((s) => !presetSourceIds.has(s.source));
+    if (!q) return base;
+    return base.filter((s) => s.source.toLowerCase().includes(q));
+  }, [sources, presetSourceIds, sourceSearch]);
 
   async function requestMe(): Promise<Me | null> {
     try {
@@ -1023,12 +1034,10 @@ export function App() {
             <div className="card source-preset-hero">
               <div className="row between" style={{ flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
                 <div>
-                  <h3 style={{ margin: 0 }}>预设模板</h3>
+                  <h3 style={{ margin: 0 }}>数据源</h3>
                   <p className="muted tiny" style={{ margin: "8px 0 0" }}>
-                    与后端内置站点列表同步。点击某张卡片将把标识、API Base、主题标签等填入下方表单；补全 API Key 后保存即可。已配置的标识会标为「已有」。
-                    实际拉取间隔不在此页配置：请到「AI 资讯与数据」中的<strong>定时同步</strong>设置整批间隔；连接器绑定本页数据源标识后才会按该调度参与拉取。
-                    GitLab 请使用接口路径如 <code>https://gitlab.com/api/v4/version</code>，测试时授权方式选「GitLab Private Token」并粘贴 PAT；仅根路径{" "}
-                    <code>/api/v4</code> 常返回 404。若本机或服务器访问 gitlab.com 超时，多为网络限制，需代理或自建 GitLab。
+                    与后端内置列表一致：未入库时卡片为模板默认值；保存后展示<strong>库内实际</strong>接口与主题。定时拉取在「AI 资讯与数据」配置；连接器绑定标识后参与调度。
+                    GitLab 请用 <code>https://gitlab.com/api/v4/version</code> 等具体路径，测试时选「GitLab Private Token」并粘贴 PAT。
                   </p>
                   {sourcePresetsOrigin === "fallback" ? (
                     <p className="preset-fallback-hint" style={{ margin: "10px 0 0" }}>
@@ -1037,11 +1046,19 @@ export function App() {
                     </p>
                   ) : null}
                 </div>
-                <button type="button" className="btn-ghost" disabled={sourcePresetsLoading} onClick={() => loadSourcePresets()}>
-                  刷新模板列表
-                </button>
+                <div className="row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <input
+                    placeholder="筛选标识或名称（本地）"
+                    value={sourceSearch}
+                    onChange={(e) => setSourceSearch(e.target.value)}
+                    style={{ minWidth: 200 }}
+                  />
+                  <button type="button" className="btn-ghost" disabled={sourcePresetsLoading} onClick={() => loadSourcePresets()}>
+                    刷新列表
+                  </button>
+                </div>
               </div>
-              {sourcePresetsLoading ? <p className="muted tiny" style={{ marginTop: 12 }}>正在加载预设模板…</p> : null}
+              {sourcePresetsLoading ? <p className="muted tiny" style={{ marginTop: 12 }}>正在加载数据源列表…</p> : null}
               {sourcePresetsError ? (
                 <div className="row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 12 }}>
                   <span className="err-text">{sourcePresetsError}</span>
@@ -1052,288 +1069,291 @@ export function App() {
               ) : null}
               {!sourcePresetsLoading && !sourcePresetsError && sourcePresets.length === 0 ? (
                 <p className="muted tiny" style={{ marginTop: 12 }}>
-                  未获取到模板条目。请确认已登录且后端提供 <code>GET /api/admin/v1/sources/presets</code>，或点击「刷新模板列表」。
+                  未获取到条目。请确认已登录且后端提供 <code>GET /api/admin/v1/sources/presets</code>，或点击「刷新列表」。
                 </p>
               ) : null}
               {sourcePresets.length > 0 ? (
-                <div className="sources-board sources-board--presets">
-                  {sourcePresets.map((p) => {
-                    const exists = sources.some((s) => s.source === p.source);
-                    return (
-                      <article
-                        key={p.source}
-                        className={`source-card source-card--preset${exists ? " source-card--preset-exists" : ""}`}
-                        title={p.notes}
-                      >
-                        <div className="source-card__head">
-                          <h4 className="source-card__title">{p.label}</h4>
-                          <span className={exists ? "tag ok" : "tag"}>{exists ? "已有" : "模板"}</span>
-                        </div>
-                        <dl className="source-card__meta">
-                          <div className="source-card__meta-row">
-                            <dt>标识</dt>
-                            <dd style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{p.source}</dd>
-                          </div>
-                          <div className="source-card__meta-row">
-                            <dt>API Base</dt>
-                            <dd className="source-card__preset-url">{p.api_base || "—"}</dd>
-                          </div>
-                          <div className="source-card__meta-row">
-                            <dt>拉取节奏</dt>
-                            <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
-                          </div>
-                          {p.scope_label || (p.scope_labels && p.scope_labels.length > 0) ? (
-                            <div className="source-card__meta-row">
-                              <dt>主题</dt>
-                              <dd>{p.scope_labels?.length ? p.scope_labels.join("；") : p.scope_label}</dd>
+                <>
+                  {filteredPresets.length === 0 ? (
+                    <p className="muted tiny" style={{ marginTop: 12 }}>
+                      无匹配项，请调整筛选关键词。
+                    </p>
+                  ) : (
+                    <div className="sources-board sources-board--presets">
+                      {filteredPresets.map((p) => {
+                        const saved = sources.find((s) => s.source === p.source);
+                        const displayBase = (saved?.api_base || "").trim() || p.api_base || "";
+                        const scopeText =
+                          saved && ((saved.scope_labels && saved.scope_labels.length > 0) || (saved.scope_label || "").trim())
+                            ? saved.scope_labels && saved.scope_labels.length > 0
+                              ? saved.scope_labels.join("；")
+                              : saved.scope_label || ""
+                            : p.scope_labels && p.scope_labels.length > 0
+                              ? p.scope_labels.join("；")
+                              : p.scope_label || "";
+                        return (
+                          <article
+                            key={p.source}
+                            className={`source-card source-card--preset${saved ? " source-card--preset-exists" : ""}`}
+                            title={saved?.notes?.trim() ? saved.notes : p.notes}
+                          >
+                            <div className="source-card__head">
+                              <h4 className="source-card__title">{p.label}</h4>
+                              <span className={saved ? (saved.enabled ? "tag ok" : "tag") : "tag"}>
+                                {saved ? (saved.enabled ? "已启用" : "已停用") : "未入库"}
+                              </span>
                             </div>
-                          ) : null}
-                        </dl>
-                        {canOperate ? (
-                          <>
-                            <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                              <select
-                                title="GitLab 使用 PRIVATE-TOKEN 头"
-                                value={
-                                  sourceTestAuth[`preset:${p.source}`] ??
-                                  ((p.api_base || "").includes("gitlab") ? "private_token" : "bearer")
-                                }
-                                onChange={(e) =>
-                                  setSourceTestAuth((prev) => ({
-                                    ...prev,
-                                    [`preset:${p.source}`]: e.target.value as "bearer" | "private_token",
-                                  }))
-                                }
-                                style={{ minWidth: 118 }}
-                              >
-                                <option value="bearer">Bearer</option>
-                                <option value="private_token">GitLab PAT</option>
-                              </select>
-                              <input
-                                type="password"
-                                autoComplete="off"
-                                placeholder="测试用密钥（可选）"
-                                value={sourceTestKeys[`preset:${p.source}`] ?? ""}
-                                onChange={(e) =>
-                                  setSourceTestKeys((prev) => ({ ...prev, [`preset:${p.source}`]: e.target.value }))
-                                }
-                                style={{ minWidth: 140, flex: "1 1 140px", maxWidth: 220 }}
-                              />
-                              <button
-                                type="button"
-                                className="btn-ghost"
-                                disabled={
-                                  sourceTestLoading === `preset:${p.source}` || !(p.api_base || "").trim()
-                                }
-                                title={!(p.api_base || "").trim() ? "模板未配置 API Base" : "对模板中的接口地址发起 GET 测试"}
-                                onClick={() =>
-                                  void runSourceTest(
-                                    {
-                                      api_base: p.api_base,
-                                      api_key: sourceTestKeys[`preset:${p.source}`] ?? "",
-                                    },
-                                    `preset:${p.source}`,
-                                    sourceTestAuth[`preset:${p.source}`] ??
-                                      ((p.api_base || "").includes("gitlab") ? "private_token" : "bearer"),
-                                  )
-                                }
-                              >
-                                {sourceTestLoading === `preset:${p.source}` ? "测试中…" : "测试连接"}
-                              </button>
-                              <button type="button" className="btn-ghost" onClick={() => openPresetInEditor(p)}>
-                                编辑
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-ghost"
-                                disabled={!exists}
-                                title={exists ? "从库中删除该标识" : "库内尚无此标识，无需删除"}
-                                onClick={() => onDeleteSourceKey(p.source, p.label)}
-                              >
-                                删除
-                              </button>
-                            </div>
-                            {sourceTestResult?.key === `preset:${p.source}` ? (
-                              <div className="source-test-result" style={{ marginTop: 10 }}>
-                                <div className={sourceTestResult.ok ? "tag ok" : "tag"} style={{ display: "inline-block" }}>
-                                  HTTP {sourceTestResult.http_status}
-                                  {sourceTestResult.ok ? " · 可达" : " · 请检查地址或密钥"}
+                            <dl className="source-card__meta">
+                              <div className="source-card__meta-row">
+                                <dt>标识</dt>
+                                <dd style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{p.source}</dd>
+                              </div>
+                              <div className="source-card__meta-row">
+                                <dt>接口地址</dt>
+                                <dd className="source-card__preset-url">{displayBase || "—"}</dd>
+                              </div>
+                              <div className="source-card__meta-row">
+                                <dt>拉取节奏</dt>
+                                <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
+                              </div>
+                              {scopeText ? (
+                                <div className="source-card__meta-row">
+                                  <dt>领域主题</dt>
+                                  <dd>{scopeText}</dd>
                                 </div>
-                                {sourceTestResult.url_tested ? (
-                                  <div className="muted tiny" style={{ marginTop: 6 }}>
-                                    {sourceTestResult.url_tested}
+                              ) : null}
+                              {saved?.api_key_masked ? (
+                                <div className="source-card__meta-row">
+                                  <dt>密钥掩码</dt>
+                                  <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{saved.api_key_masked}</dd>
+                                </div>
+                              ) : null}
+                            </dl>
+                            {canOperate ? (
+                              <>
+                                <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                  <select
+                                    title="GitLab 使用 PRIVATE-TOKEN 头"
+                                    value={
+                                      sourceTestAuth[`preset:${p.source}`] ??
+                                      (displayBase.includes("gitlab") ? "private_token" : "bearer")
+                                    }
+                                    onChange={(e) =>
+                                      setSourceTestAuth((prev) => ({
+                                        ...prev,
+                                        [`preset:${p.source}`]: e.target.value as "bearer" | "private_token",
+                                      }))
+                                    }
+                                    style={{ minWidth: 118 }}
+                                  >
+                                    <option value="bearer">Bearer</option>
+                                    <option value="private_token">GitLab PAT</option>
+                                  </select>
+                                  <input
+                                    type="password"
+                                    autoComplete="off"
+                                    placeholder="测试用密钥（可选）"
+                                    value={sourceTestKeys[`preset:${p.source}`] ?? ""}
+                                    onChange={(e) =>
+                                      setSourceTestKeys((prev) => ({ ...prev, [`preset:${p.source}`]: e.target.value }))
+                                    }
+                                    style={{ minWidth: 140, flex: "1 1 140px", maxWidth: 220 }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    disabled={sourceTestLoading === `preset:${p.source}` || !displayBase.trim()}
+                                    title={!displayBase.trim() ? "无接口地址" : "对已保存配置或模板地址发起 GET 测试"}
+                                    onClick={() =>
+                                      void runSourceTest(
+                                        saved
+                                          ? { source: p.source, api_key: sourceTestKeys[`preset:${p.source}`] ?? "" }
+                                          : { api_base: displayBase, api_key: sourceTestKeys[`preset:${p.source}`] ?? "" },
+                                        `preset:${p.source}`,
+                                        sourceTestAuth[`preset:${p.source}`] ??
+                                          (displayBase.includes("gitlab") ? "private_token" : "bearer"),
+                                      )
+                                    }
+                                  >
+                                    {sourceTestLoading === `preset:${p.source}` ? "测试中…" : "测试连接"}
+                                  </button>
+                                  <button type="button" className="btn-ghost" onClick={() => openPresetInEditor(p)}>
+                                    编辑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    disabled={!saved}
+                                    title={saved ? "从库中删除该标识" : "库内尚无此标识，无需删除"}
+                                    onClick={() => onDeleteSourceKey(p.source, p.label)}
+                                  >
+                                    删除
+                                  </button>
+                                </div>
+                                {sourceTestResult?.key === `preset:${p.source}` ? (
+                                  <div className="source-test-result" style={{ marginTop: 10 }}>
+                                    <div className={sourceTestResult.ok ? "tag ok" : "tag"} style={{ display: "inline-block" }}>
+                                      HTTP {sourceTestResult.http_status}
+                                      {sourceTestResult.ok ? " · 可达" : " · 请检查地址或密钥"}
+                                    </div>
+                                    {sourceTestResult.url_tested ? (
+                                      <div className="muted tiny" style={{ marginTop: 6 }}>
+                                        {sourceTestResult.url_tested}
+                                      </div>
+                                    ) : null}
+                                    <pre
+                                      style={{
+                                        margin: "8px 0 0",
+                                        fontSize: 11,
+                                        maxHeight: 100,
+                                        overflow: "auto",
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                      }}
+                                    >
+                                      {sourceTestResult.snippet || "—"}
+                                    </pre>
                                   </div>
                                 ) : null}
-                                <pre
-                                  style={{
-                                    margin: "8px 0 0",
-                                    fontSize: 11,
-                                    maxHeight: 100,
-                                    overflow: "auto",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {sourceTestResult.snippet || "—"}
-                                </pre>
-                              </div>
+                              </>
                             ) : null}
-                          </>
-                        ) : null}
-                      </article>
-                    );
-                  })}
-                </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               ) : null}
             </div>
 
-            {sources.length > 0 ? (
-              <>
-                <div className="card compact row between" style={{ flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 16 }}>
-                  <div>
-                    <h3 style={{ margin: 0 }}>全部数据源</h3>
-                    <p className="muted tiny" style={{ margin: "6px 0 0" }}>
-                      共 {sourcesForBoard.length} 条（含与上方模板同标识的预置项，可直接改 API 与密钥）；可本地筛选标识。
-                    </p>
-                  </div>
-                  <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                    <input
-                      placeholder="筛选标识（本地）"
-                      value={sourceSearch}
-                      onChange={(e) => setSourceSearch(e.target.value)}
-                    />
-                  </div>
-                </div>
-                {sourcesForBoard.length > 0 ? (
-                  <div className="sources-board">
-                    {sourcesForBoard.map((s) => (
-                      <article key={s.source} className="source-card">
-                        <div className="source-card__head">
-                          <h4 className="source-card__title">{s.source}</h4>
-                          <span className={s.enabled ? "tag ok" : "tag"}>{s.enabled ? "已启用" : "已停用"}</span>
+            {customSourcesOnly.length > 0 ? (
+              <div className="card" style={{ marginTop: 16 }}>
+                <h3 style={{ margin: 0 }}>其它数据源</h3>
+                <p className="muted tiny" style={{ margin: "6px 0 0" }}>
+                  以下标识不在上方内置列表中，为手动添加；可测试、编辑或删除。
+                </p>
+                <div className="sources-board" style={{ marginTop: 12 }}>
+                  {customSourcesOnly.map((s) => (
+                    <article key={s.source} className="source-card">
+                      <div className="source-card__head">
+                        <h4 className="source-card__title">{s.source}</h4>
+                        <span className={s.enabled ? "tag ok" : "tag"}>{s.enabled ? "已启用" : "已停用"}</span>
+                      </div>
+                      <dl className="source-card__meta">
+                        <div className="source-card__meta-row">
+                          <dt>拉取节奏</dt>
+                          <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                         </div>
-                        <dl className="source-card__meta">
-                          <div className="source-card__meta-row">
-                            <dt>拉取节奏</dt>
-                            <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
-                          </div>
-                          <div className="source-card__meta-row">
-                            <dt>接口地址</dt>
-                            <dd>{s.api_base || "—"}</dd>
-                          </div>
-                          <div className="source-card__meta-row">
-                            <dt>领域主题</dt>
-                            <dd>
-                              {s.scope_labels && s.scope_labels.length > 0
-                                ? s.scope_labels.join("；")
-                                : s.scope_label?.trim()
-                                  ? s.scope_label
-                                  : "—"}
-                            </dd>
-                          </div>
-                          <div className="source-card__meta-row">
-                            <dt>密钥掩码</dt>
-                            <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{s.api_key_masked || "—"}</dd>
-                          </div>
-                          <div className="source-card__meta-row">
-                            <dt>备注</dt>
-                            <dd>{s.notes?.trim() ? s.notes : "—"}</dd>
-                          </div>
-                        </dl>
-                        {canOperate ? (
-                          <>
-                            <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                              <select
-                                title="GitLab 使用 PRIVATE-TOKEN 头"
-                                value={
+                        <div className="source-card__meta-row">
+                          <dt>接口地址</dt>
+                          <dd>{s.api_base || "—"}</dd>
+                        </div>
+                        <div className="source-card__meta-row">
+                          <dt>领域主题</dt>
+                          <dd>
+                            {s.scope_labels && s.scope_labels.length > 0
+                              ? s.scope_labels.join("；")
+                              : s.scope_label?.trim()
+                                ? s.scope_label
+                                : "—"}
+                          </dd>
+                        </div>
+                        <div className="source-card__meta-row">
+                          <dt>密钥掩码</dt>
+                          <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{s.api_key_masked || "—"}</dd>
+                        </div>
+                        <div className="source-card__meta-row">
+                          <dt>备注</dt>
+                          <dd>{s.notes?.trim() ? s.notes : "—"}</dd>
+                        </div>
+                      </dl>
+                      {canOperate ? (
+                        <>
+                          <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                            <select
+                              title="GitLab 使用 PRIVATE-TOKEN 头"
+                              value={
+                                sourceTestAuth[`saved:${s.source}`] ??
+                                ((s.api_base || "").includes("gitlab") ? "private_token" : "bearer")
+                              }
+                              onChange={(e) =>
+                                setSourceTestAuth((prev) => ({
+                                  ...prev,
+                                  [`saved:${s.source}`]: e.target.value as "bearer" | "private_token",
+                                }))
+                              }
+                              style={{ minWidth: 118 }}
+                            >
+                              <option value="bearer">Bearer</option>
+                              <option value="private_token">GitLab PAT</option>
+                            </select>
+                            <input
+                              type="password"
+                              autoComplete="off"
+                              placeholder="测试用密钥（可选）"
+                              value={sourceTestKeys[`saved:${s.source}`] ?? ""}
+                              onChange={(e) =>
+                                setSourceTestKeys((prev) => ({ ...prev, [`saved:${s.source}`]: e.target.value }))
+                              }
+                              style={{ minWidth: 140, flex: "1 1 140px", maxWidth: 220 }}
+                            />
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              disabled={sourceTestLoading === `saved:${s.source}` || !(s.api_base || "").trim()}
+                              title={!(s.api_base || "").trim() ? "请先填写接口地址" : "对已保存的接口地址发起 GET"}
+                              onClick={() =>
+                                void runSourceTest(
+                                  {
+                                    source: s.source,
+                                    api_key: sourceTestKeys[`saved:${s.source}`] ?? "",
+                                  },
+                                  `saved:${s.source}`,
                                   sourceTestAuth[`saved:${s.source}`] ??
-                                  ((s.api_base || "").includes("gitlab") ? "private_token" : "bearer")
-                                }
-                                onChange={(e) =>
-                                  setSourceTestAuth((prev) => ({
-                                    ...prev,
-                                    [`saved:${s.source}`]: e.target.value as "bearer" | "private_token",
-                                  }))
-                                }
-                                style={{ minWidth: 118 }}
-                              >
-                                <option value="bearer">Bearer</option>
-                                <option value="private_token">GitLab PAT</option>
-                              </select>
-                              <input
-                                type="password"
-                                autoComplete="off"
-                                placeholder="测试用密钥（可选）"
-                                value={sourceTestKeys[`saved:${s.source}`] ?? ""}
-                                onChange={(e) =>
-                                  setSourceTestKeys((prev) => ({ ...prev, [`saved:${s.source}`]: e.target.value }))
-                                }
-                                style={{ minWidth: 140, flex: "1 1 140px", maxWidth: 220 }}
-                              />
-                              <button
-                                type="button"
-                                className="btn-ghost"
-                                disabled={sourceTestLoading === `saved:${s.source}` || !(s.api_base || "").trim()}
-                                title={!(s.api_base || "").trim() ? "请先填写接口地址" : "对已保存的接口地址发起 GET"}
-                                onClick={() =>
-                                  void runSourceTest(
-                                    {
-                                      source: s.source,
-                                      api_key: sourceTestKeys[`saved:${s.source}`] ?? "",
-                                    },
-                                    `saved:${s.source}`,
-                                    sourceTestAuth[`saved:${s.source}`] ??
-                                      ((s.api_base || "").includes("gitlab") ? "private_token" : "bearer"),
-                                  )
-                                }
-                              >
-                                {sourceTestLoading === `saved:${s.source}` ? "测试中…" : "测试连接"}
-                              </button>
-                              <button type="button" className="btn-ghost" onClick={() => fillSourceFormFromRow(s)}>
-                                编辑
-                              </button>
-                              <button type="button" className="btn-ghost" onClick={() => onDeleteSourceKey(s.source, s.source)}>
-                                删除
-                              </button>
-                            </div>
-                            {sourceTestResult?.key === `saved:${s.source}` ? (
-                              <div className="source-test-result" style={{ marginTop: 10 }}>
-                                <div className={sourceTestResult.ok ? "tag ok" : "tag"} style={{ display: "inline-block" }}>
-                                  HTTP {sourceTestResult.http_status}
-                                  {sourceTestResult.ok ? " · 可达" : " · 请检查地址或密钥"}
-                                </div>
-                                {sourceTestResult.url_tested ? (
-                                  <div className="muted tiny" style={{ marginTop: 6 }}>
-                                    {sourceTestResult.url_tested}
-                                  </div>
-                                ) : null}
-                                <pre
-                                  style={{
-                                    margin: "8px 0 0",
-                                    fontSize: 11,
-                                    maxHeight: 100,
-                                    overflow: "auto",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {sourceTestResult.snippet || "—"}
-                                </pre>
+                                    ((s.api_base || "").includes("gitlab") ? "private_token" : "bearer"),
+                                )
+                              }
+                            >
+                              {sourceTestLoading === `saved:${s.source}` ? "测试中…" : "测试连接"}
+                            </button>
+                            <button type="button" className="btn-ghost" onClick={() => fillSourceFormFromRow(s)}>
+                              编辑
+                            </button>
+                            <button type="button" className="btn-ghost" onClick={() => onDeleteSourceKey(s.source, s.source)}>
+                              删除
+                            </button>
+                          </div>
+                          {sourceTestResult?.key === `saved:${s.source}` ? (
+                            <div className="source-test-result" style={{ marginTop: 10 }}>
+                              <div className={sourceTestResult.ok ? "tag ok" : "tag"} style={{ display: "inline-block" }}>
+                                HTTP {sourceTestResult.http_status}
+                                {sourceTestResult.ok ? " · 可达" : " · 请检查地址或密钥"}
                               </div>
-                            ) : null}
-                          </>
-                        ) : null}
-                      </article>
-                    ))}
-                  </div>
-                ) : filteredSources.length > 0 ? (
-                  <p className="muted tiny">
-                    当前结果均为与预设模板同标识的占位，已不在此列表展示；请调整筛选或添加其它标识的数据源。
-                  </p>
-                ) : (
-                  <p className="muted tiny">无匹配项，请清空筛选关键词。</p>
-                )}
-              </>
+                              {sourceTestResult.url_tested ? (
+                                <div className="muted tiny" style={{ marginTop: 6 }}>
+                                  {sourceTestResult.url_tested}
+                                </div>
+                              ) : null}
+                              <pre
+                                style={{
+                                  margin: "8px 0 0",
+                                  fontSize: 11,
+                                  maxHeight: 100,
+                                  overflow: "auto",
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {sourceTestResult.snippet || "—"}
+                              </pre>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </div>
             ) : null}
 
             <div className="source-card-wrap" style={{ marginTop: 16 }}>
@@ -1343,7 +1363,7 @@ export function App() {
                   <span className="tag">表单</span>
                 </div>
                 <p className="muted tiny" style={{ margin: 0 }}>
-                  填写标识与接口信息保存即可；标识与已有 source 相同时为更新。也可在上方「预设模板」或「全部数据源」卡片上点击「编辑」载入表单。
+                  填写标识与接口信息保存即可；标识与已有 source 相同时为更新。也可在上方「数据源」卡片上点击「编辑」载入表单。
                 </p>
                 <form className="source-card__form" onSubmit={onSaveSource}>
                   <div className="form-field">
