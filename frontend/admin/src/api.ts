@@ -198,10 +198,6 @@ export const adminApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
-  deleteSource: (source: string) =>
-    request<{ deleted: string }>(`/api/admin/v1/sources/${encodeURIComponent(source)}`, {
-      method: "DELETE",
-    }),
   seedDemo: () => request("/api/admin/v1/bootstrap/seed-demo", { method: "POST" }),
   clearDemo: () => request("/api/admin/v1/bootstrap/clear-demo", { method: "POST" }),
   /** 仅管理员：清空连接器入库数据（文章/指标点/同步日志/热门快照/LLM 用量），重置连接器上次同步时间 */

@@ -61,7 +61,7 @@ AITRENDS_DEPLOY_HOST=你的公网IP AITRENDS_DEPLOY_USER=ubuntu AITRENDS_DEPLOY_
 
 ### 2.2 Actions / SSH 部署失败排查
 
-- **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（工作流已加入 `pg_isready` 等待，仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
+- **pytest 在 Actions 里失败**：查看 Run 日志中「Install dependencies & run tests」步骤；常见原因是数据库尚未接受连接（`postgres` 服务容器在 Docker 健康检查里用 `pg_isready`，Actions 在步骤开始前会等服务就绪；仍失败时可重试 Run）。本地对齐验证：`docker compose`/临时 Postgres + `AITRENDS_DATABASE_URL` 后执行 `python -m pytest tests/`。
 - **凭据不完整被跳过**：须同时具备 **HOST + USER**（Secrets 或 Variables 均可）以及 **私钥或密码之一**（**`AITRENDS_DEPLOY_SSH_KEY` / `AITRENDS_DEPLOY_SSH_PASSWORD` 只能放在 Secrets**）。仅把密码写在 Variables 无效且不安全。
 - **SSH 报 `cd: /opt/aitrends: No such file`** 或 **`VM_REPO_DIR: unbound variable`**：在 **Variables 或 Secrets** 配置远端路径（**`AITRENDS_DEPLOY_VM_REPO_DIR`** / **`AITRENDS_DEPLOY_DIR`** 等）与 **`AITRENDS_DEPLOY_SYSTEMD_UNIT`**（或 Variables 里 **`AITRENDS_VM_*`**）。**「Resolve VM paths for SSH」** 会把解析结果写入 step output 再 SSH；若路径只写在 Secrets 里，须使用已合并读取 secrets 的工作流版本。
 - **SSH 其它报错**：在 VM 上确认远端目录可 **`git fetch`**，且 **`git reset --hard <目标提交>`** 成功（私仓需 [Deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)）；手动执行：  
