@@ -761,7 +761,7 @@ export function App() {
         <div className="admin-status-strip" aria-hidden="false">
           <span className="admin-status-strip__left">
             <span className="admin-status-pulse" />
-            Ai-trends趋势 管理
+            Ai-trends 管理
           </span>
           <span className="admin-status-strip__right">
             <span className="admin-status-meta">
@@ -772,7 +772,7 @@ export function App() {
         </div>
         <main className="login-screen">
           <div className="login-brand">
-            <h1>Ai-trends趋势 管理</h1>
+            <h1>Ai-trends 管理</h1>
             <p>后台管理台 · 基于会话登录</p>
             <div className="muted tiny" style={{ marginTop: 10 }}>
               仅浏览可查数据；运营可管理数据源；管理员可管理账号。
@@ -809,7 +809,7 @@ export function App() {
       <div className="admin-status-strip">
         <span className="admin-status-strip__left">
           <span className="admin-status-pulse" />
-          Ai-trends趋势 管理
+          Ai-trends 管理
         </span>
         <span className="admin-status-strip__right">
           <span className="admin-status-meta">
@@ -828,7 +828,7 @@ export function App() {
       </div>
       <main className="shell">
       <aside className="sidebar">
-        <h2 style={{ marginTop: 0 }}>Ai-trends趋势 管理</h2>
+        <h2 style={{ marginTop: 0 }}>Ai-trends 管理</h2>
         <p className="muted tiny">
           {me?.username} · {zhRole(me?.role)}
         </p>

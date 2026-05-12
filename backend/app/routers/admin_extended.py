@@ -422,6 +422,7 @@ def run_connector_sync(
                     http_status=status_code or 0,
                     snippet=snippet,
                     now=now,
+                    connector_sync_log_id=log.id,
                 )
                 for i, t in enumerate(targets):
                     m = first_metric_for_segment(db, t["segment_id"])
@@ -467,6 +468,7 @@ def run_connector_sync(
                         http_status=status_code or 0,
                         snippet=snippet,
                         now=now,
+                        connector_sync_log_id=log.id,
                     )
         c.last_sync_at = now
         c.last_error = err
@@ -769,6 +771,8 @@ def list_articles(
                 "is_featured": r.is_featured,
                 "updated_at": r.updated_at.isoformat() + "Z" if r.updated_at else None,
                 "source_original_url": getattr(r, "source_original_url", None),
+                "connector_sync_log_id": getattr(r, "connector_sync_log_id", None),
+                "source_external_id": getattr(r, "source_external_id", None),
             }
             for r in rows
         ]
@@ -796,6 +800,8 @@ def get_article(
             "content_type": a.content_type,
             "third_party_source": a.third_party_source,
             "source_original_url": getattr(a, "source_original_url", None),
+            "connector_sync_log_id": getattr(a, "connector_sync_log_id", None),
+            "source_external_id": getattr(a, "source_external_id", None),
             "status": a.status,
             "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
             "is_featured": a.is_featured,
@@ -813,6 +819,8 @@ class ArticleCreate(BaseModel):
     content_type: str = "third_party_derived"
     third_party_source: str | None = None
     source_original_url: str | None = None
+    connector_sync_log_id: int | None = None
+    source_external_id: str | None = None
     status: str = "draft"
     is_featured: bool = False
 
@@ -826,6 +834,8 @@ class ArticlePatch(BaseModel):
     content_type: str | None = None
     third_party_source: str | None = None
     source_original_url: str | None = None
+    connector_sync_log_id: int | None = None
+    source_external_id: str | None = None
     status: str | None = None
     is_featured: bool | None = None
 
@@ -848,6 +858,8 @@ def create_article(
         content_type=payload.content_type,
         third_party_source=payload.third_party_source,
         source_original_url=(payload.source_original_url or "").strip() or None,
+        connector_sync_log_id=payload.connector_sync_log_id,
+        source_external_id=(payload.source_external_id or "").strip() or None,
         status=payload.status,
         is_featured=payload.is_featured,
         published_at=datetime.utcnow() if payload.status == "published" else None,
@@ -873,6 +885,9 @@ def patch_article(
     if "source_original_url" in data:
         v = data.get("source_original_url")
         data["source_original_url"] = (v or "").strip() or None
+    if "source_external_id" in data:
+        v = data.get("source_external_id")
+        data["source_external_id"] = (v or "").strip() or None
     for k, v in data.items():
         setattr(a, k, v)
     if data.get("status") == "published" and not a.published_at:

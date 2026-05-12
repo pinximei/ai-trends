@@ -91,6 +91,16 @@ export function ResourceDetailPage() {
               {t("sourceOriginal")}
             </a>
           ) : null}
+          {a.source_external_id ? (
+            <span className="font-mono text-[11px] text-slate-600">
+              {t("sourceExternalId")}: {a.source_external_id}
+            </span>
+          ) : null}
+          {a.connector_sync_log_id != null && a.connector_sync_log_id !== undefined ? (
+            <span className="font-mono text-[11px] text-slate-600">
+              {t("connectorSyncBatch")}: #{a.connector_sync_log_id}
+            </span>
+          ) : null}
         </div>
         {a.categories && a.categories.length > 0 ? (
           <div className="mt-4 flex flex-wrap gap-2">

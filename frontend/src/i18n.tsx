@@ -6,7 +6,7 @@ export type Lang = "zh";
 export const UI_LANG: Lang = "zh";
 
 const STRINGS: Record<string, string> = {
-  brand: "Ai-trends趋势",
+  brand: "Ai-trends",
   tagline: "AI 应用与资讯精选",
   navHome: "首页",
   navTrends: "趋势",
@@ -47,6 +47,8 @@ const STRINGS: Record<string, string> = {
   source: "来源",
   link: "链接",
   sourceOriginal: "原文链接",
+  sourceExternalId: "原始条目 ID",
+  connectorSyncBatch: "同步批次",
   trace: "追溯链",
   categories: "分类分布",
   methodology: "方法论说明",

@@ -105,6 +105,89 @@ def extract_source_original_url_from_connector_snippet(snippet: str) -> str | No
     return _first_http_url_in_text(head)
 
 
+# —— 连接器片段 → 上游条目 ID（与改写稿 id 对应）——
+
+
+def _normalize_upstream_id_value(val: object) -> str | None:
+    if val is None or isinstance(val, bool):
+        return None
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, float) and val == int(val):
+        return str(int(val))
+    if isinstance(val, str):
+        s = val.strip()
+        if 1 <= len(s) <= 512:
+            return s
+    return None
+
+
+def _extract_external_id_from_dict(d: dict) -> str | None:
+    """从单条业务对象上取常见主键字段（浅层）。"""
+    for k in (
+        "node_id",
+        "objectID",
+        "object_id",
+        "objectId",
+        "story_id",
+        "uuid",
+        "sha",
+        "databaseId",
+        "database_id",
+    ):
+        if k in d:
+            sid = _normalize_upstream_id_value(d[k])
+            if sid:
+                return sid
+    if "id" in d:
+        sid = _normalize_upstream_id_value(d["id"])
+        if sid:
+            return sid
+    return None
+
+
+def extract_source_external_id_from_connector_snippet(snippet: str) -> str | None:
+    """
+    从连接器 JSON 中解析上游「原始条目」的稳定标识（如 HN Algolia 的 objectID、GitHub 的 node_id 或数字 id）。
+
+    与 ``Article.id``（改写后入库主键）并列存储，便于后台/运营把改写稿与原始接口对象对应起来。
+    """
+    s = (snippet or "").strip()[:12000]
+    try:
+        payload = json.loads(s)
+    except Exception:
+        return None
+    if isinstance(payload, list):
+        for it in payload[:8]:
+            if isinstance(it, dict):
+                sid = _extract_external_id_from_dict(it)
+                if sid:
+                    return sid
+        return None
+    if isinstance(payload, dict):
+        hits = payload.get("hits")
+        if isinstance(hits, list) and hits:
+            h0 = hits[0]
+            if isinstance(h0, dict):
+                sid = _extract_external_id_from_dict(h0)
+                if sid:
+                    return sid
+        items = payload.get("items")
+        if isinstance(items, list) and items:
+            i0 = items[0]
+            if isinstance(i0, dict):
+                sid = _extract_external_id_from_dict(i0)
+                if sid:
+                    return sid
+        data = payload.get("data")
+        if isinstance(data, dict):
+            sid = _extract_external_id_from_dict(data)
+            if sid:
+                return sid
+        return _extract_external_id_from_dict(payload)
+    return None
+
+
 # —— 价值（规则，非 LLM）——
 
 VALUE_SCORE_MIN = 38.0

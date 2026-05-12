@@ -220,3 +220,23 @@ def test_extract_source_original_url_plain_text() -> None:
 def test_extract_source_original_url_nested_list() -> None:
     payload = json.dumps([{"url": "https://news.ycombinator.com/item?id=1"}], ensure_ascii=False)
     assert art.extract_source_original_url_from_connector_snippet(payload) == "https://news.ycombinator.com/item?id=1"
+
+
+def test_extract_source_external_id_hits_object_id() -> None:
+    payload = json.dumps({"hits": [{"objectID": "hn-123", "url": "https://example.com/x"}]}, ensure_ascii=False)
+    assert art.extract_source_external_id_from_connector_snippet(payload) == "hn-123"
+
+
+def test_extract_source_external_id_items_node_id() -> None:
+    payload = json.dumps({"items": [{"node_id": "MDEwOlJlcG9zaXRvcnkx", "id": 1}]}, ensure_ascii=False)
+    assert art.extract_source_external_id_from_connector_snippet(payload) == "MDEwOlJlcG9zaXRvcnkx"
+
+
+def test_extract_source_external_id_list_root() -> None:
+    payload = json.dumps([{"id": 42, "title": "x"}], ensure_ascii=False)
+    assert art.extract_source_external_id_from_connector_snippet(payload) == "42"
+
+
+def test_extract_source_external_id_invalid_returns_none() -> None:
+    assert art.extract_source_external_id_from_connector_snippet("not json") is None
+    assert art.extract_source_external_id_from_connector_snippet("{}") is None

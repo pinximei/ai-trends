@@ -8,6 +8,10 @@ export type ArticleCard = {
   third_party_source: string | null;
   /** 连接器原始条目 URL（若有） */
   source_original_url?: string | null;
+  /** 连接器单次 HTTP 同步日志 id（与后台 product_connector_logs 对应） */
+  connector_sync_log_id?: number | null;
+  /** 上游 API 条目的稳定 id（如 HN objectID、GitHub node_id） */
+  source_external_id?: string | null;
   published_at: string | null;
   categories?: string[];
 };

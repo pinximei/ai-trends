@@ -90,6 +90,10 @@ class Article(Base):
     third_party_source: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 连接器原始条目 URL（与 third_party_source 数据源标签互补，供追溯原文）
     source_original_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    # 本次 HTTP 同步对应 product_connector_logs.id（一次拉取一条日志，与入库改写稿对应）
+    connector_sync_log_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # 上游 JSON 中的条目主键（如 objectID、node_id），与 Article.id 并列可查
+    source_external_id: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
     # 连接器原始响应指纹，用于入库前去重（与标题无关）
     ingest_fingerprint: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     # LLM 重写时给出的短标签类别 JSON 数组，例如 ["大模型","应用发布"]
