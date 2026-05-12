@@ -88,7 +88,7 @@ class Article(Base):
     industry_id: Mapped[int] = mapped_column(Integer, ForeignKey("product_industries.id"), index=True)
     content_type: Mapped[str] = mapped_column(String(32), default="third_party_derived")
     third_party_source: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 连接器原始条目 URL（与 third_party_source 数据源标签互补，供追溯原文）
+    # 历史列：曾存连接器解析出的外链；当前产品不再写入或对外返回，可逐步废弃
     source_original_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     # 本次 HTTP 同步对应 product_connector_logs.id（一次拉取一条日志，与入库改写稿对应）
     connector_sync_log_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)

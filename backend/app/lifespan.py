@@ -30,7 +30,18 @@ def _startup_sync() -> None:
         ensure_default_admin(db)
         from .services import ensure_mainstream_admin_sources, seed_if_empty
 
+        from .product_connectors_bootstrap import (
+            ensure_core_admin_connectors,
+            prune_discontinued_bootstrap_admin_sources,
+            repair_github_admin_source_if_still_zen,
+            repair_short_probe_admin_sources,
+        )
+
         ensure_mainstream_admin_sources(db)
+        prune_discontinued_bootstrap_admin_sources(db)
+        repair_github_admin_source_if_still_zen(db)
+        repair_short_probe_admin_sources(db)
+        ensure_core_admin_connectors(db)
         if demo_seed_enabled_effective():
             seed_if_empty(db)
             from .product_seed import (

@@ -3,7 +3,7 @@ AI 资讯「Agent」——刻意保持为线性流水线（非多智能体），
 
 实现落点（单一事实来源）：
 1. 连接器拉取：`routers.admin_extended` / 连接器 `config_json`。
-2. 入库前 HTTP 正文批去重：`domain.articles.ingest_fingerprint` + `ingest_duplicate_exists`（`article_ingest`）。
+2. 入库前去重：整段 HTTP 正文 ``ingest_fingerprint``；若解析到上游 ``source_external_id`` 则同行业内重复亦跳过（`article_ingest`）。
 3. 规则门槛：`domain.articles.rule_value_score` 与 `VALUE_SCORE_MIN`（`article_ingest`）。
 4. 强制 LLM 重写：OpenAI 兼容 `POST {base}/chat/completions`（`llm_service.polish_connector_article`），
    须输出分类 + 多 tab（概要/详情 Markdown）；失败或未配置 Key 则不入库。

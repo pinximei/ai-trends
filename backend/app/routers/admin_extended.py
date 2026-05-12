@@ -770,7 +770,6 @@ def list_articles(
                 "published_at": r.published_at.isoformat() + "Z" if r.published_at else None,
                 "is_featured": r.is_featured,
                 "updated_at": r.updated_at.isoformat() + "Z" if r.updated_at else None,
-                "source_original_url": getattr(r, "source_original_url", None),
                 "connector_sync_log_id": getattr(r, "connector_sync_log_id", None),
                 "source_external_id": getattr(r, "source_external_id", None),
             }
@@ -799,7 +798,6 @@ def get_article(
             "industry_id": a.industry_id,
             "content_type": a.content_type,
             "third_party_source": a.third_party_source,
-            "source_original_url": getattr(a, "source_original_url", None),
             "connector_sync_log_id": getattr(a, "connector_sync_log_id", None),
             "source_external_id": getattr(a, "source_external_id", None),
             "status": a.status,
@@ -818,7 +816,6 @@ class ArticleCreate(BaseModel):
     industry_id: int
     content_type: str = "third_party_derived"
     third_party_source: str | None = None
-    source_original_url: str | None = None
     connector_sync_log_id: int | None = None
     source_external_id: str | None = None
     status: str = "draft"
@@ -833,7 +830,6 @@ class ArticlePatch(BaseModel):
     segment_id: int | None = None
     content_type: str | None = None
     third_party_source: str | None = None
-    source_original_url: str | None = None
     connector_sync_log_id: int | None = None
     source_external_id: str | None = None
     status: str | None = None
@@ -857,7 +853,6 @@ def create_article(
         industry_id=payload.industry_id,
         content_type=payload.content_type,
         third_party_source=payload.third_party_source,
-        source_original_url=(payload.source_original_url or "").strip() or None,
         connector_sync_log_id=payload.connector_sync_log_id,
         source_external_id=(payload.source_external_id or "").strip() or None,
         status=payload.status,
@@ -882,9 +877,6 @@ def patch_article(
     if not a:
         raise HTTPException(404, "not found")
     data = payload.model_dump(exclude_unset=True)
-    if "source_original_url" in data:
-        v = data.get("source_original_url")
-        data["source_original_url"] = (v or "").strip() or None
     if "source_external_id" in data:
         v = data.get("source_external_id")
         data["source_external_id"] = (v or "").strip() or None

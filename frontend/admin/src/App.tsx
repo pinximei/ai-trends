@@ -1,7 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { adminApi } from "./api";
 import { DataQueryPanel } from "./DataQueryPanel";
-import { PRESET_TEMPLATE_SOURCE_SLUGS } from "./presetTemplateSlugs";
 
 function zhRole(role: string | undefined) {
   if (!role) return "—";
@@ -231,10 +230,7 @@ export function App() {
   }, [sources, sourceSearch]);
 
   /** 「全部数据源」不展示与上方「预设模板」同标识的库内占位行 */
-  const sourcesForBoard = useMemo(
-    () => filteredSources.filter((s) => !PRESET_TEMPLATE_SOURCE_SLUGS.has(s.source)),
-    [filteredSources],
-  );
+  const sourcesForBoard = useMemo(() => filteredSources, [filteredSources]);
 
   async function requestMe(): Promise<Me | null> {
     try {
@@ -1197,7 +1193,7 @@ export function App() {
                   <div>
                     <h3 style={{ margin: 0 }}>全部数据源</h3>
                     <p className="muted tiny" style={{ margin: "6px 0 0" }}>
-                      共 {sourcesForBoard.length} 条可管理项（与「预设模板」同标识的占位行不在此列出）；可本地筛选标识。
+                      共 {sourcesForBoard.length} 条（含与上方模板同标识的预置项，可直接改 API 与密钥）；可本地筛选标识。
                     </p>
                   </div>
                   <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>

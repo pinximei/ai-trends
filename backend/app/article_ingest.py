@@ -12,9 +12,9 @@ from .domain.articles import (
     VALUE_SCORE_MIN,
     display_fingerprint,
     extract_source_external_id_from_connector_snippet,
-    extract_source_original_url_from_connector_snippet,
     feed_lane,
     feed_lane_for_article,
+    ingest_duplicate_by_source_external_id_exists,
     ingest_duplicate_exists,
     ingest_fingerprint,
     primary_canonical_from_raw_labels,
@@ -123,8 +123,11 @@ def create_published_articles_for_connector_targets(
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
         return 0
 
-    source_original_url = extract_source_original_url_from_connector_snippet(safe)
     source_external_id = extract_source_external_id_from_connector_snippet(safe)
+    if ingest_duplicate_by_source_external_id_exists(
+        db, industry_id=industry_id, source_external_id=source_external_id
+    ):
+        return 0
 
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
@@ -229,7 +232,6 @@ def create_published_articles_for_connector_targets(
             industry_id=industry_id,
             content_type="third_party_derived",
             third_party_source=f"{src_tag} / {connector_name}"[:512],
-            source_original_url=(source_original_url[:2048] if source_original_url else None),
             connector_sync_log_id=connector_sync_log_id,
             source_external_id=(source_external_id[:512] if source_external_id else None),
             status="published",

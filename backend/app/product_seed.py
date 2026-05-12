@@ -104,7 +104,6 @@ def seed_product_if_empty(db: Session) -> None:
             industry_id=ind.id,
             content_type="third_party_derived",
             third_party_source="hacker_news / 演示数据源",
-            source_original_url="https://news.ycombinator.com/",
             source_external_id="demo-hn-object-1",
             status="published",
             published_at=datetime.utcnow(),
@@ -125,9 +124,8 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[1].id,
             industry_id=ind.id,
             content_type="application",
-            third_party_source="product_hunt / 演示数据源",
-            source_original_url="https://www.producthunt.com/",
-            source_external_id="demo-ph-42",
+            third_party_source="npm / 演示数据源",
+            source_external_id="demo-npm-42",
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
@@ -148,7 +146,6 @@ def seed_product_if_empty(db: Session) -> None:
             industry_id=ind.id,
             content_type="self_tool",
             third_party_source="huggingface_spaces / 演示数据源",
-            source_original_url="https://huggingface.co/spaces",
             source_external_id="demo-hf-space",
             status="published",
             published_at=datetime.utcnow(),
@@ -295,7 +292,7 @@ def ensure_product_settings_and_demo_connector(db: Session) -> None:
                 },
             )
         )
-    if not db.scalar(select(ProductConnector.id).limit(1)):
+    if not db.scalar(select(ProductConnector.id).where(ProductConnector.provider_name == "demo").limit(1)):
         db.add(
             ProductConnector(
                 name="演示连接器",

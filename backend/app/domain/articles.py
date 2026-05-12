@@ -6,6 +6,8 @@ import hashlib
 import json
 import re
 from datetime import datetime
+from typing import Iterator
+from urllib.parse import urlparse
 
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
@@ -36,60 +38,105 @@ def display_fingerprint(title: str, summary: str) -> str:
 
 # —— 连接器片段 → 原始条目 URL（追溯用）——
 
+# 人读「原文页」优先：避免根字段 ``url`` 常为 API 端点或 CDN，被误当作原文链接。
 _URL_JSON_KEYS: tuple[str, ...] = (
-    "url",
     "html_url",
-    "link",
     "permalink",
+    "story_url",
+    "article_url",
     "web_url",
     "webUrl",
-    "article_url",
-    "story_url",
-    "href",
+    "link",
     "canonical_url",
-    "uri",
     "comments_url",
+    "url",
+    "href",
+    "uri",
 )
 
 
-def _first_http_url_in_text(s: str) -> str | None:
-    m = re.search(r"https?://[^\s\"'<>)\]]{4,2000}", s, re.I)
-    if not m:
-        return None
-    return m.group(0).rstrip(".,);]}")
+def _hostname(url: str) -> str:
+    try:
+        return (urlparse(url).hostname or "").lower()
+    except Exception:
+        return ""
 
 
-def _extract_url_from_json_obj(obj: object, *, depth: int = 0) -> str | None:
+def _is_low_signal_original_url(url: str) -> bool:
+    """非「原文入口」链接：对象存储/CDN/头像/API 等（解析辅助用，产品流程不再写入 source_original_url）。"""
+    h = _hostname(url)
+    if not h:
+        return True
+    if h == "api.github.com" or h.endswith(".githubusercontent.com"):
+        return True
+    markers = (
+        "aliyuncs.com",
+        "aliyuncs.cn",
+        "myqcloud.com",
+        "qcloud.com",
+        "qiniucdn.com",
+        "qiniudn.com",
+        "clouddn.com",
+        "cloudfront.net",
+        "amazonaws.com",
+        "googleusercontent.com",
+        "twimg.com",
+        "fbcdn.net",
+        "azureedge.net",
+        "cloudinary.com",
+        "fastly.net",
+        "fastly.com",
+        "akamaized.net",
+        "akamaihd.net",
+        "imgix.net",
+        "cdn.",
+        ".cdn.",
+    )
+    return any(m in h for m in markers)
+
+
+def _first_acceptable_http_url_in_text(s: str) -> str | None:
+    for m in re.finditer(r"https?://[^\s\"'<>)\]]{4,2000}", s, re.I):
+        u = m.group(0).rstrip(".,);]}")
+        if not _is_low_signal_original_url(u):
+            return u[:2048]
+    return None
+
+
+def _iter_urls_depth_first(obj: object, *, depth: int = 0) -> Iterator[str]:
     if depth > 8:
-        return None
+        return
     if isinstance(obj, str):
         t = obj.strip()
         if t.startswith(("http://", "https://")) and len(t) >= 12:
-            return t[:2048]
-        return None
+            yield t[:2048]
+        return
     if isinstance(obj, dict):
         for k in _URL_JSON_KEYS:
             if k in obj:
-                u = _extract_url_from_json_obj(obj[k], depth=depth + 1)
-                if u:
-                    return u
-        for v in obj.values():
-            u = _extract_url_from_json_obj(v, depth=depth + 1)
-            if u:
-                return u
+                yield from _iter_urls_depth_first(obj[k], depth=depth + 1)
+        for k, v in obj.items():
+            if k in _URL_JSON_KEYS:
+                continue
+            yield from _iter_urls_depth_first(v, depth=depth + 1)
+        return
     if isinstance(obj, list):
         for it in obj[:40]:
-            u = _extract_url_from_json_obj(it, depth=depth + 1)
-            if u:
-                return u
+            yield from _iter_urls_depth_first(it, depth=depth + 1)
+
+
+def _extract_url_from_json_obj(obj: object) -> str | None:
+    for u in _iter_urls_depth_first(obj, depth=0):
+        if not _is_low_signal_original_url(u):
+            return u
     return None
 
 
 def extract_source_original_url_from_connector_snippet(snippet: str) -> str | None:
     """
-    从连接器 HTTP 响应正文中尽量解析「原始条目」可点击 URL，供前台与后台与改写稿对应。
+    从连接器片段中解析可点击 http(s) URL（单测与可选脚本用）。
 
-    优先 JSON 常见字段（url/html_url/permalink 等），否则在文本中抓首条 http(s) 链接。
+    产品文章入库与公开 API 不再使用本字段；库表 ``source_original_url`` 可为历史数据保留。
     """
     s = (snippet or "").strip()
     if not s:
@@ -98,11 +145,11 @@ def extract_source_original_url_from_connector_snippet(snippet: str) -> str | No
     try:
         payload = json.loads(head)
     except Exception:
-        return (_first_http_url_in_text(head) or None)
+        return _first_acceptable_http_url_in_text(head)
     u = _extract_url_from_json_obj(payload)
     if u:
         return u[:2048]
-    return _first_http_url_in_text(head)
+    return _first_acceptable_http_url_in_text(head)
 
 
 # —— 连接器片段 → 上游条目 ID（与改写稿 id 对应）——
@@ -286,6 +333,21 @@ def ingest_duplicate_exists(db: Session, *, industry_id: int, ingest_fp: str) ->
     if not ingest_fp:
         return False
     q = select(Article.id).where(Article.industry_id == industry_id, Article.ingest_fingerprint == ingest_fp).limit(1)
+    return db.scalar(q) is not None
+
+
+def ingest_duplicate_by_source_external_id_exists(
+    db: Session, *, industry_id: int, source_external_id: str | None
+) -> bool:
+    """同一行业下已存在相同上游条目 id 的已存文章时跳过入库（防接口微差导致整段 JSON 指纹不同）。"""
+    sid = (source_external_id or "").strip()
+    if not sid:
+        return False
+    sid = sid[:512]
+    q = select(Article.id).where(
+        Article.industry_id == industry_id,
+        Article.source_external_id == sid,
+    ).limit(1)
     return db.scalar(q) is not None
 
 

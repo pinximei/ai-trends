@@ -222,6 +222,38 @@ def test_extract_source_original_url_nested_list() -> None:
     assert art.extract_source_original_url_from_connector_snippet(payload) == "https://news.ycombinator.com/item?id=1"
 
 
+def test_extract_source_original_url_prefers_html_url_over_github_api() -> None:
+    payload = json.dumps(
+        {
+            "url": "https://api.github.com/repos/foo/bar/issues/1",
+            "html_url": "https://github.com/foo/bar/issues/1",
+        },
+        ensure_ascii=False,
+    )
+    assert art.extract_source_original_url_from_connector_snippet(payload) == "https://github.com/foo/bar/issues/1"
+
+
+def test_extract_source_original_url_skips_oss_when_html_present() -> None:
+    payload = json.dumps(
+        {
+            "cover": "https://bucket.oss-cn-hangzhou.aliyuncs.com/cover.jpg",
+            "html_url": "https://example.com/article/1",
+        },
+        ensure_ascii=False,
+    )
+    assert art.extract_source_original_url_from_connector_snippet(payload) == "https://example.com/article/1"
+
+
+def test_extract_source_original_url_only_cdn_returns_none() -> None:
+    payload = json.dumps({"thumb": "https://d111111abcdef8.cloudfront.net/out.jpg"}, ensure_ascii=False)
+    assert art.extract_source_original_url_from_connector_snippet(payload) is None
+
+
+def test_extract_source_original_url_plain_text_skips_only_cdn() -> None:
+    s = "see https://bucket.oss-cn-hangzhou.aliyuncs.com/a.jpg only"
+    assert art.extract_source_original_url_from_connector_snippet(s) is None
+
+
 def test_extract_source_external_id_hits_object_id() -> None:
     payload = json.dumps({"hits": [{"objectID": "hn-123", "url": "https://example.com/x"}]}, ensure_ascii=False)
     assert art.extract_source_external_id_from_connector_snippet(payload) == "hn-123"

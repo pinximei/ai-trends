@@ -81,16 +81,6 @@ export function ResourceDetailPage() {
               {t("source")}: {a.third_party_source}
             </span>
           ) : null}
-          {a.source_original_url ? (
-            <a
-              href={a.source_original_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 font-medium text-sky-600 hover:underline"
-            >
-              {t("sourceOriginal")}
-            </a>
-          ) : null}
           {a.source_external_id ? (
             <span className="font-mono text-[11px] text-slate-600">
               {t("sourceExternalId")}: {a.source_external_id}

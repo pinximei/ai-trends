@@ -46,7 +46,6 @@ const STRINGS: Record<string, string> = {
   evidence: "证据",
   source: "来源",
   link: "链接",
-  sourceOriginal: "原文链接",
   sourceExternalId: "原始条目 ID",
   connectorSyncBatch: "同步批次",
   trace: "追溯链",

@@ -65,9 +65,9 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        src = db.query(AdminSourceConfig).filter(AdminSourceConfig.source == "product_hunt").one_or_none()
+        src = db.query(AdminSourceConfig).filter(AdminSourceConfig.source == "github").one_or_none()
         if not src:
-            print("FAIL: mainstream seed missing product_hunt admin_source")
+            print("FAIL: mainstream seed missing github admin_source")
             return 1
         src.api_base = "https://httpbin.org/get"
         src.enabled = True
@@ -78,7 +78,7 @@ def main() -> int:
             print("FAIL: no product_connectors row")
             return 1
         conn.enabled = True
-        conn.admin_source_key = "product_hunt"
+        conn.admin_source_key = "github"
         conn.min_interval_seconds = 0
         db.commit()
 
@@ -97,10 +97,10 @@ def main() -> int:
             print("FAIL: no published article")
             return 1
 
-        # product_hunt 归入「AI 应用」泳道
+        # github 归入资讯泳道
         feed = article_app.list_articles_feed(
             db,
-            feed="apps",
+            feed="news",
             industry_slug="ai",
             segment_id=None,
             segment_ids=None,
@@ -116,7 +116,7 @@ def main() -> int:
         if art.id not in ids:
             print("FAIL: new article not in public feed items", art.id, "feed=", feed)
             return 1
-        print("OK: article id", art.id, "present in public feed (apps lane for product_hunt)")
+        print("OK: article id", art.id, "present in public feed (news lane for github)")
 
         d = article_app.get_published_article(db, art.id)
         assert d

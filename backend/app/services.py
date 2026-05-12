@@ -10,57 +10,41 @@ from .scope_labels_util import dump_scope_labels_json
 
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
+# 仅收录 **免密钥 GET 即可稳定 200** 且响应体足够长（满足入库 rule_value_score）的公开端点；
+# 需 OAuth / 必 Key 的源（Product Hunt、NewsAPI、OpenAI 等）不在此列表，请自行在后台「添加数据源」手工配置。
 # scope_label：标明所属领域/板块，便于与「行业→板块」前台结构对应。
-# 拉取节奏由「AI 资讯与数据」中的连接器统一定时任务控制，不在单条数据源上配置。
-# api_base：优先选用 GET 即可探测连通性的路径；业务集成时可在表单中改回官方文档中的根路径。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
         "enabled": True,
-        "api_base": "https://api.github.com/zen",
+        "api_base": "https://api.github.com/repos/octocat/Hello-World",
         "api_key_masked": "",
         "scope_label": "AI｜通用·开源协作",
-        "notes": "【模板】GitHub REST；下方为连通性探测（/zen）。正式调用请用 api.github.com 文档中的路径；高配额建议填 PAT。",
+        "notes": "公开仓库元数据 JSON（免 Key，有速率限制）。高配额可填 PAT 并改为 issues/releases 等路径。",
     },
     {
         "source": "huggingface",
         "enabled": True,
-        "api_base": "https://huggingface.co/api/models?limit=1",
+        "api_base": "https://huggingface.co/api/models?limit=3",
         "api_key_masked": "",
         "scope_label": "AI｜大模型/生态",
-        "notes": "【模板】Hugging Face Hub；读私有或提配额请在下方填 HF_TOKEN。",
+        "notes": "Hugging Face Hub 公开模型列表；私有或提配额请填 HF_TOKEN。",
     },
     {
         "source": "huggingface_spaces",
         "enabled": True,
-        "api_base": "https://huggingface.co/api/spaces?limit=1",
+        "api_base": "https://huggingface.co/api/spaces?limit=3",
         "api_key_masked": "",
         "scope_label": "AI｜Spaces·应用",
-        "notes": "【模板】Hugging Face Spaces；线上推理请用各 Space 的 Gradio/专用 URL，或配 HF_TOKEN。",
+        "notes": "Spaces 公开列表；私有 Space 请填 HF_TOKEN。",
     },
     {
         "source": "hacker_news",
         "enabled": True,
-        "api_base": "https://hacker-news.firebaseio.com/v0/maxitem.json",
+        "api_base": "https://hacker-news.firebaseio.com/v0/topstories.json",
         "api_key_masked": "",
         "scope_label": "通用·技术资讯",
-        "notes": "Hacker News 官方 Firebase JSON API，免 Key。",
-    },
-    {
-        "source": "product_hunt",
-        "enabled": True,
-        "api_base": "https://api.producthunt.com/v2/api/graphql",
-        "api_key_masked": "",
-        "scope_label": "产品·创投",
-        "notes": "【模板】Product Hunt GraphQL v2；请先用 client_id/client_secret 换取 access_token，再把 access_token 作为 Bearer Token 填到下方测试与调用。",
-    },
-    {
-        "source": "mcp_skills",
-        "enabled": True,
-        "api_base": "https://registry.npmjs.org/react/latest",
-        "api_key_masked": "",
-        "scope_label": "AI｜Agent·MCP/Skills",
-        "notes": "【模板】npm 包元数据用于探测；MCP 请将可访问的 HTTP/SSE Base 填在下方；stdio 类需自建网关。",
+        "notes": "Hacker News 官方 Firebase API：热门 story id 列表（免 Key）。勿用 maxitem 单数字端点（响应过短无法入库）。",
     },
     {
         "source": "stackoverflow",
@@ -84,23 +68,15 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
         "api_key_masked": "",
         "scope_label": "气象·公开数据",
-        "notes": "气象与空气质量等，免 Key、非商用友好。",
+        "notes": "Open-Meteo 预报 JSON，免 Key。",
     },
     {
         "source": "coingecko",
         "enabled": True,
-        "api_base": "https://api.coingecko.com/api/v3/ping",
+        "api_base": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=5&page=1&sparkline=false",
         "api_key_masked": "",
         "scope_label": "加密·行情",
-        "notes": "加密资产行情；公开 tier 有速率限制，Pro 填 Key。",
-    },
-    {
-        "source": "newsapi",
-        "enabled": True,
-        "api_base": "https://newsapi.org/v2/top-headlines?country=us",
-        "api_key_masked": "",
-        "scope_label": "新闻·聚合",
-        "notes": "新闻聚合；无 Key 时探测可能为 401，填 Key 后保存再测。",
+        "notes": "CoinGecko 公开市场列表 JSON（公开 tier 有速率限制；勿用 /ping 短响应）。",
     },
     {
         "source": "pypi",
@@ -116,32 +92,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_base": "https://registry.npmjs.org/react/latest",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·Node",
-        "notes": "npm Registry 元数据，免 Key。",
-    },
-    # —— 以下为常用第三方：默认仅占位，密钥请在后台「数据源」表单中填写后保存。 —
-    {
-        "source": "openai",
-        "enabled": True,
-        "api_base": "https://api.openai.com/v1/models",
-        "api_key_masked": "",
-        "scope_label": "AI｜大模型·OpenAI",
-        "notes": "OpenAI HTTP API；无 Key 时列表接口多为 401；在 platform.openai.com 创建密钥后填入下方再测。",
-    },
-    {
-        "source": "google_gemini",
-        "enabled": True,
-        "api_base": "https://generativelanguage.googleapis.com/v1beta/models",
-        "api_key_masked": "",
-        "scope_label": "AI｜大模型·Google",
-        "notes": "Google AI Studio / Gemini；无 Key 时常为 403；填 Key 后保存再测。",
-    },
-    {
-        "source": "finnhub",
-        "enabled": True,
-        "api_base": "https://finnhub.io/api/v1/quote?symbol=AAPL",
-        "api_key_masked": "",
-        "scope_label": "财经·股票",
-        "notes": "Finnhub；无 Token 多为 401；finnhub.io 注册免费 Token 后填入再测。",
+        "notes": "npm Registry 包元数据，免 Key。",
     },
     {
         "source": "alphavantage",
@@ -149,23 +100,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
         "api_key_masked": "",
         "scope_label": "财经·时间序列",
-        "notes": "Alpha Vantage；模板使用官方 demo key 便于探测；生产请在 alphavantage.co 申请 Key。",
-    },
-    {
-        "source": "youtube_data",
-        "enabled": True,
-        "api_base": "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=dQw4w9WgXcQ",
-        "api_key_masked": "",
-        "scope_label": "内容·视频",
-        "notes": "YouTube Data API v3；无 Key 多为 403；Google Cloud 启用接口后填 API Key。",
-    },
-    {
-        "source": "mapbox",
-        "enabled": True,
-        "api_base": "https://api.mapbox.com",
-        "api_key_masked": "",
-        "scope_label": "地理·地图",
-        "notes": "Mapbox；根路径可探测；地理编码等请在 URL 中带 access_token。",
+        "notes": "Alpha Vantage 官方 demo key，仅用于连通与示例；生产请换自有 Key。",
     },
     {
         "source": "docker_hub",
@@ -173,7 +108,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·容器",
-        "notes": "Docker Hub 公开镜像元数据；高配额可填访问令牌。",
+        "notes": "Docker Hub 公开镜像元数据，免 Key。",
     },
     {
         "source": "crates_io",
@@ -181,15 +116,15 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_base": "https://crates.io/api/v1/crates/serde",
         "api_key_masked": "",
         "scope_label": "AI｜工具链·Rust",
-        "notes": "crates.io（Rust）包元数据；公开只读一般免 Key。",
+        "notes": "crates.io 包元数据，免 Key。",
     },
     {
         "source": "openalex",
         "enabled": True,
-        "api_base": "https://api.openalex.org/works?per_page=1",
+        "api_base": "https://api.openalex.org/works?per_page=3",
         "api_key_masked": "",
         "scope_label": "学术·开放图谱",
-        "notes": "OpenAlex 开放学术图谱；polite pool 建议填邮箱 polite 参数（可选）。",
+        "notes": "OpenAlex 开放学术图谱，免 Key；polite pool 建议按文档加 polite 参数（可选）。",
     },
 ]
 
@@ -199,25 +134,36 @@ PRESET_SOURCE_LABELS: dict[str, str] = {
     "huggingface": "Hugging Face",
     "huggingface_spaces": "Hugging Face Spaces",
     "hacker_news": "Hacker News",
-    "product_hunt": "Product Hunt",
     "stackoverflow": "Stack Overflow",
     "arxiv": "arXiv",
     "open_meteo": "Open-Meteo",
     "coingecko": "CoinGecko",
-    "newsapi": "NewsAPI",
     "pypi": "PyPI",
     "npm": "npm",
-    "mcp_skills": "MCP / Skills",
-    "openai": "OpenAI",
-    "google_gemini": "Google Gemini",
-    "finnhub": "Finnhub",
     "alphavantage": "Alpha Vantage",
-    "youtube_data": "YouTube Data",
-    "mapbox": "Mapbox",
     "docker_hub": "Docker Hub",
     "crates_io": "crates.io",
     "openalex": "OpenAlex",
 }
+
+# 历史上由 ensure_mainstream_admin_sources 写入、但已从 MAINSTREAM_ADMIN_SOURCE_PRESETS 撤下的 source。
+# 应用启动时会删除 admin_source_configs 对应行及 admin_source_key 相同的 ProductConnector。
+# 注意：若自建数据源使用了与下列相同的 source 标识，也会被一并删除；请改用不与内置冲突的标识。
+DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
+    {
+        "product_hunt",
+        "mcp_skills",
+        "newsapi",
+        "openai",
+        "google_gemini",
+        "finnhub",
+        "youtube_data",
+        "mapbox",
+    }
+)
+assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
+    {row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS}
+), "DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES overlaps MAINSTREAM_ADMIN_SOURCE_PRESETS"
 
 
 def build_admin_source_preset_items() -> list[dict]:
