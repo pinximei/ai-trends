@@ -137,8 +137,8 @@ I18N = {
         "en": "Applicable law: operator registration jurisdiction. Dispute: competent court of that jurisdiction.",
     },
     "legal.sources.desc": {
-        "zh": "GitHub、Hugging Face、Hacker News、Stack Overflow、arXiv、Open-Meteo、CoinGecko、PyPI、npm、Alpha Vantage、Docker Hub、crates.io、OpenAlex 等公开免 Key 端点。",
-        "en": "Public no-key endpoints such as GitHub, Hugging Face, Hacker News, Stack Overflow, arXiv, Open-Meteo, CoinGecko, PyPI, npm, Alpha Vantage, Docker Hub, crates.io, OpenAlex.",
+        "zh": "内置仅保留：GitHub、Hugging Face（模型与 Spaces）、Hacker News、arXiv、OpenAlex 等 AI/学术相关公开端点；其它请在后台自行添加。",
+        "en": "Built-in sources are limited to GitHub, Hugging Face (models & Spaces), Hacker News, arXiv, OpenAlex, and similar AI/academic public endpoints; add others manually in admin.",
     },
     "legal.removal.desc": {"zh": "通过 API 提交：POST /api/v1/compliance/removal-requests", "en": "Submit through API: POST /api/v1/compliance/removal-requests"},
     "footer.tagline": {"zh": "AiTrends · Agent 趋势与灵感信号", "en": "AiTrends · agent trends & inspiration signals"},
