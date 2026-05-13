@@ -56,8 +56,6 @@ export default {
         shimmer: "shimmer 2.5s linear infinite",
         "data-stream": "dataStream 4s ease-in-out infinite",
         glow: "glowPulse 3s ease-in-out infinite",
-        "hero-3d-spin-slow": "hero3dSpin 34s linear infinite",
-        "hero-3d-spin-fast": "hero3dSpin 13s linear infinite",
       },
       keyframes: {
         float: {
@@ -84,10 +82,6 @@ export default {
         glowPulse: {
           "0%, 100%": { boxShadow: "0 0 20px rgba(124,58,237,0.2)" },
           "50%": { boxShadow: "0 0 36px rgba(14,165,233,0.25)" },
-        },
-        hero3dSpin: {
-          from: { transform: "rotateY(0deg) rotateX(2deg)" },
-          to: { transform: "rotateY(360deg) rotateX(2deg)" },
         },
       },
     },
