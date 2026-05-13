@@ -1,5 +1,5 @@
 import { publicGet } from "./client";
-import type { ArticleDetail, ArticleFeedCard, ArticlesFeedResponse } from "./types";
+import type { ArticleDetail, ArticlesFeedResponse } from "./types";
 
 export { publicGet } from "./client";
 export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse } from "./types";
