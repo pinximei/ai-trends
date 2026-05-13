@@ -36,12 +36,21 @@ const sideNav = [
   { to: "/about", key: "navAbout" },
 ] as const;
 
+/** 首页：随屏宽加宽内容区；其它页保持 1200px 阅读宽 */
+function contentShellClass(isHome: boolean): string {
+  if (isHome) {
+    return "mx-auto w-full max-w-[min(1920px,100%)] px-4 sm:px-6 lg:px-10 xl:px-14 2xl:px-20";
+  }
+  return "mx-auto w-full max-w-[1200px] px-4 lg:px-8";
+}
+
 export function Layout() {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const hideSidebar = location.pathname === "/";
-  const hideFloatingNewsletter = location.pathname === "/";
+  const isHome = location.pathname === "/";
+  const hideSidebar = isHome;
+  const hideFloatingNewsletter = isHome;
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
   const [headerQ, setHeaderQ] = useState("");
@@ -62,10 +71,12 @@ export function Layout() {
     navigate("/news", q ? { state: { q } } : undefined);
   };
 
+  const shell = contentShellClass(isHome);
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-3 px-4 py-3 lg:gap-6 lg:px-8">
+        <div className={`flex flex-wrap items-center gap-3 py-3 lg:gap-6 ${shell}`}>
           <Link to="/" className="flex shrink-0 items-center gap-2.5">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black tracking-tight text-white shadow-md ring-2 ring-violet-200/60">
               AI
@@ -123,7 +134,7 @@ export function Layout() {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1200px] flex-1">
+      <div className={`flex flex-1 ${shell} ${isHome ? "" : "gap-6 lg:gap-8"}`}>
         {!hideSidebar ? (
           <aside className="hidden w-52 shrink-0 border-r border-slate-200/80 bg-white/80 lg:block">
             <div className="sticky top-[4.75rem] space-y-1 px-3 py-6">
@@ -147,13 +158,21 @@ export function Layout() {
           </aside>
         ) : null}
 
-        <main className="min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8">
+        <main
+          className={
+            isHome
+              ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
+              : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
+          }
+        >
           <Outlet />
         </main>
       </div>
 
       <footer className="border-t border-slate-200/80 bg-slate-50/90">
-        <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-4 px-4 py-8 text-center text-[11px] text-slate-500 sm:px-8 md:flex-row md:items-start md:justify-between md:text-left">
+        <div
+          className={`flex flex-col items-center gap-4 py-8 text-center text-[11px] text-slate-500 md:flex-row md:items-start md:justify-between md:text-left ${shell}`}
+        >
           <div className="max-w-xl">
             <p className="font-medium text-slate-600">{t("footer")}</p>
             <p className="mt-1 text-[10px] text-slate-400">{t("footerIcpNote")}</p>

@@ -37,10 +37,6 @@ const STRINGS: Record<string, string> = {
   homePopularCat1Sub: "模型与论文",
   homePopularCat2Title: "工具推荐",
   homePopularCat2Sub: "效率与创作",
-  homePopularCat3Title: "行业动态",
-  homePopularCat3Sub: "商业与政策",
-  homePopularCat4Title: "开源生态",
-  homePopularCat4Sub: "框架与数据集",
   homePopularCat5Title: "软件下载",
   homePopularCat5Sub: "安装包与版本",
 

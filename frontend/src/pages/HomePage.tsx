@@ -4,11 +4,9 @@ import { Link } from "react-router-dom";
 import {
   BarChart3,
   Brain,
-  Building2,
   ChevronRight,
-  FileText,
-  Github,
   Download,
+  FileText,
   Mail,
   MessageCircle,
   Sparkles,
@@ -55,29 +53,30 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 设计稿右侧主视觉：中心发光立方体 + 四角浮动图标 */
+/** 右侧主视觉：立方体 + 四角浮动图标 */
 function HeroGraphic() {
-  const float = "absolute flex h-11 w-11 items-center justify-center rounded-xl bg-white/12 shadow-lg ring-1 ring-white/25 backdrop-blur-sm text-white/90";
+  const float =
+    "absolute flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12 shadow-lg ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-14 sm:w-14";
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[420px]">
+    <div className="relative mx-auto aspect-square w-full max-w-[min(100%,520px)] 2xl:max-w-[560px]">
       <div className="absolute inset-[6%] rounded-full border border-dashed border-violet-300/25 bg-gradient-to-br from-violet-500/15 to-indigo-600/10 shadow-[0_0_60px_rgba(99,102,241,0.25)]" />
-      <div className={`${float} left-[8%] top-[20%] animate-float`} style={{ animationDuration: "20s" }}>
-        <Sparkles className="h-5 w-5" strokeWidth={1.75} />
+      <div className={`${float} left-[6%] top-[18%] animate-float`} style={{ animationDuration: "20s" }}>
+        <Sparkles className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
       </div>
-      <div className={`${float} right-[10%] top-[16%] animate-float2`} style={{ animationDuration: "24s" }}>
-        <MessageCircle className="h-5 w-5" strokeWidth={1.75} />
+      <div className={`${float} right-[8%] top-[14%] animate-float2`} style={{ animationDuration: "24s" }}>
+        <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
       </div>
-      <div className={`${float} left-[12%] bottom-[18%] animate-float2`} style={{ animationDuration: "22s" }}>
-        <FileText className="h-5 w-5" strokeWidth={1.75} />
+      <div className={`${float} left-[10%] bottom-[16%] animate-float2`} style={{ animationDuration: "22s" }}>
+        <FileText className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
       </div>
-      <div className={`${float} right-[8%] bottom-[22%] animate-float`} style={{ animationDuration: "19s" }}>
-        <BarChart3 className="h-5 w-5" strokeWidth={1.75} />
+      <div className={`${float} right-[6%] bottom-[20%] animate-float`} style={{ animationDuration: "19s" }}>
+        <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
       </div>
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div className="relative flex h-36 w-36 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-2xl ring-4 ring-white/25 sm:h-40 sm:w-40">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/25 to-transparent" />
-          <Brain className="absolute -right-2 -top-2 h-9 w-9 text-cyan-200/90 drop-shadow-md" strokeWidth={1.5} />
-          <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-md sm:text-4xl">AI</span>
+        <div className="relative flex h-40 w-40 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-2xl ring-4 ring-white/25 sm:h-44 sm:w-44 xl:h-48 xl:w-48">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-white/25 to-transparent" />
+          <Brain className="absolute -right-1 -top-1 h-10 w-10 text-cyan-200/90 drop-shadow-md sm:h-11 sm:w-11" strokeWidth={1.5} />
+          <span className="relative text-4xl font-black tracking-tight text-white drop-shadow-md sm:text-5xl">AI</span>
         </div>
       </div>
     </div>
@@ -86,7 +85,7 @@ function HeroGraphic() {
 
 function TrendSparkline() {
   return (
-    <svg viewBox="0 0 280 100" className="h-24 w-full text-violet-500" aria-hidden>
+    <svg viewBox="0 0 280 100" className="h-36 w-full text-violet-500 sm:h-40" aria-hidden>
       <defs>
         <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity="0.35" />
@@ -120,8 +119,6 @@ export function HomePage() {
     () => [
       { to: "/news", titleKey: "homePopularCat1Title", subKey: "homePopularCat1Sub", Icon: Brain, grad: "from-violet-500 to-indigo-600" },
       { to: "/apps", titleKey: "homePopularCat2Title", subKey: "homePopularCat2Sub", Icon: Wrench, grad: "from-sky-500 to-blue-600" },
-      { to: "/news", titleKey: "homePopularCat3Title", subKey: "homePopularCat3Sub", Icon: Building2, grad: "from-rose-500 to-orange-500" },
-      { to: "/news", titleKey: "homePopularCat4Title", subKey: "homePopularCat4Sub", Icon: Github, grad: "from-slate-600 to-slate-800" },
       { to: "/downloads", titleKey: "homePopularCat5Title", subKey: "homePopularCat5Sub", Icon: Download, grad: "from-emerald-500 to-teal-600" },
     ],
     [],
@@ -176,65 +173,73 @@ export function HomePage() {
   };
 
   return (
-    <div className="min-w-0 space-y-10">
-      {/* Hero：左文右图（设计稿 1.png） */}
-      <section className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
-        <div>
-          <h1 className="text-gradient text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-[2.35rem] lg:leading-[1.2]">
-            {t("homeMainHeroTitle")}
-          </h1>
-          <p className="mt-5 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-[15px]">{t("homeMainHeroDesc")}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/news"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99]"
-            >
-              {t("homeMainHeroCta1")}
-              <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
-            </Link>
-            <Link
-              to="/apps"
-              className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-6 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700"
-            >
-              {t("homeMainHeroCta2")}
-            </Link>
-          </div>
-        </div>
-        <HeroGraphic />
-      </section>
+    <div className="w-full space-y-10 lg:space-y-12">
+      {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-12">
+        <div className="min-w-0 space-y-10 lg:space-y-12">
+          <section className="grid items-center gap-8 lg:gap-10 lg:grid-cols-2">
+            <div className="min-w-0">
+              <h1 className="text-gradient text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-4xl lg:leading-[1.15] xl:text-5xl">
+                {t("homeMainHeroTitle")}
+              </h1>
+              <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
+                {t("homeMainHeroDesc")}
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to="/news"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
+                >
+                  {t("homeMainHeroCta1")}
+                  <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
+                </Link>
+                <Link
+                  to="/apps"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-7 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700 sm:text-[15px]"
+                >
+                  {t("homeMainHeroCta2")}
+                </Link>
+              </div>
+            </div>
+            <HeroGraphic />
+          </section>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_300px] lg:items-start">
-        <div className="min-w-0 space-y-10">
-          {/* 今日焦点 */}
           <section>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold text-slate-900">{t("homeTodayFocus")}</h2>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-bold tracking-tight text-slate-900 lg:text-2xl">{t("homeTodayFocus")}</h2>
             </div>
             {loading ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
             ) : news.length === 0 ? (
               <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-5">
+              <div className="grid gap-5 lg:grid-cols-12 lg:gap-6">
                 {featured ? (
                   <Link
                     to={`/resources/${featured.id}`}
-                    className="ui-card group overflow-hidden transition hover:shadow-lg lg:col-span-3"
+                    className="ui-card group overflow-hidden transition hover:shadow-xl lg:col-span-7"
                   >
-                    <div className="grid gap-0 md:grid-cols-2">
-                      <div className="relative aspect-[5/4] min-h-[200px] md:aspect-auto md:min-h-[240px]" style={thumbSurface(`${featured.id}-feat`)}>
-                        <span className="absolute left-4 top-4 rounded-lg bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-violet-700 shadow-sm ring-1 ring-white/60">
+                    <div className="grid gap-0 lg:grid-cols-2">
+                      <div
+                        className="relative aspect-[5/4] min-h-[220px] lg:min-h-[280px]"
+                        style={thumbSurface(`${featured.id}-feat`)}
+                      >
+                        <span className="absolute left-5 top-5 rounded-xl bg-white/90 px-3 py-1.5 text-xs font-semibold text-violet-700 shadow-sm ring-1 ring-white/60">
                           {t("homeImportantTag")}
                         </span>
-                        <span className="absolute inset-0 flex items-center justify-center text-5xl font-black text-white/30">
+                        <span className="absolute inset-0 flex items-center justify-center text-6xl font-black text-white/30 sm:text-7xl">
                           {(featured.title || "?").slice(0, 1)}
                         </span>
                       </div>
-                      <div className="flex flex-col justify-center p-5 sm:p-6">
-                        <p className="line-clamp-2 text-lg font-bold leading-snug text-slate-900 group-hover:text-violet-700">{featured.title}</p>
-                        <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600">{summarize(featured.summary, 160)}</p>
-                        <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
-                          <span className="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                      <div className="flex flex-col justify-center p-6 sm:p-8">
+                        <p className="line-clamp-2 text-xl font-bold leading-snug text-slate-900 group-hover:text-violet-700 sm:text-2xl">
+                          {featured.title}
+                        </p>
+                        <p className="mt-4 line-clamp-4 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                          {summarize(featured.summary, 220)}
+                        </p>
+                        <div className="mt-5 flex flex-wrap gap-3 text-xs text-slate-500 sm:text-sm">
+                          <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
                             {featured.categories?.[0] ?? featured.platform_label ?? t("source")}
                           </span>
                           <span className="tabular-nums">{timeAgo(featured.published_at)}</span>
@@ -243,25 +248,25 @@ export function HomePage() {
                     </div>
                   </Link>
                 ) : null}
-                <div className="flex min-h-0 flex-col gap-3 lg:col-span-2">
+                <div className="flex min-h-0 flex-col gap-4 lg:col-span-5">
                   {sideNews.map((item) => (
                     <Link
                       key={item.id}
                       to={`/resources/${item.id}`}
-                      className="ui-card flex gap-3 p-3 transition hover:border-violet-200 hover:shadow-md sm:p-3.5"
+                      className="ui-card flex gap-4 p-4 transition hover:border-violet-200 hover:shadow-lg sm:p-5"
                     >
                       <div
-                        className="relative h-20 w-24 shrink-0 overflow-hidden rounded-lg ring-1 ring-black/5"
+                        className="relative h-24 w-28 shrink-0 overflow-hidden rounded-xl ring-1 ring-black/5 sm:h-28 sm:w-32"
                         style={thumbSurface(`${item.id}-side`)}
                       >
-                        <span className="absolute inset-0 flex items-center justify-center text-xl font-bold text-white/90">
+                        <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-white/90">
                           {(item.title || "?").slice(0, 1)}
                         </span>
                       </div>
                       <div className="min-w-0 flex-1 py-0.5">
-                        <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                          <span className="text-violet-600">{item.platform_label || t("source")}</span>
+                        <p className="line-clamp-2 text-base font-semibold leading-snug text-slate-900">{item.title}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span className="font-medium text-violet-600">{item.platform_label || t("source")}</span>
                           <span>·</span>
                           <span className="tabular-nums">{timeAgo(item.published_at)}</span>
                         </div>
@@ -273,58 +278,61 @@ export function HomePage() {
             )}
           </section>
 
-          {/* 热门分类 */}
           <section>
-            <h2 className="mb-4 text-lg font-bold text-slate-900">{t("homePopularCategories")}</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <h2 className="mb-5 text-xl font-bold tracking-tight text-slate-900 lg:text-2xl">{t("homePopularCategories")}</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:gap-8">
               {popularCats.map(({ to, titleKey, subKey, Icon, grad }) => (
                 <Link
                   key={titleKey}
                   to={to}
-                  className="ui-card flex flex-col items-center gap-2 rounded-xl p-4 text-center transition hover:border-violet-200 hover:shadow-md"
+                  className="ui-card group flex min-h-[160px] flex-col items-center justify-center gap-4 rounded-2xl p-8 text-center shadow-sm transition hover:border-violet-300/80 hover:shadow-lg sm:min-h-[180px] sm:p-10"
                 >
                   <span
-                    className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${grad} text-white shadow-md`}
+                    className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-lg ring-2 ring-white/30 transition group-hover:scale-[1.04] sm:h-20 sm:w-20`}
                   >
-                    <Icon className="h-6 w-6" strokeWidth={1.75} />
+                    <Icon className="h-9 w-9 sm:h-10 sm:w-10" strokeWidth={1.75} />
                   </span>
-                  <p className="text-sm font-semibold text-slate-900">{t(titleKey)}</p>
-                  <p className="text-[11px] text-slate-500">{t(subKey)}</p>
+                  <p className="text-lg font-bold text-slate-900 sm:text-xl">{t(titleKey)}</p>
+                  <p className="max-w-xs text-sm leading-relaxed text-slate-500">{t(subKey)}</p>
                 </Link>
               ))}
             </div>
           </section>
         </div>
 
-        {/* 右侧栏 */}
-        <aside className="min-w-0 space-y-6 lg:sticky lg:top-24">
-          <div className="ui-card overflow-hidden p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-bold text-slate-900">{t("homePopularTools")}</h3>
-              <Link to="/apps" className="text-xs font-medium text-violet-600 hover:underline">
+        <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 2xl:top-28">
+          <div className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">{t("homePopularTools")}</h3>
+              <Link to="/apps" className="text-xs font-semibold text-violet-600 hover:underline sm:text-sm">
                 {t("homeViewAll")}
               </Link>
             </div>
             {!loading && toolList.length === 0 ? (
-              <p className="text-xs text-slate-500">{t("homeEmpty")}</p>
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
             ) : (
-              <ol className="space-y-3">
+              <ol className="space-y-1">
                 {toolList.map((item, idx) => (
                   <li key={item.id}>
-                    <Link to={`/resources/${item.id}`} className="flex gap-3 rounded-lg p-1.5 transition hover:bg-slate-50">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-violet-600">
+                    <Link
+                      to={`/resources/${item.id}`}
+                      className="flex gap-4 rounded-xl p-2 transition hover:bg-slate-50 sm:p-3"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-sm font-bold text-violet-700 ring-1 ring-violet-100">
                         {idx + 1}
                       </span>
                       <div
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow-inner"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white shadow-md ring-1 ring-white/20"
                         style={thumbSurface(`tool-${item.id}`)}
                       >
                         {(item.title || "?").slice(0, 1)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
-                        <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">{summarize(item.summary, 48)}</p>
-                        <p className="mt-1 text-xs font-semibold text-amber-600">{toolRating(item.title)}</p>
+                        <p className="truncate text-sm font-semibold text-slate-900 sm:text-[15px]">{item.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs leading-snug text-slate-500 sm:text-[13px]">
+                          {summarize(item.summary, 64)}
+                        </p>
+                        <p className="mt-2 text-sm font-bold tabular-nums text-amber-600">{toolRating(item.title)}</p>
                       </div>
                     </Link>
                   </li>
@@ -333,39 +341,38 @@ export function HomePage() {
             )}
           </div>
 
-          <div className="ui-card overflow-hidden p-4 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900">{t("homeAiTrend")}</h3>
-            <p className="mt-1 text-xs text-slate-500">{t("homeTrendChartTitle")}</p>
-            <div className="mt-3 rounded-xl bg-slate-50/90 px-2 py-2 ring-1 ring-slate-100">
+          <div className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
+            <h3 className="text-base font-bold text-slate-900">{t("homeAiTrend")}</h3>
+            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeTrendChartTitle")}</p>
+            <div className="mt-4 rounded-xl bg-slate-50/90 px-2 py-3 ring-1 ring-slate-100">
               <TrendSparkline />
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-center">
+            <div className="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 text-center">
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{t("homeStatActiveTools")}</p>
-                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">2,847</p>
-                <p className="text-xs font-medium text-emerald-600">+12.5% {t("homeStatGrowth")}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeStatActiveTools")}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">2,847</p>
+                <p className="text-xs font-semibold text-emerald-600 sm:text-sm">+12.5% {t("homeStatGrowth")}</p>
               </div>
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{t("homeStatNewArticles")}</p>
-                <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">18,920</p>
-                <p className="text-xs font-medium text-emerald-600">+8.2% {t("homeStatGrowth")}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeStatNewArticles")}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">18,920</p>
+                <p className="text-xs font-semibold text-emerald-600 sm:text-sm">+8.2% {t("homeStatGrowth")}</p>
               </div>
             </div>
           </div>
         </aside>
       </div>
 
-      {/* 通栏订阅（设计稿底部渐变条；首页不显示右下角浮动条） */}
       <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">
         <form
           onSubmit={onSubscribe}
-          className="grid gap-4 rounded-2xl bg-gradient-to-r from-violet-600/95 via-indigo-600/95 to-sky-600/95 px-5 py-6 sm:px-8 sm:py-7 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)_auto] md:items-center md:gap-6"
+          className="grid gap-4 rounded-2xl bg-gradient-to-r from-violet-600/95 via-indigo-600/95 to-sky-600/95 px-5 py-6 sm:px-8 sm:py-7 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)_auto] md:items-center md:gap-6 lg:gap-8"
         >
           <div className="flex min-w-0 items-start gap-3 text-white md:items-center">
             <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 md:mt-0">
               <Mail className="h-5 w-5" strokeWidth={2} />
             </span>
-            <p className="min-w-0 text-sm font-medium leading-relaxed md:text-[15px]">{t("homeSubscribeBarTitle")}</p>
+            <p className="min-w-0 text-sm font-medium leading-relaxed md:text-[15px] lg:text-base">{t("homeSubscribeBarTitle")}</p>
           </div>
           <input
             type="email"
@@ -377,7 +384,7 @@ export function HomePage() {
           />
           <button
             type="submit"
-            className="rounded-full bg-indigo-950/90 px-8 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-950 md:justify-self-end"
+            className="rounded-full bg-indigo-950/90 px-8 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-950 md:justify-self-end lg:px-10 lg:py-3 lg:text-[15px]"
           >
             {sent ? t("newsletterThanks") : t("homeSubscribeBarBtn")}
           </button>
