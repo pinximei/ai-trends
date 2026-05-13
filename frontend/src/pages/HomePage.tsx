@@ -58,35 +58,41 @@ function HeroGraphic() {
   const float =
     "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";
   return (
-    <div className="relative mx-auto w-full max-w-[240px] sm:max-w-[280px] lg:mx-0 lg:max-w-[268px] xl:max-w-[288px]">
-      <div className="relative aspect-square w-full">
+    <div className="relative mx-auto w-full max-w-[248px] shrink-0 overflow-visible px-3 pb-4 pt-2 sm:max-w-[288px] sm:px-4 sm:pb-5 sm:pt-3">
+      <div className="relative aspect-square w-full overflow-visible">
         <div
-          className="pointer-events-none absolute -inset-[6%] rounded-full bg-gradient-to-b from-violet-400/25 via-indigo-400/12 to-sky-400/15 blur-2xl"
+          className="pointer-events-none absolute -inset-[10%] z-0 rounded-full bg-gradient-to-b from-violet-400/30 via-indigo-400/14 to-sky-400/18 blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-40"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-0 rounded-full border-[3px] border-violet-300/60 bg-gradient-to-b from-white/40 via-violet-50/25 to-indigo-50/20 shadow-[0_0_0_1px_rgba(255,255,255,0.65),0_12px_48px_rgba(99,102,241,0.18)] ring-1 ring-violet-200/40"
+          className="pointer-events-none absolute -inset-3 z-[1] rounded-full border-[5px] border-violet-500 shadow-[0_0_0_2px_rgba(255,255,255,0.95),0_10px_36px_rgba(91,33,182,0.22)] sm:-inset-4 sm:border-[6px]"
           aria-hidden
         />
-        <div className="pointer-events-none absolute inset-[3%] rounded-full border border-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]" aria-hidden />
-        <div className="absolute inset-[6%] rounded-full border border-dashed border-violet-300/25 bg-gradient-to-br from-violet-500/15 to-indigo-600/10 shadow-[0_0_40px_rgba(99,102,241,0.2)]" />
-        <div className={`${float} left-[8%] top-[20%] animate-float`} style={{ animationDuration: "20s" }}>
-          <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-        </div>
-        <div className={`${float} right-[10%] top-[16%] animate-float2`} style={{ animationDuration: "24s" }}>
-          <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-        </div>
-        <div className={`${float} left-[12%] bottom-[18%] animate-float2`} style={{ animationDuration: "22s" }}>
-          <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-        </div>
-        <div className={`${float} right-[8%] bottom-[22%] animate-float`} style={{ animationDuration: "19s" }}>
-          <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-        </div>
-        <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-          <div className="relative flex h-[7.25rem] w-[7.25rem] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-xl ring-2 ring-white/25 sm:h-32 sm:w-32">
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/25 to-transparent" />
-            <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-200/90 drop-shadow-md sm:h-8 sm:w-8" strokeWidth={1.5} />
-            <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-md sm:text-4xl">AI</span>
+        <div className="relative z-[1] aspect-square h-full w-full">
+          <div
+            className="pointer-events-none absolute inset-0 z-0 rounded-full border-[3px] border-violet-400/90 bg-gradient-to-b from-white/50 via-violet-50/30 to-indigo-50/25 shadow-[0_0_0_1px_rgba(255,255,255,0.7),0_10px_40px_rgba(99,102,241,0.16)] ring-1 ring-violet-300/50"
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute inset-[3%] z-0 rounded-full border border-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]" aria-hidden />
+          <div className="absolute inset-[6%] z-0 rounded-full border border-dashed border-violet-400/40 bg-gradient-to-br from-violet-500/18 to-indigo-600/12 shadow-[0_0_40px_rgba(99,102,241,0.22)]" />
+          <div className={`${float} left-[8%] top-[20%] animate-float`} style={{ animationDuration: "20s" }}>
+            <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+          </div>
+          <div className={`${float} right-[10%] top-[16%] animate-float2`} style={{ animationDuration: "24s" }}>
+            <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+          </div>
+          <div className={`${float} left-[12%] bottom-[18%] animate-float2`} style={{ animationDuration: "22s" }}>
+            <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+          </div>
+          <div className={`${float} right-[8%] bottom-[22%] animate-float`} style={{ animationDuration: "19s" }}>
+            <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+          </div>
+          <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+            <div className="relative flex h-[7.25rem] w-[7.25rem] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-xl ring-2 ring-white/25 sm:h-32 sm:w-32">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/25 to-transparent" />
+              <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-200/90 drop-shadow-md sm:h-8 sm:w-8" strokeWidth={1.5} />
+              <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-md sm:text-4xl">AI</span>
+            </div>
           </div>
         </div>
       </div>
@@ -188,7 +194,7 @@ export function HomePage() {
       {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-x-16 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-x-20">
         <div className="min-w-0 space-y-8 pr-0 lg:space-y-10 lg:pr-2">
-          <section className="flex flex-col items-center gap-8 text-center sm:gap-9 lg:flex-row lg:items-center lg:gap-10 lg:text-left xl:gap-12">
+          <section className="flex flex-col items-center gap-8 overflow-visible text-center sm:gap-9 lg:flex-row lg:items-center lg:gap-10 lg:text-left xl:gap-12">
             <div className="min-w-0 w-full shrink-0 lg:max-w-lg xl:max-w-xl">
               <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
@@ -212,8 +218,8 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-[200px] w-full flex-1 items-center justify-center py-2 lg:min-h-[260px] lg:justify-center lg:py-0">
-              <div className="translate-x-0 lg:translate-x-[min(2.75rem,8%)] xl:translate-x-[min(3.25rem,9%)]">
+            <div className="flex min-h-[200px] w-full min-w-0 flex-1 items-center justify-center overflow-visible py-2 lg:min-h-[260px] lg:justify-center lg:py-0">
+              <div className="translate-x-0 overflow-visible lg:translate-x-[min(2.75rem,8%)] xl:translate-x-[min(3.25rem,9%)]">
                 <HeroGraphic />
               </div>
             </div>
