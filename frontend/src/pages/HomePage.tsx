@@ -53,7 +53,7 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 对齐 tmp/local-only/1.png：柔光大光圈 + 三层倾斜轨道环 + 圆形角标 + 中心 3D 渐变块；整组 Y 轴旋转（尊重 prefers-reduced-motion） */
+/** 对齐 tmp/local-only/1.png：柔光底盘 + 三层倾斜轨道（慢转）+ 角标与立方体（快转），双速 3D 旋转 */
 function HeroGraphic() {
   const orbitIcon =
     "pointer-events-none absolute z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/75 bg-white/50 text-violet-700 shadow-[0_0_26px_rgba(165,180,252,0.9),0_4px_14px_rgba(99,102,241,0.2),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md [transform-style:preserve-3d] motion-safe:[transform:translateZ(2.85rem)] motion-reduce:[transform:none] sm:h-9 sm:w-9";
@@ -70,54 +70,58 @@ function HeroGraphic() {
         />
 
         <div className="absolute inset-0 z-[1] flex items-center justify-center overflow-visible [perspective:1100px] sm:[perspective:1320px]">
-          <div className="relative aspect-square h-[92%] w-[92%] motion-safe:animate-hero-3d-spin motion-reduce:animate-none [transform-style:preserve-3d]">
-            <div className="pointer-events-none absolute inset-[3%] flex items-center justify-center [transform-style:preserve-3d]">
+          <div className="relative aspect-square h-[92%] w-[92%] [transform-style:preserve-3d]">
+            <div className="absolute inset-0 motion-safe:animate-hero-3d-spin-slow motion-reduce:animate-none [transform-style:preserve-3d]">
+              <div className="pointer-events-none absolute inset-[3%] flex items-center justify-center [transform-style:preserve-3d]">
+                <div
+                  className="absolute inset-[5%] rounded-full border-[2.5px] border-white/85 bg-transparent shadow-[0_0_36px_rgba(186,230,253,0.85),0_0_72px_rgba(165,180,252,0.35)] [transform:rotateX(74deg)]"
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-[5%] rounded-full border-[2px] border-cyan-100/80 bg-transparent shadow-[0_0_30px_rgba(103,232,249,0.55)] [transform:rotateX(70deg)_rotateZ(52deg)]"
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-[5%] rounded-full border-[2px] border-indigo-100/85 bg-transparent shadow-[0_0_28px_rgba(199,210,254,0.6)] [transform:rotateX(70deg)_rotateZ(-52deg)]"
+                  aria-hidden
+                />
+              </div>
+
               <div
-                className="absolute inset-[5%] rounded-full border-[2.5px] border-white/85 bg-transparent shadow-[0_0_36px_rgba(186,230,253,0.85),0_0_72px_rgba(165,180,252,0.35)] [transform:rotateX(74deg)]"
+                className="pointer-events-none absolute left-[11%] top-[16%] h-2 w-2 rounded-full bg-violet-300/70 shadow-[0_0_14px_rgba(167,139,250,0.95)] motion-safe:[transform:translateZ(3.1rem)] motion-reduce:hidden"
                 aria-hidden
               />
               <div
-                className="absolute inset-[5%] rounded-full border-[2px] border-cyan-100/80 bg-transparent shadow-[0_0_30px_rgba(103,232,249,0.55)] [transform:rotateX(70deg)_rotateZ(52deg)]"
+                className="pointer-events-none absolute right-[13%] top-[20%] h-1.5 w-1.5 rounded-full bg-sky-300/80 shadow-[0_0_12px_rgba(56,189,248,0.85)] motion-safe:[transform:translateZ(2.4rem)] motion-reduce:hidden"
                 aria-hidden
               />
               <div
-                className="absolute inset-[5%] rounded-full border-[2px] border-indigo-100/85 bg-transparent shadow-[0_0_28px_rgba(199,210,254,0.6)] [transform:rotateX(70deg)_rotateZ(-52deg)]"
+                className="pointer-events-none absolute bottom-[18%] left-[18%] h-1.5 w-1.5 rounded-full bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.9)] motion-safe:[transform:translateZ(2.6rem)] motion-reduce:hidden"
                 aria-hidden
               />
             </div>
 
-            <div
-              className="pointer-events-none absolute left-[11%] top-[16%] h-2 w-2 rounded-full bg-violet-300/70 shadow-[0_0_14px_rgba(167,139,250,0.95)] motion-safe:[transform:translateZ(3.1rem)] motion-reduce:hidden"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute right-[13%] top-[20%] h-1.5 w-1.5 rounded-full bg-sky-300/80 shadow-[0_0_12px_rgba(56,189,248,0.85)] motion-safe:[transform:translateZ(2.4rem)] motion-reduce:hidden"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute bottom-[18%] left-[18%] h-1.5 w-1.5 rounded-full bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.9)] motion-safe:[transform:translateZ(2.6rem)] motion-reduce:hidden"
-              aria-hidden
-            />
+            <div className="absolute inset-0 motion-safe:animate-hero-3d-spin-fast motion-reduce:animate-none [transform-style:preserve-3d]">
+              <div className={`${orbitIcon} left-[7%] top-[17%]`}>
+                <Bot className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
+              </div>
+              <div className={`${orbitIcon} right-[9%] top-[14%]`}>
+                <MessageCircle className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
+              </div>
+              <div className={`${orbitIcon} left-[10%] bottom-[16%]`}>
+                <FileText className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
+              </div>
+              <div className={`${orbitIcon} right-[7%] bottom-[18%]`}>
+                <BarChart3 className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
+              </div>
 
-            <div className={`${orbitIcon} left-[7%] top-[17%]`}>
-              <Bot className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-            </div>
-            <div className={`${orbitIcon} right-[9%] top-[14%]`}>
-              <MessageCircle className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-            </div>
-            <div className={`${orbitIcon} left-[10%] bottom-[16%]`}>
-              <FileText className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-            </div>
-            <div className={`${orbitIcon} right-[7%] bottom-[18%]`}>
-              <BarChart3 className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-            </div>
-
-            <div className="absolute left-1/2 top-1/2 z-30 flex h-[7.25rem] w-[7.25rem] items-center justify-center motion-safe:[transform:translate3d(-50%,-50%,3.75rem)_rotateX(-10deg)_rotateY(14deg)] motion-reduce:[transform:translate(-50%,-50%)] sm:h-32 sm:w-32">
-              <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-[0_24px_56px_-14px_rgba(79,70,229,0.55),0_12px_32px_-10px_rgba(14,165,233,0.4),inset_0_2px_0_rgba(255,255,255,0.45),inset_0_-18px_32px_rgba(67,56,202,0.25)] ring-[3px] ring-white/50 [transform-style:preserve-3d]">
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/35 via-transparent to-indigo-900/10" />
-                <div className="absolute inset-x-0 top-0 h-2/5 rounded-t-2xl bg-gradient-to-b from-white/40 to-transparent" />
-                <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-100 drop-shadow-lg sm:h-8 sm:w-8" strokeWidth={1.5} />
-                <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.35)] sm:text-4xl">AI</span>
+              <div className="absolute left-1/2 top-1/2 z-30 flex h-[7.25rem] w-[7.25rem] items-center justify-center motion-safe:[transform:translate3d(-50%,-50%,3.75rem)_rotateX(-10deg)_rotateY(14deg)] motion-reduce:[transform:translate(-50%,-50%)] sm:h-32 sm:w-32">
+                <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-[0_24px_56px_-14px_rgba(79,70,229,0.55),0_12px_32px_-10px_rgba(14,165,233,0.4),inset_0_2px_0_rgba(255,255,255,0.45),inset_0_-18px_32px_rgba(67,56,202,0.25)] ring-[3px] ring-white/50 [transform-style:preserve-3d]">
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/35 via-transparent to-indigo-900/10" />
+                  <div className="absolute inset-x-0 top-0 h-2/5 rounded-t-2xl bg-gradient-to-b from-white/40 to-transparent" />
+                  <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-100 drop-shadow-lg sm:h-8 sm:w-8" strokeWidth={1.5} />
+                  <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.35)] sm:text-4xl">AI</span>
+                </div>
               </div>
             </div>
           </div>

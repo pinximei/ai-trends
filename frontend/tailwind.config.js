@@ -56,7 +56,8 @@ export default {
         shimmer: "shimmer 2.5s linear infinite",
         "data-stream": "dataStream 4s ease-in-out infinite",
         glow: "glowPulse 3s ease-in-out infinite",
-        "hero-3d-spin": "hero3dSpin 26s linear infinite",
+        "hero-3d-spin-slow": "hero3dSpin 34s linear infinite",
+        "hero-3d-spin-fast": "hero3dSpin 13s linear infinite",
       },
       keyframes: {
         float: {
