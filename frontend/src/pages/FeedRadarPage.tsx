@@ -494,7 +494,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       <div className={gridClass}>
         <aside className="min-w-0">{leftRail}</aside>
         <div className="min-w-0 space-y-6">
-          {paginationBar()}
           {listSection}
           {paginationBar()}
         </div>
