@@ -19,9 +19,15 @@ import { useI18n } from "@/i18n";
 const INDUSTRY = "ai";
 
 /** 倾斜星环平面内的圆轨道半径（rem），与环尺寸一起调 */
-const HERO_ORBIT_REM = 7.65;
+const HERO_ORBIT_REM = 8.55;
 const HERO_ORBIT_SEC = 52;
 const HERO_RING_TILT_DEG = 58;
+
+/** 中心 AI 块呼吸灯：与 framer-motion 关键帧同步 */
+const HERO_AI_BREATH_SHADOW_IDLE =
+  "0 26px 60px -10px rgba(49,46,129,0.58), 0 0 52px rgba(34,211,238,0.34), 0 0 28px rgba(167,139,250,0.22), inset 0 1px 0 rgba(255,255,255,0.42)";
+const HERO_AI_BREATH_SHADOW_PEAK =
+  "0 38px 88px -4px rgba(49,46,129,0.72), 0 0 80px rgba(34,211,238,0.58), 0 0 52px rgba(167,139,250,0.42), inset 0 1px 0 rgba(255,255,255,0.5)";
 
 function summarize(text: string, max: number) {
   const s = (text || "").trim();
@@ -85,7 +91,7 @@ function OrbitSatellite({
         animate={reduce ? undefined : { rotate: -360 }}
         transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
       >
-        <span className="pointer-events-auto relative flex h-10 w-10 items-center justify-center text-indigo-600 drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:h-11 sm:w-11">
+        <span className="pointer-events-auto relative flex h-11 w-11 items-center justify-center text-indigo-600 drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] sm:h-12 sm:w-12">
           {children}
         </span>
       </motion.div>
@@ -106,15 +112,15 @@ function HeroGraphic() {
   return (
     <div
       data-testid="hero-graphic"
-      className="relative mx-auto w-full max-w-[min(100%,340px)] shrink-0 overflow-visible px-1 pb-1 pt-0 sm:max-w-[360px] sm:px-2 sm:pb-2 sm:pt-1"
+      className="relative mx-auto w-full max-w-[min(100%,392px)] shrink-0 overflow-visible px-0 py-0 sm:max-w-[416px] sm:px-0.5"
     >
       <div
         data-orbit-square
-        className="relative isolate mx-auto aspect-square w-full max-w-[304px] overflow-visible [perspective:1100px] [perspective-origin:50%_40%] sm:max-w-[328px]"
+        className="relative isolate mx-auto aspect-square w-full max-w-[352px] overflow-visible [perspective:1000px] [perspective-origin:50%_38%] sm:max-w-[380px]"
       >
         {/* 背面大环境光（不倾斜） */}
         <div
-          className="pointer-events-none absolute inset-[6%] -z-[1] rounded-full bg-[radial-gradient(circle_at_50%_38%,rgba(167,139,250,0.35),rgba(125,211,252,0.12)_45%,transparent_68%)] blur-3xl"
+          className="pointer-events-none absolute -inset-[18%] -z-[1] rounded-full bg-[radial-gradient(circle_at_50%_36%,rgba(167,139,250,0.42),rgba(125,211,252,0.16)_42%,rgba(99,102,241,0.08)_58%,transparent_72%)] blur-[52px]"
           aria-hidden
         />
 
@@ -127,13 +133,13 @@ function HeroGraphic() {
             {/* 慢旋柔光（与环同平面） */}
             <motion.div
               data-testid="hero-halo-primary"
-              className="pointer-events-none absolute aspect-square w-[82%] max-w-[256px] rounded-full"
+              className="pointer-events-none absolute aspect-square w-[90%] max-w-[min(100%,310px)] rounded-full sm:max-w-[334px]"
               aria-hidden
               style={{
                 background:
-                  "radial-gradient(circle at 32% 22%, rgba(255,255,255,0.55) 0%, rgba(186,230,253,0.22) 32%, rgba(99,102,241,0.14) 55%, transparent 72%)",
+                  "radial-gradient(circle at 32% 20%, rgba(255,255,255,0.58) 0%, rgba(186,230,253,0.28) 30%, rgba(99,102,241,0.16) 52%, transparent 76%)",
                 boxShadow:
-                  "0 0 56px 22px rgba(125,211,252,0.32), 0 0 90px 36px rgba(167,139,250,0.2), inset 0 0 48px rgba(255,255,255,0.28)",
+                  "0 0 72px 28px rgba(125,211,252,0.38), 0 0 120px 48px rgba(167,139,250,0.26), 0 0 160px 64px rgba(99,102,241,0.12), inset 0 0 56px rgba(255,255,255,0.32)",
               }}
               animate={reduce ? undefined : { rotate: 360 }}
               transition={{ duration: 88, repeat: Infinity, ease: "linear" }}
@@ -145,18 +151,18 @@ function HeroGraphic() {
               animate={reduce ? undefined : { rotate: 360 }}
               transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
             >
-              <div className="relative aspect-square w-[82%] max-w-[256px]">
+              <div className="relative aspect-square w-[90%] max-w-[min(100%,310px)] sm:max-w-[334px]">
                 <OrbitSatellite angleDeg={0} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <Bot className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
+                  <Bot className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
                 <OrbitSatellite angleDeg={90} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <MessageCircle className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
+                  <MessageCircle className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
                 <OrbitSatellite angleDeg={180} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <FileText className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
+                  <FileText className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
                 <OrbitSatellite angleDeg={270} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <BarChart3 className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
+                  <BarChart3 className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
               </div>
             </motion.div>
@@ -167,14 +173,30 @@ function HeroGraphic() {
             className="absolute left-1/2 top-1/2 z-20 [transform-style:preserve-3d]"
             style={
               tilt
-                ? { transform: `translate(-50%, -50%) translateZ(3.75rem) rotateX(-${tilt}deg)` }
+                ? { transform: `translate(-50%, -50%) translateZ(4.35rem) rotateX(-${tilt}deg)` }
                 : { transform: "translate(-50%, -50%)" }
             }
           >
             <motion.div
-              className="relative h-[5.125rem] w-[5.125rem] overflow-hidden rounded-2xl shadow-[0_22px_52px_-12px_rgba(49,46,129,0.55),0_0_42px_rgba(34,211,238,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-white/30 sm:h-[5.75rem] sm:w-[5.75rem]"
-              animate={reduce ? undefined : { scale: [1, 1.04, 1] }}
-              transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
+              className="relative h-[5.75rem] w-[5.75rem] overflow-hidden rounded-2xl ring-1 ring-white/30 sm:h-[6.5rem] sm:w-[6.5rem]"
+              initial={{ scale: 1, boxShadow: HERO_AI_BREATH_SHADOW_IDLE }}
+              animate={
+                reduce
+                  ? { scale: 1, boxShadow: HERO_AI_BREATH_SHADOW_IDLE }
+                  : {
+                      scale: [1, 1.1, 1],
+                      boxShadow: [
+                        HERO_AI_BREATH_SHADOW_IDLE,
+                        HERO_AI_BREATH_SHADOW_PEAK,
+                        HERO_AI_BREATH_SHADOW_IDLE,
+                      ],
+                    }
+              }
+              transition={
+                reduce
+                  ? { duration: 0 }
+                  : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }
+              }
             >
               <motion.div
                 className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
@@ -188,10 +210,10 @@ function HeroGraphic() {
               <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/36 to-transparent" />
               <div className="relative flex h-full w-full items-center justify-center">
                 <Brain
-                  className="absolute -right-0.5 -top-0.5 z-10 h-6 w-6 text-cyan-100 drop-shadow sm:h-7 sm:w-7"
+                  className="absolute -right-0.5 -top-0.5 z-10 h-7 w-7 text-cyan-100 drop-shadow sm:h-8 sm:w-8"
                   strokeWidth={1.75}
                 />
-                <span className="relative z-10 text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.55)] sm:text-3xl">
+                <span className="relative z-10 text-[1.7rem] font-black tracking-tight text-white drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] sm:text-4xl">
                   AI
                 </span>
               </div>
@@ -293,19 +315,19 @@ export function HomePage() {
   };
 
   return (
-    <div className="w-full space-y-8 lg:space-y-10">
+    <div className="w-full space-y-6 lg:space-y-8">
       {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-x-16 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-x-20">
-        <div className="min-w-0 space-y-8 pr-0 lg:space-y-10 lg:pr-2">
-          <section className="flex flex-col items-center gap-5 overflow-visible text-center sm:gap-6 lg:flex-row lg:items-center lg:gap-7 lg:text-left xl:gap-8">
+        <div className="min-w-0 space-y-6 pr-0 lg:space-y-8 lg:pr-2">
+          <section className="flex flex-col items-center gap-3 overflow-visible text-center sm:gap-4 lg:flex-row lg:items-center lg:gap-5 lg:text-left xl:gap-6">
             <div className="min-w-0 w-full shrink-0 lg:w-auto lg:max-w-lg lg:flex-none xl:max-w-xl">
               <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
               </h1>
-              <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
+              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
                 {t("homeMainHeroDesc")}
               </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
+              <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
                 <Link
                   to="/news"
                   className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
@@ -321,7 +343,7 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-0 sm:py-1 lg:min-h-0 lg:min-w-[300px] lg:flex-1 lg:justify-center lg:py-0">
+            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-0 lg:min-h-0 lg:min-w-[340px] lg:flex-1 lg:justify-center">
               <div className="flex w-full min-w-0 max-w-full shrink-0 justify-center overflow-visible lg:w-full">
                 <HeroGraphic />
               </div>
