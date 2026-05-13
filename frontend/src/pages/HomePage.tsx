@@ -58,7 +58,7 @@ function HeroGraphic() {
   const float =
     "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";
   return (
-    <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[260px] lg:mx-0 lg:max-w-[240px] xl:max-w-[260px]">
+    <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[260px] lg:mx-0 lg:max-w-[272px] xl:max-w-[292px]">
       <div className="relative aspect-square w-full">
         <div
           className="pointer-events-none absolute inset-[2%] rounded-full bg-gradient-to-br from-violet-500/35 via-indigo-500/22 to-sky-400/28 blur-2xl motion-safe:animate-hero-glow-breathe motion-reduce:opacity-50"
@@ -211,8 +211,8 @@ export function HomePage() {
       {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-12">
         <div className="min-w-0 space-y-8 lg:space-y-10">
-          <section className="grid items-center gap-6 lg:grid-cols-2 lg:gap-8">
-            <div className="min-w-0">
+          <section className="flex flex-col items-stretch gap-8 sm:gap-9 lg:flex-row lg:items-center lg:justify-between lg:gap-10 xl:gap-14">
+            <div className="min-w-0 flex-1 lg:max-w-[min(36rem,58%)] xl:max-w-[min(40rem,56%)]">
               <h1 className="text-gradient text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
               </h1>
@@ -235,7 +235,9 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <HeroGraphic />
+            <div className="flex w-full shrink-0 justify-center lg:w-auto lg:justify-end lg:pl-4 xl:pl-6">
+              <HeroGraphic />
+            </div>
           </section>
 
           <section>
