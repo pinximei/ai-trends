@@ -1,10 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Box } from "lucide-react";
+import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse } from "@/api/public/types";
 import { useI18n } from "@/i18n";
 import { FeedSidebar } from "@/components/FeedSidebar";
+import { TOP_NAV_ITEMS } from "@/navConfig";
+
+const FEED_APPS_NAV_ICON = TOP_NAV_ITEMS.find((i) => i.to === "/apps")!.icon;
+const FEED_NEWS_NAV_ICON = TOP_NAV_ITEMS.find((i) => i.to === "/news")!.icon;
 
 const INDUSTRY_SLUG = "ai";
 
@@ -84,6 +88,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   }, [searchDraft]);
 
   const pageTitle = mode === "apps" ? t("resourcesFeedApps") : t("resourcesFeedNews");
+  const ModeNavIcon = mode === "apps" ? FEED_APPS_NAV_ICON : FEED_NEWS_NAV_ICON;
 
   const listByDate = useMemo((): [string, ArticleFeedCard[]][] => {
     const m = new Map<string, ArticleFeedCard[]>();
@@ -205,7 +210,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             className="relative hidden h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-brand-50 shadow-sm sm:flex"
             aria-hidden
           >
-            <Box className="h-10 w-10 text-brand-500 opacity-90" strokeWidth={1.25} />
+            <ModeNavIcon className="h-10 w-10 text-brand-600 opacity-95" strokeWidth={1.35} />
           </div>
         </div>
       </div>
@@ -382,26 +387,23 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                       <Link
                         key={a.id}
                         to={`/resources/${a.id}`}
-                        className={`group relative flex overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm transition hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2 ${
-                          mode === "apps" ? "flex-col sm:flex-row" : "flex-col"
-                        }`}
+                        className="group relative flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm transition hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2 sm:flex-row"
                       >
                         <div
                           className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100"
                           aria-hidden
                         />
-                        <div
-                          className={
-                            mode === "apps"
-                              ? "relative flex min-h-0 flex-1 flex-col sm:flex-row"
-                              : "relative flex min-h-0 flex-1 flex-col"
-                          }
-                        >
-                          {mode === "apps" ? (
-                            <div className="flex shrink-0 items-center justify-center border-b border-slate-100 bg-slate-50 py-5 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-100 sm:py-0">
-                              <span className="text-2xl font-semibold text-brand-600">{(a.title || "?").slice(0, 1)}</span>
-                            </div>
-                          ) : null}
+                        <div className="relative flex min-h-0 flex-1 flex-col sm:flex-row">
+                          <div
+                            className="flex shrink-0 items-center justify-center border-b border-slate-100 bg-slate-50 py-5 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-100 sm:py-0"
+                            aria-hidden
+                          >
+                            {mode === "apps" ? (
+                              <FEED_APPS_NAV_ICON className="h-9 w-9 text-brand-600 sm:h-10 sm:w-10" strokeWidth={1.65} />
+                            ) : (
+                              <FEED_NEWS_NAV_ICON className="h-9 w-9 text-brand-600 sm:h-10 sm:w-10" strokeWidth={1.65} />
+                            )}
+                          </div>
                           <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 pb-3">
                             <span className="inline-flex max-w-[min(100%,18rem)] items-center truncate rounded-md bg-gradient-to-r from-emerald-50/90 to-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-100/90">
