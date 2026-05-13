@@ -66,9 +66,9 @@ function OrbitIcon2D({
   children: ReactNode;
 }) {
   const chip =
-    "pointer-events-auto relative z-[2] flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-11 sm:w-11";
-  /** 与最外层光晕 inset-[7%] 对齐：轨道半径 = (内缘 + 外缘)/2，图标在该环带中心旋转 */
-  const orbitY = "calc(-46.5cqmin)";
+    "pointer-events-auto relative z-[2] flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/90 bg-white/95 text-violet-700 shadow-sm sm:h-11 sm:w-11";
+  /** 贴近外缘：约在「外圈光晕中径」与方盒边之间偏外（略借外层 overflow-visible） */
+  const orbitY = "calc(-48.75cqmin)";
   return (
     <div
       className="absolute left-1/2 top-1/2 z-[1] h-0 w-0"
@@ -87,7 +87,7 @@ function OrbitIcon2D({
   );
 }
 
-/** 首页主视觉：外层光晕环带 + 图标沿最外圈光晕的径向中间公转 */
+/** 首页主视觉：外层光晕 + 图标沿外圈偏外轨迹公转（无芯片光圈） */
 function HeroGraphic() {
   const reduce = useReducedMotion();
   const orbitSec = 168;
