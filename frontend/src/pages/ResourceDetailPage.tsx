@@ -119,20 +119,20 @@ export function ResourceDetailPage() {
   }
 
   return (
-    <div className="w-full px-2 sm:px-4">
-      <div className="mb-4 flex justify-end lg:mb-6">
+    <div className="w-full px-2 sm:px-4 lg:flex lg:h-[calc(100dvh-9.5rem)] lg:min-h-0 lg:flex-col lg:overflow-hidden">
+      <div className="mb-3 flex shrink-0 justify-end lg:mb-2">
         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {isApp ? t("navApps") : t("navNews")}
         </span>
       </div>
 
-      <div className="sticky top-16 z-30 mb-3 lg:hidden">
+      <div className="sticky top-16 z-30 mb-3 shrink-0 lg:hidden">
         <Link to={backTo} className={backBtnClass}>
           ← {t("detailBackFeed")}
         </Link>
       </div>
 
-      <div className="flex flex-col gap-6 lg:h-[calc(100dvh-10.5rem)] lg:min-h-0 lg:flex-row lg:gap-8 lg:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden lg:flex-row lg:gap-8">
         <aside className="min-w-0 w-full shrink-0 lg:flex lg:h-full lg:min-h-0 lg:w-[min(280px,calc(100%-1rem))] lg:flex-col lg:overflow-hidden xl:w-[300px]">
           <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
             <Link to={backTo} className={`${backBtnClass} hidden lg:inline-flex`}>
@@ -165,7 +165,7 @@ export function ResourceDetailPage() {
           </div>
         </aside>
 
-        <div className="min-h-0 w-full flex-1 lg:min-h-0 lg:overflow-y-auto lg:overflow-x-hidden lg:pr-1">
+        <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain lg:min-h-0 lg:overflow-x-hidden">
           <article className="min-w-0 w-full max-w-none space-y-6 pb-4">
               {isApp ? (
             <div className="ui-card overflow-hidden p-6 sm:p-8">
