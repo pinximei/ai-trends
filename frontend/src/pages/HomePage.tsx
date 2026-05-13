@@ -53,13 +53,22 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 首页主视觉：大圆渐变底 + 虚线外环 + 四角浮动图标 + 中心渐变「AI」块（初版样式） */
+/** 首页主视觉：最外大圆环 + 内层渐变圆 + 虚线 + 四角浮动 + 中心「AI」块（对齐设计稿层次） */
 function HeroGraphic() {
   const float =
     "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";
   return (
-    <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[260px] lg:mx-0 lg:max-w-[240px] xl:max-w-[260px]">
+    <div className="relative mx-auto w-full max-w-[240px] sm:max-w-[280px] lg:mx-0 lg:max-w-[268px] xl:max-w-[288px]">
       <div className="relative aspect-square w-full">
+        <div
+          className="pointer-events-none absolute -inset-[6%] rounded-full bg-gradient-to-b from-violet-400/25 via-indigo-400/12 to-sky-400/15 blur-2xl"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 rounded-full border-[3px] border-violet-300/60 bg-gradient-to-b from-white/40 via-violet-50/25 to-indigo-50/20 shadow-[0_0_0_1px_rgba(255,255,255,0.65),0_12px_48px_rgba(99,102,241,0.18)] ring-1 ring-violet-200/40"
+          aria-hidden
+        />
+        <div className="pointer-events-none absolute inset-[3%] rounded-full border border-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]" aria-hidden />
         <div className="absolute inset-[6%] rounded-full border border-dashed border-violet-300/25 bg-gradient-to-br from-violet-500/15 to-indigo-600/10 shadow-[0_0_40px_rgba(99,102,241,0.2)]" />
         <div className={`${float} left-[8%] top-[20%] animate-float`} style={{ animationDuration: "20s" }}>
           <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
