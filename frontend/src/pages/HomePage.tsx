@@ -1,6 +1,6 @@
-import type { CSSProperties, FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import type { CSSProperties, FormEvent, ReactNode, RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type MotionValue, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
@@ -54,50 +54,103 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-function OrbitIcon2D({
-  angleDeg,
-  orbitSec,
+/** 椭圆轨道上的图标：参数方程公转 + 切向对齐 + 立体感 */
+function EllipticalOrbitIcon({
+  orbitBoxRef,
+  phaseOffsetDeg,
+  theta,
   reduce,
   children,
 }: {
-  angleDeg: number;
-  orbitSec: number;
+  orbitBoxRef: RefObject<HTMLDivElement | null>;
+  phaseOffsetDeg: number;
+  theta: MotionValue<number>;
   reduce: boolean | null;
   children: ReactNode;
 }) {
-  const chip =
-    "pointer-events-auto relative z-[2] flex h-10 w-10 items-center justify-center bg-transparent text-violet-700 sm:h-11 sm:w-11";
-  /** 尽量贴近方盒外缘（50cqmin）；略收以避免与裁切/侧栏打架 */
-  const orbitY = "calc(-49.35cqmin)";
+  const dims = useRef({ rx: 120, ry: 88 });
+
+  useLayoutEffect(() => {
+    const square = orbitBoxRef.current;
+    if (!square) return;
+    const apply = () => {
+      const w = square.getBoundingClientRect().width;
+      dims.current = { rx: w * 0.5, ry: w * 0.36 };
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(square);
+    return () => ro.disconnect();
+  }, [orbitBoxRef]);
+
+  const x = useTransform(theta, (deg) => {
+    const { rx, ry } = dims.current;
+    const rad = ((deg + phaseOffsetDeg) * Math.PI) / 180;
+    return rx * Math.cos(rad);
+  });
+  const y = useTransform(theta, (deg) => {
+    const { rx, ry } = dims.current;
+    const rad = ((deg + phaseOffsetDeg) * Math.PI) / 180;
+    return ry * Math.sin(rad);
+  });
+  /** 图标保持「正面朝上」：对齐椭圆切向 */
+  const rot = useTransform(theta, (deg) => {
+    const { rx, ry } = dims.current;
+    const rad = ((deg + phaseOffsetDeg) * Math.PI) / 180;
+    const tx = -rx * Math.sin(rad);
+    const ty = ry * Math.cos(rad);
+    return (Math.atan2(ty, tx) * 180) / Math.PI + 90;
+  });
+
+  const icon3d =
+    "relative inline-flex h-10 w-10 transform-gpu items-center justify-center [transform-style:preserve-3d] [transform:rotateX(-10deg)] text-violet-600 drop-shadow-[0_1px_0_rgba(255,255,255,0.75)] drop-shadow-[0_2px_2px_rgba(15,23,42,0.35)] drop-shadow-[0_6px_14px_rgba(67,56,202,0.48)] sm:h-11 sm:w-11";
+
   return (
-    <div
-      className="absolute left-1/2 top-1/2 z-[1] h-0 w-0"
-      style={{
-        transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(${orbitY})`,
-      }}
+    <motion.div
+      className="pointer-events-auto absolute left-1/2 top-1/2 z-[36] -translate-x-1/2 -translate-y-1/2"
+      style={{ x, y }}
     >
-      <motion.div
-        className="flex -translate-x-1/2 -translate-y-1/2"
-        animate={reduce ? undefined : { rotate: -360 }}
-        transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
-      >
-        <div className={chip}>{children}</div>
+      <motion.div className="flex items-center justify-center" style={{ rotate: rot }}>
+        <span className={icon3d}>{children}</span>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
 
-/** 首页主视觉：外层光晕 + 图标沿外缘公转（无描边方格） */
+/** 首页主视觉：外层光晕 + 椭圆轨道天体公转 + 中心 AI 慢旋 */
 function HeroGraphic() {
   const reduce = useReducedMotion();
   const orbitSec = 168;
+  const centerSpinSec = 72;
+  const orbitBoxRef = useRef<HTMLDivElement>(null);
+  const theta = useMotionValue(0);
+
+  useEffect(() => {
+    if (reduce) {
+      theta.set(0);
+      return;
+    }
+    const t0 = performance.now();
+    let id = 0;
+    const tick = (now: number) => {
+      const elapsed = (now - t0) / 1000;
+      theta.set(((elapsed / orbitSec) * 360) % 360);
+      id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [orbitSec, reduce, theta]);
 
   return (
     <div
       data-testid="hero-graphic"
       className="relative mx-auto w-full max-w-[min(100%,280px)] shrink-0 overflow-visible px-1 pb-1 pt-0 sm:max-w-[292px] sm:px-2 sm:pb-2 sm:pt-1"
     >
-      <div className="relative isolate mx-auto aspect-square w-full max-w-[248px] overflow-visible [container-type:size] sm:max-w-[264px]">
+      <div
+        ref={orbitBoxRef}
+        data-orbit-square
+        className="relative isolate mx-auto aspect-square w-full max-w-[248px] overflow-visible [container-type:size] sm:max-w-[264px]"
+      >
         {/* 底层光晕：全部压在较低 z，避免盖住公转图标 */}
         <motion.div
           className="pointer-events-none absolute inset-[7%] z-[1] rounded-full bg-[radial-gradient(circle_at_44%_40%,rgba(186,230,253,0.22)_0%,rgba(196,181,253,0.12)_38%,rgba(255,255,255,0.32)_62%,transparent_82%)] blur-xl"
@@ -133,47 +186,64 @@ function HeroGraphic() {
           aria-hidden
         />
 
-        {/* 公转图标层：高于所有光晕，低于中心 AI */}
-        <motion.div
-          className="pointer-events-none absolute inset-0 z-[35]"
-          animate={reduce ? undefined : { rotate: 360 }}
-          transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
-        >
-          <OrbitIcon2D angleDeg={0} orbitSec={orbitSec} reduce={reduce}>
-            <Bot className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
-          </OrbitIcon2D>
-          <OrbitIcon2D angleDeg={90} orbitSec={orbitSec} reduce={reduce}>
-            <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
-          </OrbitIcon2D>
-          <OrbitIcon2D angleDeg={180} orbitSec={orbitSec} reduce={reduce}>
-            <FileText className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
-          </OrbitIcon2D>
-          <OrbitIcon2D angleDeg={270} orbitSec={orbitSec} reduce={reduce}>
-            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
-          </OrbitIcon2D>
-        </motion.div>
+        {/* 公转图标层：椭圆轨道，高于光晕、低于中心 AI */}
+        <div className="pointer-events-none absolute inset-0 z-[35]">
+          <EllipticalOrbitIcon orbitBoxRef={orbitBoxRef} phaseOffsetDeg={0} theta={theta} reduce={reduce}>
+            <Bot className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.25} />
+          </EllipticalOrbitIcon>
+          <EllipticalOrbitIcon orbitBoxRef={orbitBoxRef} phaseOffsetDeg={90} theta={theta} reduce={reduce}>
+            <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.25} />
+          </EllipticalOrbitIcon>
+          <EllipticalOrbitIcon orbitBoxRef={orbitBoxRef} phaseOffsetDeg={180} theta={theta} reduce={reduce}>
+            <FileText className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.25} />
+          </EllipticalOrbitIcon>
+          <EllipticalOrbitIcon orbitBoxRef={orbitBoxRef} phaseOffsetDeg={270} theta={theta} reduce={reduce}>
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.25} />
+          </EllipticalOrbitIcon>
+        </div>
 
-        <div className="absolute left-1/2 top-1/2 z-[50] -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute left-1/2 top-1/2 z-[50] -translate-x-1/2 -translate-y-1/2 [perspective:900px]">
           <motion.div
-            className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/40 shadow-[0_20px_44px_-12px_rgba(79,70,229,0.48),0_0_32px_rgba(34,211,238,0.2)] sm:h-20 sm:w-20"
-            animate={reduce ? undefined : { scale: [1, 1.03, 1] }}
-            transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+            className="relative [transform-style:preserve-3d]"
+            animate={reduce ? undefined : { rotate: 360 }}
+            transition={{ duration: centerSpinSec, repeat: Infinity, ease: "linear" }}
           >
             <motion.div
-              className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
-              animate={reduce ? undefined : { backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
-              transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
-            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/35 via-transparent to-transparent" />
-            <div className="absolute inset-0 rounded-2xl border border-white/35" />
-            <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
-            <div className="relative flex h-full w-full items-center justify-center">
-              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-5 w-5 text-cyan-100 drop-shadow sm:h-6 sm:w-6" strokeWidth={1.75} />
-              <span className="relative z-10 text-xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-2xl">AI</span>
-            </div>
+              className="relative [transform-style:preserve-3d]"
+              animate={reduce ? undefined : { rotateY: [-16, 16, -16] }}
+              transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <motion.div
+                className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/40 shadow-[0_20px_44px_-12px_rgba(79,70,229,0.48),0_0_32px_rgba(34,211,238,0.2),inset_0_1px_0_rgba(255,255,255,0.35)] sm:h-20 sm:w-20"
+                animate={reduce ? undefined : { scale: [1, 1.03, 1], rotateX: [4, -4, 4] }}
+                transition={{
+                  scale: { duration: 3.6, repeat: Infinity, ease: "easeInOut" },
+                  rotateX: { duration: 5.5, repeat: Infinity, ease: "easeInOut" },
+                }}
+                style={{ transformStyle: "preserve-3d" }}
+              >
+              <motion.div
+                className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
+                animate={reduce ? undefined : { backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
+                transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+              />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
+              <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/35 via-transparent to-transparent" />
+              <div className="absolute inset-0 rounded-2xl border border-white/35" />
+              <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
+              <div className="relative flex h-full w-full items-center justify-center">
+                <Brain
+                  className="absolute -right-0.5 -top-0.5 z-10 h-5 w-5 text-cyan-100 drop-shadow-[0_2px_4px_rgba(15,23,42,0.45)] sm:h-6 sm:w-6"
+                  strokeWidth={1.75}
+                />
+                <span className="relative z-10 text-xl font-black tracking-tight text-white drop-shadow-[0_1px_0_rgba(255,255,255,0.5)] drop-shadow-[0_3px_10px_rgba(15,23,42,0.55)] sm:text-2xl">
+                  AI
+                </span>
+              </div>
+            </motion.div>
           </motion.div>
+        </motion.div>
         </div>
       </div>
     </div>
