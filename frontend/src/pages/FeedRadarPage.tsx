@@ -505,12 +505,13 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   return (
     <div className="mx-auto max-w-[1400px] px-2 sm:px-4">
-      <div className="grid gap-8 lg:grid-cols-[1fr_300px] lg:items-start xl:grid-cols-[1fr_320px]">
-        <div className="min-w-0 space-y-6">
+      {/* 左窄右宽：大屏左侧侧栏，右侧筛选 + 列表；DOM 主列在前，小屏主内容在上 */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start xl:grid-cols-[minmax(0,300px)_1fr]">
+        <div className="min-w-0 space-y-6 lg:col-start-2 lg:row-start-1">
           {filterPanel}
           {listSection}
         </div>
-        <aside className="min-w-0">
+        <aside className="min-w-0 lg:col-start-1 lg:row-start-1">
           <div className="lg:sticky lg:top-24">
             <FeedSidebar mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
           </div>
