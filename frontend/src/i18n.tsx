@@ -6,28 +6,46 @@ export type Lang = "zh";
 export const UI_LANG: Lang = "zh";
 
 const STRINGS: Record<string, string> = {
-  brand: "AI-TRENDS",
-  tagline: "AI 应用与资讯精选",
+  brand: "AI 资讯站",
+  tagline: "发现 AI 的无限可能",
   navHome: "首页",
-  navApps: "AI 应用",
+  navApps: "AI 工具",
   navNews: "AI 资讯",
   navDownloads: "软件下载",
-  navAbout: "关于",
-  headerSearchPlaceholder: "搜索资讯…",
+  navAbout: "关于我们",
+  headerSearchPlaceholder: "搜索 AI 资讯、工具…",
   sidebarNavTitle: "导航",
 
-  homeHeroKicker: "实时精选",
-  homeHeroTitle: "把握 AI 产品与资讯脉搏",
-  homeHeroDesc:
-    "聚合多源信号，经去重与结构化呈现：应用上新、模型与工具动态、行业资讯在一站浏览。",
-  homeHeroCtaApps: "浏览 AI 应用",
-  homeHeroCtaNews: "阅读 AI 资讯",
-  homeSectionNews: "最新 AI 资讯",
-  homeSectionApps: "热门 AI 应用",
+  /** 首页（设计稿 1.png） */
+  homeMainHeroTitle: "洞察 AI 前沿动态 掌握智能未来趋势",
+  homeMainHeroDesc:
+    "聚合全球模型发布、产品迭代与产业信号，用结构化信息流帮你节省筛选时间，专注真正重要的变化。",
+  homeMainHeroCta1: "探索最新资讯",
+  homeMainHeroCta2: "发现 AI 工具",
+  homeTodayFocus: "今日焦点",
+  homeImportantTag: "重要更新",
+  homePopularCategories: "热门分类",
+  homePopularTools: "热门工具",
+  homeAiTrend: "AI 趋势",
+  homeTrendChartTitle: "全球 AI 投资热度",
+  homeStatActiveTools: "活跃工具",
+  homeStatNewArticles: "新增资讯",
+  homeStatGrowth: "周环比",
+  homeSubscribeBarTitle: "订阅每周精选，第一时间获取 AI 前沿简报与工具清单",
+  homeSubscribeBarBtn: "订阅",
+  homePopularCat1Title: "AI 前沿",
+  homePopularCat1Sub: "模型与论文",
+  homePopularCat2Title: "工具推荐",
+  homePopularCat2Sub: "效率与创作",
+  homePopularCat3Title: "行业动态",
+  homePopularCat3Sub: "商业与政策",
+  homePopularCat4Title: "开源生态",
+  homePopularCat4Sub: "框架与数据集",
+  homePopularCat5Title: "软件下载",
+  homePopularCat5Sub: "安装包与版本",
+
   homeViewAll: "查看全部",
   homeLoading: "加载首页…",
-  homeCategorySnapshot: "近 30 天 · 资讯类目",
-  homeCategoryEmpty: "暂无类目统计数据。",
   homeEmpty: "暂无内容，请稍后重试或检查后端数据。",
 
   detailSidebarTitle: "本栏更多",
@@ -38,8 +56,12 @@ const STRINGS: Record<string, string> = {
 
   source: "来源",
 
-  footer: "公共生态估计 · 非合规或采购结论",
+  footer: "© AI 资讯站 · 学习参考与信息聚合演示",
   footerAboutFull: "完整说明",
+  footerPrivacy: "隐私政策",
+  footerTerms: "使用条款",
+  footerContact: "联系我们",
+  footerIcpNote: "备案及主体信息请以实际上线版本为准",
 
   newsletterCta: "把握 AI 浪潮，订阅精选更新",
   newsletterPlaceholder: "请输入邮箱",
@@ -87,6 +109,7 @@ const STRINGS: Record<string, string> = {
   resourceLoadingDetail: "加载文章…",
   resourceTabsHeading: "分栏阅读",
 
+  downloadsPageTitle: "软件下载",
   downloadsIntro:
     "按平台与应用类型筛选；本地上传包为直链下载，仅外链则跳转应用商店。可通过后台「应用分发」或维护脚本上传列表数据。",
   downloadsPlatform: "平台",

@@ -7,7 +7,7 @@
     @apply scroll-smooth;
   }
   body {
-    @apply min-h-screen bg-[#f5f5f5] text-slate-800 antialiased;
+    @apply min-h-screen bg-slate-50 text-slate-800 antialiased;
   }
 
   #root {
@@ -19,11 +19,11 @@
 
 @layer components {
   .glass-light {
-    @apply rounded-lg border border-slate-200 bg-white shadow-sm;
+    @apply rounded-xl border border-slate-200/90 bg-white/95 shadow-sm shadow-slate-200/40;
   }
 
   .ui-card {
-    @apply rounded-lg border border-slate-200 bg-white shadow-sm;
+    @apply rounded-xl border border-slate-200/90 bg-white/95 shadow-sm shadow-slate-200/40 backdrop-blur-[2px];
   }
 
   .glass-hover-light {
@@ -31,7 +31,7 @@
   }
 
   .text-gradient {
-    @apply text-brand-600;
+    @apply bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 bg-clip-text text-transparent;
   }
 
   .btn-accent {

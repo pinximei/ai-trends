@@ -346,7 +346,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         ) : null}
 
         {pageMeta.days_scan_truncated ? (
-          <p className="mt-4 text-xs font-medium text-amber-700">{t("resourcesDaysTruncated")}</p>
+          <p className="mt-4 text-xs font-medium text-violet-700">{t("resourcesDaysTruncated")}</p>
         ) : null}
       </div>
     </div>

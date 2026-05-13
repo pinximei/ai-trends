@@ -81,7 +81,7 @@ export function SoftwareDownloadsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <div className="glass-light p-5 sm:p-6">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{t("navDownloads")}</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{t("downloadsPageTitle")}</h1>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className="w-full text-xs font-semibold uppercase tracking-wider text-slate-500 sm:w-auto sm:mr-1">
