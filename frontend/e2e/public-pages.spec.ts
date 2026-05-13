@@ -14,12 +14,12 @@ test.describe("公开站 · 接口与交互", () => {
     });
   });
 
-  test("根路径重定向到 AI 应用；feed API code=0", async ({ page, request }) => {
+  test("根路径为首页；feed API code=0", async ({ page, request }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(/\/apps$/);
+    expect(new URL(page.url()).pathname).toBe("/");
     const feedApi = await request.get("http://127.0.0.1:8000/api/public/v1/articles/feed?feed=apps&page_size=5");
     await expectEnvelopeOk(feedApi);
-    await expect(page.locator("main")).toContainText("应用", { timeout: 30_000 });
+    await expect(page.getByTestId("hero-graphic")).toBeVisible({ timeout: 30_000 });
   });
 
   test("应用页：feed 有数据时可进详情", async ({ page, request }) => {
@@ -61,5 +61,32 @@ test.describe("公开站 · 接口与交互", () => {
     await expect(page).toHaveURL(/\/about$/);
     await page.locator("header nav").getByRole("link", { name: /应用|apps/u }).click();
     await expect(page).toHaveURL(/\/apps$/);
+  });
+
+  test("首页主视觉：轨道图标在光晕之上（命中测试）", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const hero = page.getByTestId("hero-graphic");
+    await expect(hero).toBeVisible();
+    const bot = hero.locator("svg.lucide-bot").first();
+    await expect(bot).toBeVisible();
+    const ok = await hero.evaluate((root) => {
+      const svg = root.querySelector("svg.lucide-bot");
+      if (!svg) return { ok: false as const, reason: "no bot svg" };
+      const r = svg.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const hits = document.elementsFromPoint(cx, cy);
+      const firstInHero = hits.find((el) => root.contains(el));
+      if (!firstInHero) return { ok: false as const, reason: "no element in hero at point", cx, cy };
+      const onOrbitChip =
+        firstInHero === svg || firstInHero.contains(svg) || (svg instanceof Element && svg.contains(firstInHero));
+      const isGlowOnly =
+        firstInHero.getAttribute("aria-hidden") === "true" &&
+        typeof (firstInHero as HTMLElement).className === "string" &&
+        /blur|shadow|inset|radial-gradient|mask-image/.test((firstInHero as HTMLElement).className);
+      return { ok: onOrbitChip && !isGlowOnly, firstTag: firstInHero.tagName, cx, cy };
+    });
+    expect(ok.ok, JSON.stringify(ok)).toBe(true);
   });
 });

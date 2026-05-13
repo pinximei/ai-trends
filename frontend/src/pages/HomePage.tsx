@@ -68,10 +68,10 @@ function OrbitIcon2D({
   children: ReactNode;
 }) {
   const chip =
-    "flex h-8 w-8 items-center justify-center rounded-xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-9 sm:w-9";
+    "pointer-events-auto relative z-[2] flex h-8 w-8 items-center justify-center rounded-xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-9 sm:w-9";
   return (
     <div
-      className="absolute left-1/2 top-1/2 h-0 w-0"
+      className="absolute left-1/2 top-1/2 z-[1] h-0 w-0"
       style={{
         transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(-${orbitRem}rem)`,
       }}
@@ -99,17 +99,17 @@ function HeroGraphic() {
       data-testid="hero-graphic"
       className="relative mx-auto w-full max-w-[min(100%,300px)] shrink-0 overflow-visible px-1 pb-3 pt-1 sm:max-w-[308px] sm:px-2 sm:pb-4 sm:pt-2"
     >
-      <div className="relative mx-auto aspect-square w-full max-w-[256px] overflow-visible sm:max-w-[276px]">
-        {/* 底层光晕：范围收小 */}
+      <div className="relative isolate mx-auto aspect-square w-full max-w-[256px] overflow-visible sm:max-w-[276px]">
+        {/* 底层光晕：全部压在较低 z，避免盖住公转图标 */}
         <motion.div
-          className="pointer-events-none absolute inset-[3%] z-0 rounded-full bg-[radial-gradient(circle_at_44%_40%,rgba(186,230,253,0.22)_0%,rgba(196,181,253,0.12)_38%,rgba(255,255,255,0.32)_62%,transparent_82%)] blur-xl"
+          className="pointer-events-none absolute inset-[3%] z-[1] rounded-full bg-[radial-gradient(circle_at_44%_40%,rgba(186,230,253,0.22)_0%,rgba(196,181,253,0.12)_38%,rgba(255,255,255,0.32)_62%,transparent_82%)] blur-xl"
           aria-hidden
           animate={reduce ? undefined : { opacity: [0.38, 0.52, 0.38], scale: [0.99, 1.01, 0.99] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
 
         <div
-          className="pointer-events-none absolute inset-[10%] z-[1] rounded-full opacity-[0.1] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_78%)] sm:opacity-[0.14]"
+          className="pointer-events-none absolute inset-[10%] z-[2] rounded-full opacity-[0.1] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_78%)] sm:opacity-[0.14]"
           style={{
             backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.18) 1px, transparent 1.5px)",
             backgroundSize: "10px 10px",
@@ -118,26 +118,26 @@ function HeroGraphic() {
         />
 
         <div
-          className="pointer-events-none absolute inset-[4%] z-[2] rounded-full bg-transparent opacity-[0.55] blur-[8px] shadow-[0_0_36px_12px_rgba(167,139,250,0.09),0_0_24px_8px_rgba(125,211,252,0.08)]"
+          className="pointer-events-none absolute inset-[4%] z-[3] rounded-full bg-transparent opacity-[0.55] blur-[8px] shadow-[0_0_36px_12px_rgba(167,139,250,0.09),0_0_24px_8px_rgba(125,211,252,0.08)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[6%] z-[3] rounded-full opacity-[0.48] blur-[6px] [box-shadow:inset_0_0_36px_rgba(255,255,255,0.42),0_0_0_1px_rgba(255,255,255,0.22),0_0_32px_10px_rgba(139,92,246,0.06)]"
+          className="pointer-events-none absolute inset-[6%] z-[4] rounded-full opacity-[0.48] blur-[6px] [box-shadow:inset_0_0_36px_rgba(255,255,255,0.42),0_0_0_1px_rgba(255,255,255,0.22),0_0_32px_10px_rgba(139,92,246,0.06)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[9%] z-[4] rounded-full opacity-[0.35] blur-[3px] shadow-[0_0_22px_6px_rgba(255,255,255,0.45)]"
+          className="pointer-events-none absolute inset-[9%] z-[5] rounded-full opacity-[0.35] blur-[3px] shadow-[0_0_22px_6px_rgba(255,255,255,0.45)]"
           aria-hidden
         />
 
         <div
-          className="pointer-events-none absolute inset-[22%] z-[5] rounded-full bg-[radial-gradient(ellipse_at_50%_44%,rgba(255,255,255,0.38)_0%,rgba(248,250,252,0.2)_62%,transparent_86%)]"
+          className="pointer-events-none absolute inset-[22%] z-[6] rounded-full bg-[radial-gradient(ellipse_at_50%_44%,rgba(255,255,255,0.38)_0%,rgba(248,250,252,0.2)_62%,transparent_86%)]"
           aria-hidden
         />
 
-        {/* 公转层与主容器同中心；半径用 rem 贴近外缘光晕 */}
+        {/* 公转图标层：高于所有光晕，低于中心 AI */}
         <motion.div
-          className="pointer-events-none absolute inset-0 z-[20]"
+          className="pointer-events-none absolute inset-0 z-[35]"
           animate={reduce ? undefined : { rotate: 360 }}
           transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
         >
@@ -301,7 +301,7 @@ export function HomePage() {
               </div>
             </div>
             <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-1 sm:py-2 lg:min-h-0 lg:min-w-[280px] lg:flex-1 lg:justify-center lg:py-0">
-              <div className="flex w-full min-w-0 max-w-full shrink-0 justify-center overflow-visible lg:w-full lg:translate-x-[min(2.25rem,9vw)] xl:translate-x-[min(4rem,14vw)] 2xl:translate-x-[min(5rem,16vw)]">
+              <div className="flex w-full min-w-0 max-w-full shrink-0 justify-center overflow-visible lg:w-full">
                 <HeroGraphic />
               </div>
             </div>
