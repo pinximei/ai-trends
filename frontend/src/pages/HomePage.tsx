@@ -53,82 +53,59 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 2D 主视觉（对齐 1.png）：明显大外圆 + 同心环 + 虚线内盘；角标 z 轴高于中心块；AI 为多色渐变叠层非纯色 */
+/** 2D 主视觉：最外一圈明显大圆环 + 宽间距内环 + 中心较小 AI；四角图标贴外缘，避免与中心挤在一起 */
 function HeroGraphic() {
   const orbitIcon =
-    "absolute z-[35] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/95 bg-white/85 text-violet-700 shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_6px_20px_rgba(99,102,241,0.25),0_0_24px_rgba(165,180,252,0.65)] backdrop-blur-sm sm:h-10 sm:w-10";
+    "absolute z-[40] flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-white/90 text-violet-700 shadow-[0_0_0_2px_rgba(139,92,246,0.45),0_8px_24px_rgba(99,102,241,0.28),0_0_28px_rgba(165,180,252,0.55)] backdrop-blur-sm sm:h-10 sm:w-10";
   return (
-    <div className="relative mx-auto w-full max-w-[280px] shrink-0 overflow-visible px-3 pb-6 pt-3 sm:max-w-[320px] sm:px-4 sm:pb-8 sm:pt-4">
-      <div className="relative aspect-square w-full overflow-visible">
+    <div
+      data-testid="hero-graphic"
+      className="relative mx-auto w-full max-w-[min(100%,360px)] shrink-0 overflow-visible px-2 pb-8 pt-2 sm:max-w-[400px] sm:px-3 sm:pb-10 sm:pt-3"
+    >
+      <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-visible sm:max-w-[360px]">
         <div
-          className="pointer-events-none absolute -inset-[24%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.95)_0%,rgba(224,231,255,0.5)_28%,rgba(196,181,253,0.28)_52%,rgba(125,211,252,0.12)_72%,transparent_88%)] blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-50"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -inset-[10%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.65)_0%,rgba(238,242,255,0.25)_55%,transparent_78%)]"
-          aria-hidden
-        />
-
-        <div
-          className="pointer-events-none absolute inset-0 z-[1] rounded-full border-[4px] border-violet-400/90 bg-gradient-to-b from-white/50 via-violet-50/25 to-indigo-50/20 shadow-[0_0_0_3px_rgba(255,255,255,0.95),0_0_48px_rgba(139,92,246,0.35),0_12px_40px_rgba(99,102,241,0.12)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-[5%] z-[2] rounded-full border-[3px] border-white/90 shadow-[0_0_32px_rgba(186,230,253,0.8)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-[10%] z-[3] rounded-full border-2 border-cyan-200/80 shadow-[0_0_24px_rgba(34,211,238,0.45)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-[14%] z-[4] rounded-full border border-indigo-300/70 shadow-[0_0_18px_rgba(165,180,252,0.5)]"
+          className="pointer-events-none absolute -inset-[18%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_48%,rgba(255,255,255,0.92)_0%,rgba(224,231,255,0.45)_32%,rgba(196,181,253,0.22)_58%,transparent_82%)] blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-50"
           aria-hidden
         />
 
         <div
-          className="absolute inset-[15%] z-[5] rounded-full border border-dashed border-violet-400/55 bg-gradient-to-br from-violet-400/18 via-white/30 to-sky-300/15 shadow-[inset_0_0_40px_rgba(255,255,255,0.35),0_0_28px_rgba(99,102,241,0.12)]"
+          className="pointer-events-none absolute inset-0 z-[1] rounded-full border-[7px] border-violet-500 bg-transparent shadow-[0_0_0_4px_rgba(255,255,255,1),0_0_36px_rgba(139,92,246,0.45),0_16px_48px_rgba(99,102,241,0.12)] sm:border-[9px]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[14%] z-[2] rounded-full border-[3px] border-white/95 shadow-[0_0_28px_rgba(186,230,253,0.75)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[26%] z-[3] rounded-full border-2 border-dashed border-violet-400/70 bg-gradient-to-br from-violet-100/50 via-white/70 to-sky-100/40 shadow-[inset_0_0_48px_rgba(255,255,255,0.55),0_0_20px_rgba(99,102,241,0.08)]"
           aria-hidden
         />
 
-        <div
-          className="pointer-events-none absolute left-[10%] top-[14%] z-[6] h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_14px_rgba(167,139,250,1)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute right-[11%] top-[18%] z-[6] h-2 w-2 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.95)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute bottom-[16%] left-[16%] z-[6] h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,1)]"
-          aria-hidden
-        />
-
-        <div className="absolute left-1/2 top-1/2 z-[20] -translate-x-1/2 -translate-y-1/2">
-          <div className="relative h-[7.25rem] w-[7.25rem] overflow-hidden rounded-2xl ring-2 ring-white/70 sm:h-32 sm:w-32">
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,#7c3aed_0%,#6366f1_28%,#4f46e5_48%,#2563eb_72%,#0ea5e9_100%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(255,255,255,0.55)_0%,transparent_55%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(200deg,rgba(244,114,182,0.35)_0%,transparent_40%,rgba(56,189,248,0.28)_100%)]" />
-            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/25 via-transparent to-transparent" />
-            <div className="absolute inset-0 rounded-2xl border border-white/25" />
-            <div className="absolute inset-x-0 top-0 h-[45%] rounded-t-2xl bg-gradient-to-b from-white/45 to-transparent" />
+        <div className="absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2">
+          <div className="relative h-[5.5rem] w-[5.5rem] overflow-hidden rounded-2xl ring-2 ring-white/80 shadow-[0_16px_40px_-10px_rgba(79,70,229,0.4)] sm:h-24 sm:w-24">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,#7c3aed_0%,#6366f1_30%,#4f46e5_52%,#2563eb_78%,#0ea5e9_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.32)_0%,transparent_42%,rgba(56,189,248,0.26)_100%)]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/30 via-transparent to-transparent" />
+            <div className="absolute inset-0 rounded-2xl border border-white/30" />
+            <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/42 to-transparent" />
             <div className="relative flex h-full w-full items-center justify-center">
-              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-7 w-7 text-cyan-100 drop-shadow-md sm:h-8 sm:w-8" strokeWidth={1.5} />
-              <span className="relative z-10 text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_12px_rgba(15,23,42,0.45)] sm:text-4xl">AI</span>
+              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-6 w-6 text-cyan-100 drop-shadow sm:h-7 sm:w-7" strokeWidth={1.75} />
+              <span className="relative z-10 text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-3xl">AI</span>
             </div>
           </div>
         </div>
 
-        <div className={`${orbitIcon} left-[6%] top-[16%]`}>
+        <div className={`${orbitIcon} left-[12%] top-[12%]`}>
           <Bot className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
         </div>
-        <div className={`${orbitIcon} right-[8%] top-[12%]`}>
+        <div className={`${orbitIcon} left-[88%] top-[12%]`}>
           <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
         </div>
-        <div className={`${orbitIcon} left-[9%] bottom-[14%]`}>
+        <div className={`${orbitIcon} left-[12%] top-[88%]`}>
           <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
         </div>
-        <div className={`${orbitIcon} right-[6%] bottom-[16%]`}>
+        <div className={`${orbitIcon} left-[88%] top-[88%]`}>
           <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
         </div>
       </div>
@@ -231,7 +208,7 @@ export function HomePage() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-x-16 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-x-20">
         <div className="min-w-0 space-y-8 pr-0 lg:space-y-10 lg:pr-2">
           <section className="flex flex-col items-center gap-8 overflow-visible text-center sm:gap-9 lg:flex-row lg:items-center lg:gap-10 lg:text-left xl:gap-12">
-            <div className="min-w-0 w-full shrink-0 lg:max-w-lg xl:max-w-xl">
+            <div className="min-w-0 w-full lg:max-w-lg lg:flex-1 xl:max-w-xl">
               <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
               </h1>
@@ -254,8 +231,8 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-[200px] w-full min-w-0 flex-1 items-center justify-center overflow-visible py-2 lg:min-h-[260px] lg:justify-center lg:py-0">
-              <div className="translate-x-0 overflow-visible lg:translate-x-[min(2.75rem,8%)] xl:translate-x-[min(3.25rem,9%)]">
+            <div className="flex min-h-[220px] w-full flex-none items-center justify-center overflow-visible py-3 lg:min-h-[300px] lg:w-[min(100%,360px)] lg:max-w-[360px] lg:flex-none lg:shrink-0 lg:justify-center lg:py-0">
+              <div className="w-full max-w-full translate-x-0 overflow-visible lg:translate-x-[min(2.75rem,8%)] xl:translate-x-[min(3.25rem,9%)]">
                 <HeroGraphic />
               </div>
             </div>
