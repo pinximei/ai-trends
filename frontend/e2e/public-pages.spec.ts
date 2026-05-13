@@ -68,11 +68,11 @@ test.describe("公开站 · 接口与交互", () => {
     await page.goto("/");
     const hero = page.getByTestId("hero-graphic");
     await expect(hero).toBeVisible();
-    const bot = hero.locator("svg.lucide-bot").first();
-    await expect(bot).toBeVisible();
+    const homeIcon = hero.locator("svg.lucide-home").first();
+    await expect(homeIcon).toBeVisible();
     const ok = await hero.evaluate((root) => {
-      const svg = root.querySelector("svg.lucide-bot");
-      if (!svg) return { ok: false as const, reason: "no bot svg" };
+      const svg = root.querySelector("svg.lucide-home");
+      if (!svg) return { ok: false as const, reason: "no home nav svg in hero" };
       const r = svg.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;

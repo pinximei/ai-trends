@@ -2,18 +2,15 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  BarChart3,
-  Bot,
   Brain,
   ChevronRight,
   Download,
-  FileText,
   Mail,
-  MessageCircle,
   Wrench,
 } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { useI18n } from "@/i18n";
+import { TOP_NAV_ITEMS } from "@/navConfig";
 
 const INDUSTRY = "ai";
 
@@ -109,9 +106,11 @@ function OrbitSatellite({
  * 整层 rotateZ 公转，肉眼即「绕中心转」。
  */
 function HeroGraphic() {
+  const { t } = useI18n();
   const reduce = usePrefersReducedMotion();
   const orbitRem = HERO_ORBIT_REM;
   const tilt = reduce ? 0 : HERO_RING_TILT_DEG;
+  const orbitStepDeg = 360 / TOP_NAV_ITEMS.length;
 
   const heroMotionStyle = {
     ["--hero-orbit-sec" as string]: `${HERO_ORBIT_SEC}s`,
@@ -158,18 +157,20 @@ function HeroGraphic() {
               className={`pointer-events-none absolute inset-0 flex items-center justify-center [transform-style:preserve-3d] ${reduce ? "" : "hero-orbit-spin"}`}
             >
               <div className="relative aspect-square w-[90%] max-w-[min(100%,310px)] sm:max-w-[334px]">
-                <OrbitSatellite angleDeg={0} orbitRem={orbitRem} reduce={reduce}>
-                  <Bot className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
-                </OrbitSatellite>
-                <OrbitSatellite angleDeg={90} orbitRem={orbitRem} reduce={reduce}>
-                  <MessageCircle className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
-                </OrbitSatellite>
-                <OrbitSatellite angleDeg={180} orbitRem={orbitRem} reduce={reduce}>
-                  <FileText className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
-                </OrbitSatellite>
-                <OrbitSatellite angleDeg={270} orbitRem={orbitRem} reduce={reduce}>
-                  <BarChart3 className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
-                </OrbitSatellite>
+                {TOP_NAV_ITEMS.map((item, i) => {
+                  const Icon = item.icon;
+                  return (
+                    <OrbitSatellite key={item.to} angleDeg={orbitStepDeg * i} orbitRem={orbitRem} reduce={reduce}>
+                      <Link
+                        to={item.to}
+                        className="flex h-full w-full items-center justify-center rounded-full text-indigo-600 outline-none ring-violet-400/40 transition hover:bg-white/35 hover:text-violet-700 focus-visible:ring-2"
+                        aria-label={t(item.key)}
+                      >
+                        <Icon className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
+                      </Link>
+                    </OrbitSatellite>
+                  );
+                })}
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Download, Home, Info, LayoutGrid, Newspaper } from "lucide-react";
 import { useI18n } from "@/i18n";
+import { TOP_NAV_ITEMS } from "@/navConfig";
 import { NewsletterBar } from "./NewsletterBar";
 
 function apiBasePrefix(): string {
@@ -20,21 +20,7 @@ async function fetchBackendRelease(): Promise<string | null> {
   return null;
 }
 
-const topNav = [
-  { to: "/", key: "navHome", icon: Home },
-  { to: "/apps", key: "navApps", icon: LayoutGrid },
-  { to: "/news", key: "navNews", icon: Newspaper },
-  { to: "/downloads", key: "navDownloads", icon: Download },
-  { to: "/about", key: "navAbout", icon: Info },
-] as const;
-
-const sideNav = [
-  { to: "/", key: "navHome" },
-  { to: "/apps", key: "navApps" },
-  { to: "/news", key: "navNews" },
-  { to: "/downloads", key: "navDownloads" },
-  { to: "/about", key: "navAbout" },
-] as const;
+const sideNav = TOP_NAV_ITEMS.map(({ to, key }) => ({ to, key }));
 
 /** 首页：随屏宽加宽内容区；其它页保持 1200px 阅读宽 */
 function contentShellClass(isHome: boolean): string {
@@ -80,7 +66,7 @@ export function Layout() {
           </Link>
 
           <nav className="order-last flex w-full flex-wrap items-center justify-center gap-1 md:absolute md:left-1/2 md:top-1/2 md:order-none md:w-auto md:max-w-[min(720px,72vw)] md:-translate-x-1/2 md:-translate-y-1/2 md:flex-nowrap md:justify-center">
-            {topNav.map((item) => {
+            {TOP_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
