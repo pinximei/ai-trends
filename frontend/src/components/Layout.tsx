@@ -22,7 +22,7 @@ async function fetchBackendRelease(): Promise<string | null> {
 
 const sideNav = TOP_NAV_ITEMS.map(({ to, key }) => ({ to, key }));
 
-/** 首页、资讯/工具 feed、软件下载、关于：宽版内容区；其它页 1200px */
+/** 首页、资讯/工具 feed、软件下载、关于、文章详情：宽版内容区；其它页 1200px */
 function contentShellClass(wide: boolean): string {
   if (wide) {
     return "mx-auto w-full max-w-[min(1920px,100%)] px-4 sm:px-6 lg:px-10 xl:px-14 2xl:px-20";
@@ -36,10 +36,11 @@ export function Layout() {
   const path = location.pathname;
   const isHome = path === "/";
   const isFeedHub = path === "/apps" || path === "/news";
-  const isWideHub = isHome || isFeedHub || path === "/downloads" || path === "/about";
+  const isResourceDetail = /^\/resources\/[^/]+$/.test(path);
+  const isWideHub = isHome || isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
   const useWideShell = isWideHub;
   const hideSidebar = isWideHub;
-  const isHubTightTop = isFeedHub || path === "/downloads" || path === "/about";
+  const isHubTightTop = isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
   const hideFloatingNewsletter = isHome;
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);

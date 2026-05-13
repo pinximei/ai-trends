@@ -88,12 +88,15 @@ export function ResourceDetailPage() {
   const isApp = a?.feed_kind === "apps";
 
   const mdBody =
-    "max-w-none space-y-4 text-slate-600 leading-relaxed [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:underline [&_strong]:text-slate-900 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-slate-900 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_li]:marker:text-brand-300 [&_code]:rounded-md [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-slate-800 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand-100 [&_blockquote]:pl-4 [&_blockquote]:text-slate-500";
+    "max-w-none w-full space-y-4 text-slate-600 leading-relaxed [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:underline [&_strong]:text-slate-900 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-slate-900 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_li]:marker:text-brand-300 [&_code]:rounded-md [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-slate-800 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand-100 [&_blockquote]:pl-4 [&_blockquote]:text-slate-500";
+
+  const backBtnClass =
+    "inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-600";
 
   if (err) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-8">
-        <div className="ui-card p-6">
+      <div className="w-full px-2 sm:px-4">
+        <div className="ui-card mx-auto max-w-lg p-6">
           <p className="text-sm font-medium text-rose-600">{err}</p>
           <Link
             to="/"
@@ -107,8 +110,8 @@ export function ResourceDetailPage() {
   }
   if (!a) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-8">
-        <div className="ui-card py-12 text-center">
+      <div className="w-full px-2 sm:px-4">
+        <div className="ui-card mx-auto max-w-lg py-12 text-center">
           <p className="text-sm text-slate-500">{t("resourceLoadingDetail")}</p>
         </div>
       </div>
@@ -116,48 +119,58 @@ export function ResourceDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px]">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <Link
-          to={backTo}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-600"
-        >
+    <div className="w-full px-2 sm:px-4">
+      <div className="sticky top-16 z-30 -mx-2 border-b border-slate-200/80 bg-white/95 px-3 py-2.5 backdrop-blur-md lg:hidden">
+        <Link to={backTo} className={backBtnClass}>
           ← {t("detailBackFeed")}
         </Link>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          {isApp ? t("navApps") : t("navNews")}
-        </span>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start xl:grid-cols-[300px_1fr]">
-        <aside className="min-w-0 lg:sticky lg:top-28">
-          <div className="ui-card overflow-hidden">
-            <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
-            </div>
-            <nav className="max-h-[min(70vh,520px)] divide-y divide-slate-100 overflow-y-auto">
-              {sidebar.map((row) => {
-                const activeHere = row.id === a.id;
-                return (
-                  <Link
-                    key={row.id}
-                    to={`/resources/${row.id}`}
-                    className={`block px-4 py-3 text-sm transition-colors hover:bg-slate-50 ${
-                      activeHere ? "border-l-[3px] border-l-brand-500 bg-brand-50/60 font-medium text-slate-900" : "text-slate-700"
-                    }`}
-                  >
-                    <span className="line-clamp-2 leading-snug">{row.title}</span>
-                    <span className="mt-1 block text-[10px] font-mono uppercase text-slate-400">
-                      {row.platform_label || "—"}
-                    </span>
-                  </Link>
-                );
-              })}
-            </nav>
+      <div className="mt-2 flex flex-col gap-6 lg:mt-0 lg:flex-row lg:items-start lg:gap-8">
+        <div className="hidden shrink-0 lg:block lg:w-32">
+          <div className="sticky top-24 z-20">
+            <Link to={backTo} className={`${backBtnClass} w-full justify-center text-center`}>
+              ← {t("detailBackFeed")}
+            </Link>
           </div>
-        </aside>
+        </div>
 
-        <article className="min-w-0 space-y-6">
+        <div className="min-w-0 flex-1">
+          <div className="mb-4 flex justify-end lg:mb-6">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {isApp ? t("navApps") : t("navNews")}
+            </span>
+          </div>
+
+          <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,300px)_1fr]">
+            <aside className="min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-y-contain">
+              <div className="ui-card overflow-hidden">
+                <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
+                </div>
+                <nav className="max-h-[min(70vh,520px)] divide-y divide-slate-100 overflow-y-auto">
+                  {sidebar.map((row) => {
+                    const activeHere = row.id === a.id;
+                    return (
+                      <Link
+                        key={row.id}
+                        to={`/resources/${row.id}`}
+                        className={`block px-4 py-3 text-sm transition-colors hover:bg-slate-50 ${
+                          activeHere ? "border-l-[3px] border-l-brand-500 bg-brand-50/60 font-medium text-slate-900" : "text-slate-700"
+                        }`}
+                      >
+                        <span className="line-clamp-2 leading-snug">{row.title}</span>
+                        <span className="mt-1 block text-[10px] font-mono uppercase text-slate-400">
+                          {row.platform_label || "—"}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            </aside>
+
+            <article className="min-w-0 w-full max-w-none space-y-6">
           {isApp ? (
             <div className="ui-card overflow-hidden p-6 sm:p-8">
               <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
@@ -182,7 +195,7 @@ export function ResourceDetailPage() {
               <p className="text-xs font-medium uppercase tracking-wide text-brand-700">{t("detailFeaturedTag")}</p>
               <h1 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
               {a.summary ? (
-                <p className="mt-4 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
+                <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
               ) : null}
             </div>
           )}
@@ -254,6 +267,8 @@ export function ResourceDetailPage() {
             </div>
           )}
         </article>
+          </div>
+        </div>
       </div>
     </div>
   );
