@@ -22,9 +22,9 @@ async function fetchBackendRelease(): Promise<string | null> {
 
 const sideNav = TOP_NAV_ITEMS.map(({ to, key }) => ({ to, key }));
 
-/** 首页：随屏宽加宽内容区；其它页保持 1200px 阅读宽 */
-function contentShellClass(isHome: boolean): string {
-  if (isHome) {
+/** 首页与 AI 应用/资讯：宽版内容区；其它页 1200px */
+function contentShellClass(wide: boolean): string {
+  if (wide) {
     return "mx-auto w-full max-w-[min(1920px,100%)] px-4 sm:px-6 lg:px-10 xl:px-14 2xl:px-20";
   }
   return "mx-auto w-full max-w-[1200px] px-4 lg:px-8";
@@ -33,8 +33,11 @@ function contentShellClass(isHome: boolean): string {
 export function Layout() {
   const { t } = useI18n();
   const location = useLocation();
-  const isHome = location.pathname === "/";
-  const hideSidebar = isHome;
+  const path = location.pathname;
+  const isHome = path === "/";
+  const isFeedHub = path === "/apps" || path === "/news";
+  const useWideShell = isHome || isFeedHub;
+  const hideSidebar = isHome || isFeedHub;
   const hideFloatingNewsletter = isHome;
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
@@ -49,7 +52,7 @@ export function Layout() {
     };
   }, []);
 
-  const shell = contentShellClass(isHome);
+  const shell = contentShellClass(useWideShell);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -99,7 +102,7 @@ export function Layout() {
         </div>
       </header>
 
-      <div className={`flex flex-1 ${shell} ${isHome ? "" : "gap-6 lg:gap-8"}`}>
+      <div className={`flex flex-1 ${shell} ${isHome || isFeedHub ? "" : "gap-6 lg:gap-8"}`}>
         {!hideSidebar ? (
           <aside className="hidden w-52 shrink-0 border-r border-slate-200/80 bg-white/80 lg:block">
             <div className="sticky top-[4.75rem] space-y-1 px-3 py-6">
@@ -125,7 +128,7 @@ export function Layout() {
 
         <main
           className={
-            isHome
+            isHome || isFeedHub
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
               : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
           }

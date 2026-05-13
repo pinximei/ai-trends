@@ -191,13 +191,64 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       ? t("resourcesPageSummary").replace("{page}", String(feedPage)).replace("{total}", String(pageMeta.total_pages))
       : "";
 
-  const filterPanel = (
-    <div className="glass-light relative overflow-hidden rounded-lg border-slate-200 p-0 shadow-sm">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50/50 via-transparent to-slate-50/40" />
+  const paginationBar = () =>
+    !loading && pageMeta.total_pages > 0 ? (
+      <div className="ui-card flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
+        <div className="text-sm text-slate-600">
+          <span className="font-medium text-slate-900">{pageSummaryText}</span>
+          {pageMeta.day_utc ? (
+            <span className="ml-2 text-slate-500">· 世界时 {formatFeedDateLabel(pageMeta.day_utc)}</span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!pageMeta.has_prev || loading}
+            onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+            className="rounded-full border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {t("resourcesPagePrev")}
+          </button>
+          <button
+            type="button"
+            disabled={!pageMeta.has_next || loading}
+            onClick={() => setFeedPage((p) => p + 1)}
+            className="rounded-full border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {t("resourcesPageNext")}
+          </button>
+          <label className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="sr-only">{t("resourcesPageJumpPlaceholder")}</span>
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, pageMeta.total_pages)}
+              value={jumpDraft}
+              onChange={(e) => setJumpDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onJump();
+              }}
+              className="w-20 rounded-xl border border-slate-200 bg-white px-2 py-1.5 font-mono text-sm text-slate-800 shadow-inner"
+              aria-label={t("resourcesPageJumpPlaceholder")}
+            />
+            <button
+              type="button"
+              onClick={() => onJump()}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand-400"
+            >
+              {t("resourcesPageGo")}
+            </button>
+          </label>
+        </div>
+      </div>
+    ) : null;
 
-      <div className="relative border-b border-slate-100/90 p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="max-w-3xl">
+  const leftRail = (
+    <div className="min-w-0 space-y-5">
+      <div className="ui-card relative overflow-hidden p-5 sm:p-6">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50/50 via-transparent to-slate-50/40" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-600/85">
               {mode === "apps" ? t("navApps") : t("navNews")}
             </p>
@@ -213,145 +264,95 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         </div>
       </div>
 
-      <div className="relative p-5 sm:p-6 sm:pt-5">
-        <div className="rounded-2xl border border-slate-100/90 bg-slate-50/45 p-4 ring-1 ring-slate-100/70 sm:p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            <Search className="h-3.5 w-3.5 text-brand-500" strokeWidth={2.5} />
-            {t("resourcesSearchLabel")}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
-            <div className="relative min-w-0 flex-1 sm:max-w-xl">
-              <Search className="pointer-events-none absolute bottom-3 left-4 h-4 w-4 text-slate-400" />
-              <input
-                type="search"
-                enterKeyHint="search"
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder={t("resourcesSearchPlaceholder")}
-                className="w-full rounded-full border border-slate-200 bg-white/90 py-3 pl-11 pr-4 text-sm text-slate-800 shadow-inner outline-none ring-brand-400/20 placeholder:text-slate-400 focus:border-brand-300 focus:ring-2"
-                aria-label={t("resourcesSearchPlaceholder")}
-              />
-            </div>
-            {searchDraft.trim() ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchDraft("");
-                  setSearchQ("");
-                }}
-                className="shrink-0 self-center rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
-              >
-                {t("resourcesSearchClear")}
-              </button>
-            ) : null}
-          </div>
+      <div className="ui-card p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+          <Search className="h-3.5 w-3.5 text-brand-500" strokeWidth={2.5} />
+          {t("resourcesSearchLabel")}
         </div>
-
-        <div className="mt-6 grid gap-5 lg:grid-cols-2 lg:gap-6">
-          <div className="flex flex-col rounded-2xl border border-slate-100/90 bg-white/60 p-4 shadow-inner ring-1 ring-slate-50/80 sm:p-4">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesTimeFilter")}</span>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {TIME_FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => {
-                    setTimeKey(f.key);
-                    setCategoryKey(null);
-                  }}
-                  className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
-                    timeKey === f.key ? "pill-active shadow-md" : "pill-idle"
-                  }`}
-                >
-                  {t(f.labelKey)}
-                </button>
-              ))}
-            </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute bottom-3 left-4 h-4 w-4 text-slate-400" />
+            <input
+              type="search"
+              enterKeyHint="search"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              placeholder={t("resourcesSearchPlaceholder")}
+              className="w-full rounded-full border border-slate-200 bg-white/90 py-3 pl-11 pr-4 text-sm text-slate-800 shadow-inner outline-none ring-brand-400/20 placeholder:text-slate-400 focus:border-brand-300 focus:ring-2"
+              aria-label={t("resourcesSearchPlaceholder")}
+            />
           </div>
-          <div className="flex flex-col rounded-2xl border border-slate-100/90 bg-white/60 p-4 shadow-inner ring-1 ring-slate-50/80 sm:p-4">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesCategoryFilter")}</span>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setCategoryKey(null)}
-                className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
-                  categoryKey == null ? "pill-active shadow-md" : "pill-idle"
-                }`}
-              >
-                {t("resourcesCategoryAll")}
-              </button>
-              {categoryOptions.map((row) => (
-                <button
-                  key={row.label}
-                  type="button"
-                  onClick={() => setCategoryKey(row.label)}
-                  className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
-                    categoryKey === row.label ? "pill-active shadow-md" : "pill-idle"
-                  }`}
-                >
-                  {row.label}
-                  <span className="ml-1 font-mono text-[10px] text-slate-500/90">({row.count})</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          {searchDraft.trim() ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchDraft("");
+                setSearchQ("");
+              }}
+              className="shrink-0 self-center rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+            >
+              {t("resourcesSearchClear")}
+            </button>
+          ) : null}
         </div>
-
-        {!loading && pageMeta.total_pages > 0 ? (
-          <div className="mt-6 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
-            <div className="text-sm text-slate-600">
-              <span className="font-medium text-slate-900">{pageSummaryText}</span>
-              {pageMeta.day_utc ? (
-                <span className="ml-2 text-slate-500">· 世界时 {formatFeedDateLabel(pageMeta.day_utc)}</span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={!pageMeta.has_prev || loading}
-                onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-                className="rounded-full border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t("resourcesPagePrev")}
-              </button>
-              <button
-                type="button"
-                disabled={!pageMeta.has_next || loading}
-                onClick={() => setFeedPage((p) => p + 1)}
-                className="rounded-full border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t("resourcesPageNext")}
-              </button>
-              <label className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="sr-only">{t("resourcesPageJumpPlaceholder")}</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={Math.max(1, pageMeta.total_pages)}
-                  value={jumpDraft}
-                  onChange={(e) => setJumpDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") onJump();
-                  }}
-                  className="w-20 rounded-xl border border-slate-200 bg-white px-2 py-1.5 font-mono text-sm text-slate-800 shadow-inner"
-                  aria-label={t("resourcesPageJumpPlaceholder")}
-                />
-                <button
-                  type="button"
-                  onClick={() => onJump()}
-                  className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand-400"
-                >
-                  {t("resourcesPageGo")}
-                </button>
-              </label>
-            </div>
-          </div>
-        ) : null}
-
-        {pageMeta.days_scan_truncated ? (
-          <p className="mt-4 text-xs font-medium text-violet-700">{t("resourcesDaysTruncated")}</p>
-        ) : null}
       </div>
+
+      <div className="ui-card p-4 sm:p-4">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesTimeFilter")}</span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {TIME_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => {
+                setTimeKey(f.key);
+                setCategoryKey(null);
+              }}
+              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                timeKey === f.key ? "pill-active shadow-md" : "pill-idle"
+              }`}
+            >
+              {t(f.labelKey)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ui-card p-4 sm:p-4">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesCategoryFilter")}</span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setCategoryKey(null)}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              categoryKey == null ? "pill-active shadow-md" : "pill-idle"
+            }`}
+          >
+            {t("resourcesCategoryAll")}
+          </button>
+          {categoryOptions.map((row) => (
+            <button
+              key={row.label}
+              type="button"
+              onClick={() => setCategoryKey(row.label)}
+              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                categoryKey === row.label ? "pill-active shadow-md" : "pill-idle"
+              }`}
+            >
+              {row.label}
+              <span className="ml-1 font-mono text-[10px] text-slate-500/90">({row.count})</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="lg:sticky lg:top-24">
+        <FeedSidebar mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
+      </div>
+
+      {pageMeta.days_scan_truncated ? (
+        <p className="ui-card px-4 py-3 text-xs font-medium text-violet-700">{t("resourcesDaysTruncated")}</p>
+      ) : null}
     </div>
   );
 
@@ -385,7 +386,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                       <Link
                         key={a.id}
                         to={`/resources/${a.id}`}
-                        className="group relative flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm transition hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2 sm:flex-row"
+                        className="ui-card group relative flex flex-col overflow-hidden text-left transition hover:border-brand-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2 sm:flex-row"
                       >
                         <div
                           className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100"
@@ -477,45 +478,20 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
               {searchQ ? t("resourcesEmptySearch") : t("resourcesEmptyTopic")}
             </p>
           ) : null}
-
-          {list.length > 0 && pageMeta.total_pages > 0 ? (
-            <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-              <button
-                type="button"
-                disabled={!pageMeta.has_prev}
-                onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-                className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t("resourcesPagePrev")}
-              </button>
-              <button
-                type="button"
-                disabled={!pageMeta.has_next}
-                onClick={() => setFeedPage((p) => p + 1)}
-                className="rounded-md bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t("resourcesPageNext")}
-              </button>
-            </div>
-          ) : null}
         </>
       ) : null}
     </>
   );
 
   return (
-    <div className="mx-auto max-w-[1400px] px-2 sm:px-4">
-      {/* 左窄右宽：大屏左侧侧栏，右侧筛选 + 列表；DOM 主列在前，小屏主内容在上 */}
+    <div className="w-full px-2 sm:px-4">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start xl:grid-cols-[minmax(0,300px)_1fr]">
-        <div className="min-w-0 space-y-6 lg:col-start-2 lg:row-start-1">
-          {filterPanel}
+        <aside className="min-w-0">{leftRail}</aside>
+        <div className="min-w-0 space-y-6">
+          {paginationBar()}
           {listSection}
+          {paginationBar()}
         </div>
-        <aside className="min-w-0 lg:col-start-1 lg:row-start-1">
-          <div className="lg:sticky lg:top-24">
-            <FeedSidebar mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
-          </div>
-        </aside>
       </div>
     </div>
   );
