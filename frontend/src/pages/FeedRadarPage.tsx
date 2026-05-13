@@ -5,6 +5,8 @@ import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse } from "@/api/public/types";
 import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisual";
 import { useI18n } from "@/i18n";
+import { FeedPageGlance } from "@/components/FeedPageGlance";
+
 const INDUSTRY_SLUG = "ai";
 
 type TimeKey = "latest_day" | "all" | "d7" | "d30" | "d90";
@@ -356,6 +358,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     <div className="min-w-0 space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:self-start">
       {feedLeftStrip}
       {leftFilters}
+      <FeedPageGlance mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
     </div>
   );
 
