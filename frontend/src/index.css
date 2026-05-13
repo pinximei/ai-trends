@@ -7,11 +7,7 @@
     @apply scroll-smooth;
   }
   body {
-    @apply min-h-screen bg-ui-page text-slate-800 antialiased;
-    background-image:
-      radial-gradient(ellipse 90% 60% at 10% -5%, rgba(124, 58, 237, 0.09), transparent 50%),
-      radial-gradient(ellipse 70% 50% at 95% 5%, rgba(14, 165, 233, 0.08), transparent 45%),
-      radial-gradient(ellipse 55% 45% at 50% 100%, rgba(244, 114, 182, 0.05), transparent 55%);
+    @apply min-h-screen bg-[#f5f5f5] text-slate-800 antialiased;
   }
 
   #root {
@@ -23,23 +19,27 @@
 
 @layer components {
   .glass-light {
-    @apply rounded-2xl border border-slate-200/80 bg-white/85 shadow-card backdrop-blur-md;
+    @apply rounded-lg border border-slate-200 bg-white shadow-sm;
+  }
+
+  .ui-card {
+    @apply rounded-lg border border-slate-200 bg-white shadow-sm;
   }
 
   .glass-hover-light {
-    @apply transition-all duration-300 hover:border-violet-200 hover:shadow-ui;
+    @apply transition-colors duration-200 hover:border-brand-200 hover:shadow-md;
   }
 
   .text-gradient {
-    @apply bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-500 bg-clip-text text-transparent;
+    @apply text-brand-600;
   }
 
   .btn-accent {
-    @apply rounded-full bg-gradient-to-r from-violet-600 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.98];
+    @apply rounded-md bg-brand-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-400 active:bg-brand-600;
   }
 
   .pill-active {
-    @apply bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm;
+    @apply bg-brand-500 text-white shadow-sm;
   }
 
   .pill-idle {
@@ -60,6 +60,6 @@
 
   .tech-underline::after {
     content: "";
-    @apply absolute -bottom-1 left-0 h-0.5 w-full rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-sky-500 opacity-90;
+    @apply absolute -bottom-1 left-0 h-0.5 w-full rounded-full bg-brand-500 opacity-90;
   }
 }

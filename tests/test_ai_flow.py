@@ -215,15 +215,6 @@ def test_public_articles_categories_accepts_search_q(client: TestClient) -> None
     assert isinstance(rows, list)
 
 
-def test_content_briefing_envelope(client: TestClient) -> None:
-    r = client.get("/api/v1/content/briefing", params={"period": "week"})
-    assert r.status_code == 200
-    body = r.json()
-    assert "data" in body
-    data = body.get("data") or {}
-    assert "title" in data or "sections" in data or "facts" in data
-
-
 def test_clear_product_ingest_clears_domains_taxonomy(client: TestClient) -> None:
     from sqlalchemy import select
 

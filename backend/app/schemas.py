@@ -3,18 +3,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class RemovalRequestCreate(BaseModel):
-    requester_contact: str
-    target_signal_id: str
-    reason: str
-    request_type: str = "correction"
-
-
-class InternalRunRequest(BaseModel):
-    idempotency_key: str
-    job_type: str
-
-
 class AdminSourceConfigUpsert(BaseModel):
     source: str
     enabled: bool = True
@@ -33,7 +21,7 @@ class AdminSourceTestRequest(BaseModel):
     api_base: str | None = None
     api_key: str = ""
     # GitLab REST 使用 PRIVATE-TOKEN；多数 OAuth 使用 Bearer；
-    # 部分开放平台需要把 key 放在 query 参数里（如 ?token=xxx / ?apiKey=xxx / ?key=xxx）。
+    # 部分开放平台需要把 key 放在 query 参数（如 ?token=xxx / ?apiKey=xxx / ?key=xxx）。
     auth_mode: Literal["bearer", "private_token", "query_key"] = "bearer"
     key_param: str = "key"
 
@@ -41,10 +29,6 @@ class AdminSourceTestRequest(BaseModel):
 class AdminLoginRequest(BaseModel):
     username: str
     password: str
-
-
-class AdminResolveRequest(BaseModel):
-    note: str = ""
 
 
 class AdminUserCreate(BaseModel):
@@ -69,12 +53,3 @@ class AdminSettingsUpdate(BaseModel):
 class AdminChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
-
-
-class TrendOpsUpdate(BaseModel):
-    lifecycle_stage: str | None = None
-    trend_score: float | None = None
-
-
-class SignalOpsUpdate(BaseModel):
-    status: str | None = None

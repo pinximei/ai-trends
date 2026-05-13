@@ -9,7 +9,7 @@
 
 ## 线上体验
 
-公开站点可直接访问：**[https://www.ai-trends.news](https://www.ai-trends.news)**（同域 `/api` 提供公开 JSON API）。页面内容为 AI 趋势资讯与学习向演示，不构成采购或合规结论；欢迎试用与反馈 Issue。
+公开站点可直接访问：**[https://www.ai-trends.news](https://www.ai-trends.news)**（同域 `/api` 提供公开 JSON API）。页面为 AI 应用与资讯聚合展示；欢迎试用与反馈 Issue。
 
 后台管理路径为 **`/admin/`**，不向访客开放账号；如需自建实例见下文「本地运行」与 `docs/deploy-tencent-cvm.md`。
 
@@ -20,12 +20,12 @@
 - 需求主文档：`docs/requirements-master-v1.md`（含 **项目定位**：学习向、可全量重写、部署后议）
 - API / 数据库 / 安全：`docs/implementation-architecture-api-db-security-v1.md`
 
-当前仓库中的运行方式与旧 API 可能随重写调整；以 `docs/` 中目标设计为准。
+当前仓库中的运行方式以 `docs/` 中部署与需求文档为准。
 
-### 新版公开 API（已实现）
+### 公开 API（已实现）
 
 - 前缀：`/api/public/v1`（免登录 JSON：`{ code, message, data }`）
-- 前台路由：`/`、`/trends`、`/resources`、`/resources/:id`、`/about`
+- 前台路由：`/`、`/apps`、`/news`、`/resources/:id`、`/downloads`、`/about`
 - 腾讯云部署参考：`docs/deploy-tencent-cvm.md`
 
 ## 本地运行
@@ -71,7 +71,6 @@ npm run dev -- --host 127.0.0.1 --port 5172
 ```
 
 - 打开：<http://127.0.0.1:5172>
-- 新增事实文章页：<http://127.0.0.1:5172/briefing>
 
 **4) 后台前端（再开一个终端）**
 
@@ -102,9 +101,7 @@ npm run dev -- --host 127.0.0.1 --port 5174
 ### Public API（公开业务接口）
 
 - 前缀：`/api/public/v1/*`
-- 鉴权：`Bearer + X-TS + X-Signature`（HMAC）
-
-兼容旧前缀：`/api/v1/*` 仍可访问（迁移期）。
+- 鉴权：无（HTTPS 由网关/环境保证；本地可设 `AITRENDS_ALLOW_INSECURE_LOCALHOST=true`）
 
 ### Admin API（后台管理接口）
 
@@ -114,24 +111,15 @@ npm run dev -- --host 127.0.0.1 --port 5174
   - `POST /api/admin/v1/auth/login`
   - `GET /api/admin/v1/auth/me`
   - `POST /api/admin/v1/auth/logout`
-- 核心管理接口：
+- 常用管理接口：
   - `GET /api/admin/v1/overview`
   - `GET/POST /api/admin/v1/sources`
-  - `GET /api/admin/v1/compliance/removal-requests`
-  - `POST /api/admin/v1/compliance/removal-requests/{ticket_id}/resolve`
-  - `GET /api/admin/v1/audit-logs`
   - `GET/POST /api/admin/v1/settings`
   - `GET/POST /api/admin/v1/users` / `POST /api/admin/v1/users/{username}`
   - `GET /api/admin/v1/health`
   - `GET /api/admin/v1/system/db-info`（查看当前数据库模式）
   - `POST /api/admin/v1/bootstrap/seed-demo`（初始化模拟数据）
   - `POST /api/admin/v1/bootstrap/clear-demo`（清空业务测试数据，仅 admin 可调用）
-
-### AI 事实文章接口（前台）
-
-- `GET /api/v1/content/briefing?period=day|week|month|quarter|year`
-- `GET /api/public/v1/content/briefing?period=...`
-- 说明：文章内容基于趋势与信号事实拼装，返回章节、引用、事实列表、媒体链接，避免无依据生成。
 
 ### 数据库访问统一收口
 

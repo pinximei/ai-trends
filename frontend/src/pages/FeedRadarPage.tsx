@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search, Box } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse } from "@/api/public/types";
@@ -47,6 +47,8 @@ function isDayFeedResponse(d: unknown): d is ArticlesFeedDayResponse {
 
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [timeKey, setTimeKey] = useState<TimeKey>("latest_day");
   const [feedPage, setFeedPage] = useState(1);
   const [jumpDraft, setJumpDraft] = useState("1");
@@ -64,6 +66,15 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [categoryOptions, setCategoryOptions] = useState<Array<{ label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
+
+  useEffect(() => {
+    const raw = location.state as { q?: string } | undefined;
+    const q = raw?.q?.trim();
+    if (!q) return;
+    setSearchDraft(q);
+    setSearchQ(q);
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+  }, [location.state, location.pathname, location.search, navigate]);
 
   const timeParams = useMemo(() => timeKeyToArticleParams(timeKey), [timeKey]);
 
@@ -178,23 +189,23 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       : "";
 
   const filterPanel = (
-    <div className="glass-light relative overflow-hidden rounded-3xl border-slate-200/80 p-0 shadow-card">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-50/45 via-transparent to-sky-50/30" />
+    <div className="glass-light relative overflow-hidden rounded-lg border-slate-200 p-0 shadow-sm">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50/50 via-transparent to-slate-50/40" />
 
       <div className="relative border-b border-slate-100/90 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-600/85">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-600/85">
               {mode === "apps" ? t("navApps") : t("navNews")}
             </p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{pageTitle}</h1>
             <p className="mt-2 text-sm leading-relaxed text-slate-500">{t("resourcesFeedDayHint")}</p>
           </div>
           <div
-            className="relative hidden h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-100/90 via-white to-sky-100/80 shadow-ui sm:flex"
+            className="relative hidden h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-brand-50 shadow-sm sm:flex"
             aria-hidden
           >
-            <Box className="h-10 w-10 text-violet-500 opacity-90 drop-shadow-md" strokeWidth={1.25} />
+            <Box className="h-10 w-10 text-brand-500 opacity-90" strokeWidth={1.25} />
           </div>
         </div>
       </div>
@@ -202,7 +213,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       <div className="relative p-5 sm:p-6 sm:pt-5">
         <div className="rounded-2xl border border-slate-100/90 bg-slate-50/45 p-4 ring-1 ring-slate-100/70 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            <Search className="h-3.5 w-3.5 text-violet-500" strokeWidth={2.5} />
+            <Search className="h-3.5 w-3.5 text-brand-500" strokeWidth={2.5} />
             {t("resourcesSearchLabel")}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
@@ -214,7 +225,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
                 placeholder={t("resourcesSearchPlaceholder")}
-                className="w-full rounded-full border border-slate-200 bg-white/90 py-3 pl-11 pr-4 text-sm text-slate-800 shadow-inner outline-none ring-violet-400/20 placeholder:text-slate-400 focus:border-violet-300 focus:ring-2"
+                className="w-full rounded-full border border-slate-200 bg-white/90 py-3 pl-11 pr-4 text-sm text-slate-800 shadow-inner outline-none ring-brand-400/20 placeholder:text-slate-400 focus:border-brand-300 focus:ring-2"
                 aria-label={t("resourcesSearchPlaceholder")}
               />
             </div>
@@ -284,9 +295,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         </div>
 
         {!loading && pageMeta.total_pages > 0 ? (
-          <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-violet-100/80 bg-gradient-to-r from-violet-50/50 via-white to-sky-50/40 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
+          <div className="mt-6 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
             <div className="text-sm text-slate-600">
-              <span className="font-semibold text-violet-800">{pageSummaryText}</span>
+              <span className="font-medium text-slate-900">{pageSummaryText}</span>
               {pageMeta.day_utc ? (
                 <span className="ml-2 text-slate-500">· 世界时 {formatFeedDateLabel(pageMeta.day_utc)}</span>
               ) : null}
@@ -325,7 +336,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 <button
                   type="button"
                   onClick={() => onJump()}
-                  className="rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand-400"
                 >
                   {t("resourcesPageGo")}
                 </button>
@@ -353,25 +364,45 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             {listByDate.map(([dayKey, rows]) => (
               <Fragment key={dayKey}>
                 <div className="flex items-center gap-4 px-1">
-                  <span className="shrink-0 rounded-full border border-violet-200/80 bg-gradient-to-r from-violet-50 to-white px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-violet-700 shadow-sm">
+                  <span className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
                     {formatFeedDateLabel(dayKey)}
                   </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-violet-200/90 via-slate-200/60 to-transparent" aria-hidden />
+                  <span className="h-px flex-1 bg-slate-200" aria-hidden />
                 </div>
-                <div className="mt-5 grid gap-6 sm:grid-cols-2 sm:gap-7">
+                <div
+                  className={
+                    mode === "apps"
+                      ? "mt-5 grid gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4"
+                      : "mt-5 grid gap-6 sm:grid-cols-2 sm:gap-7"
+                  }
+                >
                   {rows.map((a) => {
                     const pub = a.published_at ? a.published_at.slice(0, 10) : null;
                     return (
                       <Link
                         key={a.id}
                         to={`/resources/${a.id}`}
-                        className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/85 bg-white text-left shadow-sm ring-1 ring-slate-100/90 transition duration-300 hover:-translate-y-0.5 hover:border-violet-300/70 hover:shadow-lg hover:ring-violet-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 focus-visible:ring-offset-2"
+                        className={`group relative flex overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm transition hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2 ${
+                          mode === "apps" ? "flex-col sm:flex-row" : "flex-col"
+                        }`}
                       >
                         <div
-                          className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-500 via-fuchsia-500 to-sky-400 opacity-55 transition-opacity duration-300 group-hover:opacity-100"
+                          className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100"
                           aria-hidden
                         />
-                        <div className="relative flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
+                        <div
+                          className={
+                            mode === "apps"
+                              ? "relative flex min-h-0 flex-1 flex-col sm:flex-row"
+                              : "relative flex min-h-0 flex-1 flex-col"
+                          }
+                        >
+                          {mode === "apps" ? (
+                            <div className="flex shrink-0 items-center justify-center border-b border-slate-100 bg-slate-50 py-5 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-100 sm:py-0">
+                              <span className="text-2xl font-semibold text-brand-600">{(a.title || "?").slice(0, 1)}</span>
+                            </div>
+                          ) : null}
+                          <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 pb-3">
                             <span className="inline-flex max-w-[min(100%,18rem)] items-center truncate rounded-md bg-gradient-to-r from-emerald-50/90 to-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-100/90">
                               {a.platform_label || t("source")}
@@ -391,7 +422,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                               {a.categories.slice(0, 4).map((c) => (
                                 <span
                                   key={c}
-                                  className="rounded-md bg-violet-50/90 px-2 py-0.5 text-[10px] font-semibold text-violet-800 ring-1 ring-violet-100/80"
+                                  className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700"
                                 >
                                   {c}
                                 </span>
@@ -399,7 +430,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                             </div>
                           ) : null}
 
-                          <h2 className="mt-3 text-[1.05rem] font-bold leading-snug tracking-tight text-slate-900 sm:text-lg sm:leading-snug group-hover:text-violet-800">
+                          <h2 className="mt-3 text-[1.05rem] font-semibold leading-snug tracking-tight text-slate-900 sm:text-lg sm:leading-snug group-hover:text-brand-600">
                             {a.title}
                           </h2>
                           <p className="mt-2 line-clamp-4 flex-1 text-sm leading-relaxed text-slate-600">{summarize(a.summary, 168)}</p>
@@ -409,9 +440,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                               {a.tab_summaries.slice(0, 3).map((tab) => (
                                 <li
                                   key={tab.label}
-                                  className="border-l-2 border-violet-200/90 pl-3 text-[12px] leading-snug text-slate-600"
+                                  className="border-l-2 border-brand-200 pl-3 text-[12px] leading-snug text-slate-600"
                                 >
-                                  <span className="font-semibold text-violet-700">{tab.label}</span>
+                                  <span className="font-medium text-brand-700">{tab.label}</span>
                                   <span className="text-slate-300"> · </span>
                                   {summarize(tab.summary, 88)}
                                 </li>
@@ -419,14 +450,15 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                             </ul>
                           ) : null}
 
-                          <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-violet-600">
-                            <span>{t("trendViewDetail")}</span>
+                          <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-brand-600">
+                            <span>{t("listViewDetail")}</span>
                             <span
                               className="inline-block transition-transform duration-300 group-hover:translate-x-0.5"
                               aria-hidden
                             >
                               →
                             </span>
+                          </div>
                           </div>
                         </div>
                       </Link>
@@ -457,7 +489,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 type="button"
                 disabled={!pageMeta.has_next}
                 onClick={() => setFeedPage((p) => p + 1)}
-                className="rounded-full bg-gradient-to-r from-violet-600 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-35"
+                className="rounded-md bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {t("resourcesPageNext")}
               </button>

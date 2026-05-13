@@ -158,10 +158,7 @@ export const adminApi = {
   overview: () =>
     request<{
       sources: number;
-      tickets: number;
-      pending_tickets: number;
       admin_users: number;
-      audit_logs: number;
       trends: number;
       signals: number;
     }>("/api/admin/v1/overview"),

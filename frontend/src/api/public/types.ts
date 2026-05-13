@@ -33,6 +33,8 @@ export type ArticleDetail = ArticleCard & {
   categories?: string[];
   feed_kind?: "news" | "apps";
   admin_source_key?: string;
+  /** 部分列表字段在详情接口一并返回 */
+  platform_label?: string;
   /** 分 tab：label + 概要 + Markdown 详情 */
   tabs?: ArticleTab[];
 };

@@ -65,7 +65,7 @@
 | CMS | `GET /pages/{slug}` — 如 `about` / `about_en` |
 | 系统 | `GET /health`、`GET /version` |
 
-若接口需 **HMAC / 签名**，见 `backend/app/main.py` 与 README「API 分层与鉴权」；开发环境可能通过 `AITRENDS_SKIP_API_SIGNATURE` 等放宽（以代码为准）。
+公开 JSON 接口 **不要求** HMAC 或客户端签名；传输安全由 HTTPS（及 `backend/app/security.py` 的 `enforce_https`）保障。
 
 ---
 
@@ -76,7 +76,7 @@
   - `backend/app/routers/admin_product.py` — 产品域：CMS、热门快照重建入口、ingest 清理、`ThemeFetchPayload` 等。
   - `backend/app/routers/admin_extended.py` — 连接器同步、运行参数、LLM 设置、调度与导入等扩展能力。
   - `backend/app/routers/admin_data_browser.py` — 数据浏览/导出类接口。
-- `backend/app/main.py` 仍挂载 **旧版兼容** 的管理路由（用户、登录、overview 等），README「Admin API」一节有列表，新增功能优先走上述 `routers/` 模块。
+- `backend/app/main.py` 挂载 **会话认证、用户与数据源、overview、设置、演示种子** 等基础管理路由；README「Admin API」一节有列表，新增功能优先走上述 `routers/` 模块。
 - 认证：**Session Cookie**（`aitrends_admin_session`）+ RBAC（`viewer` / `operator` / `admin`）；生产须配置 `AITRENDS_JWT_SECRET`、`AITRENDS_SIGNING_KEY`、`AITRENDS_ADMIN_INIT_*` 等。
 
 ---

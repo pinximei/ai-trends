@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from .lifespan import app_lifespan
 from .runtime_cors_middleware import RuntimeCORSMiddleware
 from .api.public.router import router as public_api_router
@@ -23,24 +23,20 @@ from .admin_auth import (
     require_role,
 )
 from .data_api_service import DataApiService
-from .models import AdminSession, AdminSourceConfig, AdminUser, AuditLog, EvidenceSignal, PipelineRun, RemovalRequest, Trend
+from .models import AdminSession, AdminSourceConfig, AdminUser, EvidenceSignal, Trend
 from .schemas import (
     AdminLoginRequest,
     AdminChangePasswordRequest,
     AdminSettingsUpdate,
     AdminSourceConfigUpsert,
     AdminSourceTestRequest,
-    SignalOpsUpdate,
-    TrendOpsUpdate,
     AdminUserCreate,
     AdminUserUpdate,
-    InternalRunRequest,
-    RemovalRequestCreate,
 )
-from .security import AUTH_BOOTSTRAP_KEY, enforce_https, issue_access_token, verify_bearer_from_request, verify_hmac_signature
-from .services import clear_business_data, create_removal_ticket, envelope, get_or_create_run, seed_demo_bundle, seed_if_empty
+from .security import enforce_https
+from .services import clear_business_data, envelope, seed_demo_bundle
 
-app = FastAPI(title="Agent Trend Platform", lifespan=app_lifespan)
+app = FastAPI(title="AI-TRENDS API", lifespan=app_lifespan)
 
 root = Path(__file__).resolve().parent.parent
 
@@ -54,98 +50,9 @@ app.include_router(admin_data_browser.router)
 
 SUPPORTED_LANGS = {"zh", "en"}
 DEFAULT_LANG = "zh"
-VALID_PERIODS = {"day", "week", "month", "quarter", "year"}
 I18N = {
-    "nav.dashboard": {"zh": "仪表盘", "en": "Dashboard"},
-    "nav.inspirations": {"zh": "灵感信号", "en": "Inspirations"},
-    "nav.trends": {"zh": "趋势", "en": "Trends"},
-    "nav.categories": {"zh": "分类", "en": "Categories"},
-    "nav.new_signals": {"zh": "新信号", "en": "New Signals"},
-    "nav.methodology": {"zh": "方法论", "en": "Methodology"},
-    "nav.data_sources": {"zh": "数据来源", "en": "Data Sources"},
-    "nav.privacy": {"zh": "隐私", "en": "Privacy"},
-    "nav.terms": {"zh": "条款", "en": "Terms"},
-    "nav.removal": {"zh": "删除申请", "en": "Removal"},
-    "nav.admin": {"zh": "管理台", "en": "Admin"},
-    "lang.zh": {"zh": "中文", "en": "中文"},
-    "lang.en": {"zh": "English", "en": "English"},
-    "home.title": {"zh": "Agent 趋势仪表盘", "en": "Agent Trend Dashboard"},
-    "home.subtitle": {
-        "zh": "公共生态趋势估计，不构成采购或合规结论。",
-        "en": "Public ecosystem trend estimation. Not procurement or compliance conclusion.",
-    },
-    "home.top_trends": {"zh": "热门趋势", "en": "Top Trends"},
-    "kpi.active_use_cases": {"zh": "活跃用例", "en": "Active Use Cases"},
-    "kpi.new_apps": {"zh": "新增应用", "en": "New Apps"},
-    "kpi.emerging_trends": {"zh": "新兴趋势", "en": "Emerging Trends"},
-    "kpi.updated_at": {"zh": "更新时间", "en": "Updated At"},
-    "common.trend": {"zh": "趋势", "en": "Trend"},
-    "common.score": {"zh": "分数", "en": "Score"},
-    "common.confidence": {"zh": "置信度", "en": "Confidence"},
-    "common.sample": {"zh": "样本量", "en": "Sample"},
-    "common.lifecycle": {"zh": "生命周期", "en": "Lifecycle"},
-    "trends.subtitle": {"zh": "点击趋势查看时间线和证据链。", "en": "Click a trend to inspect timeline and evidence chain."},
-    "inspirations.title": {"zh": "灵感信号", "en": "Inspirations"},
-    "inspirations.subtitle": {
-        "zh": "发现可落地的信号，并下钻到原始证据。",
-        "en": "Explore practical signals and drill down to raw evidence.",
-    },
-    "trend.detail": {"zh": "趋势详情", "en": "Trend Detail"},
-    "trend.timeline": {"zh": "时间线", "en": "Timeline"},
-    "trend.next_step": {"zh": "建议下一步", "en": "Suggested Next Step"},
-    "trend.next_step_text": {
-        "zh": "建议：定义一个假设，进行 2 周试点，跟踪 1 个成功指标，并记录风险后再扩大。",
-        "en": "Next Step: define one hypothesis, run a 2-week pilot, track one success metric, and record risks before scaling.",
-    },
-    "evidence.detail": {"zh": "证据详情", "en": "Evidence Detail"},
-    "common.source": {"zh": "来源", "en": "Source"},
-    "common.url": {"zh": "链接", "en": "URL"},
-    "common.trace": {"zh": "追溯链", "en": "Trace"},
-    "categories.subtitle": {"zh": "来自开源生态信号的分类分布。", "en": "Category distribution from open ecosystem signals."},
-    "methodology.tip1": {"zh": "采取行动前必须核验证据。", "en": "Always review evidence before action."},
-    "methodology.tip2": {"zh": "趋势结果用于提出假设，不是最终决策。", "en": "Use trend output as hypothesis input, not final decision."},
-    "methodology.tip3": {"zh": "在强监管行业，需要额外合规审查。", "en": "For regulated domains, do an additional compliance review."},
-    "methodology.summary": {
-        "zh": "基于公开生态数据的趋势估计，非采购或合规结论。",
-        "en": "Public ecosystem trend estimation; not procurement or compliance conclusion.",
-    },
-    "admin.title": {"zh": "管理台", "en": "Admin"},
-    "admin.subtitle": {
-        "zh": "用于管理数据源、分类体系、审核队列和合规工单。",
-        "en": "Admin control center for sources, taxonomy, review queue, and compliance actions.",
-    },
-    "admin.review_queue": {"zh": "审核队列", "en": "Review queue"},
-    "admin.taxonomy": {"zh": "分类体系", "en": "Taxonomy"},
-    "admin.sources": {"zh": "数据源", "en": "Sources"},
-    "admin.compliance": {"zh": "合规", "en": "Compliance"},
-    "admin.compliance.subtitle": {
-        "zh": "处理删除与纠错请求，并保留审计追踪。",
-        "en": "Resolve removal and correction requests with audit trace.",
-    },
-    "common.ticket": {"zh": "工单", "en": "Ticket"},
-    "common.status": {"zh": "状态", "en": "Status"},
-    "common.action": {"zh": "操作", "en": "Action"},
-    "common.resolve": {"zh": "处理", "en": "Resolve"},
-    "common.done": {"zh": "完成", "en": "Done"},
-    "admin.review.desc": {"zh": "审核低置信度事件与合规请求。", "en": "Review low-confidence events and compliance requests."},
-    "admin.taxonomy.desc": {"zh": "管理趋势分类版本。", "en": "Manage trend taxonomy versions."},
-    "admin.sources.desc": {"zh": "管理数据源开关和调度频率。", "en": "Manage source switches and schedule frequencies."},
-    "signals.new.desc": {"zh": "用于下一轮迭代机会识别的新信号列表。", "en": "Emerging signal list for next iteration opportunities."},
-    "legal.privacy.desc": {"zh": "运营方：AiTrends 项目运营者。联系方式：legal@ai-trends.news", "en": "Operator: AiTrends Project Operator. Contact: legal@ai-trends.news"},
-    "legal.terms.desc": {
-        "zh": "适用法律：运营方注册地法律。争议解决：注册地有管辖权法院。",
-        "en": "Applicable law: operator registration jurisdiction. Dispute: competent court of that jurisdiction.",
-    },
-    "legal.sources.desc": {
-        "zh": "内置免 Key 端点含 GitHub、Hugging Face、Hacker News、Stack Overflow、arXiv、Open-Meteo、CoinGecko、PyPI、npm、Alpha Vantage、Docker Hub、crates.io、OpenAlex 等；另可在后台添加任意数据源并填写 Key。",
-        "en": "Built-in no-key endpoints include GitHub, Hugging Face, Hacker News, Stack Overflow, arXiv, Open-Meteo, CoinGecko, PyPI, npm, Alpha Vantage, Docker Hub, crates.io, OpenAlex; add more sources and keys freely in admin.",
-    },
-    "legal.removal.desc": {"zh": "通过 API 提交：POST /api/v1/compliance/removal-requests", "en": "Submit through API: POST /api/v1/compliance/removal-requests"},
-    "footer.tagline": {"zh": "AiTrends · Agent 趋势与灵感信号", "en": "AiTrends · agent trends & inspiration signals"},
     "api.ok": {"zh": "成功", "en": "ok"},
 }
-
-ADMIN_TOKEN = os.getenv("AITRENDS_ADMIN_TOKEN", "")
 
 
 def resolve_lang(request: Request) -> str:
@@ -162,27 +69,6 @@ def tr(key: str, lang: str) -> str:
 
 def api_envelope(request: Request, data, message_key: str = "api.ok"):
     return envelope(data, message=tr(message_key, resolve_lang(request)))
-
-
-def _token_ok(request: Request, token: str) -> bool:
-    auth = request.headers.get("authorization") or ""
-    if auth.startswith("Bearer ") and auth.removeprefix("Bearer ").strip() == token:
-        return True
-    if request.headers.get("x-admin-token") == token:
-        return True
-    return False
-
-
-def require_admin(request: Request):
-    from .runtime_settings_service import legacy_admin_enabled
-
-    if not legacy_admin_enabled():
-        raise HTTPException(status_code=410, detail="legacy admin api disabled")
-    if not ADMIN_TOKEN:
-        raise HTTPException(status_code=500, detail="legacy admin token missing")
-    if _token_ok(request, ADMIN_TOKEN):
-        return
-    raise HTTPException(status_code=401, detail="unauthorized")
 
 
 def _mask_key(raw_key: str) -> str:
@@ -215,81 +101,16 @@ def _bootstrap_clear_demo_envelope(request: Request, db: Session):
     return api_envelope(request, {"status": "ok", "message": "business data cleared"})
 
 
-def _admin_pages_plan_payload() -> dict:
-    return {
-        "items": [
-            {
-                "key": "admin-overview",
-                "title": "后台总览",
-                "description": "查看数据覆盖、趋势/信号规模、系统健康度。",
-                "status": "ready",
-            },
-            {
-                "key": "source-center",
-                "title": "数据源与 API Key 管理",
-                "description": "管理第三方数据源开关、采集频率、API Base 和 Key。",
-                "status": "ready",
-            },
-            {
-                "key": "trend-ops",
-                "title": "趋势运营",
-                "description": "管理趋势标签、阶段、分数修正和人工标注。",
-                "status": "ready",
-            },
-            {
-                "key": "signal-ops",
-                "title": "信号运营",
-                "description": "审核信号质量、处理误报、查看证据链状态。",
-                "status": "ready",
-            },
-            {
-                "key": "compliance-workbench",
-                "title": "合规工单",
-                "description": "统一处理删除/纠错工单，形成审计闭环。",
-                "status": "ready",
-            },
-        ]
-    }
-
-
 def _validate_password_policy(db: Session, raw_password: str) -> None:
     settings = DataApiService(db).get_settings()
     if len(raw_password or "") < settings["password_min_length"]:
         raise HTTPException(status_code=400, detail=f"password too short, min={settings['password_min_length']}")
 
 
-_SKIP_SIGNED = os.getenv("AITRENDS_SKIP_API_SIGNATURE", "").lower() in {"1", "true", "yes", "on"}
-
-
 @app.middleware("http")
 async def api_security_middleware(request: Request, call_next):
     enforce_https(request)
-    path = request.url.path
-    # 仅内部 /api/v1 需 HMAC + Bearer；/api/public/v1 为站点公开只读接口，免签名（健康检查、CDN、监控可直接 GET）
-    protected_signed = path.startswith("/api/v1/")
-    allow_unauth = {"/api/v1/auth/token", "/api/admin/v1/auth/login", "/api/admin/v1/auth/logout", "/api/admin/v1/auth/me"}
-    if request.method == "OPTIONS":
-        return await call_next(request)
-    if protected_signed and path not in allow_unauth and not _SKIP_SIGNED:
-        body = await request.body()
-        verify_hmac_signature(request, body)
-        verify_bearer_from_request(request)
     return await call_next(request)
-
-
-@app.get("/api/v1/dashboard/summary")
-def dashboard_summary(request: Request, db: Session = Depends(get_db)):
-    return api_envelope(request, DataApiService(db).get_dashboard_summary())
-
-
-@app.post("/api/v1/auth/token")
-def issue_token(request: Request):
-    bootstrap = request.headers.get("x-bootstrap-key") or request.query_params.get("bootstrap_key") or ""
-    if bootstrap != AUTH_BOOTSTRAP_KEY:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    client_id = request.headers.get("x-client-id", "web-client")
-    token = issue_access_token(client_id=client_id)
-    return api_envelope(request, {"access_token": token, "token_type": "Bearer"})
 
 
 @app.post("/api/admin/v1/auth/login")
@@ -345,126 +166,6 @@ def admin_auth_change_password(
     db.commit()
     audit(db, actor=session.username, action="auth.change_password")
     return api_envelope(request, {"ok": True})
-
-
-@app.get("/api/v1/trends")
-def trends(request: Request, period: str = "week", db: Session = Depends(get_db)):
-    try:
-        data = DataApiService(db).get_trends(period)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return api_envelope(request, data)
-
-
-@app.get("/api/v1/trends/{trend_key}")
-def trend_detail(request: Request, trend_key: str, db: Session = Depends(get_db)):
-    data = DataApiService(db).get_trend_detail(trend_key)
-    if not data:
-        raise HTTPException(status_code=404, detail="trend not found")
-    return api_envelope(request, data)
-
-
-@app.get("/api/v1/trends/{trend_key}/timeline")
-def trend_timeline(request: Request, trend_key: str, period: str = "week"):
-    if period not in VALID_PERIODS:
-        raise HTTPException(status_code=400, detail="invalid period")
-    seed = {
-        "workflow-automation-agent": 78.2,
-        "customer-support-agent": 73.4,
-        "multimodal-content-agent": 69.1,
-    }.get(trend_key, 56.0)
-    step_days = {"day": 1, "week": 7, "month": 30, "quarter": 91, "year": 365}[period]
-    span = {"day": 7, "week": 8, "month": 6, "quarter": 5, "year": 5}[period]
-    points = []
-    now = datetime.now(timezone.utc).date()
-    for i in range(span):
-        index_from_recent = span - i - 1
-        date = now - timedelta(days=index_from_recent * step_days)
-        score = max(35.0, round(seed - index_from_recent * 2.1, 1))
-        points.append({"period_start": str(date), "score": score})
-    return api_envelope(
-        request,
-        {
-            "trend_key": trend_key,
-            "period": period,
-            "points": points,
-        },
-    )
-
-
-@app.get("/api/v1/inspirations")
-def inspirations(request: Request, period: str = "week", db: Session = Depends(get_db)):
-    try:
-        data = DataApiService(db).get_inspirations(period)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return api_envelope(request, data)
-
-
-@app.get("/api/v1/content/briefing")
-def content_briefing(request: Request, period: str = "week", db: Session = Depends(get_db)):
-    try:
-        data = DataApiService(db).get_content_briefing(period=period, lang=resolve_lang(request))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return api_envelope(request, data)
-
-
-@app.get("/api/v1/evidences/{signal_id}")
-def evidence(request: Request, signal_id: str, db: Session = Depends(get_db)):
-    data = DataApiService(db).get_evidence(signal_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="evidence not found")
-    return api_envelope(request, data)
-
-
-@app.get("/api/v1/categories")
-def categories(request: Request):
-    return api_envelope(request, {"items": ["code-agent", "workflow", "customer-support", "multimodal-content", "mcp", "skills"]})
-
-
-@app.get("/api/v1/meta/methodology")
-def methodology(request: Request):
-    return api_envelope(
-        request,
-        {
-            "summary": tr("methodology.summary", resolve_lang(request)),
-            "must_show": ["data_source", "statistical_scope", "updated_at", "sample_size", "confidence_hint"],
-        },
-    )
-
-
-@app.get("/api/v1/meta/taxonomy")
-def taxonomy(request: Request):
-    return api_envelope(request, {"version": "v1", "use_cases": ["workflow-automation-agent", "coding-agent"]})
-
-
-@app.get("/api/v1/signals/new")
-def signals_new(request: Request):
-    return api_envelope(request, {"items": [{"signal_id": "sig_001", "newness_score": 0.73}]})
-
-
-@app.get("/api/v1/lens/industry-region")
-def industry_region_lens(request: Request):
-    return api_envelope(
-        request,
-        {"items": [{"industry": "ecommerce", "region": "global", "trend_key": "workflow-automation-agent"}]},
-    )
-
-
-@app.get("/api/v1/subscriptions")
-def subscriptions(request: Request):
-    return api_envelope(request, {"items": [{"channel": "email", "enabled": False}]})
-
-
-@app.get("/api/v1/export/trends.csv")
-def export_trends_csv(request: Request):
-    return api_envelope(request, {"download": "/exports/trends.csv", "status": "generated"})
-
-
-@app.get("/api/v1/b2b/trends")
-def b2b_trends(request: Request):
-    return api_envelope(request, {"items": [{"trend_key": "workflow-automation-agent", "score": 78.2}]})
 
 
 @app.post("/api/admin/v1/bootstrap/seed-demo")
@@ -580,40 +281,6 @@ def admin_sources_delete_v2(
     return api_envelope(request, {"deleted": deleted})
 
 
-@app.get("/api/admin/v1/compliance/removal-requests")
-def admin_removal_requests_v2(
-    request: Request,
-    status: str = "",
-    keyword: str = "",
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    return api_envelope(request, {"items": DataApiService(db).list_removal_requests(status=status.strip(), keyword=keyword.strip())})
-
-
-@app.post("/api/admin/v1/compliance/removal-requests/{ticket_id}/resolve")
-def admin_resolve_v2(
-    request: Request,
-    ticket_id: str,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    data = DataApiService(db).resolve_removal_request(ticket_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="ticket not found")
-    audit(db, actor=session.username, action="removal.resolve", target=ticket_id)
-    return api_envelope(request, data)
-
-
-@app.get("/api/admin/v1/pages-plan")
-def admin_pages_plan_v2(
-    request: Request,
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    _ = session
-    return api_envelope(request, _admin_pages_plan_payload())
-
-
 @app.get("/api/admin/v1/overview")
 def admin_overview_v2(
     request: Request,
@@ -621,16 +288,6 @@ def admin_overview_v2(
     session: AdminSession = Depends(require_role("viewer")),
 ):
     return api_envelope(request, DataApiService(db).get_overview_metrics())
-
-
-@app.get("/api/admin/v1/audit-logs")
-def admin_audit_logs_v2(
-    request: Request,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    return api_envelope(request, {"items": DataApiService(db).list_audit_logs(limit)})
 
 
 @app.get("/api/admin/v1/users")
@@ -642,74 +299,6 @@ def admin_users_v2(
     session: AdminSession = Depends(require_role("admin")),
 ):
     return api_envelope(request, {"items": DataApiService(db).list_admin_users(role=role.strip(), keyword=keyword.strip())})
-
-
-@app.get("/api/admin/v1/query/trends")
-def admin_query_trends_v2(
-    request: Request,
-    keyword: str = "",
-    lifecycle: str = "",
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    return api_envelope(
-        request,
-        {"items": DataApiService(db).query_trends(keyword=keyword.strip(), lifecycle=lifecycle.strip(), limit=limit)},
-    )
-
-
-@app.get("/api/admin/v1/query/signals")
-def admin_query_signals_v2(
-    request: Request,
-    keyword: str = "",
-    source: str = "",
-    status: str = "",
-    limit: int = 80,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    return api_envelope(
-        request,
-        {
-            "items": DataApiService(db).query_signals(
-                keyword=keyword.strip(),
-                source=source.strip(),
-                status=status.strip(),
-                limit=limit,
-            )
-        },
-    )
-
-
-@app.post("/api/admin/v1/trend-ops/{trend_key}")
-def admin_trend_ops_update_v2(
-    request: Request,
-    trend_key: str,
-    payload: TrendOpsUpdate,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    data = DataApiService(db).update_trend_ops(trend_key, payload.model_dump())
-    if not data:
-        raise HTTPException(status_code=404, detail="trend not found")
-    audit(db, actor=session.username, action="trend.update", target=trend_key, detail=str(payload.model_dump()))
-    return api_envelope(request, data)
-
-
-@app.post("/api/admin/v1/signal-ops/{signal_id}")
-def admin_signal_ops_update_v2(
-    request: Request,
-    signal_id: str,
-    payload: SignalOpsUpdate,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    data = DataApiService(db).update_signal_ops(signal_id, payload.model_dump())
-    if not data:
-        raise HTTPException(status_code=404, detail="signal not found")
-    audit(db, actor=session.username, action="signal.update", target=signal_id, detail=str(payload.model_dump()))
-    return api_envelope(request, data)
 
 
 @app.post("/api/admin/v1/users")
@@ -813,34 +402,6 @@ def admin_health_v2(
 ):
     metrics = DataApiService(db).get_overview_metrics()
     return api_envelope(request, {"status": "ok", "db": "up", "metrics": metrics, "time": datetime.utcnow().isoformat()})
-
-
-@app.post("/api/v1/compliance/removal-requests")
-def create_removal(request: Request, req: RemovalRequestCreate, db: Session = Depends(get_db)):
-    ticket = create_removal_ticket(db, req)
-    return api_envelope(request, {"ticket_id": ticket.ticket_id, "token": ticket.token, "status": ticket.status})
-
-
-@app.get("/api/v1/compliance/removal-requests/{ticket_id}")
-def get_removal(request: Request, ticket_id: str, token: str = Query(...), db: Session = Depends(get_db)):
-    item = db.scalar(select(RemovalRequest).where(RemovalRequest.ticket_id == ticket_id))
-    if not item or item.token != token:
-        raise HTTPException(status_code=404, detail="ticket not found")
-    return api_envelope(request, {"ticket_id": item.ticket_id, "status": item.status})
-
-
-@app.post("/internal/run")
-def internal_run(request: Request, req: InternalRunRequest, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    run = get_or_create_run(db, req)
-    return api_envelope(request, {"run_id": run.run_id, "status": run.status, "idempotency_key": run.idempotency_key})
-
-
-@app.get("/internal/runs/{run_id}")
-def internal_run_status(request: Request, run_id: str, db: Session = Depends(get_db), _: None = Depends(require_admin)):
-    run = db.scalar(select(PipelineRun).where(PipelineRun.run_id == run_id))
-    if not run:
-        raise HTTPException(status_code=404, detail="run not found")
-    return api_envelope(request, {"run_id": run.run_id, "job_type": run.job_type, "status": run.status, "retries": run.retries})
 
 
 @app.get("/")

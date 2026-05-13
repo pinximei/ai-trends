@@ -151,9 +151,9 @@ export function SoftwareDownloadsPage() {
             {items.map((row) => (
               <div
                 key={row.id}
-                className="group relative flex flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-ui"
+                className="group relative flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand-200 hover:shadow-md"
               >
-                <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br from-violet-100 to-sky-100 opacity-70 blur-2xl transition group-hover:opacity-100" />
+                <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-brand-50 opacity-80 blur-2xl transition group-hover:opacity-100" />
                 <div className="relative flex items-start gap-3">
                   {row.icon_url ? (
                     <img src={row.icon_url} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-slate-200" />
@@ -174,7 +174,7 @@ export function SoftwareDownloadsPage() {
                         {row.platform}
                       </span>
                       {row.category_label ? (
-                        <span className="rounded-lg bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-900 ring-1 ring-violet-100">
+                        <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
                           {row.category_label}
                         </span>
                       ) : null}

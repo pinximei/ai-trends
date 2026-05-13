@@ -29,7 +29,7 @@ export function AboutSitePage() {
             <div className="mx-auto max-w-3xl">
               {title ? <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h2> : null}
               <div
-                className={`max-w-none whitespace-pre-wrap text-slate-600 [&_a]:font-medium [&_a]:text-violet-600 hover:[&_a]:underline ${title ? "mt-6" : ""}`}
+                className={`max-w-none whitespace-pre-wrap text-slate-600 [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:underline ${title ? "mt-6" : ""}`}
               >
                 {body}
               </div>

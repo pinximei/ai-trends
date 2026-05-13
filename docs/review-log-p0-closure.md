@@ -13,7 +13,7 @@
 
 ## 2. 评审范围
 
-- 主文档：`docs/agent-trend-platform-prd-tech-spec.md`
+- 主文档：`docs/requirements-master-v1.md`
 - 评审周期：按迭代执行（建议每周一次）
 - 参与角色：
   - 架构负责人
@@ -33,7 +33,7 @@
 目标：先验证“方案是否可实现、可测试、可被用户理解”，提前消灭需求与验收口径问题。
 
 - 执行项：
-  - QA 对 `docs/agent-trend-platform-prd-tech-spec.md` 做用例设计审查
+  - QA 对 `docs/requirements-master-v1.md` 做用例设计审查
   - 用户角色审核（12 类）做任务可达性走查（以原型/文档为准）
   - 输出 P0/P1 清单并回写主文档
 - 通过条件：

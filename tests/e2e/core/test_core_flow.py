@@ -21,32 +21,7 @@ def test_public_version_endpoint(client):
     assert len(data["release"]) >= 1
 
 
-def test_dashboard_page_accessible(client):
+def test_api_root(client):
     resp = client.get("/")
     assert resp.status_code == 200
     assert resp.json().get("service") == "aitrends-api"
-
-
-def test_trend_to_evidence_flow(client):
-    resp = client.get("/api/v1/trends")
-    assert resp.status_code == 200
-    items = resp.json()["data"]["items"]
-    assert len(items) >= 1
-    trend_key = items[0]["trend_key"]
-    detail = client.get(f"/api/v1/trends/{trend_key}")
-    assert detail.status_code == 200
-    ev = client.get("/api/v1/evidences/sig_001")
-    assert ev.status_code == 200
-
-
-def test_removal_request_submit_and_query(client):
-    created = client.post(
-        "/api/v1/compliance/removal-requests",
-        json={"requester_contact": "user@example.com", "target_signal_id": "sig_001", "reason": "test"},
-    )
-    assert created.status_code == 200
-    data = created.json()["data"]
-    ticket = data["ticket_id"]
-    token = data["token"]
-    queried = client.get(f"/api/v1/compliance/removal-requests/{ticket}", params={"token": token})
-    assert queried.status_code == 200

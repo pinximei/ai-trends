@@ -19,10 +19,10 @@ export function NewsletterBar() {
     <div className="pointer-events-none fixed bottom-6 left-1/2 z-[70] w-[min(100%,42rem)] -translate-x-1/2 px-4">
       <form
         onSubmit={onSubmit}
-        className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-full border border-slate-200/90 bg-white/95 px-4 py-3 shadow-[0_12px_48px_rgba(124,58,237,0.15)] backdrop-blur-xl sm:flex-nowrap sm:px-5"
+        className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-md backdrop-blur-xl sm:flex-nowrap sm:px-5"
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-sky-100 text-violet-600">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600 ring-1 ring-brand-100">
             <Bell className="h-5 w-5" strokeWidth={2} />
           </span>
           <p className="min-w-0 text-sm font-medium leading-snug text-slate-800">{t("newsletterCta")}</p>
@@ -35,7 +35,7 @@ export function NewsletterBar() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("newsletterPlaceholder")}
-              className="w-full rounded-full border border-slate-200 bg-slate-50/90 py-2.5 pl-10 pr-3 text-sm text-slate-800 shadow-inner outline-none ring-violet-500/30 placeholder:text-slate-400 focus:border-violet-300 focus:ring-2"
+              className="w-full rounded-md border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none ring-brand-500/15 placeholder:text-slate-400 focus:border-brand-400 focus:ring-2"
               autoComplete="email"
             />
           </div>

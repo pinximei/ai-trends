@@ -1,15 +1,11 @@
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Cpu, Sparkles, Sun } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Download, Home, Info, LayoutGrid, Newspaper, Search, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n";
-import { Aurora } from "./Aurora";
-import { TechAtmosphere } from "./TechAtmosphere";
 import { NewsletterBar } from "./NewsletterBar";
 
 function apiBasePrefix(): string {
-  const b = (import.meta.env.VITE_API_BASE || "").trim().replace(/\/$/, "");
-  return b;
+  return (import.meta.env.VITE_API_BASE || "").trim().replace(/\/$/, "");
 }
 
 async function fetchBackendRelease(): Promise<string | null> {
@@ -24,7 +20,16 @@ async function fetchBackendRelease(): Promise<string | null> {
   return null;
 }
 
-const nav = [
+const topNav = [
+  { to: "/", key: "navHome", icon: Home },
+  { to: "/apps", key: "navApps", icon: LayoutGrid },
+  { to: "/news", key: "navNews", icon: Newspaper },
+  { to: "/downloads", key: "navDownloads", icon: Download },
+  { to: "/about", key: "navAbout", icon: Info },
+] as const;
+
+const sideNav = [
+  { to: "/", key: "navHome" },
   { to: "/apps", key: "navApps" },
   { to: "/news", key: "navNews" },
   { to: "/downloads", key: "navDownloads" },
@@ -33,9 +38,10 @@ const nav = [
 
 export function Layout() {
   const { t } = useI18n();
-  const loc = useLocation();
+  const navigate = useNavigate();
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
+  const [headerQ, setHeaderQ] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -47,98 +53,99 @@ export function Layout() {
     };
   }, []);
 
+  const onSearch = (e: FormEvent) => {
+    e.preventDefault();
+    const q = headerQ.trim();
+    navigate("/news", q ? { state: { q } } : undefined);
+  };
+
   return (
-    <div className="relative min-h-screen pb-28">
-      <TechAtmosphere />
-      <Aurora />
-      <div className="relative z-[60] flex items-center justify-between border-b border-violet-200/40 bg-white/75 px-4 py-1.5 font-mono text-[10px] uppercase tracking-widest text-violet-600/90 backdrop-blur-md sm:px-6">
-        <span className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          {t("brand")} · {t("uplink")}
-        </span>
-        <span className="flex max-w-[62%] flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:max-w-none">
-          <span className="hidden items-center gap-1 text-sky-600/90 sm:flex">
-            <Cpu className="h-3 w-3" /> 链路
-          </span>
-          <span
-            className="max-w-full truncate normal-case tracking-normal text-slate-500 max-sm:text-[9px]"
-            title={`界面 ${uiRelease} · 接口 ${apiRelease ?? "…"}`}
-          >
-            构建 <span className="text-violet-600">{uiRelease}</span>
-            {apiRelease ? (
-              <>
-                {" "}
-                · 接口 <span className="text-sky-600">{apiRelease}</span>
-              </>
-            ) : (
-              <span className="text-slate-400"> · 接口 …</span>
-            )}
-          </span>
-          <span className="text-slate-500 normal-case tracking-normal max-sm:text-[9px]">
-            {new Date().toISOString().slice(0, 10)} 世界时
-          </span>
-        </span>
-      </div>
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link to="/apps" className="group flex items-center gap-3">
-            <motion.span
-              className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-400 text-lg shadow-lg shadow-violet-400/30 ring-1 ring-white/60"
-              whileHover={{ rotate: [0, -6, 6, 0], scale: 1.04 }}
-              transition={{ duration: 0.45 }}
-            >
-              <Sparkles className="relative h-5 w-5 text-white" />
-            </motion.span>
-            <div>
-              <div className="font-semibold tracking-tight text-slate-900">{t("brand")}</div>
-              <div className="text-xs text-slate-500">{t("tagline")}</div>
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-50 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:gap-4 lg:px-8">
+          <Link to="/" className="flex shrink-0 items-center gap-2.5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-500 text-white shadow-sm">
+              <Sparkles className="h-5 w-5" strokeWidth={2} />
+            </span>
+            <div className="leading-tight">
+              <div className="text-[15px] font-bold tracking-tight text-slate-900">{t("brand")}</div>
+              <div className="text-[11px] text-slate-500">{t("tagline")}</div>
             </div>
           </Link>
-          <nav className="flex flex-wrap items-center gap-1.5">
-            {nav.map((item) => {
-              const onResourceDetail = loc.pathname.startsWith("/resources/");
+
+          <nav className="order-3 flex w-full flex-wrap items-center gap-1 border-t border-slate-100 pt-3 lg:order-none lg:w-auto lg:border-0 lg:pt-0">
+            {topNav.map((item) => {
+              const Icon = item.icon;
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.to === "/"}
                   className={({ isActive }) => {
-                    const active = isActive || (item.to === "/apps" && onResourceDetail);
-                    const base = "rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-[0.98]";
-                    return active
-                      ? `${base} bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25`
+                    const base =
+                      "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors active:scale-[0.99]";
+                    return isActive
+                      ? `${base} bg-brand-500 text-white shadow-sm`
                       : `${base} text-slate-600 hover:bg-slate-100 hover:text-slate-900`;
                   }}
                 >
-                  {t(item.key)}
+                  <Icon className="h-4 w-4 opacity-90" strokeWidth={2} />
+                  <span>{t(item.key)}</span>
                 </NavLink>
               );
             })}
           </nav>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-amber-500 shadow-sm"
-              title={t("themeLightHint")}
-              aria-label={t("themeLightHint")}
-            >
-              <Sun className="h-5 w-5" strokeWidth={2} />
-            </button>
+
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end sm:max-w-md lg:max-w-sm">
+            <form onSubmit={onSearch} className="relative min-w-0 w-full">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={headerQ}
+                onChange={(e) => setHeaderQ(e.target.value)}
+                placeholder={t("headerSearchPlaceholder")}
+                className="w-full rounded-md border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-800 outline-none ring-brand-500/15 placeholder:text-slate-400 focus:border-brand-400 focus:ring-2"
+                aria-label={t("headerSearchPlaceholder")}
+              />
+            </form>
           </div>
         </div>
       </header>
-      <main className="relative z-10 mx-auto min-h-[calc(100vh-8rem)] w-full max-w-[1600px] px-4 py-8 sm:px-8 lg:px-12">
-        <Outlet />
-      </main>
-      <footer className="relative z-10 border-t border-slate-200/80 bg-white/60 py-8 text-center text-[11px] text-slate-500 backdrop-blur-sm">
+
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1">
+        <aside className="hidden w-56 shrink-0 border-r border-slate-200/80 bg-white/80 lg:block">
+          <div className="sticky top-[4.75rem] space-y-1 px-3 py-6">
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t("sidebarNavTitle")}</p>
+            {sideNav.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) => {
+                  const base = "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors";
+                  return isActive
+                    ? `${base} bg-brand-50 text-brand-700 font-medium`
+                    : `${base} text-slate-600 hover:bg-slate-50 hover:text-slate-900`;
+                }}
+              >
+                {t(item.key)}
+              </NavLink>
+            ))}
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-10 lg:py-8">
+          <Outlet />
+        </main>
+      </div>
+
+      <footer className="border-t border-slate-200/80 bg-white/90 py-8 text-center text-[11px] text-slate-500">
         <p className="font-medium text-slate-600">{t("footer")}</p>
         <p className="mt-2 text-[10px] text-slate-400">
-          版本：界面 {uiRelease}
+          构建 {uiRelease}
           {apiRelease ? ` · 接口 ${apiRelease}` : ""}
         </p>
-        <Link to="/about" className="mt-2 inline-block text-violet-600 hover:underline">
+        <Link to="/about" className="mt-2 inline-block text-brand-600 hover:underline">
           {t("navAbout")} · {t("footerAboutFull")}
         </Link>
       </footer>

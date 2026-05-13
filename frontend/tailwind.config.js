@@ -8,6 +8,17 @@ export default {
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       colors: {
+        /** 对齐 Ant Design 主色体系，便于全站统一（非 1:1 复刻第三方模板） */
+        brand: {
+          50: "#e6f4ff",
+          100: "#bae0ff",
+          200: "#91caff",
+          300: "#69b1ff",
+          400: "#4096ff",
+          500: "#1677ff",
+          600: "#0958d9",
+          700: "#003eb3",
+        },
         night: {
           950: "#07060d",
           900: "#0d0b14",
