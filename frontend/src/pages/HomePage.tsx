@@ -53,73 +53,83 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 对齐 tmp/local-only/1.png（2D）：柔光大光圈 + 同心发光细环 + 内虚线渐变盘 + 圆形角标 + 扁平中心渐变块 */
+/** 2D 主视觉（对齐 1.png）：明显大外圆 + 同心环 + 虚线内盘；角标 z 轴高于中心块；AI 为多色渐变叠层非纯色 */
 function HeroGraphic() {
   const orbitIcon =
-    "pointer-events-none absolute z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/80 bg-white/55 text-violet-700 shadow-[0_0_22px_rgba(165,180,252,0.85),0_4px_12px_rgba(99,102,241,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-sm sm:h-9 sm:w-9";
+    "absolute z-[35] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/95 bg-white/85 text-violet-700 shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_6px_20px_rgba(99,102,241,0.25),0_0_24px_rgba(165,180,252,0.65)] backdrop-blur-sm sm:h-10 sm:w-10";
   return (
-    <div className="relative mx-auto w-full max-w-[260px] shrink-0 px-4 pb-5 pt-3 sm:max-w-[300px] sm:px-5 sm:pb-6 sm:pt-4">
-      <div className="relative aspect-square w-full">
+    <div className="relative mx-auto w-full max-w-[280px] shrink-0 overflow-visible px-3 pb-6 pt-3 sm:max-w-[320px] sm:px-4 sm:pb-8 sm:pt-4">
+      <div className="relative aspect-square w-full overflow-visible">
         <div
-          className="pointer-events-none absolute -inset-[28%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.98)_0%,rgba(224,231,255,0.52)_24%,rgba(196,181,253,0.28)_48%,rgba(125,211,252,0.12)_68%,transparent_85%)] blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-55"
+          className="pointer-events-none absolute -inset-[24%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.95)_0%,rgba(224,231,255,0.5)_28%,rgba(196,181,253,0.28)_52%,rgba(125,211,252,0.12)_72%,transparent_88%)] blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-50"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -inset-[12%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.55)_0%,rgba(238,242,255,0.2)_52%,transparent_75%)]"
-          aria-hidden
-        />
-
-        <div
-          className="pointer-events-none absolute inset-[2%] z-[1] rounded-full border-[2.5px] border-white/85 shadow-[0_0_40px_rgba(186,230,253,0.75),0_0_80px_rgba(165,180,252,0.28)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-[7%] z-[1] rounded-full border-2 border-cyan-100/65 shadow-[0_0_28px_rgba(103,232,249,0.45)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-[11%] z-[1] rounded-full border border-indigo-100/70 shadow-[0_0_22px_rgba(199,210,254,0.45)]"
+          className="pointer-events-none absolute -inset-[10%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.65)_0%,rgba(238,242,255,0.25)_55%,transparent_78%)]"
           aria-hidden
         />
 
         <div
-          className="absolute inset-[12%] z-[2] rounded-full border border-dashed border-violet-300/45 bg-gradient-to-br from-violet-500/14 to-indigo-600/10 shadow-[0_0_36px_rgba(99,102,241,0.18)]"
+          className="pointer-events-none absolute inset-0 z-[1] rounded-full border-[4px] border-violet-400/90 bg-gradient-to-b from-white/50 via-violet-50/25 to-indigo-50/20 shadow-[0_0_0_3px_rgba(255,255,255,0.95),0_0_48px_rgba(139,92,246,0.35),0_12px_40px_rgba(99,102,241,0.12)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[5%] z-[2] rounded-full border-[3px] border-white/90 shadow-[0_0_32px_rgba(186,230,253,0.8)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[10%] z-[3] rounded-full border-2 border-cyan-200/80 shadow-[0_0_24px_rgba(34,211,238,0.45)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[14%] z-[4] rounded-full border border-indigo-300/70 shadow-[0_0_18px_rgba(165,180,252,0.5)]"
           aria-hidden
         />
 
         <div
-          className="pointer-events-none absolute left-[11%] top-[16%] z-[2] h-2 w-2 rounded-full bg-violet-300/75 shadow-[0_0_12px_rgba(167,139,250,0.9)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute right-[13%] top-[20%] z-[2] h-1.5 w-1.5 rounded-full bg-sky-300/85 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute bottom-[18%] left-[18%] z-[2] h-1.5 w-1.5 rounded-full bg-white/90 shadow-[0_0_8px_rgba(255,255,255,0.85)]"
+          className="absolute inset-[15%] z-[5] rounded-full border border-dashed border-violet-400/55 bg-gradient-to-br from-violet-400/18 via-white/30 to-sky-300/15 shadow-[inset_0_0_40px_rgba(255,255,255,0.35),0_0_28px_rgba(99,102,241,0.12)]"
           aria-hidden
         />
 
-        <div className={`${orbitIcon} left-[7%] top-[17%]`}>
-          <Bot className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-        </div>
-        <div className={`${orbitIcon} right-[9%] top-[14%]`}>
-          <MessageCircle className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-        </div>
-        <div className={`${orbitIcon} left-[10%] bottom-[16%]`}>
-          <FileText className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-        </div>
-        <div className={`${orbitIcon} right-[7%] bottom-[18%]`}>
-          <BarChart3 className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
-        </div>
+        <div
+          className="pointer-events-none absolute left-[10%] top-[14%] z-[6] h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_14px_rgba(167,139,250,1)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute right-[11%] top-[18%] z-[6] h-2 w-2 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.95)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute bottom-[16%] left-[16%] z-[6] h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,1)]"
+          aria-hidden
+        />
 
-        <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-          <div className="relative flex h-[7.25rem] w-[7.25rem] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-[0_20px_48px_-12px_rgba(79,70,229,0.45),0_8px_24px_-8px_rgba(14,165,233,0.3),inset_0_2px_0_rgba(255,255,255,0.42),inset_0_-14px_28px_rgba(67,56,202,0.2)] ring-2 ring-white/55 sm:h-32 sm:w-32">
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/32 via-transparent to-indigo-900/8" />
-            <div className="absolute inset-x-0 top-0 h-[42%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
-            <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-100 drop-shadow-md sm:h-8 sm:w-8" strokeWidth={1.5} />
-            <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.3)] sm:text-4xl">AI</span>
+        <div className="absolute left-1/2 top-1/2 z-[20] -translate-x-1/2 -translate-y-1/2">
+          <div className="relative h-[7.25rem] w-[7.25rem] overflow-hidden rounded-2xl ring-2 ring-white/70 sm:h-32 sm:w-32">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,#7c3aed_0%,#6366f1_28%,#4f46e5_48%,#2563eb_72%,#0ea5e9_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(255,255,255,0.55)_0%,transparent_55%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(200deg,rgba(244,114,182,0.35)_0%,transparent_40%,rgba(56,189,248,0.28)_100%)]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/25 via-transparent to-transparent" />
+            <div className="absolute inset-0 rounded-2xl border border-white/25" />
+            <div className="absolute inset-x-0 top-0 h-[45%] rounded-t-2xl bg-gradient-to-b from-white/45 to-transparent" />
+            <div className="relative flex h-full w-full items-center justify-center">
+              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-7 w-7 text-cyan-100 drop-shadow-md sm:h-8 sm:w-8" strokeWidth={1.5} />
+              <span className="relative z-10 text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_12px_rgba(15,23,42,0.45)] sm:text-4xl">AI</span>
+            </div>
           </div>
+        </div>
+
+        <div className={`${orbitIcon} left-[6%] top-[16%]`}>
+          <Bot className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+        </div>
+        <div className={`${orbitIcon} right-[8%] top-[12%]`}>
+          <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+        </div>
+        <div className={`${orbitIcon} left-[9%] bottom-[14%]`}>
+          <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+        </div>
+        <div className={`${orbitIcon} right-[6%] bottom-[16%]`}>
+          <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
         </div>
       </div>
     </div>
