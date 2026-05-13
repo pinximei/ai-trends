@@ -18,8 +18,8 @@ import { useI18n } from "@/i18n";
 
 const INDUSTRY = "ai";
 
-/** 与轨道一致：横向半轴占容器宽的比例、竖向半轴（扁椭圆） */
-const HERO_ORBIT_RX_FRAC = 0.475;
+/** 轨道与最外椭圆光晕外缘对齐（rx 为相对整宽的半轴长度）；扁率与光晕一致 */
+const HERO_ORBIT_RX_FRAC = 0.492;
 const HERO_ORBIT_RY_FRAC = HERO_ORBIT_RX_FRAC * (36 / 50);
 
 function summarize(text: string, max: number) {
@@ -121,7 +121,7 @@ function EllipticalOrbitIcon({
   );
 }
 
-/** 首页主视觉：椭圆光圈 + 透视台面 + 与光圈重合的椭圆轨道与图标 */
+/** 首页主视觉：大椭圆光晕 + 透视台面 + 轨道贴在光晕外缘 */
 function HeroGraphic() {
   const reduce = useReducedMotion();
   const orbitSec = 168;
@@ -153,23 +153,23 @@ function HeroGraphic() {
       <div
         ref={orbitBoxRef}
         data-orbit-square
-        className="relative isolate mx-auto aspect-square w-full max-w-[248px] overflow-visible [container-type:size] [perspective:920px] sm:max-w-[264px]"
+        className="relative isolate mx-auto aspect-square w-full max-w-[260px] overflow-visible [container-type:size] [perspective:920px] sm:max-w-[278px]"
       >
         <div
           className={`absolute inset-0 [transform-style:preserve-3d] origin-[50%_52%] ${
             reduce ? "" : "[transform:rotateX(11deg)]"
           }`}
         >
-          {/* 椭圆光晕（rounded-[50%] + 不等 inset），与轨道同一扁率 */}
+          {/* 椭圆光晕：略放大、无外圈描线；不等 inset + rounded-[50%] */}
           <motion.div
-            className="pointer-events-none absolute inset-x-[1%] inset-y-[7%] z-[1] rounded-[50%] bg-[radial-gradient(ellipse_96%_78%_at_50%_44%,rgba(186,230,253,0.28)_0%,rgba(196,181,253,0.16)_38%,rgba(255,255,255,0.34)_58%,transparent_78%)] blur-2xl"
+            className="pointer-events-none absolute inset-x-0 inset-y-[2%] z-[1] rounded-[50%] bg-[radial-gradient(ellipse_98%_80%_at_50%_44%,rgba(186,230,253,0.32)_0%,rgba(196,181,253,0.18)_38%,rgba(255,255,255,0.38)_58%,transparent_80%)] blur-3xl"
             aria-hidden
-            animate={reduce ? undefined : { opacity: [0.42, 0.58, 0.42], scale: [0.99, 1.01, 0.99] }}
+            animate={reduce ? undefined : { opacity: [0.45, 0.62, 0.45], scale: [0.99, 1.01, 0.99] }}
             transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
           />
 
           <div
-            className="pointer-events-none absolute inset-x-[5%] inset-y-[11%] z-[2] rounded-[50%] opacity-[0.12] [mask-image:radial-gradient(ellipse_94%_80%_at_50%_50%,black_52%,transparent_76%)] sm:opacity-[0.16]"
+            className="pointer-events-none absolute inset-x-[2%] inset-y-[8%] z-[2] rounded-[50%] opacity-[0.12] [mask-image:radial-gradient(ellipse_96%_82%_at_50%_50%,black_50%,transparent_78%)] sm:opacity-[0.16]"
             style={{
               backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.2) 1px, transparent 1.5px)",
               backgroundSize: "10px 10px",
@@ -178,51 +178,24 @@ function HeroGraphic() {
           />
 
           <div
-            className="pointer-events-none absolute inset-x-[3%] inset-y-[8%] z-[3] rounded-[50%] bg-transparent opacity-[0.6] blur-[7px] shadow-[0_0_32px_12px_rgba(167,139,250,0.12),0_0_22px_8px_rgba(125,211,252,0.1)]"
+            className="pointer-events-none absolute inset-x-0 inset-y-[3%] z-[3] rounded-[50%] bg-transparent opacity-[0.62] blur-[8px] shadow-[0_0_38px_14px_rgba(167,139,250,0.14),0_0_26px_10px_rgba(125,211,252,0.12)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-x-[4%] inset-y-[9%] z-[4] rounded-[50%] opacity-[0.5] blur-[5px] [box-shadow:inset_0_0_32px_rgba(255,255,255,0.38),0_0_0_1px_rgba(255,255,255,0.22),0_0_28px_10px_rgba(139,92,246,0.08)]"
+            className="pointer-events-none absolute inset-x-[2%] inset-y-[6%] z-[4] rounded-[50%] opacity-[0.52] blur-[6px] [box-shadow:inset_0_0_36px_rgba(255,255,255,0.42),0_0_32px_12px_rgba(139,92,246,0.1)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-x-[6%] inset-y-[12%] z-[5] rounded-[50%] opacity-[0.38] blur-[2px] shadow-[0_0_22px_8px_rgba(255,255,255,0.5)]"
+            className="pointer-events-none absolute inset-x-[4%] inset-y-[9%] z-[5] rounded-[50%] opacity-[0.4] blur-[2px] shadow-[0_0_26px_10px_rgba(255,255,255,0.52)]"
             aria-hidden
           />
 
           <div
-            className="pointer-events-none absolute inset-x-[18%] inset-y-[22%] z-[6] rounded-[50%] bg-[radial-gradient(ellipse_92%_88%_at_50%_44%,rgba(255,255,255,0.42)_0%,rgba(248,250,252,0.22)_58%,transparent_84%)]"
+            className="pointer-events-none absolute inset-x-[14%] inset-y-[18%] z-[6] rounded-[50%] bg-[radial-gradient(ellipse_94%_90%_at_50%_44%,rgba(255,255,255,0.46)_0%,rgba(248,250,252,0.24)_58%,transparent_86%)]"
             aria-hidden
           />
 
-          {/* 与图标轨道重合的椭圆「光圈」描边 */}
-          <svg
-            className="pointer-events-none absolute inset-0 z-[12] h-full w-full overflow-visible"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-hidden
-          >
-            <defs>
-              <linearGradient id="hero-orbit-ring" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
-                <stop offset="45%" stopColor="rgba(186,230,253,0.95)" />
-                <stop offset="100%" stopColor="rgba(167,139,250,0.65)" />
-              </linearGradient>
-            </defs>
-            <ellipse
-              cx="50"
-              cy="50"
-              rx={100 * HERO_ORBIT_RX_FRAC}
-              ry={100 * HERO_ORBIT_RY_FRAC}
-              fill="none"
-              stroke="url(#hero-orbit-ring)"
-              strokeWidth="0.55"
-              vectorEffect="non-scaling-stroke"
-              className="opacity-[0.92] drop-shadow-[0_0_8px_rgba(125,211,252,0.45)]"
-            />
-          </svg>
-
-          {/* 公转图标：z 高于椭圆线，与数学轨道对齐 */}
+          {/* 公转图标：贴在光晕外缘（与 HERO_ORBIT_* 一致），无额外 SVG 线框 */}
           <div className="pointer-events-none absolute inset-0 z-[38]">
             <EllipticalOrbitIcon orbitBoxRef={orbitBoxRef} phaseOffsetDeg={0} theta={theta} reduce={reduce}>
               <Bot className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.35} />
