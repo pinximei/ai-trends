@@ -61,7 +61,7 @@ export default {
         "hero-orbit-reverse": "heroOrbitReverse 18s linear infinite",
         "hero-glow-breathe": "heroGlowBreathe 3.2s ease-in-out infinite",
         "hero-scan": "heroScan 3.8s ease-in-out infinite",
-        "hero-cube-shimmer": "heroCubeShimmer 5s ease-in-out infinite",
+        "hero-ai-tech": "heroAiTech 12s ease-in-out infinite",
       },
       keyframes: {
         float: {
@@ -111,9 +111,12 @@ export default {
           "88%": { opacity: "0.85" },
           "100%": { transform: "translateY(130%)", opacity: "0" },
         },
-        heroCubeShimmer: {
-          "0%, 100%": { backgroundPosition: "0% 40%" },
-          "50%": { backgroundPosition: "100% 60%" },
+        heroAiTech: {
+          "0%, 100%": { transform: "rotateY(-14deg) rotateX(5deg)" },
+          "20%": { transform: "rotateY(14deg) rotateX(-3deg)" },
+          "44%": { transform: "rotateY(188deg) rotateX(2deg) scale(0.94)" },
+          "50%": { transform: "rotateY(360deg) rotateX(0deg) scale(1)" },
+          "72%": { transform: "rotateY(10deg) rotateX(6deg)" },
         },
       },
     },

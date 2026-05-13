@@ -53,12 +53,12 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 右侧主视觉：立方体 + 四角浮动图标；中心立方体带轻量科技动效（尊重 prefers-reduced-motion） */
+/** 右侧主视觉：圆环 + 四角浮动；中心透明圆 +「AI」渐变字与 3D 翻转动效（尊重 prefers-reduced-motion） */
 function HeroGraphic() {
   const float =
     "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";
   return (
-    <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[260px] lg:mx-0 lg:max-w-[272px] xl:max-w-[292px]">
+    <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[260px] lg:mx-0 lg:max-w-[248px] xl:max-w-[268px]">
       <div className="relative aspect-square w-full">
         <div
           className="pointer-events-none absolute inset-[2%] rounded-full bg-gradient-to-br from-violet-500/35 via-indigo-500/22 to-sky-400/28 blur-2xl motion-safe:animate-hero-glow-breathe motion-reduce:opacity-50"
@@ -92,24 +92,28 @@ function HeroGraphic() {
         <div className={`${float} right-[8%] bottom-[22%] animate-float`} style={{ animationDuration: "19s" }}>
           <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
         </div>
-        <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-          <div className="relative flex h-[7.25rem] w-[7.25rem] items-center justify-center overflow-hidden rounded-2xl shadow-xl ring-2 ring-white/30 motion-safe:animate-glow motion-reduce:animate-none sm:h-32 sm:w-32">
-            <div
-              className="absolute inset-0 bg-gradient-to-br from-violet-400 via-indigo-600 to-sky-500 bg-[length:220%_220%] motion-safe:animate-hero-cube-shimmer motion-reduce:animate-none"
-              aria-hidden
-            />
-            <div className="absolute inset-0 bg-gradient-to-tr from-white/28 to-transparent" aria-hidden />
-            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl" aria-hidden>
-              <div className="absolute inset-x-0 top-0 flex justify-center motion-safe:animate-hero-scan motion-reduce:hidden">
-                <div className="h-16 w-[130%] max-w-none -translate-x-[12%] bg-gradient-to-b from-transparent via-white/35 to-transparent opacity-90" />
+        <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 [perspective:560px]">
+          <div className="motion-safe:animate-hero-ai-tech motion-reduce:animate-none [transform-style:preserve-3d]">
+            <div className="relative flex h-[7rem] w-[7rem] items-center justify-center overflow-hidden rounded-full border-2 border-white/50 bg-transparent shadow-[0_0_32px_rgba(139,92,246,0.4),0_0_48px_rgba(14,165,233,0.15),inset_0_0_28px_rgba(255,255,255,0.07)] ring-1 ring-violet-300/40 sm:h-[7.75rem] sm:w-[7.75rem]">
+              <div className="pointer-events-none absolute inset-[8%] rounded-full border border-white/20" aria-hidden />
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full" aria-hidden>
+                <div className="absolute inset-x-0 top-0 flex justify-center motion-safe:animate-hero-scan motion-reduce:hidden">
+                  <div className="h-14 w-[130%] max-w-none -translate-x-[12%] bg-gradient-to-b from-transparent via-white/28 to-transparent opacity-90" />
+                </div>
               </div>
+              <Brain
+                className="absolute -right-0.5 -top-0.5 z-10 h-6 w-6 text-cyan-200/95 drop-shadow-md motion-safe:animate-pulse motion-reduce:animate-none sm:h-7 sm:w-7"
+                strokeWidth={1.5}
+              />
+              <span className="relative z-10 flex select-none text-3xl font-black tracking-tight sm:text-4xl">
+                <span className="inline-block bg-gradient-to-br from-white via-cyan-100 to-violet-200 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(167,139,250,0.9)]">
+                  A
+                </span>
+                <span className="inline-block bg-gradient-to-br from-cyan-100 via-white to-indigo-200 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(56,189,248,0.75)]">
+                  I
+                </span>
+              </span>
             </div>
-            <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/20" aria-hidden />
-            <Brain
-              className="absolute -right-0.5 -top-0.5 z-10 h-7 w-7 text-cyan-200/95 drop-shadow-md motion-safe:animate-pulse motion-reduce:animate-none sm:h-8 sm:w-8"
-              strokeWidth={1.5}
-            />
-            <span className="relative z-10 text-3xl font-black tracking-tight text-white drop-shadow-md sm:text-4xl">AI</span>
           </div>
         </div>
       </div>
@@ -209,17 +213,17 @@ export function HomePage() {
   return (
     <div className="w-full space-y-8 lg:space-y-10">
       {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-12">
-        <div className="min-w-0 space-y-8 lg:space-y-10">
-          <section className="flex flex-col items-stretch gap-8 sm:gap-9 lg:flex-row lg:items-center lg:justify-between lg:gap-10 xl:gap-14">
-            <div className="min-w-0 flex-1 lg:max-w-[min(36rem,58%)] xl:max-w-[min(40rem,56%)]">
-              <h1 className="text-gradient text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-x-16 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-x-20">
+        <div className="min-w-0 space-y-8 pr-0 lg:space-y-10 lg:pr-2">
+          <section className="flex flex-col items-center gap-8 text-center sm:gap-9 lg:flex-row lg:items-center lg:gap-10 lg:text-left xl:gap-12">
+            <div className="min-w-0 w-full shrink-0 lg:max-w-lg xl:max-w-xl">
+              <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
               </h1>
               <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
                 {t("homeMainHeroDesc")}
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
                 <Link
                   to="/news"
                   className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
@@ -235,8 +239,10 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex w-full shrink-0 justify-center lg:w-auto lg:justify-end lg:pl-4 xl:pl-6">
-              <HeroGraphic />
+            <div className="flex min-h-[200px] w-full flex-1 items-center justify-center py-2 lg:min-h-[260px] lg:justify-center lg:py-0">
+              <div className="translate-x-0 lg:translate-x-[min(2.75rem,8%)] xl:translate-x-[min(3.25rem,9%)]">
+                <HeroGraphic />
+              </div>
             </div>
           </section>
 
