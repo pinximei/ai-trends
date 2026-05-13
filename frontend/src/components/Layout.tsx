@@ -128,9 +128,11 @@ export function Layout() {
 
         <main
           className={
-            isHome || isFeedHub
+            isHome
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
-              : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
+              : isFeedHub
+                ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
+                : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
           }
         >
           <Outlet />

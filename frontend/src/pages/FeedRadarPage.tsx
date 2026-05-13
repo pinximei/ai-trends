@@ -361,13 +361,13 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   const listSection = (
     <>
-      {err ? <p className="mt-6 text-sm font-medium text-rose-600">{err}</p> : null}
-      {loading ? <p className="mt-8 text-sm text-slate-500">{t("resourcesLoading")}</p> : null}
+      {err ? <p className="mt-1 text-sm font-medium text-rose-600 sm:mt-2">{err}</p> : null}
+      {loading ? <p className="mt-2 text-sm text-slate-500 sm:mt-3">{t("resourcesLoading")}</p> : null}
 
       {!loading ? (
         <>
-          <p className="mt-10 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400">{t("resourcesByDate")}</p>
-          <div className="mt-6 space-y-14">
+          <p className="mt-1 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400 sm:mt-2">{t("resourcesByDate")}</p>
+          <div className="mt-4 space-y-14 sm:mt-5">
             {listByDate.map(([dayKey, rows]) => (
               <Fragment key={dayKey}>
                 <div className="flex items-center gap-4 px-1">
@@ -477,7 +477,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           </div>
 
           {list.length === 0 ? (
-            <p className="mt-10 text-center text-sm text-slate-500">
+            <p className="mt-6 text-center text-sm text-slate-500 sm:mt-8">
               {searchQ ? t("resourcesEmptySearch") : t("resourcesEmptyTopic")}
             </p>
           ) : null}
@@ -493,7 +493,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     <div className="w-full px-2 sm:px-4">
       <div className={gridClass}>
         <aside className="min-w-0">{leftRail}</aside>
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-4">
           {listSection}
           {paginationBar()}
         </div>
