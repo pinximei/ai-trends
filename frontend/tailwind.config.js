@@ -54,10 +54,8 @@ export default {
         float2: "float2 22s ease-in-out infinite",
         pulseSoft: "pulseSoft 4s ease-in-out infinite",
         shimmer: "shimmer 2.5s linear infinite",
-        "spin-slow": "spinSlow 28s linear infinite",
         "data-stream": "dataStream 4s ease-in-out infinite",
         glow: "glowPulse 3s ease-in-out infinite",
-        "hero-orb-tilt": "heroOrbTilt 10s ease-in-out infinite",
       },
       keyframes: {
         float: {
@@ -77,10 +75,6 @@ export default {
           "0%": { backgroundPosition: "200% 0" },
           "100%": { backgroundPosition: "-200% 0" },
         },
-        spinSlow: {
-          from: { transform: "rotate(0deg)" },
-          to: { transform: "rotate(360deg)" },
-        },
         dataStream: {
           "0%, 100%": { opacity: "0.3", transform: "scaleX(0.3)" },
           "50%": { opacity: "1", transform: "scaleX(1)" },
@@ -88,10 +82,6 @@ export default {
         glowPulse: {
           "0%, 100%": { boxShadow: "0 0 20px rgba(124,58,237,0.2)" },
           "50%": { boxShadow: "0 0 36px rgba(14,165,233,0.25)" },
-        },
-        heroOrbTilt: {
-          "0%, 100%": { transform: "rotateY(-11deg) rotateX(5deg)" },
-          "50%": { transform: "rotateY(11deg) rotateX(-4deg)" },
         },
       },
     },
