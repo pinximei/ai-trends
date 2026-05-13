@@ -87,11 +87,12 @@ function OrbitIcon2D({
   );
 }
 
-/** 首页主视觉：2D 静态光晕 + 四图标绕光晕公转（无光晕自转） */
+/** 首页主视觉：更紧凑的静态光晕 + 四图标沿外层光晕慢速公转 */
 function HeroGraphic() {
   const reduce = useReducedMotion();
-  const orbitSec = 96;
-  const orbitRem = 4.55;
+  const orbitSec = 168;
+  /** 轨道半径：贴近方形外缘（绕光晕外沿，非绕中心 AI） */
+  const orbitRem = 7.35;
 
   return (
     <div
@@ -99,44 +100,44 @@ function HeroGraphic() {
       className="relative mx-auto w-full max-w-[min(100%,300px)] shrink-0 overflow-visible px-1 pb-3 pt-1 sm:max-w-[308px] sm:px-2 sm:pb-4 sm:pt-2"
     >
       <div className="relative mx-auto aspect-square w-full max-w-[256px] overflow-visible sm:max-w-[276px]">
-        {/* 底层光晕（静止，仅轻微呼吸） */}
+        {/* 底层光晕：范围收小 */}
         <motion.div
-          className="pointer-events-none absolute -inset-[12%] z-0 rounded-full bg-[radial-gradient(circle_at_42%_38%,rgba(186,230,253,0.3)_0%,rgba(196,181,253,0.16)_34%,rgba(255,255,255,0.45)_56%,transparent_80%)] blur-2xl"
+          className="pointer-events-none absolute inset-[3%] z-0 rounded-full bg-[radial-gradient(circle_at_44%_40%,rgba(186,230,253,0.22)_0%,rgba(196,181,253,0.12)_38%,rgba(255,255,255,0.32)_62%,transparent_82%)] blur-xl"
           aria-hidden
-          animate={reduce ? undefined : { opacity: [0.42, 0.62, 0.42], scale: [0.98, 1.02, 0.98] }}
+          animate={reduce ? undefined : { opacity: [0.38, 0.52, 0.38], scale: [0.99, 1.01, 0.99] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
 
         <div
-          className="pointer-events-none absolute inset-[6%] z-[1] rounded-full opacity-[0.12] [mask-image:radial-gradient(ellipse_at_center,black_48%,transparent_76%)] sm:opacity-[0.16]"
+          className="pointer-events-none absolute inset-[10%] z-[1] rounded-full opacity-[0.1] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_78%)] sm:opacity-[0.14]"
           style={{
-            backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.2) 1px, transparent 1.5px)",
-            backgroundSize: "11px 11px",
+            backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.18) 1px, transparent 1.5px)",
+            backgroundSize: "10px 10px",
           }}
           aria-hidden
         />
 
         <div
-          className="pointer-events-none absolute -inset-[4%] z-[2] rounded-full bg-transparent opacity-[0.72] blur-[16px] shadow-[0_0_64px_22px_rgba(167,139,250,0.11),0_0_40px_14px_rgba(125,211,252,0.1)]"
+          className="pointer-events-none absolute inset-[4%] z-[2] rounded-full bg-transparent opacity-[0.55] blur-[8px] shadow-[0_0_36px_12px_rgba(167,139,250,0.09),0_0_24px_8px_rgba(125,211,252,0.08)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[-1%] z-[3] rounded-full opacity-[0.55] blur-[10px] [box-shadow:inset_0_0_52px_rgba(255,255,255,0.48),0_0_0_1px_rgba(255,255,255,0.26),0_0_52px_14px_rgba(139,92,246,0.07),0_0_80px_26px_rgba(125,211,252,0.06)]"
+          className="pointer-events-none absolute inset-[6%] z-[3] rounded-full opacity-[0.48] blur-[6px] [box-shadow:inset_0_0_36px_rgba(255,255,255,0.42),0_0_0_1px_rgba(255,255,255,0.22),0_0_32px_10px_rgba(139,92,246,0.06)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[3%] z-[4] rounded-full opacity-[0.42] blur-[4px] shadow-[0_0_32px_8px_rgba(255,255,255,0.52)]"
+          className="pointer-events-none absolute inset-[9%] z-[4] rounded-full opacity-[0.35] blur-[3px] shadow-[0_0_22px_6px_rgba(255,255,255,0.45)]"
           aria-hidden
         />
 
         <div
-          className="pointer-events-none absolute inset-[16%] z-[5] rounded-full bg-[radial-gradient(ellipse_at_50%_42%,rgba(255,255,255,0.48)_0%,rgba(248,250,252,0.26)_58%,transparent_84%)]"
+          className="pointer-events-none absolute inset-[22%] z-[5] rounded-full bg-[radial-gradient(ellipse_at_50%_44%,rgba(255,255,255,0.38)_0%,rgba(248,250,252,0.2)_62%,transparent_86%)]"
           aria-hidden
         />
 
-        {/* 图标绕中心公转（2D）；光晕层不旋转 */}
+        {/* 公转层与主容器同中心；半径用 rem 贴近外缘光晕 */}
         <motion.div
-          className="pointer-events-none absolute inset-[6%] z-[20]"
+          className="pointer-events-none absolute inset-0 z-[20]"
           animate={reduce ? undefined : { rotate: 360 }}
           transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
         >
