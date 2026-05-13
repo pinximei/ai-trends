@@ -62,4 +62,49 @@
     content: "";
     @apply absolute -bottom-1 left-0 h-0.5 w-full rounded-full bg-brand-500 opacity-90;
   }
+
+  /* 首页 Hero：纯 CSS 动画（无 framer-motion），时长由 .hero-graphic 上 CSS 变量控制 */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-halo-spin {
+      animation: hero-halo-rotate var(--hero-halo-sec, 88s) linear infinite;
+      transform-origin: 50% 50%;
+    }
+    .hero-orbit-spin {
+      animation: hero-orbit-rotate var(--hero-orbit-sec, 52s) linear infinite;
+      transform-origin: 50% 50%;
+    }
+    .hero-sat-counter {
+      animation: hero-sat-counter-rotate var(--hero-orbit-sec, 52s) linear infinite;
+      transform: translate(-50%, -50%);
+      transform-origin: center center;
+    }
+    .hero-ai-gradient-shift {
+      animation: hero-ai-gradient-move 16s linear infinite;
+    }
+  }
+
+  @keyframes hero-halo-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes hero-orbit-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes hero-sat-counter-rotate {
+    to {
+      transform: translate(-50%, -50%) rotate(-360deg);
+    }
+  }
+  @keyframes hero-ai-gradient-move {
+    0%,
+    100% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 100% 100%;
+    }
+  }
 }

@@ -1,6 +1,5 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
@@ -21,11 +20,25 @@ const INDUSTRY = "ai";
 /** 倾斜星环平面内的圆轨道半径（rem）；越大越贴近外圈光晕、离中心 AI 越远 */
 const HERO_ORBIT_REM = 9.52;
 const HERO_ORBIT_SEC = 52;
+/** 主光晕慢旋周期（秒），与 index.css 中 .hero-halo-spin 默认值一致 */
+const HERO_HALO_ROT_SEC = 88;
 const HERO_RING_TILT_DEG = 58;
 
 /** 中心 AI 块静态外发光（无呼吸） */
 const HERO_AI_CARD_SHADOW =
   "0 26px 60px -10px rgba(49,46,129,0.58), 0 0 52px rgba(34,211,238,0.34), 0 0 28px rgba(167,139,250,0.22), inset 0 1px 0 rgba(255,255,255,0.42)";
+
+function usePrefersReducedMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduce(mq.matches);
+    const onChange = () => setReduce(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return reduce;
+}
 
 function summarize(text: string, max: number) {
   const s = (text || "").trim();
@@ -63,18 +76,16 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 星环平面内：圆轨道 + 逆旋保持图标正向 */
+/** 星环平面内：圆轨道 + 逆旋保持图标正向（CSS 动画） */
 function OrbitSatellite({
   angleDeg,
   orbitRem,
-  orbitSec,
   reduce,
   children,
 }: {
   angleDeg: number;
   orbitRem: number;
-  orbitSec: number;
-  reduce: boolean | null;
+  reduce: boolean;
   children: ReactNode;
 }) {
   return (
@@ -84,15 +95,11 @@ function OrbitSatellite({
         transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(-${orbitRem}rem)`,
       }}
     >
-      <motion.div
-        className="flex -translate-x-1/2 -translate-y-1/2"
-        animate={reduce ? undefined : { rotate: -360 }}
-        transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
-      >
+      <div className={reduce ? "flex -translate-x-1/2 -translate-y-1/2" : "hero-sat-counter flex"}>
         <span className="pointer-events-auto relative flex h-11 w-11 items-center justify-center text-indigo-600 drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] sm:h-12 sm:w-12">
           {children}
         </span>
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -102,15 +109,20 @@ function OrbitSatellite({
  * 整层 rotateZ 公转，肉眼即「绕中心转」。
  */
 function HeroGraphic() {
-  const reduce = useReducedMotion();
-  const orbitSec = HERO_ORBIT_SEC;
+  const reduce = usePrefersReducedMotion();
   const orbitRem = HERO_ORBIT_REM;
   const tilt = reduce ? 0 : HERO_RING_TILT_DEG;
+
+  const heroMotionStyle = {
+    ["--hero-orbit-sec" as string]: `${HERO_ORBIT_SEC}s`,
+    ["--hero-halo-sec" as string]: `${HERO_HALO_ROT_SEC}s`,
+  } as CSSProperties;
 
   return (
     <div
       data-testid="hero-graphic"
       className="relative mx-auto w-full max-w-[min(100%,392px)] shrink-0 overflow-visible px-0 py-0 sm:max-w-[416px] sm:px-0.5"
+      style={heroMotionStyle}
     >
       <div
         data-orbit-square
@@ -129,9 +141,9 @@ function HeroGraphic() {
             style={tilt ? { transform: `rotateX(${tilt}deg)` } : undefined}
           >
             {/* 慢旋柔光（与环同平面） */}
-            <motion.div
+            <div
               data-testid="hero-halo-primary"
-              className="pointer-events-none absolute aspect-square w-[90%] max-w-[min(100%,310px)] rounded-full sm:max-w-[334px]"
+              className={`pointer-events-none absolute aspect-square w-[90%] max-w-[min(100%,310px)] rounded-full sm:max-w-[334px] ${reduce ? "" : "hero-halo-spin"}`}
               aria-hidden
               style={{
                 background:
@@ -139,31 +151,27 @@ function HeroGraphic() {
                 boxShadow:
                   "0 0 96px 44px rgba(125,211,252,0.18), 0 0 160px 72px rgba(167,139,250,0.12), 0 0 220px 96px rgba(99,102,241,0.05), inset 0 0 72px rgba(165,180,252,0.09), inset 0 0 120px rgba(79,70,229,0.035)",
               }}
-              animate={reduce ? undefined : { rotate: 360 }}
-              transition={{ duration: 88, repeat: Infinity, ease: "linear" }}
             />
 
             {/* 公转：同平面整层旋转 */}
-            <motion.div
-              className="pointer-events-none absolute inset-0 flex items-center justify-center [transform-style:preserve-3d]"
-              animate={reduce ? undefined : { rotate: 360 }}
-              transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
+            <div
+              className={`pointer-events-none absolute inset-0 flex items-center justify-center [transform-style:preserve-3d] ${reduce ? "" : "hero-orbit-spin"}`}
             >
               <div className="relative aspect-square w-[90%] max-w-[min(100%,310px)] sm:max-w-[334px]">
-                <OrbitSatellite angleDeg={0} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+                <OrbitSatellite angleDeg={0} orbitRem={orbitRem} reduce={reduce}>
                   <Bot className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
-                <OrbitSatellite angleDeg={90} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+                <OrbitSatellite angleDeg={90} orbitRem={orbitRem} reduce={reduce}>
                   <MessageCircle className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
-                <OrbitSatellite angleDeg={180} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+                <OrbitSatellite angleDeg={180} orbitRem={orbitRem} reduce={reduce}>
                   <FileText className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
-                <OrbitSatellite angleDeg={270} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+                <OrbitSatellite angleDeg={270} orbitRem={orbitRem} reduce={reduce}>
                   <BarChart3 className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
                 </OrbitSatellite>
               </div>
-            </motion.div>
+            </div>
           </div>
 
           {/* 中心 AI：反向倾斜正对镜头 */}
@@ -179,10 +187,8 @@ function HeroGraphic() {
               className="relative h-[5.75rem] w-[5.75rem] overflow-hidden rounded-2xl ring-1 ring-white/30 sm:h-[6.5rem] sm:w-[6.5rem]"
               style={{ boxShadow: HERO_AI_CARD_SHADOW }}
             >
-              <motion.div
-                className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
-                animate={reduce ? undefined : { backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
-                transition={{ duration: 16, repeat: Infinity, ease: "linear" }}
+              <div
+                className={`absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)] ${reduce ? "" : "hero-ai-gradient-shift"}`}
               />
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
               <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
