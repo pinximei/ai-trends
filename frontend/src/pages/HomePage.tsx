@@ -54,51 +54,31 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-function OrbitMoon({
-  angleDeg,
-  orbitRem,
-  orbitSec,
-  reduce,
+function CornerChip({
+  className,
+  delay,
   children,
 }: {
-  angleDeg: number;
-  orbitRem: number;
-  orbitSec: number;
-  reduce: boolean | null;
+  className: string;
+  delay: number;
   children: ReactNode;
 }) {
+  const reduce = useReducedMotion();
   return (
-    <div
-      className="absolute left-1/2 top-1/2 z-40 h-0 w-0"
-      style={{
-        transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(-${orbitRem}rem)`,
-      }}
+    <motion.div
+      className={`absolute z-[40] flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-9 sm:w-9 ${className}`}
+      animate={reduce ? undefined : { y: [0, -4, 0], scale: [1, 1.03, 1] }}
+      transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut", delay }}
     >
-      <motion.div
-        className="flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center sm:h-9 sm:w-9"
-        animate={reduce ? undefined : { rotate: -360 }}
-        transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
-      >
-        <div className="flex h-full w-full items-center justify-center rounded-xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_22px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.15)] backdrop-blur-md">
-          {children}
-        </div>
-      </motion.div>
-    </div>
+      {children}
+    </motion.div>
   );
 }
 
-/** 首页主视觉：外缘柔光圈、去内圈、3D 倾斜 + 太阳系式公转 */
+/** 首页主视觉：2D 外缘光晕 + 外层慢旋高光环，四角静态图标 */
 function HeroGraphic() {
   const reduce = useReducedMotion();
-  const orbitSec = 118;
-  const orbitRem = 4.65;
-  const tilt = reduce
-    ? undefined
-    : {
-        rotateX: [44, 52, 44],
-        rotateY: [-14, 14, -14],
-        rotateZ: [-3, 3, -3],
-      };
+  const ringSec = 42;
 
   return (
     <div
@@ -106,95 +86,93 @@ function HeroGraphic() {
       className="relative mx-auto w-full max-w-[min(100%,300px)] shrink-0 overflow-visible px-1 pb-3 pt-1 sm:max-w-[308px] sm:px-2 sm:pb-4 sm:pt-2"
     >
       <div className="relative mx-auto aspect-square w-full max-w-[256px] overflow-visible sm:max-w-[276px]">
-        <div className="absolute inset-0 [perspective:920px]">
+        {/* 底层光晕 */}
+        <motion.div
+          className="pointer-events-none absolute -inset-[12%] z-0 rounded-full bg-[radial-gradient(circle_at_42%_38%,rgba(186,230,253,0.3)_0%,rgba(196,181,253,0.16)_34%,rgba(255,255,255,0.45)_56%,transparent_80%)] blur-2xl"
+          aria-hidden
+          animate={reduce ? undefined : { opacity: [0.42, 0.62, 0.42], scale: [0.98, 1.02, 0.98] }}
+          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        <div
+          className="pointer-events-none absolute inset-[6%] z-[1] rounded-full opacity-[0.12] [mask-image:radial-gradient(ellipse_at_center,black_48%,transparent_76%)] sm:opacity-[0.16]"
+          style={{
+            backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.2) 1px, transparent 1.5px)",
+            backgroundSize: "11px 11px",
+          }}
+          aria-hidden
+        />
+
+        <div
+          className="pointer-events-none absolute -inset-[4%] z-[2] rounded-full bg-transparent opacity-[0.72] blur-[16px] shadow-[0_0_64px_22px_rgba(167,139,250,0.11),0_0_40px_14px_rgba(125,211,252,0.1)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[-1%] z-[3] rounded-full opacity-[0.55] blur-[10px] [box-shadow:inset_0_0_52px_rgba(255,255,255,0.48),0_0_0_1px_rgba(255,255,255,0.26),0_0_52px_14px_rgba(139,92,246,0.07),0_0_80px_26px_rgba(125,211,252,0.06)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[3%] z-[4] rounded-full opacity-[0.42] blur-[4px] shadow-[0_0_32px_8px_rgba(255,255,255,0.52)]"
+          aria-hidden
+        />
+
+        <div
+          className="pointer-events-none absolute inset-[16%] z-[5] rounded-full bg-[radial-gradient(ellipse_at_50%_42%,rgba(255,255,255,0.48)_0%,rgba(248,250,252,0.26)_58%,transparent_84%)]"
+          aria-hidden
+        />
+
+        {/* 外圈绕光晕慢旋的高光（环形 mask，非 3D） */}
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-[7] rounded-full mix-blend-screen"
+          style={{
+            opacity: 0.85,
+            background:
+              "conic-gradient(from 0deg, transparent 0deg 110deg, rgba(192,181,253,0.55) 128deg, rgba(125,211,252,0.5) 180deg, rgba(167,139,250,0.45) 232deg, transparent 260deg 360deg)",
+            WebkitMaskImage:
+              "radial-gradient(circle closest-side, transparent calc(100% - 18px), #000 calc(100% - 17px), #000 calc(100% - 5px), transparent calc(100% - 4px))",
+            maskImage:
+              "radial-gradient(circle closest-side, transparent calc(100% - 18px), #000 calc(100% - 17px), #000 calc(100% - 5px), transparent calc(100% - 4px))",
+          }}
+          aria-hidden
+          animate={reduce ? undefined : { rotate: 360 }}
+          transition={{ duration: ringSec, repeat: Infinity, ease: "linear" }}
+        />
+
+        <div className="absolute left-1/2 top-1/2 z-[50] -translate-x-1/2 -translate-y-1/2">
           <motion.div
-            className="absolute inset-0 origin-center will-change-transform [transform-style:preserve-3d]"
-            animate={tilt}
-            transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+            className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/40 shadow-[0_20px_44px_-12px_rgba(79,70,229,0.48),0_0_32px_rgba(34,211,238,0.2)] sm:h-20 sm:w-20"
+            animate={reduce ? undefined : { scale: [1, 1.03, 1] }}
+            transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
           >
             <motion.div
-              className="pointer-events-none absolute -inset-[12%] z-0 rounded-full bg-[radial-gradient(circle_at_40%_36%,rgba(186,230,253,0.32)_0%,rgba(196,181,253,0.18)_35%,rgba(255,255,255,0.48)_58%,transparent_80%)] blur-2xl"
-              aria-hidden
-              animate={reduce ? undefined : { opacity: [0.4, 0.62, 0.4], scale: [0.97, 1.04, 0.97] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
+              animate={reduce ? undefined : { backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
+              transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
             />
-
-            <div
-              className="pointer-events-none absolute inset-[6%] z-[1] rounded-full opacity-[0.12] [mask-image:radial-gradient(ellipse_at_center,black_48%,transparent_76%)] sm:opacity-[0.16]"
-              style={{
-                backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.2) 1px, transparent 1.5px)",
-                backgroundSize: "11px 11px",
-              }}
-              aria-hidden
-            />
-
-            {/* 仅外缘光圈：多层柔光，无实线描边 */}
-            <div
-              className="pointer-events-none absolute -inset-[4%] z-[2] rounded-full bg-transparent opacity-[0.75] blur-[16px] shadow-[0_0_64px_22px_rgba(167,139,250,0.11),0_0_40px_14px_rgba(125,211,252,0.1)]"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-[-1%] z-[3] rounded-full opacity-60 blur-[10px] [box-shadow:inset_0_0_52px_rgba(255,255,255,0.5),0_0_0_1px_rgba(255,255,255,0.28),0_0_52px_14px_rgba(139,92,246,0.07),0_0_80px_26px_rgba(125,211,252,0.06)]"
-              aria-hidden
-            />
-            <div
-              className="pointer-events-none absolute inset-[3%] z-[4] rounded-full opacity-[0.45] blur-[4px] shadow-[0_0_32px_8px_rgba(255,255,255,0.55)]"
-              aria-hidden
-            />
-
-            <div
-              className="pointer-events-none absolute inset-[16%] z-[6] rounded-full bg-[radial-gradient(ellipse_at_50%_42%,rgba(255,255,255,0.5)_0%,rgba(248,250,252,0.28)_58%,transparent_84%)]"
-              aria-hidden
-            />
-
-            <div
-              className="pointer-events-none absolute inset-[5%] z-[20] [transform-style:preserve-3d]"
-              style={{ transform: "rotateX(54deg)" }}
-            >
-              <motion.div
-                className="absolute inset-0 [transform-style:preserve-3d]"
-                animate={reduce ? undefined : { rotate: 360 }}
-                transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
-              >
-                <OrbitMoon angleDeg={0} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-                </OrbitMoon>
-                <OrbitMoon angleDeg={90} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-                </OrbitMoon>
-                <OrbitMoon angleDeg={180} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-                </OrbitMoon>
-                <OrbitMoon angleDeg={270} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-                </OrbitMoon>
-              </motion.div>
-            </div>
-
-            <div className="absolute left-1/2 top-1/2 z-[50] [transform:translate3d(-50%,-50%,52px)] [transform-style:preserve-3d]">
-              <motion.div
-                className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/40 shadow-[0_22px_48px_-14px_rgba(79,70,229,0.5),0_0_36px_rgba(34,211,238,0.22)] sm:h-20 sm:w-20"
-                animate={reduce ? undefined : { scale: [1, 1.04, 1] }}
-                transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <motion.div
-                  className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
-                  animate={reduce ? undefined : { backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
-                  transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
-                />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
-                <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
-                <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/35 via-transparent to-transparent" />
-                <div className="absolute inset-0 rounded-2xl border border-white/35" />
-                <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
-                <div className="relative flex h-full w-full items-center justify-center">
-                  <Brain className="absolute -right-0.5 -top-0.5 z-10 h-5 w-5 text-cyan-100 drop-shadow sm:h-6 sm:w-6" strokeWidth={1.75} />
-                  <span className="relative z-10 text-xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-2xl">AI</span>
-                </div>
-              </motion.div>
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/35 via-transparent to-transparent" />
+            <div className="absolute inset-0 rounded-2xl border border-white/35" />
+            <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
+            <div className="relative flex h-full w-full items-center justify-center">
+              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-5 w-5 text-cyan-100 drop-shadow sm:h-6 sm:w-6" strokeWidth={1.75} />
+              <span className="relative z-10 text-xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-2xl">AI</span>
             </div>
           </motion.div>
         </div>
+
+        <CornerChip className="left-[11%] top-[11%]" delay={0}>
+          <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+        </CornerChip>
+        <CornerChip className="left-[89%] top-[11%]" delay={0.35}>
+          <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+        </CornerChip>
+        <CornerChip className="left-[11%] top-[89%]" delay={0.7}>
+          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+        </CornerChip>
+        <CornerChip className="left-[89%] top-[89%]" delay={1.05}>
+          <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+        </CornerChip>
       </div>
     </div>
   );
