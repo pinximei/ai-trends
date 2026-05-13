@@ -5,8 +5,6 @@ import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse } from "@/api/public/types";
 import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisual";
 import { useI18n } from "@/i18n";
-import { FeedSidebar } from "@/components/FeedSidebar";
-
 const INDUSTRY_SLUG = "ai";
 
 type TimeKey = "latest_day" | "all" | "d7" | "d30" | "d90";
@@ -348,8 +346,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         </div>
       </div>
 
-      <FeedSidebar mode={mode} listLen={list.length} categoryOptions={categoryOptions} />
-
       {pageMeta.days_scan_truncated ? (
         <p className="ui-card px-4 py-3 text-xs font-medium text-violet-700">{t("resourcesDaysTruncated")}</p>
       ) : null}
@@ -357,13 +353,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   );
 
   const leftRail = <div className="lg:sticky lg:top-24 lg:self-start">{feedLeftStrip}</div>;
-
-  const mainToolbar = (
-    <div className="space-y-5">
-      <p className="text-sm leading-relaxed text-slate-500">{t("resourcesFeedDayHint")}</p>
-      {filtersAndSidebar}
-    </div>
-  );
 
   const listSection = (
     <>
@@ -500,7 +489,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       <div className={gridClass}>
         <aside className="min-w-0">{leftRail}</aside>
         <div className="min-w-0 space-y-6">
-          {mainToolbar}
+          {filtersAndSidebar}
           {paginationBar()}
           {listSection}
           {paginationBar()}
