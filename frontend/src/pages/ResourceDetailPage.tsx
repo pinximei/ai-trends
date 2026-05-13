@@ -91,7 +91,7 @@ export function ResourceDetailPage() {
     "max-w-none w-full space-y-4 text-slate-600 leading-relaxed [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:underline [&_strong]:text-slate-900 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-slate-900 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_li]:marker:text-brand-300 [&_code]:rounded-md [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-slate-800 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand-100 [&_blockquote]:pl-4 [&_blockquote]:text-slate-500";
 
   const backBtnClass =
-    "inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-sm font-medium text-slate-700 shadow-md backdrop-blur-sm transition hover:border-brand-300 hover:text-brand-600";
+    "inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-600 sm:w-auto sm:justify-start";
 
   if (err) {
     return (
@@ -119,50 +119,53 @@ export function ResourceDetailPage() {
   }
 
   return (
-    <div className="relative w-full px-2 sm:px-4">
-      <Link
-        to={backTo}
-        className={`fixed left-3 top-20 z-40 sm:left-6 lg:left-8 xl:left-12 2xl:left-16 ${backBtnClass}`}
-      >
-        ← {t("detailBackFeed")}
-      </Link>
+    <div className="w-full px-2 sm:px-4">
+      <div className="mb-4 flex justify-end lg:mb-6">
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {isApp ? t("navApps") : t("navNews")}
+        </span>
+      </div>
 
-      <div className="pt-14 sm:pt-16 lg:pl-32 lg:pt-2 xl:pl-36">
-        <div className="mb-4 flex justify-end lg:mb-6">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            {isApp ? t("navApps") : t("navNews")}
-          </span>
-        </div>
+      <div className="sticky top-16 z-30 mb-3 lg:hidden">
+        <Link to={backTo} className={backBtnClass}>
+          ← {t("detailBackFeed")}
+        </Link>
+      </div>
 
-        <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,300px)_1fr]">
-          <aside className="min-w-0">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-8">
+        <aside className="min-w-0 w-full shrink-0 lg:w-[min(280px,calc(100%-1rem))] xl:w-[300px]">
+          <div className="space-y-4 lg:sticky lg:top-24 lg:z-30">
+            <Link to={backTo} className={`${backBtnClass} hidden lg:inline-flex`}>
+              ← {t("detailBackFeed")}
+            </Link>
             <div className="ui-card overflow-hidden">
               <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
               </div>
               <nav className="divide-y divide-slate-100">
-                  {sidebar.map((row) => {
-                    const activeHere = row.id === a.id;
-                    return (
-                      <Link
-                        key={row.id}
-                        to={`/resources/${row.id}`}
-                        className={`block px-4 py-3 text-sm transition-colors hover:bg-slate-50 ${
-                          activeHere ? "border-l-[3px] border-l-brand-500 bg-brand-50/60 font-medium text-slate-900" : "text-slate-700"
-                        }`}
-                      >
-                        <span className="line-clamp-2 leading-snug">{row.title}</span>
-                        <span className="mt-1 block text-[10px] font-mono uppercase text-slate-400">
-                          {row.platform_label || "—"}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
-            </aside>
+                {sidebar.map((row) => {
+                  const activeHere = row.id === a.id;
+                  return (
+                    <Link
+                      key={row.id}
+                      to={`/resources/${row.id}`}
+                      className={`block px-4 py-3 text-sm transition-colors hover:bg-slate-50 ${
+                        activeHere ? "border-l-[3px] border-l-brand-500 bg-brand-50/60 font-medium text-slate-900" : "text-slate-700"
+                      }`}
+                    >
+                      <span className="line-clamp-2 leading-snug">{row.title}</span>
+                      <span className="mt-1 block text-[10px] font-mono uppercase text-slate-400">
+                        {row.platform_label || "—"}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+        </aside>
 
-            <article className="min-w-0 w-full max-w-none space-y-6">
+        <article className="min-w-0 w-full max-w-none flex-1 space-y-6">
               {isApp ? (
             <div className="ui-card overflow-hidden p-6 sm:p-8">
               <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
@@ -259,7 +262,6 @@ export function ResourceDetailPage() {
             </div>
           )}
         </article>
-        </div>
       </div>
     </div>
   );
