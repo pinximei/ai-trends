@@ -2,6 +2,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .pytest_local.db
+# 本地临时文件（截图等，不提交）
+tmp/local-only/
+
 # 本地 SQLite 与验证库（生产用 PostgreSQL）
 backend/data/
 frontend/node_modules/
