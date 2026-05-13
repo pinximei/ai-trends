@@ -54,31 +54,44 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-function CornerChip({
-  className,
-  delay,
+function OrbitIcon2D({
+  angleDeg,
+  orbitRem,
+  orbitSec,
+  reduce,
   children,
 }: {
-  className: string;
-  delay: number;
+  angleDeg: number;
+  orbitRem: number;
+  orbitSec: number;
+  reduce: boolean | null;
   children: ReactNode;
 }) {
-  const reduce = useReducedMotion();
+  const chip =
+    "flex h-8 w-8 items-center justify-center rounded-xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-9 sm:w-9";
   return (
-    <motion.div
-      className={`absolute z-[40] flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-9 sm:w-9 ${className}`}
-      animate={reduce ? undefined : { y: [0, -4, 0], scale: [1, 1.03, 1] }}
-      transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut", delay }}
+    <div
+      className="absolute left-1/2 top-1/2 h-0 w-0"
+      style={{
+        transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(-${orbitRem}rem)`,
+      }}
     >
-      {children}
-    </motion.div>
+      <motion.div
+        className="flex -translate-x-1/2 -translate-y-1/2"
+        animate={reduce ? undefined : { rotate: -360 }}
+        transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
+      >
+        <div className={chip}>{children}</div>
+      </motion.div>
+    </div>
   );
 }
 
-/** 首页主视觉：2D 外缘光晕 + 外层慢旋高光环，四角静态图标 */
+/** 首页主视觉：2D 静态光晕 + 四图标绕光晕公转（无光晕自转） */
 function HeroGraphic() {
   const reduce = useReducedMotion();
-  const ringSec = 42;
+  const orbitSec = 96;
+  const orbitRem = 4.55;
 
   return (
     <div
@@ -86,7 +99,7 @@ function HeroGraphic() {
       className="relative mx-auto w-full max-w-[min(100%,300px)] shrink-0 overflow-visible px-1 pb-3 pt-1 sm:max-w-[308px] sm:px-2 sm:pb-4 sm:pt-2"
     >
       <div className="relative mx-auto aspect-square w-full max-w-[256px] overflow-visible sm:max-w-[276px]">
-        {/* 底层光晕 */}
+        {/* 底层光晕（静止，仅轻微呼吸） */}
         <motion.div
           className="pointer-events-none absolute -inset-[12%] z-0 rounded-full bg-[radial-gradient(circle_at_42%_38%,rgba(186,230,253,0.3)_0%,rgba(196,181,253,0.16)_34%,rgba(255,255,255,0.45)_56%,transparent_80%)] blur-2xl"
           aria-hidden
@@ -121,22 +134,25 @@ function HeroGraphic() {
           aria-hidden
         />
 
-        {/* 外圈绕光晕慢旋的高光（环形 mask，非 3D） */}
+        {/* 图标绕中心公转（2D）；光晕层不旋转 */}
         <motion.div
-          className="pointer-events-none absolute inset-0 z-[7] rounded-full mix-blend-screen"
-          style={{
-            opacity: 0.85,
-            background:
-              "conic-gradient(from 0deg, transparent 0deg 110deg, rgba(192,181,253,0.55) 128deg, rgba(125,211,252,0.5) 180deg, rgba(167,139,250,0.45) 232deg, transparent 260deg 360deg)",
-            WebkitMaskImage:
-              "radial-gradient(circle closest-side, transparent calc(100% - 18px), #000 calc(100% - 17px), #000 calc(100% - 5px), transparent calc(100% - 4px))",
-            maskImage:
-              "radial-gradient(circle closest-side, transparent calc(100% - 18px), #000 calc(100% - 17px), #000 calc(100% - 5px), transparent calc(100% - 4px))",
-          }}
-          aria-hidden
+          className="pointer-events-none absolute inset-[6%] z-[20]"
           animate={reduce ? undefined : { rotate: 360 }}
-          transition={{ duration: ringSec, repeat: Infinity, ease: "linear" }}
-        />
+          transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
+        >
+          <OrbitIcon2D angleDeg={0} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+            <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+          </OrbitIcon2D>
+          <OrbitIcon2D angleDeg={90} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+            <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+          </OrbitIcon2D>
+          <OrbitIcon2D angleDeg={180} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+          </OrbitIcon2D>
+          <OrbitIcon2D angleDeg={270} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+            <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+          </OrbitIcon2D>
+        </motion.div>
 
         <div className="absolute left-1/2 top-1/2 z-[50] -translate-x-1/2 -translate-y-1/2">
           <motion.div
@@ -160,19 +176,6 @@ function HeroGraphic() {
             </div>
           </motion.div>
         </div>
-
-        <CornerChip className="left-[11%] top-[11%]" delay={0}>
-          <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-        </CornerChip>
-        <CornerChip className="left-[89%] top-[11%]" delay={0.35}>
-          <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-        </CornerChip>
-        <CornerChip className="left-[11%] top-[89%]" delay={0.7}>
-          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-        </CornerChip>
-        <CornerChip className="left-[89%] top-[89%]" delay={1.05}>
-          <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-        </CornerChip>
       </div>
     </div>
   );
