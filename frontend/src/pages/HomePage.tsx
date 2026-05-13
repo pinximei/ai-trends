@@ -120,7 +120,7 @@ function HeroGraphic() {
       >
         {/* 背面大环境光（不倾斜） */}
         <div
-          className="pointer-events-none absolute -inset-[18%] -z-[1] rounded-full bg-[radial-gradient(circle_at_50%_38%,rgba(165,180,252,0.32),rgba(129,140,248,0.2)_38%,rgba(125,211,252,0.12)_52%,rgba(99,102,241,0.06)_65%,transparent_78%)] blur-[52px]"
+          className="pointer-events-none absolute -inset-[18%] -z-[1] rounded-full bg-[radial-gradient(circle_at_50%_40%,rgba(165,180,252,0.2)_0%,rgba(147,163,253,0.14)_28%,rgba(125,211,252,0.1)_48%,rgba(99,102,241,0.05)_72%,transparent_92%)] blur-[58px]"
           aria-hidden
         />
 
@@ -137,9 +137,9 @@ function HeroGraphic() {
               aria-hidden
               style={{
                 background:
-                  "radial-gradient(ellipse 92% 88% at 42% 32%, rgba(199,210,254,0.42) 0%, rgba(165,180,252,0.32) 22%, rgba(129,140,248,0.22) 40%, rgba(125,211,252,0.16) 56%, rgba(99,102,241,0.1) 72%, transparent 88%)",
+                  "radial-gradient(ellipse 108% 102% at 48% 36%, rgba(199,210,254,0.26) 0%, rgba(176,190,254,0.2) 18%, rgba(165,180,252,0.17) 34%, rgba(139,154,255,0.13) 50%, rgba(125,211,252,0.11) 66%, rgba(99,102,241,0.07) 82%, transparent 96%)",
                 boxShadow:
-                  "0 0 72px 28px rgba(125,211,252,0.34), 0 0 120px 48px rgba(167,139,250,0.22), 0 0 160px 64px rgba(99,102,241,0.1), inset 0 0 52px rgba(165,180,252,0.14), inset 0 0 96px rgba(79,70,229,0.06)",
+                  "0 0 96px 44px rgba(125,211,252,0.18), 0 0 160px 72px rgba(167,139,250,0.12), 0 0 220px 96px rgba(99,102,241,0.05), inset 0 0 72px rgba(165,180,252,0.09), inset 0 0 120px rgba(79,70,229,0.035)",
               }}
               animate={reduce ? undefined : { rotate: 360 }}
               transition={{ duration: 88, repeat: Infinity, ease: "linear" }}
