@@ -3,13 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
+  Bot,
   Brain,
   ChevronRight,
   Download,
   FileText,
   Mail,
   MessageCircle,
-  Sparkles,
   Wrench,
 } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
@@ -53,56 +53,71 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 首页主视觉：静态大光圈 + 内层 3D 旋转（圆环、角标、中心 AI 块带景深） */
+/** 对齐 tmp/local-only/1.png：柔光大光圈 + 三层倾斜轨道环 + 圆形角标 + 中心 3D 渐变块；整组 Y 轴旋转（尊重 prefers-reduced-motion） */
 function HeroGraphic() {
-  const chip =
-    "pointer-events-none absolute z-10 flex h-8 w-8 items-center justify-center rounded-xl border border-white/65 bg-gradient-to-br from-white/55 via-violet-100/45 to-indigo-200/40 text-violet-900 shadow-[0_12px_28px_-4px_rgba(67,56,202,0.55),0_3px_10px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-md [transform-style:preserve-3d] motion-safe:[transform:translateZ(2.35rem)] motion-reduce:[transform:none] sm:h-9 sm:w-9";
+  const orbitIcon =
+    "pointer-events-none absolute z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/75 bg-white/50 text-violet-700 shadow-[0_0_26px_rgba(165,180,252,0.9),0_4px_14px_rgba(99,102,241,0.2),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md [transform-style:preserve-3d] motion-safe:[transform:translateZ(2.85rem)] motion-reduce:[transform:none] sm:h-9 sm:w-9";
   return (
-    <div className="relative mx-auto w-full max-w-[248px] shrink-0 overflow-visible px-3 pb-4 pt-2 sm:max-w-[288px] sm:px-4 sm:pb-5 sm:pt-3">
+    <div className="relative mx-auto w-full max-w-[260px] shrink-0 overflow-visible px-4 pb-6 pt-3 sm:max-w-[300px] sm:px-5 sm:pb-7 sm:pt-4">
       <div className="relative aspect-square w-full overflow-visible">
         <div
-          className="pointer-events-none absolute -inset-[22%] z-0 rounded-full bg-gradient-to-t from-violet-500/40 via-fuchsia-400/25 to-sky-400/30 blur-3xl motion-safe:animate-pulseSoft motion-reduce:opacity-50"
+          className="pointer-events-none absolute -inset-[32%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_42%,rgba(255,255,255,0.98)_0%,rgba(224,231,255,0.55)_22%,rgba(196,181,253,0.32)_45%,rgba(125,211,252,0.14)_65%,transparent_82%)] blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-60"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -inset-[16%] z-[1] rounded-full border-[3px] border-white/90 shadow-[0_0_0_2px_rgba(139,92,246,0.45),0_0_72px_40px_rgba(167,139,250,0.65),0_0_140px_60px_rgba(99,102,241,0.28)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -inset-3 z-[2] rounded-full border-[5px] border-violet-500 shadow-[0_0_0_4px_rgba(255,255,255,1),0_14px_44px_rgba(91,33,182,0.38)] sm:-inset-4 sm:border-[6px]"
+          className="pointer-events-none absolute -inset-[14%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.5)_0%,rgba(238,242,255,0.22)_48%,transparent_72%)]"
           aria-hidden
         />
 
-        <div className="absolute inset-0 z-[3] flex items-center justify-center overflow-visible [perspective:920px] sm:[perspective:1100px]">
-          <div className="relative aspect-square h-full w-full motion-safe:animate-hero-3d-spin motion-reduce:animate-none [transform-style:preserve-3d]">
+        <div className="absolute inset-0 z-[1] flex items-center justify-center overflow-visible [perspective:1100px] sm:[perspective:1320px]">
+          <div className="relative aspect-square h-[92%] w-[92%] motion-safe:animate-hero-3d-spin motion-reduce:animate-none [transform-style:preserve-3d]">
+            <div className="pointer-events-none absolute inset-[3%] flex items-center justify-center [transform-style:preserve-3d]">
+              <div
+                className="absolute inset-[5%] rounded-full border-[2.5px] border-white/85 bg-transparent shadow-[0_0_36px_rgba(186,230,253,0.85),0_0_72px_rgba(165,180,252,0.35)] [transform:rotateX(74deg)]"
+                aria-hidden
+              />
+              <div
+                className="absolute inset-[5%] rounded-full border-[2px] border-cyan-100/80 bg-transparent shadow-[0_0_30px_rgba(103,232,249,0.55)] [transform:rotateX(70deg)_rotateZ(52deg)]"
+                aria-hidden
+              />
+              <div
+                className="absolute inset-[5%] rounded-full border-[2px] border-indigo-100/85 bg-transparent shadow-[0_0_28px_rgba(199,210,254,0.6)] [transform:rotateX(70deg)_rotateZ(-52deg)]"
+                aria-hidden
+              />
+            </div>
+
             <div
-              className="pointer-events-none absolute inset-0 [transform:translateZ(-1.125rem)] rounded-full border-[3px] border-violet-400/95 bg-gradient-to-b from-white/60 via-violet-50/35 to-indigo-50/28 shadow-[inset_0_2px_28px_rgba(255,255,255,0.55),0_10px_40px_rgba(99,102,241,0.18)] ring-1 ring-violet-300/55"
+              className="pointer-events-none absolute left-[11%] top-[16%] h-2 w-2 rounded-full bg-violet-300/70 shadow-[0_0_14px_rgba(167,139,250,0.95)] motion-safe:[transform:translateZ(3.1rem)] motion-reduce:hidden"
               aria-hidden
             />
             <div
-              className="pointer-events-none absolute inset-[3%] [transform:translateZ(-0.375rem)] rounded-full border border-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+              className="pointer-events-none absolute right-[13%] top-[20%] h-1.5 w-1.5 rounded-full bg-sky-300/80 shadow-[0_0_12px_rgba(56,189,248,0.85)] motion-safe:[transform:translateZ(2.4rem)] motion-reduce:hidden"
               aria-hidden
             />
-            <div className="absolute inset-[6%] [transform:translateZ(0.5rem)] rounded-full border border-dashed border-violet-400/55 bg-gradient-to-br from-violet-500/24 to-indigo-600/16 shadow-[0_0_40px_rgba(99,102,241,0.28)]" />
+            <div
+              className="pointer-events-none absolute bottom-[18%] left-[18%] h-1.5 w-1.5 rounded-full bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.9)] motion-safe:[transform:translateZ(2.6rem)] motion-reduce:hidden"
+              aria-hidden
+            />
 
-            <div className={`${chip} left-[8%] top-[20%]`}>
-              <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            <div className={`${orbitIcon} left-[7%] top-[17%]`}>
+              <Bot className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
             </div>
-            <div className={`${chip} right-[10%] top-[16%]`}>
-              <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            <div className={`${orbitIcon} right-[9%] top-[14%]`}>
+              <MessageCircle className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
             </div>
-            <div className={`${chip} left-[12%] bottom-[18%]`}>
-              <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            <div className={`${orbitIcon} left-[10%] bottom-[16%]`}>
+              <FileText className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
             </div>
-            <div className={`${chip} right-[8%] bottom-[22%]`}>
-              <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            <div className={`${orbitIcon} right-[7%] bottom-[18%]`}>
+              <BarChart3 className="h-4 w-4 sm:h-[17px] sm:w-[17px]" strokeWidth={1.75} />
             </div>
 
-            <div className="absolute left-1/2 top-1/2 z-20 flex h-[7.25rem] w-[7.25rem] items-center justify-center motion-safe:[transform:translate3d(-50%,-50%,3.5rem)] motion-reduce:[transform:translate(-50%,-50%)] sm:h-32 sm:w-32">
-              <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-[0_20px_50px_-12px_rgba(67,56,202,0.55),0_8px_24px_-8px_rgba(14,165,233,0.35),inset_0_2px_0_rgba(255,255,255,0.35)] ring-2 ring-white/40 [transform-style:preserve-3d]">
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/30 to-transparent" />
-                <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-200 drop-shadow-lg sm:h-8 sm:w-8" strokeWidth={1.5} />
-                <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] sm:text-4xl">AI</span>
+            <div className="absolute left-1/2 top-1/2 z-30 flex h-[7.25rem] w-[7.25rem] items-center justify-center motion-safe:[transform:translate3d(-50%,-50%,3.75rem)_rotateX(-10deg)_rotateY(14deg)] motion-reduce:[transform:translate(-50%,-50%)] sm:h-32 sm:w-32">
+              <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-[0_24px_56px_-14px_rgba(79,70,229,0.55),0_12px_32px_-10px_rgba(14,165,233,0.4),inset_0_2px_0_rgba(255,255,255,0.45),inset_0_-18px_32px_rgba(67,56,202,0.25)] ring-[3px] ring-white/50 [transform-style:preserve-3d]">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/35 via-transparent to-indigo-900/10" />
+                <div className="absolute inset-x-0 top-0 h-2/5 rounded-t-2xl bg-gradient-to-b from-white/40 to-transparent" />
+                <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-100 drop-shadow-lg sm:h-8 sm:w-8" strokeWidth={1.5} />
+                <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.35)] sm:text-4xl">AI</span>
               </div>
             </div>
           </div>
