@@ -241,36 +241,36 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       </div>
     ) : null;
 
-  /** 资讯 / AI 工具共用：最左仅频道名 + 标题 + 图标；筛选与侧栏在主列顶部 */
+  /** 左栏：频道标题 + 图标，其下搜索 / 时间 / 类别 */
   const feedLeftStrip = (
-    <div className="ui-card relative overflow-hidden p-4 sm:p-5 lg:px-4 lg:py-8">
+    <div className="ui-card relative overflow-hidden p-4 sm:p-5">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50/45 via-transparent to-slate-50/35" />
-      <div className="relative flex flex-row items-center gap-4 lg:flex-col lg:items-center lg:gap-5 lg:text-center">
+      <div className="relative flex flex-row items-start gap-4">
         <div
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-brand-50 shadow-sm lg:h-[4.5rem] lg:w-[4.5rem]"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-brand-50 shadow-sm sm:h-14 sm:w-14"
           aria-hidden
         >
-          <ModeGlyph className="h-7 w-7 text-brand-600 lg:h-9 lg:w-9" strokeWidth={1.35} />
+          <ModeGlyph className="h-6 w-6 text-brand-600 sm:h-7 sm:w-7" strokeWidth={1.35} />
         </div>
-        <div className="min-w-0 flex-1 lg:flex-none">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-600/90">
             {mode === "apps" ? t("navApps") : t("navNews")}
           </p>
-          <h1 className="mt-1.5 text-lg font-bold leading-snug tracking-tight text-slate-900 sm:text-xl">{pageTitle}</h1>
+          <h1 className="mt-1 text-lg font-bold leading-snug tracking-tight text-slate-900 sm:text-xl">{pageTitle}</h1>
         </div>
       </div>
     </div>
   );
 
-  const filtersAndSidebar = (
+  const leftFilters = (
     <div className="min-w-0 space-y-5">
       <div className="ui-card p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           <Search className="h-3.5 w-3.5 text-brand-500" strokeWidth={2.5} />
           {t("resourcesSearchLabel")}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
-          <div className="relative min-w-0 flex-1">
+        <div className="flex flex-col gap-2">
+          <div className="relative min-w-0">
             <Search className="pointer-events-none absolute bottom-3 left-4 h-4 w-4 text-slate-400" />
             <input
               type="search"
@@ -289,7 +289,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 setSearchDraft("");
                 setSearchQ("");
               }}
-              className="shrink-0 self-center rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+              className="self-start rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
             >
               {t("resourcesSearchClear")}
             </button>
@@ -352,7 +352,12 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     </div>
   );
 
-  const leftRail = <div className="lg:sticky lg:top-24 lg:self-start">{feedLeftStrip}</div>;
+  const leftRail = (
+    <div className="min-w-0 space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:self-start">
+      {feedLeftStrip}
+      {leftFilters}
+    </div>
+  );
 
   const listSection = (
     <>
@@ -482,14 +487,13 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   );
 
   const gridClass =
-    "grid gap-6 lg:grid-cols-[minmax(0,11.5rem)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,12rem)_1fr]";
+    "grid gap-6 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,300px)_1fr]";
 
   return (
     <div className="w-full px-2 sm:px-4">
       <div className={gridClass}>
         <aside className="min-w-0">{leftRail}</aside>
         <div className="min-w-0 space-y-6">
-          {filtersAndSidebar}
           {paginationBar()}
           {listSection}
           {paginationBar()}
