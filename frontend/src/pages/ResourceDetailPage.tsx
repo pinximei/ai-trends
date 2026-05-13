@@ -120,35 +120,30 @@ export function ResourceDetailPage() {
 
   return (
     <div className="w-full px-2 sm:px-4">
-      <div className="sticky top-16 z-30 -mx-2 border-b border-slate-200/80 bg-white/95 px-3 py-2.5 backdrop-blur-md lg:hidden">
-        <Link to={backTo} className={backBtnClass}>
-          ← {t("detailBackFeed")}
-        </Link>
-      </div>
-
-      <div className="mt-2 flex flex-col gap-6 lg:mt-0 lg:flex-row lg:items-start lg:gap-8">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
         <div className="hidden shrink-0 lg:block lg:w-32">
-          <div className="sticky top-24 z-20">
-            <Link to={backTo} className={`${backBtnClass} w-full justify-center text-center`}>
-              ← {t("detailBackFeed")}
-            </Link>
-          </div>
+          <Link to={backTo} className={`${backBtnClass} w-full justify-center text-center`}>
+            ← {t("detailBackFeed")}
+          </Link>
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-4 flex justify-end lg:mb-6">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 lg:mb-6">
+            <Link to={backTo} className={`${backBtnClass} lg:hidden`}>
+              ← {t("detailBackFeed")}
+            </Link>
+            <span className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               {isApp ? t("navApps") : t("navNews")}
             </span>
           </div>
 
           <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,300px)_1fr]">
-            <aside className="min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:overscroll-y-contain">
+            <aside className="min-w-0">
               <div className="ui-card overflow-hidden">
                 <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
                 </div>
-                <nav className="max-h-[min(70vh,520px)] divide-y divide-slate-100 overflow-y-auto">
+                <nav className="divide-y divide-slate-100">
                   {sidebar.map((row) => {
                     const activeHere = row.id === a.id;
                     return (
@@ -232,7 +227,7 @@ export function ResourceDetailPage() {
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{t("resourceTabsHeading")}</div>
               <div
                 role="tablist"
-                className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap"
+                className="mt-3 flex flex-wrap gap-2"
                 aria-label={t("resourceTabsHeading")}
               >
                 {tabs.map((tab, i) => (
