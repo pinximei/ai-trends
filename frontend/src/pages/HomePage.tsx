@@ -53,7 +53,7 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 首页主视觉：最外大圆环 + 内层渐变圆 + 虚线 + 四角浮动 + 中心「AI」块（对齐设计稿层次） */
+/** 首页主视觉：最外大圆环 + 内层渐变圆 + 虚线 + 四角浮动 + 中心「AI」块。视觉稿：项目根目录 temp/1.png（本地放置，便于对照） */
 function HeroGraphic() {
   const float =
     "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";

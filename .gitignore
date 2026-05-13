@@ -29,3 +29,6 @@ venv/
 
 # Cursor IDE 本地配置与缓存
 .cursor/
+
+# 设计稿与临时参考（根目录 temp/，如 1.png；不入库）
+/temp/
