@@ -18,8 +18,8 @@ import { useI18n } from "@/i18n";
 
 const INDUSTRY = "ai";
 
-/** 倾斜星环平面内的圆轨道半径（rem），与环尺寸一起调 */
-const HERO_ORBIT_REM = 8.55;
+/** 倾斜星环平面内的圆轨道半径（rem）；越大越贴近外圈光晕、离中心 AI 越远 */
+const HERO_ORBIT_REM = 9.52;
 const HERO_ORBIT_SEC = 52;
 const HERO_RING_TILT_DEG = 58;
 
