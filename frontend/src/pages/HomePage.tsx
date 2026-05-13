@@ -56,24 +56,24 @@ function toolRating(seed: string): string {
 
 function OrbitIcon2D({
   angleDeg,
-  orbitRem,
   orbitSec,
   reduce,
   children,
 }: {
   angleDeg: number;
-  orbitRem: number;
   orbitSec: number;
   reduce: boolean | null;
   children: ReactNode;
 }) {
   const chip =
     "pointer-events-auto relative z-[2] flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.2),0_8px_20px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-11 sm:w-11";
+  /** 与最外层光晕 inset-[7%] 对齐：轨道半径 = (内缘 + 外缘)/2，图标在该环带中心旋转 */
+  const orbitY = "calc(-46.5cqmin)";
   return (
     <div
       className="absolute left-1/2 top-1/2 z-[1] h-0 w-0"
       style={{
-        transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(-${orbitRem}rem)`,
+        transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(${orbitY})`,
       }}
     >
       <motion.div
@@ -87,29 +87,27 @@ function OrbitIcon2D({
   );
 }
 
-/** 首页主视觉：较小静态光晕 + 较大图标在光晕上方内侧慢速公转 */
+/** 首页主视觉：外层光晕环带 + 图标沿最外圈光晕的径向中间公转 */
 function HeroGraphic() {
   const reduce = useReducedMotion();
   const orbitSec = 168;
-  /** 轨道半径：小于光晕外缘，图标浮在光晕区域上方旋转而非贴边 */
-  const orbitRem = 5.65;
 
   return (
     <div
       data-testid="hero-graphic"
       className="relative mx-auto w-full max-w-[min(100%,280px)] shrink-0 overflow-visible px-1 pb-1 pt-0 sm:max-w-[292px] sm:px-2 sm:pb-2 sm:pt-1"
     >
-      <div className="relative isolate mx-auto aspect-square w-full max-w-[236px] overflow-visible sm:max-w-[252px]">
+      <div className="relative isolate mx-auto aspect-square w-full max-w-[248px] overflow-visible [container-type:size] sm:max-w-[264px]">
         {/* 底层光晕：全部压在较低 z，避免盖住公转图标 */}
         <motion.div
-          className="pointer-events-none absolute inset-[10%] z-[1] rounded-full bg-[radial-gradient(circle_at_44%_40%,rgba(186,230,253,0.22)_0%,rgba(196,181,253,0.12)_38%,rgba(255,255,255,0.32)_62%,transparent_82%)] blur-lg"
+          className="pointer-events-none absolute inset-[7%] z-[1] rounded-full bg-[radial-gradient(circle_at_44%_40%,rgba(186,230,253,0.22)_0%,rgba(196,181,253,0.12)_38%,rgba(255,255,255,0.32)_62%,transparent_82%)] blur-xl"
           aria-hidden
           animate={reduce ? undefined : { opacity: [0.38, 0.52, 0.38], scale: [0.99, 1.01, 0.99] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
 
         <div
-          className="pointer-events-none absolute inset-[16%] z-[2] rounded-full opacity-[0.1] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_78%)] sm:opacity-[0.14]"
+          className="pointer-events-none absolute inset-[14%] z-[2] rounded-full opacity-[0.1] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_78%)] sm:opacity-[0.14]"
           style={{
             backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.18) 1px, transparent 1.5px)",
             backgroundSize: "10px 10px",
@@ -118,20 +116,20 @@ function HeroGraphic() {
         />
 
         <div
-          className="pointer-events-none absolute inset-[11%] z-[3] rounded-full bg-transparent opacity-[0.55] blur-[6px] shadow-[0_0_28px_10px_rgba(167,139,250,0.09),0_0_18px_6px_rgba(125,211,252,0.08)]"
+          className="pointer-events-none absolute inset-[8%] z-[3] rounded-full bg-transparent opacity-[0.55] blur-[6px] shadow-[0_0_28px_10px_rgba(167,139,250,0.09),0_0_18px_6px_rgba(125,211,252,0.08)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[13%] z-[4] rounded-full opacity-[0.48] blur-[5px] [box-shadow:inset_0_0_28px_rgba(255,255,255,0.42),0_0_0_1px_rgba(255,255,255,0.22),0_0_26px_8px_rgba(139,92,246,0.06)]"
+          className="pointer-events-none absolute inset-[10%] z-[4] rounded-full opacity-[0.48] blur-[5px] [box-shadow:inset_0_0_28px_rgba(255,255,255,0.42),0_0_0_1px_rgba(255,255,255,0.22),0_0_26px_8px_rgba(139,92,246,0.06)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[15%] z-[5] rounded-full opacity-[0.35] blur-[2px] shadow-[0_0_18px_5px_rgba(255,255,255,0.45)]"
+          className="pointer-events-none absolute inset-[12%] z-[5] rounded-full opacity-[0.35] blur-[2px] shadow-[0_0_18px_5px_rgba(255,255,255,0.45)]"
           aria-hidden
         />
 
         <div
-          className="pointer-events-none absolute inset-[28%] z-[6] rounded-full bg-[radial-gradient(ellipse_at_50%_44%,rgba(255,255,255,0.38)_0%,rgba(248,250,252,0.2)_62%,transparent_86%)]"
+          className="pointer-events-none absolute inset-[26%] z-[6] rounded-full bg-[radial-gradient(ellipse_at_50%_44%,rgba(255,255,255,0.38)_0%,rgba(248,250,252,0.2)_62%,transparent_86%)]"
           aria-hidden
         />
 
@@ -141,16 +139,16 @@ function HeroGraphic() {
           animate={reduce ? undefined : { rotate: 360 }}
           transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
         >
-          <OrbitIcon2D angleDeg={0} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+          <OrbitIcon2D angleDeg={0} orbitSec={orbitSec} reduce={reduce}>
             <Bot className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
           </OrbitIcon2D>
-          <OrbitIcon2D angleDeg={90} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+          <OrbitIcon2D angleDeg={90} orbitSec={orbitSec} reduce={reduce}>
             <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
           </OrbitIcon2D>
-          <OrbitIcon2D angleDeg={180} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+          <OrbitIcon2D angleDeg={180} orbitSec={orbitSec} reduce={reduce}>
             <FileText className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
           </OrbitIcon2D>
-          <OrbitIcon2D angleDeg={270} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
+          <OrbitIcon2D angleDeg={270} orbitSec={orbitSec} reduce={reduce}>
             <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2} />
           </OrbitIcon2D>
         </motion.div>
