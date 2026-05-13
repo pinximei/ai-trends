@@ -119,7 +119,7 @@ export function ResourceDetailPage() {
   }
 
   return (
-    <div className="w-full px-2 sm:px-4 lg:flex lg:h-[calc(100dvh-9.5rem)] lg:min-h-0 lg:flex-col lg:overflow-hidden">
+    <div className="flex w-full min-w-0 flex-col px-2 sm:px-4">
       <div className="mb-3 flex shrink-0 justify-end lg:mb-2">
         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {isApp ? t("navApps") : t("navNews")}
@@ -132,17 +132,17 @@ export function ResourceDetailPage() {
         </Link>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden lg:flex-row lg:gap-8">
-        <aside className="min-w-0 w-full shrink-0 lg:flex lg:h-full lg:min-h-0 lg:w-[min(280px,calc(100%-1rem))] lg:flex-col lg:overflow-hidden xl:w-[300px]">
-          <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
-            <Link to={backTo} className={`${backBtnClass} hidden lg:inline-flex`}>
-              ← {t("detailBackFeed")}
-            </Link>
-            <div className="ui-card flex min-h-0 flex-1 flex-col overflow-hidden lg:min-h-0">
-              <div className="shrink-0 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+        <aside className="flex min-w-0 w-full shrink-0 flex-col lg:sticky lg:top-20 lg:z-10 lg:max-h-[calc(100dvh-5rem)] lg:w-[min(280px,calc(100%-1rem))] lg:self-start xl:w-[300px]">
+          <Link to={backTo} className={`${backBtnClass} mb-1 hidden shrink-0 lg:mb-0 lg:inline-flex`}>
+            ← {t("detailBackFeed")}
+          </Link>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain lg:mt-3">
+            <div className="ui-card overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
               </div>
-              <nav className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-y-contain">
+              <nav className="divide-y divide-slate-100">
                 {sidebar.map((row) => {
                   const activeHere = row.id === a.id;
                   return (
@@ -165,7 +165,7 @@ export function ResourceDetailPage() {
           </div>
         </aside>
 
-        <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain lg:min-h-0 lg:overflow-x-hidden">
+        <div className="min-w-0 w-full flex-1 lg:min-h-0 lg:overflow-x-hidden">
           <article className="min-w-0 w-full max-w-none space-y-6 pb-4">
               {isApp ? (
             <div className="ui-card overflow-hidden p-6 sm:p-8">

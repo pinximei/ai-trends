@@ -41,7 +41,7 @@ export function Layout() {
   const useWideShell = isWideHub;
   const hideSidebar = isWideHub;
   const isHubTightTop = isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
-  const hideFloatingNewsletter = isHome;
+  const hideFloatingNewsletter = isHome || isResourceDetail;
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
 
@@ -105,7 +105,7 @@ export function Layout() {
         </div>
       </header>
 
-      <div className={`flex flex-1 ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`}>
+      <div className={`flex min-h-0 min-w-0 flex-1 flex-row ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`}>
         {!hideSidebar ? (
           <aside className="hidden w-52 shrink-0 border-r border-slate-200/80 bg-white/80 lg:block">
             <div className="sticky top-[4.75rem] space-y-1 px-3 py-6">
@@ -133,9 +133,11 @@ export function Layout() {
           className={
             isHome
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
-              : isHubTightTop
-                ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
-                : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
+              : isResourceDetail
+                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pt-2 pb-10 sm:pt-3 sm:pb-12 lg:pt-4"
+                : isHubTightTop
+                  ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
+                  : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
           }
         >
           <Outlet />
