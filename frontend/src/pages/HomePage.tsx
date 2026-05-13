@@ -1,5 +1,6 @@
-import type { CSSProperties, FormEvent } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
@@ -53,61 +54,136 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 2D 主视觉：最外一圈明显大圆环 + 宽间距内环 + 中心较小 AI；四角图标贴外缘，避免与中心挤在一起 */
+function OrbitChip({
+  className,
+  delay,
+  children,
+}: {
+  className: string;
+  delay: number;
+  children: ReactNode;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      className={`absolute z-[40] flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.8),0_0_28px_rgba(34,211,238,0.22),0_12px_32px_rgba(99,102,241,0.18)] backdrop-blur-md sm:h-11 sm:w-11 ${className}`}
+      animate={
+        reduce
+          ? undefined
+          : {
+              y: [0, -7, 0],
+              scale: [1, 1.06, 1],
+              boxShadow: [
+                "0 0 0 1px rgba(255,255,255,0.8), 0 0 28px rgba(34,211,238,0.22), 0 12px 32px rgba(99,102,241,0.18)",
+                "0 0 0 1px rgba(255,255,255,0.95), 0 0 36px rgba(34,211,238,0.45), 0 14px 36px rgba(124,58,237,0.28)",
+                "0 0 0 1px rgba(255,255,255,0.8), 0 0 28px rgba(34,211,238,0.22), 0 12px 32px rgba(99,102,241,0.18)",
+              ],
+            }
+      }
+      transition={{
+        duration: 3.4,
+        repeat: Infinity,
+        ease: "easeInOut",
+        delay,
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** 首页主视觉：科技感光晕 + 渐变实线环（无虚线）、四角动效芯片、整体略偏右 */
 function HeroGraphic() {
-  const orbitIcon =
-    "absolute z-[40] flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-white/90 text-violet-700 shadow-[0_0_0_2px_rgba(139,92,246,0.45),0_8px_24px_rgba(99,102,241,0.28),0_0_28px_rgba(165,180,252,0.55)] backdrop-blur-sm sm:h-10 sm:w-10";
+  const reduce = useReducedMotion();
   return (
     <div
       data-testid="hero-graphic"
-      className="relative mx-auto w-full max-w-[min(100%,360px)] shrink-0 overflow-visible px-2 pb-8 pt-2 sm:max-w-[400px] sm:px-3 sm:pb-10 sm:pt-3"
+      className="relative mx-auto w-full max-w-[min(100%,380px)] shrink-0 overflow-visible px-2 pb-8 pt-2 sm:max-w-[400px] sm:px-3 sm:pb-10 sm:pt-3"
     >
       <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-visible sm:max-w-[360px]">
+        {/* 环境光 */}
+        <motion.div
+          className="pointer-events-none absolute -inset-[20%] z-0 rounded-full bg-[radial-gradient(circle_at_42%_38%,rgba(165,243,252,0.35)_0%,rgba(196,181,253,0.28)_28%,rgba(255,255,255,0.75)_48%,transparent_72%)] blur-3xl"
+          aria-hidden
+          animate={reduce ? undefined : { opacity: [0.45, 0.72, 0.45], scale: [0.98, 1.02, 0.98] }}
+          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* 极淡科技点阵（非视线/非虚线） */}
         <div
-          className="pointer-events-none absolute -inset-[18%] z-0 rounded-full bg-[radial-gradient(circle_at_50%_48%,rgba(255,255,255,0.92)_0%,rgba(224,231,255,0.45)_32%,rgba(196,181,253,0.22)_58%,transparent_82%)] blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-50"
+          className="pointer-events-none absolute inset-[4%] z-[1] rounded-full opacity-[0.22] [mask-image:radial-gradient(ellipse_at_center,black_52%,transparent_78%)] sm:opacity-[0.28]"
+          style={{
+            backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.35) 1px, transparent 1.5px)",
+            backgroundSize: "13px 13px",
+          }}
           aria-hidden
         />
 
+        {/* 慢旋锥形光晕 */}
+        <motion.div
+          className="pointer-events-none absolute inset-[5%] z-[2] rounded-full opacity-[0.38] blur-[2px] sm:opacity-[0.45]"
+          style={{
+            background:
+              "conic-gradient(from 0deg, rgba(124,58,237,0.55), rgba(14,165,233,0.35), transparent 35%, rgba(167,139,250,0.45), rgba(124,58,237,0.55))",
+          }}
+          aria-hidden
+          animate={reduce ? undefined : { rotate: [0, 360] }}
+          transition={{ duration: 36, repeat: Infinity, ease: "linear" }}
+        />
+
+        {/* 外环：渐变描边（无虚线） */}
         <div
-          className="pointer-events-none absolute inset-0 z-[1] rounded-full border-[7px] border-violet-500 bg-transparent shadow-[0_0_0_4px_rgba(255,255,255,1),0_0_36px_rgba(139,92,246,0.45),0_16px_48px_rgba(99,102,241,0.12)] sm:border-[9px]"
+          className="pointer-events-none absolute inset-0 z-[3] rounded-full bg-gradient-to-br from-violet-500/90 via-sky-400/75 to-fuchsia-500/85 p-[4px] shadow-[0_0_0_1px_rgba(255,255,255,0.85),0_0_52px_rgba(99,102,241,0.28),0_20px_56px_rgba(14,165,233,0.12)] sm:p-[5px]"
+          aria-hidden
+        >
+          <div className="h-full w-full rounded-full bg-[radial-gradient(ellipse_at_50%_36%,rgba(255,255,255,0.97)_0%,rgba(248,250,252,0.94)_42%,rgba(238,242,255,0.9)_100%)] shadow-[inset_0_0_60px_rgba(255,255,255,0.55)]" />
+        </div>
+
+        {/* 内层柔光实心细环 */}
+        <div
+          className="pointer-events-none absolute inset-[13%] z-[4] rounded-full border border-cyan-300/25 shadow-[0_0_36px_rgba(34,211,238,0.12)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[14%] z-[2] rounded-full border-[3px] border-white/95 shadow-[0_0_28px_rgba(186,230,253,0.75)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-[26%] z-[3] rounded-full border-2 border-dashed border-violet-400/70 bg-gradient-to-br from-violet-100/50 via-white/70 to-sky-100/40 shadow-[inset_0_0_48px_rgba(255,255,255,0.55),0_0_20px_rgba(99,102,241,0.08)]"
+          className="pointer-events-none absolute inset-[20%] z-[5] rounded-full bg-gradient-to-br from-violet-100/35 via-white/50 to-sky-100/30 shadow-[inset_0_0_48px_rgba(255,255,255,0.65)]"
           aria-hidden
         />
 
         <div className="absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2">
-          <div className="relative h-[5.5rem] w-[5.5rem] overflow-hidden rounded-2xl ring-2 ring-white/80 shadow-[0_16px_40px_-10px_rgba(79,70,229,0.4)] sm:h-24 sm:w-24">
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,#7c3aed_0%,#6366f1_30%,#4f46e5_52%,#2563eb_78%,#0ea5e9_100%)]" />
+          <motion.div
+            className="relative h-[5.5rem] w-[5.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/40 shadow-[0_20px_50px_-12px_rgba(79,70,229,0.45),0_0_40px_rgba(34,211,238,0.18)] sm:h-24 sm:w-24"
+            animate={reduce ? undefined : { scale: [1, 1.03, 1] }}
+            transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)]"
+              animate={reduce ? undefined : { backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
+              transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+            />
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.32)_0%,transparent_42%,rgba(56,189,248,0.26)_100%)]" />
-            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/30 via-transparent to-transparent" />
-            <div className="absolute inset-0 rounded-2xl border border-white/30" />
-            <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/42 to-transparent" />
+            <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/35 via-transparent to-transparent" />
+            <div className="absolute inset-0 rounded-2xl border border-white/35" />
+            <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
             <div className="relative flex h-full w-full items-center justify-center">
               <Brain className="absolute -right-0.5 -top-0.5 z-10 h-6 w-6 text-cyan-100 drop-shadow sm:h-7 sm:w-7" strokeWidth={1.75} />
               <span className="relative z-10 text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-3xl">AI</span>
             </div>
-          </div>
+          </motion.div>
         </div>
 
-        <div className={`${orbitIcon} left-[12%] top-[12%]`}>
+        <OrbitChip className="left-[10%] top-[10%]" delay={0}>
           <Bot className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
-        </div>
-        <div className={`${orbitIcon} left-[88%] top-[12%]`}>
+        </OrbitChip>
+        <OrbitChip className="left-[90%] top-[10%]" delay={0.45}>
           <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
-        </div>
-        <div className={`${orbitIcon} left-[12%] top-[88%]`}>
+        </OrbitChip>
+        <OrbitChip className="left-[10%] top-[90%]" delay={0.9}>
           <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
-        </div>
-        <div className={`${orbitIcon} left-[88%] top-[88%]`}>
+        </OrbitChip>
+        <OrbitChip className="left-[90%] top-[90%]" delay={1.35}>
           <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
-        </div>
+        </OrbitChip>
       </div>
     </div>
   );
@@ -231,8 +307,8 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-[220px] w-full flex-none items-center justify-center overflow-visible py-3 lg:min-h-[300px] lg:w-[min(100%,360px)] lg:max-w-[360px] lg:flex-none lg:shrink-0 lg:justify-center lg:py-0">
-              <div className="w-full max-w-full translate-x-0 overflow-visible lg:translate-x-[min(2.75rem,8%)] xl:translate-x-[min(3.25rem,9%)]">
+            <div className="flex min-h-[220px] w-full flex-none items-center justify-center overflow-visible py-3 lg:min-h-[300px] lg:w-[min(100%,380px)] lg:max-w-[380px] lg:flex-none lg:shrink-0 lg:justify-center lg:py-0">
+              <div className="w-full max-w-full translate-x-0 overflow-visible lg:translate-x-[min(4.5rem,16%)] xl:translate-x-[min(5.5rem,14vw)]">
                 <HeroGraphic />
               </div>
             </div>
