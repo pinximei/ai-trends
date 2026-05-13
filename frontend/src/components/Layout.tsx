@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Crown, Download, Home, Info, LayoutGrid, Newspaper, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Download, Home, Info, LayoutGrid, Newspaper } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { NewsletterBar } from "./NewsletterBar";
 
@@ -47,13 +47,11 @@ function contentShellClass(isHome: boolean): string {
 export function Layout() {
   const { t } = useI18n();
   const location = useLocation();
-  const navigate = useNavigate();
   const isHome = location.pathname === "/";
   const hideSidebar = isHome;
   const hideFloatingNewsletter = isHome;
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
-  const [headerQ, setHeaderQ] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -65,29 +63,23 @@ export function Layout() {
     };
   }, []);
 
-  const onSearch = (e: FormEvent) => {
-    e.preventDefault();
-    const q = headerQ.trim();
-    navigate("/news", q ? { state: { q } } : undefined);
-  };
-
   const shell = contentShellClass(isHome);
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur-md">
-        <div className={`flex flex-wrap items-center gap-3 py-3 lg:gap-6 ${shell}`}>
-          <Link to="/" className="flex shrink-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black tracking-tight text-white shadow-md ring-2 ring-violet-200/60">
+      <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/92 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-xl">
+        <div className={`relative flex flex-col gap-3 py-3.5 sm:gap-3.5 md:flex-row md:items-center md:justify-between ${shell}`}>
+          <Link to="/" className="flex shrink-0 items-center gap-3 transition-opacity hover:opacity-95">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-black tracking-tight text-white shadow-lg shadow-violet-500/20 ring-2 ring-white">
               AI
             </span>
             <div className="leading-tight">
-              <div className="text-[15px] font-bold tracking-tight text-slate-900">{t("brand")}</div>
-              <div className="text-[11px] text-slate-500">{t("tagline")}</div>
+              <div className="text-base font-bold tracking-tight text-slate-900">{t("brand")}</div>
+              <div className="text-[11px] font-medium text-slate-500">{t("tagline")}</div>
             </div>
           </Link>
 
-          <nav className="order-3 flex w-full flex-wrap items-center justify-center gap-0.5 border-t border-slate-100 pt-3 md:order-none md:flex-1 md:border-0 md:pt-0">
+          <nav className="order-last flex w-full flex-wrap items-center justify-center gap-1 md:absolute md:left-1/2 md:top-1/2 md:order-none md:w-auto md:max-w-[min(720px,72vw)] md:-translate-x-1/2 md:-translate-y-1/2 md:flex-nowrap md:justify-center">
             {topNav.map((item) => {
               const Icon = item.icon;
               return (
@@ -97,40 +89,20 @@ export function Layout() {
                   end={item.to === "/"}
                   className={({ isActive }) => {
                     const base =
-                      "relative flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors active:scale-[0.99]";
+                      "flex items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-medium tracking-wide transition-all duration-200 active:scale-[0.98] sm:px-4 sm:text-sm md:px-5 md:text-[15px]";
                     return isActive
-                      ? `${base} font-semibold text-violet-700 after:absolute after:bottom-1 after:left-3 after:right-3 after:h-0.5 after:rounded-full after:bg-violet-600`
-                      : `${base} text-slate-600 hover:bg-slate-50 hover:text-slate-900`;
+                      ? `${base} bg-gradient-to-r from-violet-600 to-indigo-600 font-semibold text-white shadow-md shadow-violet-500/25 ring-1 ring-white/25`
+                      : `${base} text-slate-600 hover:bg-slate-100/90 hover:text-slate-900`;
                   }}
                 >
-                  <Icon className="h-4 w-4 shrink-0 opacity-90" strokeWidth={2} />
+                  <Icon className="h-3.5 w-3.5 shrink-0 opacity-85 md:h-4 md:w-4" strokeWidth={2} />
                   <span>{t(item.key)}</span>
                 </NavLink>
               );
             })}
           </nav>
 
-          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 md:max-w-sm md:flex-none">
-            <form onSubmit={onSearch} className="relative min-w-0 flex-1 md:w-56 md:flex-none lg:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={headerQ}
-                onChange={(e) => setHeaderQ(e.target.value)}
-                placeholder={t("headerSearchPlaceholder")}
-                className="w-full rounded-full border border-slate-200 bg-slate-50 py-2 pl-10 pr-3 text-sm text-slate-800 outline-none ring-violet-500/15 placeholder:text-slate-400 focus:border-violet-300 focus:bg-white focus:ring-2"
-                aria-label={t("headerSearchPlaceholder")}
-              />
-            </form>
-            <button
-              type="button"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-gradient-to-b from-amber-50 to-amber-100 text-amber-600 shadow-sm transition hover:brightness-105"
-              title="会员"
-              aria-label="会员"
-            >
-              <Crown className="h-5 w-5" strokeWidth={1.75} />
-            </button>
-          </div>
+          <div className="hidden min-w-[10.5rem] shrink-0 md:block" aria-hidden />
         </div>
       </header>
 

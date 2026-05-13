@@ -57,6 +57,11 @@ export default {
         "spin-slow": "spinSlow 28s linear infinite",
         "data-stream": "dataStream 4s ease-in-out infinite",
         glow: "glowPulse 3s ease-in-out infinite",
+        "hero-orbit": "heroOrbit 14s linear infinite",
+        "hero-orbit-reverse": "heroOrbitReverse 18s linear infinite",
+        "hero-glow-breathe": "heroGlowBreathe 3.2s ease-in-out infinite",
+        "hero-scan": "heroScan 3.8s ease-in-out infinite",
+        "hero-cube-shimmer": "heroCubeShimmer 5s ease-in-out infinite",
       },
       keyframes: {
         float: {
@@ -87,6 +92,28 @@ export default {
         glowPulse: {
           "0%, 100%": { boxShadow: "0 0 20px rgba(124,58,237,0.2)" },
           "50%": { boxShadow: "0 0 36px rgba(14,165,233,0.25)" },
+        },
+        heroOrbit: {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
+        heroOrbitReverse: {
+          from: { transform: "rotate(360deg)" },
+          to: { transform: "rotate(0deg)" },
+        },
+        heroGlowBreathe: {
+          "0%, 100%": { opacity: "0.35", transform: "scale(0.96)" },
+          "50%": { opacity: "0.75", transform: "scale(1.04)" },
+        },
+        heroScan: {
+          "0%": { transform: "translateY(-130%)", opacity: "0" },
+          "12%": { opacity: "0.85" },
+          "88%": { opacity: "0.85" },
+          "100%": { transform: "translateY(130%)", opacity: "0" },
+        },
+        heroCubeShimmer: {
+          "0%, 100%": { backgroundPosition: "0% 40%" },
+          "50%": { backgroundPosition: "100% 60%" },
         },
       },
     },

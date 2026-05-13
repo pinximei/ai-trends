@@ -53,30 +53,64 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 右侧主视觉：立方体 + 四角浮动图标 */
+/** 右侧主视觉：立方体 + 四角浮动图标；中心立方体带轻量科技动效（尊重 prefers-reduced-motion） */
 function HeroGraphic() {
   const float =
-    "absolute flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12 shadow-lg ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-14 sm:w-14";
+    "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[min(100%,520px)] 2xl:max-w-[560px]">
-      <div className="absolute inset-[6%] rounded-full border border-dashed border-violet-300/25 bg-gradient-to-br from-violet-500/15 to-indigo-600/10 shadow-[0_0_60px_rgba(99,102,241,0.25)]" />
-      <div className={`${float} left-[6%] top-[18%] animate-float`} style={{ animationDuration: "20s" }}>
-        <Sparkles className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
-      </div>
-      <div className={`${float} right-[8%] top-[14%] animate-float2`} style={{ animationDuration: "24s" }}>
-        <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
-      </div>
-      <div className={`${float} left-[10%] bottom-[16%] animate-float2`} style={{ animationDuration: "22s" }}>
-        <FileText className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
-      </div>
-      <div className={`${float} right-[6%] bottom-[20%] animate-float`} style={{ animationDuration: "19s" }}>
-        <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
-      </div>
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div className="relative flex h-40 w-40 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-2xl ring-4 ring-white/25 sm:h-44 sm:w-44 xl:h-48 xl:w-48">
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-white/25 to-transparent" />
-          <Brain className="absolute -right-1 -top-1 h-10 w-10 text-cyan-200/90 drop-shadow-md sm:h-11 sm:w-11" strokeWidth={1.5} />
-          <span className="relative text-4xl font-black tracking-tight text-white drop-shadow-md sm:text-5xl">AI</span>
+    <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[260px] lg:mx-0 lg:max-w-[240px] xl:max-w-[260px]">
+      <div className="relative aspect-square w-full">
+        <div
+          className="pointer-events-none absolute inset-[2%] rounded-full bg-gradient-to-br from-violet-500/35 via-indigo-500/22 to-sky-400/28 blur-2xl motion-safe:animate-hero-glow-breathe motion-reduce:opacity-50"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-[5%] motion-safe:animate-hero-orbit motion-reduce:animate-none"
+          aria-hidden
+        >
+          <div className="h-full w-full rounded-full border border-dashed border-violet-400/45" />
+        </div>
+        <div
+          className="pointer-events-none absolute inset-[10%] motion-safe:animate-hero-orbit-reverse motion-reduce:animate-none"
+          aria-hidden
+        >
+          <div className="h-full w-full rounded-full border border-dotted border-violet-300/35" />
+        </div>
+        <div
+          className="pointer-events-none absolute inset-[12%] rounded-full border border-white/10 bg-gradient-to-br from-violet-500/14 to-indigo-600/10 shadow-[0_0_40px_rgba(99,102,241,0.2)]"
+          aria-hidden
+        />
+        <div className={`${float} left-[8%] top-[20%] animate-float`} style={{ animationDuration: "20s" }}>
+          <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+        </div>
+        <div className={`${float} right-[10%] top-[16%] animate-float2`} style={{ animationDuration: "24s" }}>
+          <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+        </div>
+        <div className={`${float} left-[12%] bottom-[18%] animate-float2`} style={{ animationDuration: "22s" }}>
+          <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+        </div>
+        <div className={`${float} right-[8%] bottom-[22%] animate-float`} style={{ animationDuration: "19s" }}>
+          <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+        </div>
+        <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+          <div className="relative flex h-[7.25rem] w-[7.25rem] items-center justify-center overflow-hidden rounded-2xl shadow-xl ring-2 ring-white/30 motion-safe:animate-glow motion-reduce:animate-none sm:h-32 sm:w-32">
+            <div
+              className="absolute inset-0 bg-gradient-to-br from-violet-400 via-indigo-600 to-sky-500 bg-[length:220%_220%] motion-safe:animate-hero-cube-shimmer motion-reduce:animate-none"
+              aria-hidden
+            />
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/28 to-transparent" aria-hidden />
+            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl" aria-hidden>
+              <div className="absolute inset-x-0 top-0 flex justify-center motion-safe:animate-hero-scan motion-reduce:hidden">
+                <div className="h-16 w-[130%] max-w-none -translate-x-[12%] bg-gradient-to-b from-transparent via-white/35 to-transparent opacity-90" />
+              </div>
+            </div>
+            <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/20" aria-hidden />
+            <Brain
+              className="absolute -right-0.5 -top-0.5 z-10 h-7 w-7 text-cyan-200/95 drop-shadow-md motion-safe:animate-pulse motion-reduce:animate-none sm:h-8 sm:w-8"
+              strokeWidth={1.5}
+            />
+            <span className="relative z-10 text-3xl font-black tracking-tight text-white drop-shadow-md sm:text-4xl">AI</span>
+          </div>
         </div>
       </div>
     </div>
@@ -173,13 +207,13 @@ export function HomePage() {
   };
 
   return (
-    <div className="w-full space-y-10 lg:space-y-12">
+    <div className="w-full space-y-8 lg:space-y-10">
       {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-12">
-        <div className="min-w-0 space-y-10 lg:space-y-12">
-          <section className="grid items-center gap-8 lg:gap-10 lg:grid-cols-2">
+        <div className="min-w-0 space-y-8 lg:space-y-10">
+          <section className="grid items-center gap-6 lg:grid-cols-2 lg:gap-8">
             <div className="min-w-0">
-              <h1 className="text-gradient text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-4xl lg:leading-[1.15] xl:text-5xl">
+              <h1 className="text-gradient text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
               </h1>
               <p className="mt-5 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
@@ -205,40 +239,40 @@ export function HomePage() {
           </section>
 
           <section>
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <h2 className="text-xl font-bold tracking-tight text-slate-900 lg:text-2xl">{t("homeTodayFocus")}</h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold tracking-tight text-slate-900 lg:text-xl">{t("homeTodayFocus")}</h2>
             </div>
             {loading ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
             ) : news.length === 0 ? (
               <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
             ) : (
-              <div className="grid gap-5 lg:grid-cols-12 lg:gap-6">
+              <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
                 {featured ? (
                   <Link
                     to={`/resources/${featured.id}`}
-                    className="ui-card group overflow-hidden transition hover:shadow-xl lg:col-span-7"
+                    className="ui-card group overflow-hidden transition hover:shadow-lg lg:col-span-7"
                   >
                     <div className="grid gap-0 lg:grid-cols-2">
                       <div
-                        className="relative aspect-[5/4] min-h-[220px] lg:min-h-[280px]"
+                        className="relative h-36 w-full sm:h-40 lg:h-44"
                         style={thumbSurface(`${featured.id}-feat`)}
                       >
-                        <span className="absolute left-5 top-5 rounded-xl bg-white/90 px-3 py-1.5 text-xs font-semibold text-violet-700 shadow-sm ring-1 ring-white/60">
+                        <span className="absolute left-3 top-3 rounded-lg bg-white/90 px-2 py-1 text-[11px] font-semibold text-violet-700 shadow-sm ring-1 ring-white/60">
                           {t("homeImportantTag")}
                         </span>
-                        <span className="absolute inset-0 flex items-center justify-center text-6xl font-black text-white/30 sm:text-7xl">
+                        <span className="absolute inset-0 flex items-center justify-center text-4xl font-black text-white/30 sm:text-5xl">
                           {(featured.title || "?").slice(0, 1)}
                         </span>
                       </div>
-                      <div className="flex flex-col justify-center p-6 sm:p-8">
-                        <p className="line-clamp-2 text-xl font-bold leading-snug text-slate-900 group-hover:text-violet-700 sm:text-2xl">
+                      <div className="flex flex-col justify-center p-4 sm:p-5">
+                        <p className="line-clamp-2 text-lg font-bold leading-snug text-slate-900 group-hover:text-violet-700 sm:text-xl">
                           {featured.title}
                         </p>
-                        <p className="mt-4 line-clamp-4 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
-                          {summarize(featured.summary, 220)}
+                        <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600">
+                          {summarize(featured.summary, 160)}
                         </p>
-                        <div className="mt-5 flex flex-wrap gap-3 text-xs text-slate-500 sm:text-sm">
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
                           <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
                             {featured.categories?.[0] ?? featured.platform_label ?? t("source")}
                           </span>
@@ -248,23 +282,23 @@ export function HomePage() {
                     </div>
                   </Link>
                 ) : null}
-                <div className="flex min-h-0 flex-col gap-4 lg:col-span-5">
+                <div className="flex min-h-0 flex-col gap-3 lg:col-span-5">
                   {sideNews.map((item) => (
                     <Link
                       key={item.id}
                       to={`/resources/${item.id}`}
-                      className="ui-card flex gap-4 p-4 transition hover:border-violet-200 hover:shadow-lg sm:p-5"
+                      className="ui-card flex gap-3 p-3 transition hover:border-violet-200 hover:shadow-md sm:p-3.5"
                     >
                       <div
-                        className="relative h-24 w-28 shrink-0 overflow-hidden rounded-xl ring-1 ring-black/5 sm:h-28 sm:w-32"
+                        className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg ring-1 ring-black/5 sm:h-[4.5rem] sm:w-24"
                         style={thumbSurface(`${item.id}-side`)}
                       >
-                        <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-white/90">
+                        <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white/90 sm:text-xl">
                           {(item.title || "?").slice(0, 1)}
                         </span>
                       </div>
                       <div className="min-w-0 flex-1 py-0.5">
-                        <p className="line-clamp-2 text-base font-semibold leading-snug text-slate-900">{item.title}</p>
+                        <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900 sm:text-[15px]">{item.title}</p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <span className="font-medium text-violet-600">{item.platform_label || t("source")}</span>
                           <span>·</span>
@@ -279,7 +313,7 @@ export function HomePage() {
           </section>
 
           <section>
-            <h2 className="mb-5 text-xl font-bold tracking-tight text-slate-900 lg:text-2xl">{t("homePopularCategories")}</h2>
+            <h2 className="mb-4 text-lg font-bold tracking-tight text-slate-900 lg:text-xl">{t("homePopularCategories")}</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:gap-8">
               {popularCats.map(({ to, titleKey, subKey, Icon, grad }) => (
                 <Link
