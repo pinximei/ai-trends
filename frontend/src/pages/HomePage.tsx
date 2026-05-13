@@ -66,7 +66,7 @@ function OrbitChip({
   const reduce = useReducedMotion();
   return (
     <motion.div
-      className={`absolute z-[40] flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border border-cyan-400/35 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.8),0_0_28px_rgba(34,211,238,0.22),0_12px_32px_rgba(99,102,241,0.18)] backdrop-blur-md sm:h-11 sm:w-11 ${className}`}
+      className={`absolute z-[40] flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-cyan-400/30 bg-gradient-to-br from-white/95 to-violet-50/90 text-violet-700 shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_20px_rgba(34,211,238,0.18),0_8px_22px_rgba(99,102,241,0.14)] backdrop-blur-md sm:h-9 sm:w-9 ${className}`}
       animate={
         reduce
           ? undefined
@@ -92,67 +92,79 @@ function OrbitChip({
   );
 }
 
-/** 首页主视觉：科技感光晕 + 渐变实线环（无虚线）、四角动效芯片、整体略偏右 */
+/** 首页主视觉：更轻外环、体积更小、桌面靠右、轻量 3D 缓动 */
 function HeroGraphic() {
   const reduce = useReducedMotion();
+  const tilt3d = reduce
+    ? undefined
+    : {
+        rotateY: [-8, 8, -8],
+        rotateX: [-3, 3, -3],
+      };
   return (
     <div
       data-testid="hero-graphic"
-      className="relative mx-auto w-full max-w-[min(100%,380px)] shrink-0 overflow-visible px-2 pb-8 pt-2 sm:max-w-[400px] sm:px-3 sm:pb-10 sm:pt-3"
+      className="relative mx-auto w-full max-w-[min(100%,300px)] shrink-0 overflow-visible px-1 pb-3 pt-1 sm:max-w-[308px] sm:px-2 sm:pb-4 sm:pt-2 lg:mx-0 lg:ml-auto lg:mr-0"
     >
-      <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-visible sm:max-w-[360px]">
+      <div className="relative mx-auto aspect-square w-full max-w-[248px] overflow-visible sm:max-w-[268px]">
+        <div className="absolute inset-0 [perspective:1100px]">
+        <motion.div
+          className="absolute inset-0 origin-center will-change-transform [transform-style:preserve-3d]"
+          animate={tilt3d}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+        >
         {/* 环境光 */}
         <motion.div
-          className="pointer-events-none absolute -inset-[20%] z-0 rounded-full bg-[radial-gradient(circle_at_42%_38%,rgba(165,243,252,0.35)_0%,rgba(196,181,253,0.28)_28%,rgba(255,255,255,0.75)_48%,transparent_72%)] blur-3xl"
+          className="pointer-events-none absolute -inset-[14%] z-0 rounded-full bg-[radial-gradient(circle_at_42%_38%,rgba(165,243,252,0.22)_0%,rgba(196,181,253,0.16)_30%,rgba(255,255,255,0.55)_50%,transparent_74%)] blur-2xl"
           aria-hidden
-          animate={reduce ? undefined : { opacity: [0.45, 0.72, 0.45], scale: [0.98, 1.02, 0.98] }}
+          animate={reduce ? undefined : { opacity: [0.38, 0.58, 0.38], scale: [0.99, 1.01, 0.99] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
 
         {/* 极淡科技点阵（非视线/非虚线） */}
         <div
-          className="pointer-events-none absolute inset-[4%] z-[1] rounded-full opacity-[0.22] [mask-image:radial-gradient(ellipse_at_center,black_52%,transparent_78%)] sm:opacity-[0.28]"
+          className="pointer-events-none absolute inset-[4%] z-[1] rounded-full opacity-[0.16] [mask-image:radial-gradient(ellipse_at_center,black_52%,transparent_78%)] sm:opacity-[0.2]"
           style={{
-            backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.35) 1px, transparent 1.5px)",
-            backgroundSize: "13px 13px",
+            backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.28) 1px, transparent 1.5px)",
+            backgroundSize: "12px 12px",
           }}
           aria-hidden
         />
 
         {/* 慢旋锥形光晕 */}
         <motion.div
-          className="pointer-events-none absolute inset-[5%] z-[2] rounded-full opacity-[0.38] blur-[2px] sm:opacity-[0.45]"
+          className="pointer-events-none absolute inset-[5%] z-[2] rounded-full opacity-[0.22] blur-[1.5px] sm:opacity-[0.28]"
           style={{
             background:
-              "conic-gradient(from 0deg, rgba(124,58,237,0.55), rgba(14,165,233,0.35), transparent 35%, rgba(167,139,250,0.45), rgba(124,58,237,0.55))",
+              "conic-gradient(from 0deg, rgba(167,139,250,0.28), rgba(125,211,252,0.22), transparent 38%, rgba(196,181,253,0.26), rgba(167,139,250,0.28))",
           }}
           aria-hidden
           animate={reduce ? undefined : { rotate: [0, 360] }}
-          transition={{ duration: 36, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
         />
 
-        {/* 外环：渐变描边（无虚线） */}
+        {/* 外环：浅色渐变描边（无虚线） */}
         <div
-          className="pointer-events-none absolute inset-0 z-[3] rounded-full bg-gradient-to-br from-violet-500/90 via-sky-400/75 to-fuchsia-500/85 p-[4px] shadow-[0_0_0_1px_rgba(255,255,255,0.85),0_0_52px_rgba(99,102,241,0.28),0_20px_56px_rgba(14,165,233,0.12)] sm:p-[5px]"
+          className="pointer-events-none absolute inset-0 z-[3] rounded-full bg-gradient-to-br from-violet-200/85 via-sky-200/75 to-violet-200/80 p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.75),0_0_28px_rgba(99,102,241,0.12),0_12px_36px_rgba(14,165,233,0.08)] sm:p-[3px]"
           aria-hidden
         >
-          <div className="h-full w-full rounded-full bg-[radial-gradient(ellipse_at_50%_36%,rgba(255,255,255,0.97)_0%,rgba(248,250,252,0.94)_42%,rgba(238,242,255,0.9)_100%)] shadow-[inset_0_0_60px_rgba(255,255,255,0.55)]" />
+          <div className="h-full w-full rounded-full bg-[radial-gradient(ellipse_at_50%_36%,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.96)_44%,rgba(241,245,255,0.94)_100%)] shadow-[inset_0_0_48px_rgba(255,255,255,0.6)]" />
         </div>
 
         {/* 内层柔光实心细环 */}
         <div
-          className="pointer-events-none absolute inset-[13%] z-[4] rounded-full border border-cyan-300/25 shadow-[0_0_36px_rgba(34,211,238,0.12)]"
+          className="pointer-events-none absolute inset-[13%] z-[4] rounded-full border border-cyan-300/18 shadow-[0_0_24px_rgba(34,211,238,0.08)]"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-[20%] z-[5] rounded-full bg-gradient-to-br from-violet-100/35 via-white/50 to-sky-100/30 shadow-[inset_0_0_48px_rgba(255,255,255,0.65)]"
+          className="pointer-events-none absolute inset-[20%] z-[5] rounded-full bg-gradient-to-br from-violet-100/28 via-white/45 to-sky-100/22 shadow-[inset_0_0_40px_rgba(255,255,255,0.55)]"
           aria-hidden
         />
 
-        <div className="absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute left-1/2 top-1/2 z-[15] [transform:translate3d(-50%,-50%,26px)]">
           <motion.div
-            className="relative h-[5.5rem] w-[5.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/40 shadow-[0_20px_50px_-12px_rgba(79,70,229,0.45),0_0_40px_rgba(34,211,238,0.18)] sm:h-24 sm:w-24"
-            animate={reduce ? undefined : { scale: [1, 1.03, 1] }}
+            className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl ring-1 ring-cyan-300/35 shadow-[0_16px_40px_-12px_rgba(79,70,229,0.35),0_0_28px_rgba(34,211,238,0.14)] sm:h-20 sm:w-20"
+            animate={reduce ? undefined : { scale: [1, 1.025, 1] }}
             transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
           >
             <motion.div
@@ -166,24 +178,26 @@ function HeroGraphic() {
             <div className="absolute inset-0 rounded-2xl border border-white/35" />
             <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/38 to-transparent" />
             <div className="relative flex h-full w-full items-center justify-center">
-              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-6 w-6 text-cyan-100 drop-shadow sm:h-7 sm:w-7" strokeWidth={1.75} />
-              <span className="relative z-10 text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-3xl">AI</span>
+              <Brain className="absolute -right-0.5 -top-0.5 z-10 h-5 w-5 text-cyan-100 drop-shadow sm:h-6 sm:w-6" strokeWidth={1.75} />
+              <span className="relative z-10 text-xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:text-2xl">AI</span>
             </div>
           </motion.div>
         </div>
 
         <OrbitChip className="left-[10%] top-[10%]" delay={0}>
-          <Bot className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+          <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
         </OrbitChip>
         <OrbitChip className="left-[90%] top-[10%]" delay={0.45}>
-          <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+          <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
         </OrbitChip>
         <OrbitChip className="left-[10%] top-[90%]" delay={0.9}>
-          <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
         </OrbitChip>
         <OrbitChip className="left-[90%] top-[90%]" delay={1.35}>
-          <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={2} />
+          <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
         </OrbitChip>
+        </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -283,7 +297,7 @@ export function HomePage() {
       {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-x-16 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-x-20">
         <div className="min-w-0 space-y-8 pr-0 lg:space-y-10 lg:pr-2">
-          <section className="flex flex-col items-center gap-8 overflow-visible text-center sm:gap-9 lg:flex-row lg:items-center lg:gap-10 lg:text-left xl:gap-12">
+          <section className="flex flex-col items-center gap-6 overflow-visible text-center sm:gap-7 lg:flex-row lg:items-center lg:gap-8 lg:text-left xl:gap-10">
             <div className="min-w-0 w-full lg:max-w-lg lg:flex-1 xl:max-w-xl">
               <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
                 {t("homeMainHeroTitle")}
@@ -307,8 +321,8 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-[220px] w-full flex-none items-center justify-center overflow-visible py-3 lg:min-h-[300px] lg:w-[min(100%,380px)] lg:max-w-[380px] lg:flex-none lg:shrink-0 lg:justify-center lg:py-0">
-              <div className="w-full max-w-full translate-x-0 overflow-visible lg:translate-x-[min(4.5rem,16%)] xl:translate-x-[min(5.5rem,14vw)]">
+            <div className="flex min-h-0 w-full flex-none items-center justify-center overflow-visible py-1 sm:py-2 lg:min-h-0 lg:w-[min(100%,312px)] lg:max-w-[312px] lg:flex-none lg:shrink-0 lg:justify-end lg:py-0">
+              <div className="w-full max-w-full shrink-0 overflow-visible lg:w-full lg:max-w-full lg:translate-x-[min(0.5rem,2vw)] xl:translate-x-[min(1.75rem,6vw)] 2xl:translate-x-[min(2.25rem,7vw)]">
                 <HeroGraphic />
               </div>
             </div>
