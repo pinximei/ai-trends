@@ -19,7 +19,7 @@ import { useI18n } from "@/i18n";
 const INDUSTRY = "ai";
 
 /** 倾斜星环平面内的圆轨道半径（rem），与环尺寸一起调 */
-const HERO_ORBIT_REM = 6.75;
+const HERO_ORBIT_REM = 7.65;
 const HERO_ORBIT_SEC = 52;
 const HERO_RING_TILT_DEG = 58;
 
@@ -85,7 +85,7 @@ function OrbitSatellite({
         animate={reduce ? undefined : { rotate: -360 }}
         transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
       >
-        <span className="pointer-events-auto relative flex h-9 w-9 items-center justify-center text-indigo-600 drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:h-10 sm:w-10">
+        <span className="pointer-events-auto relative flex h-10 w-10 items-center justify-center text-indigo-600 drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)] sm:h-11 sm:w-11">
           {children}
         </span>
       </motion.div>
@@ -106,11 +106,11 @@ function HeroGraphic() {
   return (
     <div
       data-testid="hero-graphic"
-      className="relative mx-auto w-full max-w-[min(100%,300px)] shrink-0 overflow-visible px-1 pb-1 pt-0 sm:max-w-[312px] sm:px-2 sm:pb-2 sm:pt-1"
+      className="relative mx-auto w-full max-w-[min(100%,340px)] shrink-0 overflow-visible px-1 pb-1 pt-0 sm:max-w-[360px] sm:px-2 sm:pb-2 sm:pt-1"
     >
       <div
         data-orbit-square
-        className="relative isolate mx-auto aspect-square w-full max-w-[272px] overflow-visible [perspective:1100px] [perspective-origin:50%_40%] sm:max-w-[292px]"
+        className="relative isolate mx-auto aspect-square w-full max-w-[304px] overflow-visible [perspective:1100px] [perspective-origin:50%_40%] sm:max-w-[328px]"
       >
         {/* 背面大环境光（不倾斜） */}
         <div
@@ -127,7 +127,7 @@ function HeroGraphic() {
             {/* 慢旋柔光（与环同平面） */}
             <motion.div
               data-testid="hero-halo-primary"
-              className="pointer-events-none absolute aspect-square w-[78%] max-w-[228px] rounded-full"
+              className="pointer-events-none absolute aspect-square w-[82%] max-w-[256px] rounded-full"
               aria-hidden
               style={{
                 background:
@@ -145,18 +145,18 @@ function HeroGraphic() {
               animate={reduce ? undefined : { rotate: 360 }}
               transition={{ duration: orbitSec, repeat: Infinity, ease: "linear" }}
             >
-              <div className="relative aspect-square w-[78%] max-w-[228px]">
+              <div className="relative aspect-square w-[82%] max-w-[256px]">
                 <OrbitSatellite angleDeg={0} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <Bot className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.2} />
+                  <Bot className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
                 </OrbitSatellite>
                 <OrbitSatellite angleDeg={90} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.2} />
+                  <MessageCircle className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
                 </OrbitSatellite>
                 <OrbitSatellite angleDeg={180} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <FileText className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.2} />
+                  <FileText className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
                 </OrbitSatellite>
                 <OrbitSatellite angleDeg={270} orbitRem={orbitRem} orbitSec={orbitSec} reduce={reduce}>
-                  <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.2} />
+                  <BarChart3 className="h-[1.1rem] w-[1.1rem] sm:h-6 sm:w-6" strokeWidth={2.2} />
                 </OrbitSatellite>
               </div>
             </motion.div>
@@ -167,12 +167,12 @@ function HeroGraphic() {
             className="absolute left-1/2 top-1/2 z-20 [transform-style:preserve-3d]"
             style={
               tilt
-                ? { transform: `translate(-50%, -50%) translateZ(3.25rem) rotateX(-${tilt}deg)` }
+                ? { transform: `translate(-50%, -50%) translateZ(3.75rem) rotateX(-${tilt}deg)` }
                 : { transform: "translate(-50%, -50%)" }
             }
           >
             <motion.div
-              className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl shadow-[0_18px_44px_-12px_rgba(49,46,129,0.55),0_0_36px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-white/30 sm:h-20 sm:w-20"
+              className="relative h-[5.125rem] w-[5.125rem] overflow-hidden rounded-2xl shadow-[0_22px_52px_-12px_rgba(49,46,129,0.55),0_0_42px_rgba(34,211,238,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-white/30 sm:h-[5.75rem] sm:w-[5.75rem]"
               animate={reduce ? undefined : { scale: [1, 1.04, 1] }}
               transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
             >
@@ -188,10 +188,10 @@ function HeroGraphic() {
               <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/36 to-transparent" />
               <div className="relative flex h-full w-full items-center justify-center">
                 <Brain
-                  className="absolute -right-0.5 -top-0.5 z-10 h-5 w-5 text-cyan-100 drop-shadow sm:h-6 sm:w-6"
+                  className="absolute -right-0.5 -top-0.5 z-10 h-6 w-6 text-cyan-100 drop-shadow sm:h-7 sm:w-7"
                   strokeWidth={1.75}
                 />
-                <span className="relative z-10 text-xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.55)] sm:text-2xl">
+                <span className="relative z-10 text-2xl font-black tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.55)] sm:text-3xl">
                   AI
                 </span>
               </div>
@@ -321,7 +321,7 @@ export function HomePage() {
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-0 sm:py-1 lg:min-h-0 lg:min-w-[280px] lg:flex-1 lg:justify-center lg:py-0">
+            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-0 sm:py-1 lg:min-h-0 lg:min-w-[300px] lg:flex-1 lg:justify-center lg:py-0">
               <div className="flex w-full min-w-0 max-w-full shrink-0 justify-center overflow-visible lg:w-full">
                 <HeroGraphic />
               </div>
