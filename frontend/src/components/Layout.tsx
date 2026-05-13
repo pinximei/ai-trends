@@ -102,7 +102,14 @@ export function Layout() {
             })}
           </nav>
 
-          <div className="hidden min-w-[10.5rem] shrink-0 md:block" aria-hidden />
+          <div className="order-1 flex w-full min-w-0 shrink-0 items-center justify-center md:order-none md:w-auto md:max-w-[14rem] md:justify-end">
+            <span
+              className="max-w-full truncate rounded-lg border border-violet-200/90 bg-violet-50/90 px-2.5 py-1.5 text-[10px] font-semibold leading-none text-violet-800 shadow-sm tabular-nums ring-1 ring-white/80"
+              title="前端构建版本（部署后看此处是否变化）"
+            >
+              UI {uiRelease}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -147,11 +154,11 @@ export function Layout() {
         >
           <div className="max-w-xl">
             <p className="font-medium text-slate-600">{t("footer")}</p>
-            <p className="mt-1 text-[10px] text-slate-400">{t("footerIcpNote")}</p>
-            <p className="mt-1 text-[10px] text-slate-400">
-              构建 {uiRelease}
+            <p className="mt-1 text-[10px] text-slate-500">
+              <span className="font-semibold text-slate-600">UI 版本</span> {uiRelease}
               {apiRelease ? ` · 接口 ${apiRelease}` : ""}
             </p>
+            <p className="mt-1 text-[10px] text-slate-400">{t("footerIcpNote")}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-slate-600 md:justify-end">
             <Link to="/about" className="hover:text-violet-600 hover:underline">

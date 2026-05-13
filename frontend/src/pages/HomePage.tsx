@@ -53,45 +53,57 @@ function toolRating(seed: string): string {
   return (9 + (n % 8) / 10).toFixed(1);
 }
 
-/** 首页主视觉：最外大圆环 + 内层渐变圆 + 虚线 + 四角浮动 + 中心「AI」块。视觉稿：项目根目录 temp/1.png（本地放置，便于对照） */
+/** 首页主视觉：静态大光圈 + 内层 3D 旋转（圆环、角标、中心 AI 块带景深） */
 function HeroGraphic() {
-  const float =
-    "absolute z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 shadow-md ring-1 ring-white/25 backdrop-blur-sm text-white/90 sm:h-9 sm:w-9";
+  const chip =
+    "pointer-events-none absolute z-10 flex h-8 w-8 items-center justify-center rounded-xl border border-white/65 bg-gradient-to-br from-white/55 via-violet-100/45 to-indigo-200/40 text-violet-900 shadow-[0_12px_28px_-4px_rgba(67,56,202,0.55),0_3px_10px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-md [transform-style:preserve-3d] motion-safe:[transform:translateZ(2.35rem)] motion-reduce:[transform:none] sm:h-9 sm:w-9";
   return (
     <div className="relative mx-auto w-full max-w-[248px] shrink-0 overflow-visible px-3 pb-4 pt-2 sm:max-w-[288px] sm:px-4 sm:pb-5 sm:pt-3">
       <div className="relative aspect-square w-full overflow-visible">
         <div
-          className="pointer-events-none absolute -inset-[10%] z-0 rounded-full bg-gradient-to-b from-violet-400/30 via-indigo-400/14 to-sky-400/18 blur-2xl motion-safe:animate-pulseSoft motion-reduce:opacity-40"
+          className="pointer-events-none absolute -inset-[22%] z-0 rounded-full bg-gradient-to-t from-violet-500/40 via-fuchsia-400/25 to-sky-400/30 blur-3xl motion-safe:animate-pulseSoft motion-reduce:opacity-50"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -inset-3 z-[1] rounded-full border-[5px] border-violet-500 shadow-[0_0_0_2px_rgba(255,255,255,0.95),0_10px_36px_rgba(91,33,182,0.22)] sm:-inset-4 sm:border-[6px]"
+          className="pointer-events-none absolute -inset-[16%] z-[1] rounded-full border-[3px] border-white/90 shadow-[0_0_0_2px_rgba(139,92,246,0.45),0_0_72px_40px_rgba(167,139,250,0.65),0_0_140px_60px_rgba(99,102,241,0.28)]"
           aria-hidden
         />
-        <div className="relative z-[1] aspect-square h-full w-full">
-          <div
-            className="pointer-events-none absolute inset-0 z-0 rounded-full border-[3px] border-violet-400/90 bg-gradient-to-b from-white/50 via-violet-50/30 to-indigo-50/25 shadow-[0_0_0_1px_rgba(255,255,255,0.7),0_10px_40px_rgba(99,102,241,0.16)] ring-1 ring-violet-300/50"
-            aria-hidden
-          />
-          <div className="pointer-events-none absolute inset-[3%] z-0 rounded-full border border-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]" aria-hidden />
-          <div className="absolute inset-[6%] z-0 rounded-full border border-dashed border-violet-400/40 bg-gradient-to-br from-violet-500/18 to-indigo-600/12 shadow-[0_0_40px_rgba(99,102,241,0.22)]" />
-          <div className={`${float} left-[8%] top-[20%] animate-float`} style={{ animationDuration: "20s" }}>
-            <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-          </div>
-          <div className={`${float} right-[10%] top-[16%] animate-float2`} style={{ animationDuration: "24s" }}>
-            <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-          </div>
-          <div className={`${float} left-[12%] bottom-[18%] animate-float2`} style={{ animationDuration: "22s" }}>
-            <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-          </div>
-          <div className={`${float} right-[8%] bottom-[22%] animate-float`} style={{ animationDuration: "19s" }}>
-            <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
-          </div>
-          <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-            <div className="relative flex h-[7.25rem] w-[7.25rem] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-xl ring-2 ring-white/25 sm:h-32 sm:w-32">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/25 to-transparent" />
-              <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-200/90 drop-shadow-md sm:h-8 sm:w-8" strokeWidth={1.5} />
-              <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-md sm:text-4xl">AI</span>
+        <div
+          className="pointer-events-none absolute -inset-3 z-[2] rounded-full border-[5px] border-violet-500 shadow-[0_0_0_4px_rgba(255,255,255,1),0_14px_44px_rgba(91,33,182,0.38)] sm:-inset-4 sm:border-[6px]"
+          aria-hidden
+        />
+
+        <div className="absolute inset-0 z-[3] flex items-center justify-center overflow-visible [perspective:920px] sm:[perspective:1100px]">
+          <div className="relative aspect-square h-full w-full motion-safe:animate-hero-3d-spin motion-reduce:animate-none [transform-style:preserve-3d]">
+            <div
+              className="pointer-events-none absolute inset-0 [transform:translateZ(-1.125rem)] rounded-full border-[3px] border-violet-400/95 bg-gradient-to-b from-white/60 via-violet-50/35 to-indigo-50/28 shadow-[inset_0_2px_28px_rgba(255,255,255,0.55),0_10px_40px_rgba(99,102,241,0.18)] ring-1 ring-violet-300/55"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-[3%] [transform:translateZ(-0.375rem)] rounded-full border border-white/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+              aria-hidden
+            />
+            <div className="absolute inset-[6%] [transform:translateZ(0.5rem)] rounded-full border border-dashed border-violet-400/55 bg-gradient-to-br from-violet-500/24 to-indigo-600/16 shadow-[0_0_40px_rgba(99,102,241,0.28)]" />
+
+            <div className={`${chip} left-[8%] top-[20%]`}>
+              <Sparkles className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            </div>
+            <div className={`${chip} right-[10%] top-[16%]`}>
+              <MessageCircle className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            </div>
+            <div className={`${chip} left-[12%] bottom-[18%]`}>
+              <FileText className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            </div>
+            <div className={`${chip} right-[8%] bottom-[22%]`}>
+              <BarChart3 className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.75} />
+            </div>
+
+            <div className="absolute left-1/2 top-1/2 z-20 flex h-[7.25rem] w-[7.25rem] items-center justify-center motion-safe:[transform:translate3d(-50%,-50%,3.5rem)] motion-reduce:[transform:translate(-50%,-50%)] sm:h-32 sm:w-32">
+              <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-600 to-sky-500 shadow-[0_20px_50px_-12px_rgba(67,56,202,0.55),0_8px_24px_-8px_rgba(14,165,233,0.35),inset_0_2px_0_rgba(255,255,255,0.35)] ring-2 ring-white/40 [transform-style:preserve-3d]">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/30 to-transparent" />
+                <Brain className="absolute -right-0.5 -top-0.5 h-7 w-7 text-cyan-200 drop-shadow-lg sm:h-8 sm:w-8" strokeWidth={1.5} />
+                <span className="relative text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)] sm:text-4xl">AI</span>
+              </div>
             </div>
           </div>
         </div>
