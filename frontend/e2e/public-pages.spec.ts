@@ -63,6 +63,15 @@ test.describe("公开站 · 接口与交互", () => {
     await expect(page).toHaveURL(/\/apps$/);
   });
 
+  test("首页主视觉：主光晕为椭圆（border-radius 双轴）", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const halo = page.getByTestId("hero-halo-primary");
+    await expect(halo).toBeVisible();
+    const br = await halo.evaluate((el) => getComputedStyle(el).borderRadius);
+    expect(br, `borderRadius was: ${br}`).toMatch(/\//);
+  });
+
   test("首页主视觉：轨道图标在光晕之上（命中测试）", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");

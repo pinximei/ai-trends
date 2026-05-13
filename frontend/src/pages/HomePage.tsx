@@ -22,6 +22,9 @@ const INDUSTRY = "ai";
 const HERO_ORBIT_RX_FRAC = 0.492;
 const HERO_ORBIT_RY_FRAC = HERO_ORBIT_RX_FRAC * (36 / 50);
 
+/** 正方形容器上形成真椭圆：横半径 50% / 纵半径 36%（≈ 轨道扁率） */
+const HERO_HALO_ELLIPSE_RADIUS = "50% / 36%" as const;
+
 function summarize(text: string, max: number) {
   const s = (text || "").trim();
   if (!s) return "—";
@@ -160,17 +163,20 @@ function HeroGraphic() {
             reduce ? "" : "[transform:rotateX(11deg)]"
           }`}
         >
-          {/* 椭圆光晕：略放大、无外圈描线；不等 inset + rounded-[50%] */}
+          {/* 椭圆光晕：CSS 双轴 border-radius，在正方形容器上为真椭圆（非圆） */}
           <motion.div
-            className="pointer-events-none absolute inset-x-0 inset-y-[2%] z-[1] rounded-[50%] bg-[radial-gradient(ellipse_98%_80%_at_50%_44%,rgba(186,230,253,0.32)_0%,rgba(196,181,253,0.18)_38%,rgba(255,255,255,0.38)_58%,transparent_80%)] blur-3xl"
+            data-testid="hero-halo-primary"
+            style={{ borderRadius: HERO_HALO_ELLIPSE_RADIUS }}
+            className="pointer-events-none absolute inset-x-0 inset-y-[2%] z-[1] bg-[radial-gradient(ellipse_98%_80%_at_50%_44%,rgba(186,230,253,0.32)_0%,rgba(196,181,253,0.18)_38%,rgba(255,255,255,0.38)_58%,transparent_80%)] blur-3xl"
             aria-hidden
             animate={reduce ? undefined : { opacity: [0.45, 0.62, 0.45], scale: [0.99, 1.01, 0.99] }}
             transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
           />
 
           <div
-            className="pointer-events-none absolute inset-x-[2%] inset-y-[8%] z-[2] rounded-[50%] opacity-[0.12] [mask-image:radial-gradient(ellipse_96%_82%_at_50%_50%,black_50%,transparent_78%)] sm:opacity-[0.16]"
+            className="pointer-events-none absolute inset-x-[2%] inset-y-[8%] z-[2] opacity-[0.12] [mask-image:radial-gradient(ellipse_96%_82%_at_50%_50%,black_50%,transparent_78%)] sm:opacity-[0.16]"
             style={{
+              borderRadius: HERO_HALO_ELLIPSE_RADIUS,
               backgroundImage: "radial-gradient(circle at center, rgba(99,102,241,0.2) 1px, transparent 1.5px)",
               backgroundSize: "10px 10px",
             }}
@@ -178,20 +184,24 @@ function HeroGraphic() {
           />
 
           <div
-            className="pointer-events-none absolute inset-x-0 inset-y-[3%] z-[3] rounded-[50%] bg-transparent opacity-[0.62] blur-[8px] shadow-[0_0_38px_14px_rgba(167,139,250,0.14),0_0_26px_10px_rgba(125,211,252,0.12)]"
+            style={{ borderRadius: HERO_HALO_ELLIPSE_RADIUS }}
+            className="pointer-events-none absolute inset-x-0 inset-y-[3%] z-[3] bg-transparent opacity-[0.62] blur-[8px] shadow-[0_0_38px_14px_rgba(167,139,250,0.14),0_0_26px_10px_rgba(125,211,252,0.12)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-x-[2%] inset-y-[6%] z-[4] rounded-[50%] opacity-[0.52] blur-[6px] [box-shadow:inset_0_0_36px_rgba(255,255,255,0.42),0_0_32px_12px_rgba(139,92,246,0.1)]"
+            style={{ borderRadius: HERO_HALO_ELLIPSE_RADIUS }}
+            className="pointer-events-none absolute inset-x-[2%] inset-y-[6%] z-[4] opacity-[0.52] blur-[6px] [box-shadow:inset_0_0_36px_rgba(255,255,255,0.42),0_0_32px_12px_rgba(139,92,246,0.1)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-x-[4%] inset-y-[9%] z-[5] rounded-[50%] opacity-[0.4] blur-[2px] shadow-[0_0_26px_10px_rgba(255,255,255,0.52)]"
+            style={{ borderRadius: HERO_HALO_ELLIPSE_RADIUS }}
+            className="pointer-events-none absolute inset-x-[4%] inset-y-[9%] z-[5] opacity-[0.4] blur-[2px] shadow-[0_0_26px_10px_rgba(255,255,255,0.52)]"
             aria-hidden
           />
 
           <div
-            className="pointer-events-none absolute inset-x-[14%] inset-y-[18%] z-[6] rounded-[50%] bg-[radial-gradient(ellipse_94%_90%_at_50%_44%,rgba(255,255,255,0.46)_0%,rgba(248,250,252,0.24)_58%,transparent_86%)]"
+            style={{ borderRadius: HERO_HALO_ELLIPSE_RADIUS }}
+            className="pointer-events-none absolute inset-x-[14%] inset-y-[18%] z-[6] bg-[radial-gradient(ellipse_94%_90%_at_50%_44%,rgba(255,255,255,0.46)_0%,rgba(248,250,252,0.24)_58%,transparent_86%)]"
             aria-hidden
           />
 
