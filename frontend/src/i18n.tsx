@@ -13,6 +13,8 @@ const STRINGS: Record<string, string> = {
   navNews: "AI 资讯",
   navDownloads: "软件下载",
   navAbout: "关于我们",
+  aboutPageIntro: "以下为管理后台维护的正文，含网站介绍与免责说明等。",
+  aboutPageLoading: "加载页面…",
   headerSearchPlaceholder: "搜索 AI 资讯、工具…",
   sidebarNavTitle: "导航",
 
