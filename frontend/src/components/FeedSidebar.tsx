@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { BarChart3, Layers, Sparkles } from "lucide-react";
+import { BarChart3, Layers, ScrollText, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n";
-import { TOP_NAV_ITEMS } from "@/navConfig";
 
 type Cat = { label: string; count: number };
 
@@ -50,7 +49,7 @@ export function FeedSidebar({ mode, listLen, categoryOptions }: Props) {
   const totalListed = categoryOptions.reduce((s, c) => s + c.count, 0);
 
   const railTitle = mode === "apps" ? t("sidebarChartApps") : t("sidebarChartNews");
-  const ModeIcon = TOP_NAV_ITEMS.find((i) => i.to === (mode === "apps" ? "/apps" : "/news"))!.icon;
+  const SectionGlyph = mode === "apps" ? Sparkles : ScrollText;
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-gradient-to-b from-white via-white to-slate-50/40 shadow-card ring-1 ring-white/60 transition-shadow duration-300 hover:shadow-ui">
@@ -60,7 +59,7 @@ export function FeedSidebar({ mode, listLen, categoryOptions }: Props) {
       <header className="relative border-b border-slate-100/90 px-5 pb-4 pt-5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-600/90">{t("sidebarRailKicker")}</p>
         <h2 className="mt-2 flex items-center gap-2.5 text-[15px] font-bold leading-snug tracking-tight text-slate-900">
-          <ModeIcon className="h-5 w-5 shrink-0 text-brand-600" strokeWidth={2} aria-hidden />
+          <SectionGlyph className="h-5 w-5 shrink-0 text-brand-600" strokeWidth={2} aria-hidden />
           <span>{railTitle}</span>
         </h2>
         <div className="mt-3 flex items-center gap-2">

@@ -1,14 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { ScrollText, Search, Sparkles } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse } from "@/api/public/types";
+import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisual";
 import { useI18n } from "@/i18n";
 import { FeedSidebar } from "@/components/FeedSidebar";
-import { TOP_NAV_ITEMS } from "@/navConfig";
-
-const FEED_APPS_NAV_ICON = TOP_NAV_ITEMS.find((i) => i.to === "/apps")!.icon;
-const FEED_NEWS_NAV_ICON = TOP_NAV_ITEMS.find((i) => i.to === "/news")!.icon;
 
 const INDUSTRY_SLUG = "ai";
 
@@ -88,7 +85,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   }, [searchDraft]);
 
   const pageTitle = mode === "apps" ? t("resourcesFeedApps") : t("resourcesFeedNews");
-  const ModeNavIcon = mode === "apps" ? FEED_APPS_NAV_ICON : FEED_NEWS_NAV_ICON;
+  /** 频道级装饰（非顶栏导航图标）：两页同一套外框样式，内用不同隐喻 */
+  const ModeGlyph = mode === "apps" ? Sparkles : ScrollText;
 
   const listByDate = useMemo((): [string, ArticleFeedCard[]][] => {
     const m = new Map<string, ArticleFeedCard[]>();
@@ -210,7 +208,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             className="relative hidden h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-brand-50 shadow-sm sm:flex"
             aria-hidden
           >
-            <ModeNavIcon className="h-10 w-10 text-brand-600 opacity-95" strokeWidth={1.35} />
+            <ModeGlyph className="h-10 w-10 text-brand-600 opacity-95" strokeWidth={1.35} />
           </div>
         </div>
       </div>
@@ -395,14 +393,17 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                         />
                         <div className="relative flex min-h-0 flex-1 flex-col sm:flex-row">
                           <div
-                            className="flex shrink-0 items-center justify-center border-b border-slate-100 bg-slate-50 py-5 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-100 sm:py-0"
+                            className="flex shrink-0 border-b border-slate-200/90 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-200/90"
                             aria-hidden
                           >
-                            {mode === "apps" ? (
-                              <FEED_APPS_NAV_ICON className="h-9 w-9 text-brand-600 sm:h-10 sm:w-10" strokeWidth={1.65} />
-                            ) : (
-                              <FEED_NEWS_NAV_ICON className="h-9 w-9 text-brand-600 sm:h-10 sm:w-10" strokeWidth={1.65} />
-                            )}
+                            <div
+                              className="flex min-h-[4.5rem] w-full flex-1 items-center justify-center py-4 sm:min-h-[6.5rem] sm:py-0"
+                              style={articleThumbGradientStyle(`${a.id}:${a.title || ""}`)}
+                            >
+                              <span className="select-none text-2xl font-black tracking-tight text-white drop-shadow-[0_1px_3px_rgba(15,23,42,0.35)] sm:text-[1.65rem]">
+                                {articleCardInitial(a.title)}
+                              </span>
+                            </div>
                           </div>
                           <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 pb-3">
