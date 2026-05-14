@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { ChevronRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { publicApi, type ArticleDetail, type ArticleFeedCard, type ArticleTab } from "@/api/public";
 import { useI18n } from "@/i18n";
-import { parseMarkdownToc, type TocItem } from "@/lib/markdownToc";
+import { parseMarkdownToc, prefixTocItemIds, type TocItem } from "@/lib/markdownToc";
 import { pushRecentArticle } from "@/lib/recentArticles";
 
 const INDUSTRY = "ai";
@@ -50,7 +50,6 @@ export function ResourceDetailPage() {
   const { id } = useParams();
   const [a, setA] = useState<ArticleDetail | null>(null);
   const [err, setErr] = useState("");
-  const [tabIdx, setTabIdx] = useState(0);
   const [sidebar, setSidebar] = useState<ArticleFeedCard[]>([]);
   const [sidebarQuery, setSidebarQuery] = useState("");
   const articleScrollRef = useRef<HTMLDivElement>(null);
@@ -61,7 +60,6 @@ export function ResourceDetailPage() {
       .article(Number(id))
       .then((row) => {
         setA(row);
-        setTabIdx(0);
       })
       .catch((e) => setErr(String(e)));
   }, [id]);
@@ -106,15 +104,29 @@ export function ResourceDetailPage() {
     () => (Array.isArray(a?.tabs) && a!.tabs!.length > 0 ? a!.tabs! : []),
     [a],
   );
-  const active = tabs[tabIdx];
 
-  const markdownSource = useMemo(() => {
-    if (!a) return "";
-    if (tabs.length > 0) return active?.body_md ?? "";
-    return a.body || "";
-  }, [a, tabs.length, active?.body_md, a?.body]);
+  const tabMdSections = useMemo(() => {
+    if (!a || tabs.length === 0) return [];
+    return tabs.map((tab, i) => {
+      const prefix = `t${i}`;
+      const tocItems = prefixTocItemIds(parseMarkdownToc(tab.body_md), prefix);
+      return {
+        key: `tab-${i}-${tab.label}`,
+        label: tab.label,
+        summary: tab.summary,
+        bodyMd: tab.body_md,
+        components: createArticleMarkdownComponents(tocItems),
+      };
+    });
+  }, [a, tabs]);
 
-  const toc = useMemo(() => parseMarkdownToc(markdownSource), [markdownSource]);
+  const mainToc = useMemo(() => parseMarkdownToc(a?.body || ""), [a?.body]);
+  const mainMdComponents = useMemo(() => createArticleMarkdownComponents(mainToc), [mainToc]);
+
+  const markdownFingerprint = useMemo(() => {
+    if (tabs.length > 0) return tabMdSections.map((s) => s.bodyMd).join("\0");
+    return a?.body || "";
+  }, [tabs.length, tabMdSections, a?.body]);
 
   const sidebarFilterQ = sidebarQuery.trim().toLowerCase();
 
@@ -127,11 +139,9 @@ export function ResourceDetailPage() {
     });
   }, [sidebar, sidebarFilterQ]);
 
-  const mdComponents = useMemo(() => createArticleMarkdownComponents(toc), [toc]);
-
   useEffect(() => {
     setSidebarQuery("");
-  }, [tabIdx, markdownSource, a?.id]);
+  }, [a?.id, markdownFingerprint]);
 
   const scrollToHeading = useCallback((headingId: string) => {
     const root = articleScrollRef.current;
@@ -151,7 +161,7 @@ export function ResourceDetailPage() {
     if (!el) return;
     const t = window.setTimeout(() => scrollToHeading(raw), 80);
     return () => window.clearTimeout(t);
-  }, [location.hash, markdownSource, scrollToHeading]);
+  }, [location.hash, markdownFingerprint, scrollToHeading]);
 
   const highlights = useMemo(() => {
     if (!a) return [];
@@ -336,8 +346,7 @@ export function ResourceDetailPage() {
               </div>
             ) : (
               <div className="ui-card border-l-4 border-l-brand-500 bg-brand-50/40 px-6 py-8 sm:px-8">
-                <p className="text-xs font-medium uppercase tracking-wide text-brand-700">{t("detailFeaturedTag")}</p>
-                <h1 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
+                <h1 className="text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
                 {a.summary ? (
                   <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
                 ) : null}
@@ -360,41 +369,23 @@ export function ResourceDetailPage() {
             ) : null}
 
             {tabs.length > 0 ? (
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{t("resourceTabsHeading")}</div>
-                <div
-                  role="tablist"
-                  className="mt-3 flex flex-wrap gap-2"
-                  aria-label={t("resourceTabsHeading")}
-                >
-                  {tabs.map((tab, i) => (
-                    <button
-                      key={`${tab.label}-${i}`}
-                      type="button"
-                      role="tab"
-                      aria-selected={i === tabIdx}
-                      onClick={() => setTabIdx(i)}
-                      className={`flex min-w-0 shrink-0 items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                        i === tabIdx
-                          ? "border-brand-500 bg-brand-500 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-brand-300"
-                      }`}
-                    >
-                      {tab.label}
-                      <ChevronRight className={`h-4 w-4 ${i === tabIdx ? "text-white/90" : "text-slate-400"}`} />
-                    </button>
-                  ))}
-                </div>
-                <div role="tabpanel" className="ui-card mt-6 p-5 sm:p-8">
-                  <div className={mdBody}>
-                    <ReactMarkdown components={mdComponents}>{active?.body_md ?? ""}</ReactMarkdown>
+              tabMdSections.map((sec) => (
+                <section key={sec.key} className="ui-card overflow-hidden" aria-labelledby={`${sec.key}-heading`}>
+                  <div className="border-b border-slate-100 bg-slate-50/90 px-5 py-4 sm:px-6">
+                    <h2 id={`${sec.key}-heading`} className="text-base font-semibold tracking-tight text-slate-900">
+                      {sec.label}
+                    </h2>
+                    {sec.summary ? <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{sec.summary}</p> : null}
                   </div>
-                </div>
-              </div>
+                  <div className={`p-5 sm:p-8 ${mdBody}`}>
+                    <ReactMarkdown components={sec.components}>{sec.bodyMd}</ReactMarkdown>
+                  </div>
+                </section>
+              ))
             ) : (
               <div className="ui-card p-5 sm:p-8">
                 <div className={mdBody}>
-                  <ReactMarkdown components={mdComponents}>{a.body || ""}</ReactMarkdown>
+                  <ReactMarkdown components={mainMdComponents}>{a.body || ""}</ReactMarkdown>
                 </div>
               </div>
             )}

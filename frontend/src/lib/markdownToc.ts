@@ -11,6 +11,10 @@ function slugifySegment(raw: string): string {
   return s || "section";
 }
 
+export function prefixTocItemIds(items: TocItem[], prefix: string): TocItem[] {
+  return items.map((it) => ({ ...it, id: `${prefix}-${it.id}` }));
+}
+
 /** 从 Markdown 正文提取 ## / ### 作为目录（顺序与正文一致） */
 export function parseMarkdownToc(md: string): TocItem[] {
   if (!md.trim()) return [];
