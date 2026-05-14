@@ -47,6 +47,10 @@ const STRINGS: Record<string, string> = {
   homeEmpty: "暂无内容，请稍后重试或检查后端数据。",
 
   detailSidebarTitle: "本栏更多",
+  detailSidebarRelatedTitle: "同栏推荐",
+  detailSidebarSearchPlaceholder: "搜索目录与推荐标题…",
+  detailSidebarNoMatch: "无匹配项，请修改关键词。",
+  detailSidebarFeedEmpty: "暂无同栏推荐",
   detailTocTitle: "正文目录",
   detailTocEmpty: "暂无小节标题",
   detailBackFeed: "返回列表",

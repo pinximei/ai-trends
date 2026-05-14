@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { publicApi, type ArticleDetail, type ArticleFeedCard, type ArticleTab } from "@/api/public";
 import { useI18n } from "@/i18n";
 import { parseMarkdownToc, type TocItem } from "@/lib/markdownToc";
@@ -53,6 +53,7 @@ export function ResourceDetailPage() {
   const [tabIdx, setTabIdx] = useState(0);
   const [sidebar, setSidebar] = useState<ArticleFeedCard[]>([]);
   const [activeTocId, setActiveTocId] = useState<string | null>(null);
+  const [sidebarQuery, setSidebarQuery] = useState("");
   const articleScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,10 +117,27 @@ export function ResourceDetailPage() {
 
   const toc = useMemo(() => parseMarkdownToc(markdownSource), [markdownSource]);
 
+  const sidebarFilterQ = sidebarQuery.trim().toLowerCase();
+
+  const filteredToc = useMemo(() => {
+    if (!sidebarFilterQ) return toc;
+    return toc.filter((item) => item.text.toLowerCase().includes(sidebarFilterQ));
+  }, [toc, sidebarFilterQ]);
+
+  const filteredSidebar = useMemo(() => {
+    if (!sidebarFilterQ) return sidebar;
+    return sidebar.filter((row) => {
+      const title = row.title.toLowerCase();
+      const plat = (row.platform_label || "").toLowerCase();
+      return title.includes(sidebarFilterQ) || plat.includes(sidebarFilterQ);
+    });
+  }, [sidebar, sidebarFilterQ]);
+
   const mdComponents = useMemo(() => createArticleMarkdownComponents(toc), [toc]);
 
   useEffect(() => {
     setActiveTocId(null);
+    setSidebarQuery("");
   }, [tabIdx, markdownSource, a?.id]);
 
   useEffect(() => {
@@ -265,63 +283,98 @@ export function ResourceDetailPage() {
         <aside
           className={
             "flex w-full shrink-0 flex-col self-start overflow-hidden " +
-            "max-h-[min(42vh,26rem)] min-h-0 lg:max-h-none lg:min-h-0 lg:w-[260px] lg:shrink-0 lg:self-stretch xl:w-[272px] " +
+            "max-h-[min(52vh,30rem)] min-h-0 lg:max-h-none lg:min-h-0 lg:w-[260px] lg:shrink-0 lg:self-stretch xl:w-[272px] " +
             "lg:border-r lg:border-slate-300/35 lg:bg-[#ecedf2]"
           }
         >
-          <div
-            className={
-              "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain px-1 py-1 scrollbar-hide " +
-              "lg:px-2.5 lg:py-3"
-            }
-          >
-            <Link to={backTo} className={`${backBtnClass} hidden shrink-0 lg:inline-flex`}>
-              ← {t("detailBackFeed")}
-            </Link>
-
-            {!isApp && toc.length > 0 ? (
-              <div className="min-w-0">
-                <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailTocTitle")}</p>
-                <nav className="pb-1" aria-label={t("detailTocTitle")}>
-                  {toc.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={tocLinkClass(item.id)}
-                      style={{ paddingLeft: item.level === 3 ? "0.875rem" : undefined }}
-                      onClick={() => scrollToHeading(item.id)}
-                    >
-                      <span className="line-clamp-3">{item.text}</span>
-                    </button>
-                  ))}
-                </nav>
+          <div className="shrink-0 space-y-2 px-1.5 pb-2 pt-1 lg:px-2.5 lg:pt-3">
+            <div className="ui-card hidden overflow-hidden p-1 shadow-sm lg:block">
+              <Link to={backTo} className={`${backBtnClass} flex w-full border-0 shadow-none`}>
+                ← {t("detailBackFeed")}
+              </Link>
+            </div>
+            <div className="ui-card overflow-hidden p-2.5 shadow-sm">
+              <label htmlFor="resource-detail-sidebar-search" className="sr-only">
+                {t("resourcesSearchLabel")}
+              </label>
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                <input
+                  id="resource-detail-sidebar-search"
+                  type="search"
+                  value={sidebarQuery}
+                  onChange={(e) => setSidebarQuery(e.target.value)}
+                  autoComplete="off"
+                  placeholder={t("detailSidebarSearchPlaceholder")}
+                  className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
               </div>
+            </div>
+            <p className="px-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 pb-2 scrollbar-hide lg:px-2.5 lg:pb-3">
+            {!isApp && toc.length > 0 ? (
+              filteredToc.length > 0 ? (
+                <div className="ui-card mb-3 overflow-hidden shadow-sm">
+                  <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailTocTitle")}</p>
+                  </div>
+                  <nav className="px-1 py-2" aria-label={t("detailTocTitle")}>
+                    {filteredToc.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={tocLinkClass(item.id)}
+                        style={{ paddingLeft: item.level === 3 ? "0.875rem" : undefined }}
+                        onClick={() => scrollToHeading(item.id)}
+                      >
+                        <span className="line-clamp-3">{item.text}</span>
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              ) : (
+                <div className="ui-card mb-3 px-3 py-2.5 text-xs text-slate-500 shadow-sm">{t("detailSidebarNoMatch")}</div>
+              )
             ) : !isApp && toc.length === 0 ? (
-              <p className="px-3 py-1 text-xs text-slate-500">{t("detailTocEmpty")}</p>
+              <div className="ui-card mb-3 px-3 py-2.5 text-xs text-slate-500 shadow-sm">{t("detailTocEmpty")}</div>
             ) : null}
 
-            <div className="min-w-0 flex-1 lg:min-h-0">
-              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
-              <nav className="flex flex-col gap-0.5 pb-1">
-                {sidebar.map((row) => {
-                  const activeHere = row.id === a.id;
-                  return (
-                    <Link
-                      key={row.id}
-                      to={`/resources/${row.id}`}
-                      className={`mx-1 block rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                        activeHere
-                          ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200/70"
-                          : "text-slate-700 hover:bg-white/50"
-                      }`}
-                    >
-                      <span className="line-clamp-2 leading-snug">{row.title}</span>
-                      <span className="mt-0.5 block text-[10px] font-mono uppercase tracking-wide text-slate-400">
-                        {row.platform_label || "—"}
-                      </span>
-                    </Link>
-                  );
-                })}
+            <div className="ui-card overflow-hidden shadow-sm">
+              <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailSidebarRelatedTitle")}</p>
+              </div>
+              <nav className="flex flex-col gap-0.5 px-1 py-2" aria-label={t("detailSidebarRelatedTitle")}>
+                {filteredSidebar.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-slate-500">
+                    {sidebarFilterQ ? t("detailSidebarNoMatch") : t("detailSidebarFeedEmpty")}
+                  </p>
+                ) : (
+                  filteredSidebar.map((row) => {
+                    const activeHere = row.id === a.id;
+                    return (
+                      <Link
+                        key={row.id}
+                        to={`/resources/${row.id}`}
+                        className={`mx-1 block rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                          activeHere
+                            ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200/70"
+                            : "text-slate-700 hover:bg-white/50"
+                        }`}
+                      >
+                        <span className="line-clamp-2 leading-snug">{row.title}</span>
+                        <span className="mt-0.5 block text-[10px] font-mono uppercase tracking-wide text-slate-400">
+                          {row.platform_label || "—"}
+                        </span>
+                      </Link>
+                    );
+                  })
+                )}
               </nav>
             </div>
           </div>
