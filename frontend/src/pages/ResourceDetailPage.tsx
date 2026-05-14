@@ -52,7 +52,6 @@ export function ResourceDetailPage() {
   const [err, setErr] = useState("");
   const [tabIdx, setTabIdx] = useState(0);
   const [sidebar, setSidebar] = useState<ArticleFeedCard[]>([]);
-  const [activeTocId, setActiveTocId] = useState<string | null>(null);
   const [sidebarQuery, setSidebarQuery] = useState("");
   const articleScrollRef = useRef<HTMLDivElement>(null);
 
@@ -119,11 +118,6 @@ export function ResourceDetailPage() {
 
   const sidebarFilterQ = sidebarQuery.trim().toLowerCase();
 
-  const filteredToc = useMemo(() => {
-    if (!sidebarFilterQ) return toc;
-    return toc.filter((item) => item.text.toLowerCase().includes(sidebarFilterQ));
-  }, [toc, sidebarFilterQ]);
-
   const filteredSidebar = useMemo(() => {
     if (!sidebarFilterQ) return sidebar;
     return sidebar.filter((row) => {
@@ -136,51 +130,8 @@ export function ResourceDetailPage() {
   const mdComponents = useMemo(() => createArticleMarkdownComponents(toc), [toc]);
 
   useEffect(() => {
-    setActiveTocId(null);
     setSidebarQuery("");
   }, [tabIdx, markdownSource, a?.id]);
-
-  useEffect(() => {
-    const root = articleScrollRef.current;
-    if (!root || toc.length === 0) return;
-    const heads = [...root.querySelectorAll("[data-toc-heading]")] as HTMLElement[];
-    if (heads.length === 0) return;
-
-    let raf = 0;
-    const pickActive = () => {
-      const rootRect = root.getBoundingClientRect();
-      const band = rootRect.top + rootRect.height * 0.18;
-      let best: string | null = null;
-      let bestDist = Infinity;
-      for (const el of heads) {
-        if (!el.id) continue;
-        const r = el.getBoundingClientRect();
-        if (r.bottom < rootRect.top + 2) continue;
-        if (r.top > rootRect.bottom - 2) continue;
-        const d = Math.abs(r.top - band);
-        if (d < bestDist) {
-          bestDist = d;
-          best = el.id;
-        }
-      }
-      if (best) setActiveTocId((cur) => (cur === best ? cur : best));
-    };
-
-    const ob = new IntersectionObserver(
-      () => {
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(pickActive);
-      },
-      { root, rootMargin: "-8% 0px -70% 0px", threshold: [0, 0.04, 0.15, 0.35, 0.6] },
-    );
-    heads.forEach((h) => ob.observe(h));
-    pickActive();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      ob.disconnect();
-    };
-  }, [toc, markdownSource, a?.id, tabIdx]);
 
   const scrollToHeading = useCallback((headingId: string) => {
     const root = articleScrollRef.current;
@@ -252,13 +203,6 @@ export function ResourceDetailPage() {
     );
   }
 
-  const tocLinkClass = (id: string) =>
-    `mx-1 block rounded-lg px-2.5 py-1.5 text-left text-[13px] leading-snug transition-colors ${
-      activeTocId === id
-        ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200/70"
-        : "text-slate-600 hover:bg-white/50"
-    }`;
-
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:px-0">
       <div className="mb-3 flex shrink-0 justify-end lg:hidden">
@@ -314,37 +258,9 @@ export function ResourceDetailPage() {
                 />
               </div>
             </div>
-            <p className="px-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 pb-2 scrollbar-hide lg:px-2.5 lg:pb-3">
-            {!isApp && toc.length > 0 ? (
-              filteredToc.length > 0 ? (
-                <div className="ui-card mb-3 overflow-hidden shadow-sm">
-                  <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailTocTitle")}</p>
-                  </div>
-                  <nav className="px-1 py-2" aria-label={t("detailTocTitle")}>
-                    {filteredToc.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={tocLinkClass(item.id)}
-                        style={{ paddingLeft: item.level === 3 ? "0.875rem" : undefined }}
-                        onClick={() => scrollToHeading(item.id)}
-                      >
-                        <span className="line-clamp-3">{item.text}</span>
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-              ) : (
-                <div className="ui-card mb-3 px-3 py-2.5 text-xs text-slate-500 shadow-sm">{t("detailSidebarNoMatch")}</div>
-              )
-            ) : !isApp && toc.length === 0 ? (
-              <div className="ui-card mb-3 px-3 py-2.5 text-xs text-slate-500 shadow-sm">{t("detailTocEmpty")}</div>
-            ) : null}
-
             <div className="ui-card overflow-hidden shadow-sm">
               <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("detailSidebarRelatedTitle")}</p>
@@ -385,13 +301,7 @@ export function ResourceDetailPage() {
           data-testid="resource-detail-article"
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
         >
-          <div className="sticky top-0 z-10 hidden shrink-0 border-b border-slate-200/70 bg-white/90 px-4 py-2.5 backdrop-blur-md supports-[backdrop-filter]:bg-white/75 lg:flex lg:items-center lg:justify-between lg:gap-3 lg:px-6 xl:px-10">
-            <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{a.title}</p>
-            <span className="shrink-0 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              {isApp ? t("navApps") : t("navNews")}
-            </span>
-          </div>
-          <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-3 xl:px-10">
+          <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
             {isApp ? (
               <div className="ui-card overflow-hidden p-6 sm:p-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
