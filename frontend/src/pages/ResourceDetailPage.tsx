@@ -239,7 +239,7 @@ export function ResourceDetailPage() {
     }`;
 
   return (
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:pr-0">
       <div className="mb-3 flex shrink-0 justify-end lg:mb-2">
         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {isApp ? t("navApps") : t("navNews")}
@@ -259,7 +259,7 @@ export function ResourceDetailPage() {
             "flex w-full shrink-0 flex-col gap-3 self-start " +
             "max-h-[min(42vh,26rem)] overflow-y-auto overscroll-y-contain [scrollbar-width:thin] " +
             "lg:sticky lg:top-[5.75rem] lg:z-20 lg:max-h-[calc(100svh-6.25rem)] lg:w-[min(280px,calc(100%-1rem))] " +
-            "lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:w-0 lg:[&::-webkit-scrollbar]:bg-transparent " +
+            "lg:overflow-y-auto lg:overscroll-y-contain lg:lg-scrollbar-hide " +
             "xl:w-[300px]"
           }
         >
@@ -272,7 +272,7 @@ export function ResourceDetailPage() {
               <div className="border-b border-slate-100 bg-slate-50/80 px-3 py-2.5">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailTocTitle")}</p>
               </div>
-              <nav className="max-h-[min(28vh,16rem)] overflow-y-auto overscroll-y-contain px-1 py-2 lg:max-h-[min(32vh,18rem)]" aria-label={t("detailTocTitle")}>
+              <nav className="px-1 py-2" aria-label={t("detailTocTitle")}>
                 {toc.map((item) => (
                   <button
                     key={item.id}
@@ -319,7 +319,7 @@ export function ResourceDetailPage() {
         <div
           ref={articleScrollRef}
           data-testid="resource-detail-article"
-          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain lg:overflow-x-hidden"
+          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain lg:-mr-10 lg:pr-10 lg:overflow-x-hidden xl:-mr-14 xl:pr-14 2xl:-mr-20 2xl:pr-20"
         >
           <article className="min-w-0 w-full max-w-none space-y-6 pb-4">
             {isApp ? (

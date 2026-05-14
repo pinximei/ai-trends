@@ -108,3 +108,17 @@
     }
   }
 }
+
+@layer utilities {
+  @media (min-width: 1024px) {
+    .lg-scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .lg-scrollbar-hide::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+  }
+}
