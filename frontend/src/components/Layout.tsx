@@ -58,7 +58,13 @@ export function Layout() {
   const shell = contentShellClass(useWideShell);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div
+      className={
+        isResourceDetail
+          ? "flex h-svh max-h-svh min-h-0 flex-col overflow-hidden"
+          : "flex min-h-screen flex-col"
+      }
+    >
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/92 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-xl">
         <div className={`relative flex flex-col gap-3 py-3.5 sm:gap-3.5 md:flex-row md:items-center md:justify-between ${shell}`}>
           <Link to="/" className="flex shrink-0 items-center gap-3 transition-opacity hover:opacity-95">
@@ -105,9 +111,7 @@ export function Layout() {
         </div>
       </header>
 
-      <div
-        className={`flex min-w-0 flex-1 flex-row ${isResourceDetail ? "" : "min-h-0"} ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`}
-      >
+      <div className={`flex min-h-0 min-w-0 flex-1 flex-row ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`}>
         {!hideSidebar ? (
           <aside className="hidden w-52 shrink-0 border-r border-slate-200/80 bg-white/80 lg:block">
             <div className="sticky top-[4.75rem] space-y-1 px-3 py-6">
@@ -136,7 +140,7 @@ export function Layout() {
             isHome
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
               : isResourceDetail
-                ? "flex min-w-0 flex-1 flex-col pt-2 pb-10 sm:pt-3 sm:pb-12 lg:pt-4"
+                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-2 pb-10 sm:pt-3 sm:pb-12 lg:pt-4"
                 : isHubTightTop
                   ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
                   : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"

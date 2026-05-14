@@ -47,6 +47,8 @@ const STRINGS: Record<string, string> = {
   homeEmpty: "暂无内容，请稍后重试或检查后端数据。",
 
   detailSidebarTitle: "本栏更多",
+  detailTocTitle: "正文目录",
+  detailTocEmpty: "暂无小节标题",
   detailBackFeed: "返回列表",
   detailHighlights: "核心要点",
   detailAppMeta: "应用信息",
