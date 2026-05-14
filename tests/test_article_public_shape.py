@@ -171,6 +171,18 @@ def test_feed_lane_product_hunt_store_install_is_apps() -> None:
     )
 
 
+def test_feed_lane_product_hunt_launch_defaults_to_apps() -> None:
+    assert (
+        art.feed_lane_for_article(
+            "product_hunt",
+            title="Acme AI",
+            summary="Ship faster with our new SaaS dashboard for teams.",
+            ai_categories_json=json.dumps(["应用产品"], ensure_ascii=False),
+        )
+        == "apps"
+    )
+
+
 def test_feed_lane_github_stays_news_even_with_install_words() -> None:
     assert (
         art.feed_lane_for_article(

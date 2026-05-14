@@ -39,7 +39,7 @@ from ..software_package_service import (
     list_packages_admin,
 )
 from ..article_ingest import create_published_articles_for_connector_targets
-from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS
+from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS, PRODUCT_HUNT_POSTS_FIRST
 from ..source_segment_resolve import first_metric_for_segment, resolve_admin_source_key_to_segments
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product-extended"])
@@ -397,7 +397,9 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
         with httpx.Client(timeout=30.0) as client:
             if source_key == "product_hunt":
                 ph_url = "https://api.producthunt.com/v2/api/graphql"
-                query = {"query": "{ posts(first: 1) { edges { node { id name tagline votesCount createdAt } } } }"}
+                query = {
+                    "query": f"{{ posts(first: {PRODUCT_HUNT_POSTS_FIRST}) {{ edges {{ node {{ id name tagline votesCount createdAt }} }} }} }}"
+                }
                 r = client.post(ph_url, headers={**headers, "Content-Type": "application/json"}, json=query)
             else:
                 r = client.request(method, url, headers=headers)

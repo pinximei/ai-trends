@@ -37,7 +37,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "source": "huggingface_spaces",
         "preset_label": "Hugging Face Spaces",
         "enabled": True,
-        "api_base": "https://huggingface.co/api/spaces?limit=3",
+        "api_base": "https://huggingface.co/api/spaces?limit=24",
         "api_key_masked": "",
         "scope_label": "AI｜Spaces·应用",
         "content_role": "runnable_apps",

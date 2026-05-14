@@ -21,6 +21,9 @@ CONNECTOR_SNIPPET_MAX_CHARS = 524_288
 # 送入大模型润色的片段上限（与上者分离，避免半兆 JSON 撑爆上下文与费用）。
 CONNECTOR_LLM_SNIPPET_MAX_CHARS = 32_768
 
+# Product Hunt GraphQL ``posts(first: N)``：连接器同步与后台「测试连接」共用；过小会导致应用侧几乎只有一条稿。
+PRODUCT_HUNT_POSTS_FIRST = 20
+
 # —— 指纹 ——
 
 
@@ -379,8 +382,8 @@ FEED_NEWS_KEYS = frozenset(
         "rss_theverge",
     }
 )
-# 应用：来自下列数据源的条目**仍须**通过 ``feed_lane_for_article`` 校验（可安装产品）才进 apps；
-# Agent / 大模型 / 纯模型或 API 资讯一律视为 news。
+# 应用：来自下列数据源的条目经 ``feed_lane_for_article`` 二次判别后进 apps；
+# Agent / 大模型主类与正文中的模型/Agent 信号仍一律视为 news。
 FEED_APPS_KEYS = frozenset(
     {
         "product_hunt",
@@ -452,54 +455,6 @@ def _blob_suggests_agent_or_model_news(blob: str) -> bool:
     return False
 
 
-def _blob_suggests_installable_consumer_app(blob: str) -> bool:
-    """用户可安装的客户端/插件/商店分发 → 应用泳道候选。"""
-    if not blob.strip():
-        return False
-    low = normalize_ws(blob).lower()
-    zh = blob
-    en_hits = (
-        "app store",
-        "apple store",
-        "google play",
-        "play store",
-        "galaxy store",
-        "microsoft store",
-        "mac app store",
-        "testflight",
-        "chrome web store",
-        "firefox add-on",
-        "edge add-on",
-        ".apk",
-        ".ipa",
-        ".dmg",
-        ".exe",
-        ".msi",
-        ".appimage",
-        "download for windows",
-        "download for mac",
-        "download on ios",
-        "download on android",
-        "ios app",
-        "android app",
-        "iphone app",
-        "ipad app",
-        "mobile app",
-        "desktop app",
-        "vscode extension",
-        "visual studio code extension",
-        "jetbrains plugin",
-        "snap install",
-        "flatpak",
-        "homebrew --cask",
-        "brew install --cask",
-    )
-    if any(h in low for h in en_hits):
-        return True
-    zh_hits = ("应用商店", "安装包", "安卓下载", "苹果商店", "上架 app", "客户端下载", "桌面版下载", "插件商店")
-    return any(h in zh for h in zh_hits)
-
-
 def admin_source_key(third_party_source: str | None) -> str:
     if not third_party_source:
         return ""
@@ -526,11 +481,8 @@ def feed_lane_for_article(
     ai_categories_json: str | None = None,
     ai_tabs_json: str | None = None,
 ) -> str:
-    """公开站泳道：apps 仅「可安装的客户端/商店分发」类产品；Agent/大模型/模型资讯等为 news。
-
-    对 ``FEED_APPS_KEYS`` 数据源按标题/摘要/tab 正文二次判别；``huggingface_spaces`` 在排除 Agent/大模型等大类后
-    默认视为可运行应用演示（apps），避免仅靠「应用商店」关键词导致应用页长期为空。
-    其余数据源与 ``feed_lane`` 一致。
+    """公开站泳道：``FEED_APPS_KEYS``（Product Hunt、Hugging Face Spaces）在排除主类强制 news 与正文 Agent/模型信号后
+    默认进 apps；其余数据源与 ``feed_lane`` 一致。
     """
     k = (admin_key or "").strip().lower()
     if not k or k == "未绑定数据源":
@@ -545,11 +497,7 @@ def feed_lane_for_article(
     blob = _feed_lane_text_blob(title=title, summary=summary, ai_tabs_json=ai_tabs_json)
     if _blob_suggests_agent_or_model_news(blob):
         return "news"
-    if k == "huggingface_spaces":
-        return "apps"
-    if _blob_suggests_installable_consumer_app(blob):
-        return "apps"
-    return "news"
+    return "apps"
 
 
 # —— 游标与排除集 ——

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .models import AdminSetting, AdminSourceConfig, AdminUser, EvidenceSignal, Trend
 from .product_models import ProductConnector
 from .scope_labels_util import apply_scope_labels_to_row, get_scope_labels_from_source, normalize_scope_labels_from_payload
+from .domain.articles import PRODUCT_HUNT_POSTS_FIRST
 from .services import CONTENT_ROLE_LABEL_ZH
 
 
@@ -213,7 +214,7 @@ class DataApiService:
                         raise ValueError("product_hunt 需要 Bearer Access Token（先用 client_id/client_secret 换取 access_token）")
                     ph_url = "https://api.producthunt.com/v2/api/graphql"
                     query = {
-                        "query": "{ posts(first: 1) { edges { node { id name tagline votesCount createdAt } } } }"
+                        "query": f"{{ posts(first: {PRODUCT_HUNT_POSTS_FIRST}) {{ edges {{ node {{ id name tagline votesCount createdAt }} }} }} }}"
                     }
                     # 在部分 Windows/代理环境里，httpx 对该域名会出现异常 404；
                     # 这里改用 urllib 保持与手工验证一致，确保能拿到真实数据。
