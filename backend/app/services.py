@@ -21,7 +21,7 @@ CONTENT_ROLE_LABEL_ZH: dict[str, str] = {
 
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
-# 下列含 **免 Key** 与 **需 OAuth** 的模板：Product Hunt 须在连接器或「测试连接」中提供 **Bearer access_token**。
+# 下列为 **AI 向** 内置预置：GitHub 协作、HF Spaces、Product Hunt、arXiv cs.AI；Product Hunt 须 OAuth Bearer。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
@@ -54,26 +54,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "notes": "Product Hunt **GraphQL v2**（同步与测试连接走 POST，见连接器逻辑）。须在连接器 ``config_json`` 填 **Bearer access_token**（Developer OAuth），后台卡片另可存 **OAuth Client Secret** 至 ``oauth_client_secret``；或在「测试连接」粘贴临时 Token。无 Token 时探测可能为 401，属正常。",
     },
     {
-        "source": "hacker_news",
-        "preset_label": "Hacker News",
-        "enabled": True,
-        "api_base": "https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=20",
-        "api_key_masked": "",
-        "scope_label": "通用·技术资讯",
-        "content_role": "daily_editorial",
-        "notes": "HN Algolia 公开搜索 JSON：含标题/链接/时间等 **条目型** 字段（免 Key）。",
-    },
-    {
-        "source": "stackoverflow",
-        "preset_label": "Stack Overflow",
-        "enabled": True,
-        "api_base": "https://api.stackexchange.com/2.3/questions?order=desc&sort=activity&site=stackoverflow&pagesize=10",
-        "api_key_masked": "",
-        "scope_label": "开发·问答",
-        "content_role": "daily_editorial",
-        "notes": "Stack Overflow **最新问题** JSON（标题+摘要等）；可选填 app key 提高配额。",
-    },
-    {
         "source": "arxiv",
         "preset_label": "arXiv",
         "enabled": True,
@@ -82,36 +62,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "scope_label": "学术·论文",
         "content_role": "academic",
         "notes": "arXiv **cs.AI** 按最近更新排序的 Atom（论文条目+摘要）。",
-    },
-    {
-        "source": "openalex",
-        "preset_label": "OpenAlex",
-        "enabled": True,
-        "api_base": "https://api.openalex.org/works?per_page=5&sort=cited_by_count:desc",
-        "api_key_masked": "",
-        "scope_label": "学术·开放图谱",
-        "content_role": "academic",
-        "notes": "OpenAlex 著作 JSON；偏 **学术条目**，不是大众门户资讯；polite pool 可按文档加 polite 参数（可选）。",
-    },
-    {
-        "source": "rss_arstechnica",
-        "preset_label": "Ars Technica RSS",
-        "enabled": True,
-        "api_base": "https://feeds.arstechnica.com/arstechnica/index",
-        "api_key_masked": "",
-        "scope_label": "通用·科技媒体",
-        "content_role": "daily_editorial",
-        "notes": "Ars Technica **RSS（XML）**：站点文章条目；单连接器仍合成一篇稿，可改为你方站点/栏目 Feed。",
-    },
-    {
-        "source": "rss_theverge",
-        "preset_label": "The Verge RSS",
-        "enabled": True,
-        "api_base": "https://www.theverge.com/rss/index.xml",
-        "api_key_masked": "",
-        "scope_label": "通用·科技媒体",
-        "content_role": "daily_editorial",
-        "notes": "The Verge **RSS（XML）**：站点文章条目。",
     },
 ]
 
@@ -126,6 +76,11 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "finnhub",
         "youtube_data",
         "mapbox",
+        "hacker_news",
+        "stackoverflow",
+        "openalex",
+        "rss_arstechnica",
+        "rss_theverge",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
@@ -137,23 +92,13 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
 ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
-        "hacker_news",
         "arxiv",
-        "openalex",
-        "rss_arstechnica",
-        "rss_theverge",
-        "stackoverflow",
     }
 )
 
-# 凭据形态速查（内置 9 个 + 已下线 7 个 + 运营自定义任意标识；文档常笼统称「数据源」）：
-# - 典型 OAuth「Client ID + Client Secret」换 Bearer：product_hunt（在用）；已下线 youtube_data 等 Google OAuth 同类。
-# - 单串 API Key / Token：newsapi、finnhub、openai、google_gemini（常见）、mapbox（access token）等。
-# - 公开免钥或单 Bearer 可选：github、hacker_news、stackoverflow、arxiv、openalex、rss_*；huggingface_spaces 公开列表免钥。
+# 凭据形态：当前仅保留 AI 向内置预置；旧预置（HN / SO / OpenAlex / RSS 等）已进 DISCONTINUED 并由启动任务删库。
 # 后台第二输入框「APP Secret」仅对 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD 为真时展示（当前仅 product_hunt）。
-
 # 后台卡片在「Bearer Access Token」之外另展示「OAuth Client Secret」输入的预置（Developer OAuth 换 token 用）。
-# 其余 8 个在用预置 + 7 个已下线标识：多为单 API Key / 单 Token / 免钥；仅 product_hunt 在此集合。
 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product_hunt"})
 
 
@@ -286,8 +231,8 @@ def seed_if_empty(db: Session):
         EvidenceSignal(
             signal_id="sig_002",
             trend_key="customer-support-agent",
-            source="hacker_news",
-            evidence_url="https://news.ycombinator.com/item?id=1",
+            source="arxiv",
+            evidence_url="https://arxiv.org/abs/1706.03762",
             evidence_score=0.81,
             source_diversity=0.55,
             label_stability=0.77,

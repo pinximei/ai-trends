@@ -367,14 +367,11 @@ def ingest_duplicate_by_source_external_id_exists(
 
 # —— 泳道（与 admin_source_key 一致）——
 
-# 资讯：模型/API、代码托管、论文与行情等（非「上架应用」发现类）
+# 资讯：模型/API、代码托管、论文等（非「上架应用」发现类）；键与仍支持或历史 admin_source 对齐。
 FEED_NEWS_KEYS = frozenset(
     {
-        "hacker_news",
         "newsapi",
-        "stackoverflow",
         "arxiv",
-        "openalex",
         "youtube_data",
         "finnhub",
         "mapbox",
@@ -382,8 +379,6 @@ FEED_NEWS_KEYS = frozenset(
         "mcp_skills",
         "openai",
         "google_gemini",
-        "rss_arstechnica",
-        "rss_theverge",
     }
 )
 # 应用：来自下列数据源的条目经 ``feed_lane_for_article`` 二次判别后进 apps；

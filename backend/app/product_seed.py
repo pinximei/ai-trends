@@ -103,7 +103,7 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[0].id,
             industry_id=ind.id,
             content_type="third_party_derived",
-            third_party_source="hacker_news / 演示数据源",
+            third_party_source="github / 演示数据源",
             source_external_id="demo-hn-object-1",
             status="published",
             published_at=datetime.utcnow(),
