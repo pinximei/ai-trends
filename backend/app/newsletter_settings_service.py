@@ -14,9 +14,9 @@ NEWSLETTER_KEY = "newsletter"
 
 def default_newsletter_json() -> dict[str, Any]:
     return {
-        "cron_enabled": True,
-        "generate_enabled": True,
-        "send_enabled": True,
+        "cron_enabled": False,
+        "generate_enabled": False,
+        "send_enabled": False,
         "article_limit": 36,
         "daily_hour": 9,
         "daily_minute": 0,
@@ -58,9 +58,9 @@ def _env_fallback_smtp(m: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     out = dict(m)
-    out["cron_enabled"] = bool(out.get("cron_enabled", True))
-    out["generate_enabled"] = bool(out.get("generate_enabled", True))
-    out["send_enabled"] = bool(out.get("send_enabled", True))
+    out["cron_enabled"] = bool(out.get("cron_enabled", False))
+    out["generate_enabled"] = bool(out.get("generate_enabled", False))
+    out["send_enabled"] = bool(out.get("send_enabled", False))
     out["article_limit"] = max(1, min(80, int(out.get("article_limit") or 36)))
     out["daily_hour"] = max(0, min(23, int(out.get("daily_hour") or 9)))
     out["daily_minute"] = max(0, min(59, int(out.get("daily_minute") or 0)))

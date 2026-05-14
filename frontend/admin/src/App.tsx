@@ -195,9 +195,9 @@ export function App() {
   const [schedulerSaving, setSchedulerSaving] = useState(false);
   const [newsletterSettings, setNewsletterSettings] = useState<NewsletterSettingsView | null>(null);
   const [newsletterForm, setNewsletterForm] = useState(() => newsletterFormFromView({
-    cron_enabled: true,
-    generate_enabled: true,
-    send_enabled: true,
+    cron_enabled: false,
+    generate_enabled: false,
+    send_enabled: false,
     article_limit: 36,
     daily_hour: 9,
     daily_minute: 0,

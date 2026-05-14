@@ -14,6 +14,9 @@ import { TOP_NAV_ITEMS } from "@/navConfig";
 
 const INDUSTRY = "ai";
 
+/** 首页邮件订阅条：功能未对公众开放前保持隐藏；与后台 newsletter 就绪后可改为 true */
+const HOME_NEWSLETTER_VISIBLE = false;
+
 /** 倾斜星环平面内的圆轨道半径（rem）；越大越贴近外圈光晕、离中心 AI 越远 */
 const HERO_ORBIT_REM = 9.52;
 const HERO_ORBIT_SEC = 52;
@@ -512,43 +515,45 @@ export function HomePage() {
         </aside>
       </div>
 
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">
-        <form
-          onSubmit={onSubscribe}
-          className="grid gap-4 rounded-2xl bg-gradient-to-r from-violet-600/95 via-indigo-600/95 to-sky-600/95 px-5 py-6 sm:px-8 sm:py-7 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)_auto] md:items-center md:gap-6 lg:gap-8"
-        >
-          <div className="flex min-w-0 items-start gap-3 text-white md:items-center">
-            <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 md:mt-0">
-              <Mail className="h-5 w-5" strokeWidth={2} />
-            </span>
-            <p className="min-w-0 text-sm font-medium leading-relaxed md:text-[15px] lg:text-base">{t("homeSubscribeBarTitle")}</p>
-          </div>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (subscribeErr) setSubscribeErr("");
-            }}
-            placeholder={t("newsletterPlaceholder")}
-            className="w-full min-w-0 rounded-full border border-white/30 bg-white py-2.5 pl-4 pr-4 text-sm text-slate-900 shadow-inner outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-white/50"
-            autoComplete="email"
-          />
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-full bg-indigo-950/90 px-8 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-950 disabled:cursor-not-allowed disabled:opacity-60 md:justify-self-end lg:px-10 lg:py-3 lg:text-[15px]"
+      {HOME_NEWSLETTER_VISIBLE ? (
+        <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">
+          <form
+            onSubmit={onSubscribe}
+            className="grid gap-4 rounded-2xl bg-gradient-to-r from-violet-600/95 via-indigo-600/95 to-sky-600/95 px-5 py-6 sm:px-8 sm:py-7 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)_auto] md:items-center md:gap-6 lg:gap-8"
           >
-            {submitting ? t("newsletterSending") : sent ? t("newsletterThanks") : t("homeSubscribeBarBtn")}
-          </button>
-        </form>
-        {subscribeErr ? (
-          <p className="px-5 pb-3 text-center text-[11px] font-medium text-amber-200 sm:px-8" role="alert">
-            {subscribeErr}
-          </p>
-        ) : null}
-        <p className="px-5 pb-3 text-center text-[10px] text-white/70 sm:px-8">{t("newsletterHint")}</p>
-      </section>
+            <div className="flex min-w-0 items-start gap-3 text-white md:items-center">
+              <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 md:mt-0">
+                <Mail className="h-5 w-5" strokeWidth={2} />
+              </span>
+              <p className="min-w-0 text-sm font-medium leading-relaxed md:text-[15px] lg:text-base">{t("homeSubscribeBarTitle")}</p>
+            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (subscribeErr) setSubscribeErr("");
+              }}
+              placeholder={t("newsletterPlaceholder")}
+              className="w-full min-w-0 rounded-full border border-white/30 bg-white py-2.5 pl-4 pr-4 text-sm text-slate-900 shadow-inner outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-white/50"
+              autoComplete="email"
+            />
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-full bg-indigo-950/90 px-8 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-950 disabled:cursor-not-allowed disabled:opacity-60 md:justify-self-end lg:px-10 lg:py-3 lg:text-[15px]"
+            >
+              {submitting ? t("newsletterSending") : sent ? t("newsletterThanks") : t("homeSubscribeBarBtn")}
+            </button>
+          </form>
+          {subscribeErr ? (
+            <p className="px-5 pb-3 text-center text-[11px] font-medium text-amber-200 sm:px-8" role="alert">
+              {subscribeErr}
+            </p>
+          ) : null}
+          <p className="px-5 pb-3 text-center text-[10px] text-white/70 sm:px-8">{t("newsletterHint")}</p>
+        </section>
+      ) : null}
     </div>
   );
 }
