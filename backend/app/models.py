@@ -121,3 +121,13 @@ class AdminSetting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class NewsletterSubscriber(Base):
+    """站点公开订阅邮箱（首页等）；email 存规范化地址，唯一约束防重复。"""
+
+    __tablename__ = "newsletter_subscribers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

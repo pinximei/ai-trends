@@ -244,6 +244,8 @@ export function HomePage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [subscribeErr, setSubscribeErr] = useState("");
 
   const popularCats = useMemo(
     () => [
@@ -294,12 +296,25 @@ export function HomePage() {
   const sideNews = news.slice(1, 4);
   const toolList = apps.slice(0, 5);
 
-  const onSubscribe = (e: FormEvent) => {
+  const onSubscribe = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    setSent(true);
-    setEmail("");
-    window.setTimeout(() => setSent(false), 3200);
+    const trimmed = email.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setSubscribeErr("");
+    try {
+      await publicApi.newsletterSubscribe(trimmed);
+      setSent(true);
+      setEmail("");
+      window.setTimeout(() => {
+        setSent(false);
+      }, 4000);
+    } catch (err) {
+      const text = err instanceof Error && err.message ? err.message : t("newsletterErrorNetwork");
+      setSubscribeErr(text);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -511,18 +526,27 @@ export function HomePage() {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (subscribeErr) setSubscribeErr("");
+            }}
             placeholder={t("newsletterPlaceholder")}
             className="w-full min-w-0 rounded-full border border-white/30 bg-white py-2.5 pl-4 pr-4 text-sm text-slate-900 shadow-inner outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-white/50"
             autoComplete="email"
           />
           <button
             type="submit"
-            className="rounded-full bg-indigo-950/90 px-8 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-950 md:justify-self-end lg:px-10 lg:py-3 lg:text-[15px]"
+            disabled={submitting}
+            className="rounded-full bg-indigo-950/90 px-8 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-950 disabled:cursor-not-allowed disabled:opacity-60 md:justify-self-end lg:px-10 lg:py-3 lg:text-[15px]"
           >
-            {sent ? t("newsletterThanks") : t("homeSubscribeBarBtn")}
+            {submitting ? t("newsletterSending") : sent ? t("newsletterThanks") : t("homeSubscribeBarBtn")}
           </button>
         </form>
+        {subscribeErr ? (
+          <p className="px-5 pb-3 text-center text-[11px] font-medium text-amber-200 sm:px-8" role="alert">
+            {subscribeErr}
+          </p>
+        ) : null}
         <p className="px-5 pb-3 text-center text-[10px] text-white/70 sm:px-8">{t("newsletterHint")}</p>
       </section>
     </div>

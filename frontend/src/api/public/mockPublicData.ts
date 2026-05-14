@@ -83,3 +83,12 @@ export function tryMockPublicGet<T>(path: string): T | null {
 
   return null;
 }
+
+/** dev + `VITE_MOCK_PUBLIC_API=true` 时由 `publicPost` 短路（不落库） */
+export function tryMockPublicPost<T>(path: string, _body: unknown): T | null {
+  if (import.meta.env.VITE_MOCK_PUBLIC_API !== "true") return null;
+  if (path.includes("/newsletter/subscribe")) {
+    return { subscribed: true } as T;
+  }
+  return null;
+}

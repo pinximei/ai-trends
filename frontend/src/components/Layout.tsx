@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
-import { NewsletterBar } from "./NewsletterBar";
 
 function apiBasePrefix(): string {
   return (import.meta.env.VITE_API_BASE || "").trim().replace(/\/$/, "");
@@ -41,7 +40,6 @@ export function Layout() {
   const useWideShell = isWideHub;
   const hideSidebar = isWideHub;
   const isHubTightTop = isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
-  const hideFloatingNewsletter = isHome || isResourceDetail;
   const uiRelease = import.meta.env.VITE_APP_RELEASE || "—";
   const [apiRelease, setApiRelease] = useState<string | null>(null);
 
@@ -184,7 +182,6 @@ export function Layout() {
           </div>
         </div>
       </footer>
-      {!hideFloatingNewsletter ? <NewsletterBar /> : null}
     </div>
   );
 }

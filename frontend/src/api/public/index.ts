@@ -1,7 +1,7 @@
-import { publicGet } from "./client";
+import { publicGet, publicPost } from "./client";
 import type { ArticleDetail, ArticlesFeedResponse } from "./types";
 
-export { publicGet } from "./client";
+export { publicGet, publicPost } from "./client";
 export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse } from "./types";
 
 export const publicApi = {
@@ -77,4 +77,6 @@ export const publicApi = {
       }>
     >(`/api/public/v1/software/downloads${qs ? `?${qs}` : ""}`);
   },
+  newsletterSubscribe: (email: string) =>
+    publicPost<{ subscribed: boolean }>("/api/public/v1/newsletter/subscribe", { email }),
 };

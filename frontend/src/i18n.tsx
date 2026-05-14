@@ -70,7 +70,9 @@ const STRINGS: Record<string, string> = {
   newsletterPlaceholder: "请输入邮箱",
   newsletterSubscribe: "订阅",
   newsletterThanks: "谢谢！",
-  newsletterHint: "演示：提交后仅本地提示，不向服务器发送邮箱。",
+  newsletterHint: "邮箱仅用于订阅通讯，可随时退订；提交即表示同意我们按隐私说明处理。",
+  newsletterSending: "提交中…",
+  newsletterErrorNetwork: "网络异常，请稍后重试。",
 
   sidebarChartApps: "本栏 · AI 应用",
   sidebarChartNews: "本栏 · AI 资讯",
