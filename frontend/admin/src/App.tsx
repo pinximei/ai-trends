@@ -52,6 +52,25 @@ function publicFeedLaneForSourceKey(sourceKey: string): { lane: "apps" | "news";
   };
 }
 
+type SourceCardDraft = { api_base: string; scope_text: string; notes: string; api_key: string };
+
+function inferSourceTestAuthMode(apiBase: string): "bearer" | "private_token" {
+  return apiBase.toLowerCase().includes("gitlab") ? "private_token" : "bearer";
+}
+
+/** 将后端 ``abcd...wxyz`` 掩码改为「首尾 + 中间星号」展示。 */
+function formatApiKeyDisplay(masked: string | undefined | null): string {
+  const s = (masked || "").trim();
+  if (!s) return "";
+  const i = s.indexOf("...");
+  if (i > 0 && i + 3 < s.length) {
+    const head = s.slice(0, i);
+    const tail = s.slice(i + 3);
+    return `${head}${"*".repeat(10)}${tail}`;
+  }
+  return s;
+}
+
 type Me = { username: string; role: string; expires_at: string; password_min_length: number };
 type ConnectorTokenStatus = { connector_id: number; name: string; enabled: boolean; has_api_key: boolean };
 type Source = {
@@ -67,6 +86,7 @@ type Source = {
   scope_labels?: string[];
   notes: string;
 };
+
 type AdminUser = {
   username: string;
   role: string;
@@ -166,6 +186,21 @@ type SourcePresetRow = {
   content_role_label_zh?: string;
 };
 
+function scopeTextFromSavedOrPreset(saved: Source | undefined, preset: SourcePresetRow | undefined): string {
+  if (saved?.scope_labels && saved.scope_labels.length > 0) return saved.scope_labels.join("\n");
+  if (preset?.scope_labels && preset.scope_labels.length > 0) return preset.scope_labels.join("\n");
+  return (saved?.scope_label || preset?.scope_label || "").trim();
+}
+
+function defaultSourceCardDraft(saved: Source | undefined, preset: SourcePresetRow | undefined): SourceCardDraft {
+  return {
+    api_base: (saved?.api_base ?? preset?.api_base ?? "").trim(),
+    scope_text: scopeTextFromSavedOrPreset(saved, preset),
+    notes: (saved?.notes ?? preset?.notes ?? "").trim(),
+    api_key: "",
+  };
+}
+
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [err, setErr] = useState("");
@@ -199,12 +234,11 @@ export function App() {
   const [sourcePresets, setSourcePresets] = useState<SourcePresetRow[]>([]);
   const [sourcePresetsLoading, setSourcePresetsLoading] = useState(false);
   const [sourcePresetsError, setSourcePresetsError] = useState("");
+  /** 数据源卡片内联编辑草稿（api_key 仅浏览器内，保存成功后清空） */
+  const [sourceCardDrafts, setSourceCardDrafts] = useState<Record<string, SourceCardDraft>>({});
+  const [sourceCardSaving, setSourceCardSaving] = useState<string | null>(null);
   /** 数据源卡片上「启用/停用」提交中（key 为 source 标识） */
   const [sourceToggleBusy, setSourceToggleBusy] = useState<string | null>(null);
-  /** 数据源卡片「测试连接」可选密钥（仅浏览器内存，不写库） */
-  const [sourceTestKeys, setSourceTestKeys] = useState<Record<string, string>>({});
-  /** Bearer（OAuth）或 GitLab PRIVATE-TOKEN */
-  const [sourceTestAuth, setSourceTestAuth] = useState<Record<string, "bearer" | "private_token">>({});
   const [formTestAuth, setFormTestAuth] = useState<"bearer" | "private_token">("bearer");
   const [sourceTestLoading, setSourceTestLoading] = useState<string | null>(null);
   const [sourceTestResult, setSourceTestResult] = useState<{
@@ -460,35 +494,6 @@ export function App() {
     loadSourcePresets();
   }, [loadSourcePresets]);
 
-  const fillSourceFormFromRow = useCallback((row: Source | SourcePresetRow) => {
-    const scope_labels =
-      row.scope_labels && row.scope_labels.length > 0
-        ? [...row.scope_labels]
-        : row.scope_label?.trim()
-          ? [row.scope_label.trim()]
-          : [""];
-    setSourceForm({
-      source: row.source,
-      api_base: row.api_base,
-      scope_labels,
-      api_key: "",
-      enabled: row.enabled,
-      notes: row.notes || "",
-    });
-    queueMicrotask(() =>
-      document.getElementById("admin-source-form")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
-  }, []);
-
-  const openPresetInEditor = useCallback(
-    (p: SourcePresetRow) => {
-      const saved = sources.find((s) => s.source === p.source);
-      if (saved) fillSourceFormFromRow(saved);
-      else fillSourceFormFromRow(p);
-    },
-    [sources, fillSourceFormFromRow],
-  );
-
   async function runSourceTest(
     payload: { source?: string; api_base?: string; api_key?: string },
     resultKey: string,
@@ -731,22 +736,71 @@ export function App() {
   async function onToggleSourceEnabled(row: Source) {
     if (!canOperate) return;
     const key = row.source;
+    const preset = sourcePresets.find((p) => p.source === key);
+    const draft = sourceCardDrafts[key] ?? defaultSourceCardDraft(row, preset);
     setSourceToggleBusy(key);
     setErr("");
     try {
       await adminApi.saveSource({
         source: row.source,
         enabled: !row.enabled,
-        api_base: row.api_base,
-        api_key: "",
-        notes: row.notes || "",
-        scope_labels: scopeLabelsPayloadFromSource(row),
+        api_base: draft.api_base.trim(),
+        api_key: draft.api_key.trim(),
+        notes: draft.notes.trim(),
+        scope_labels: draft.scope_text
+          .split(/[\n\r]+/)
+          .map((x) => x.trim())
+          .filter(Boolean),
       });
+      setSourceCardDrafts((prev) => ({
+        ...prev,
+        [key]: { ...draft, api_key: "" },
+      }));
       await loadAdminData();
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "save failed"));
     } finally {
       setSourceToggleBusy(null);
+    }
+  }
+
+  async function saveSourceCard(sourceKey: string) {
+    if (!canOperate) return;
+    const saved = sources.find((s) => s.source === sourceKey);
+    const preset = sourcePresets.find((p) => p.source === sourceKey);
+    const draft = sourceCardDrafts[sourceKey] ?? defaultSourceCardDraft(saved, preset);
+    const enabled = saved?.enabled ?? preset?.enabled ?? true;
+    setSourceCardSaving(sourceKey);
+    setErr("");
+    try {
+      const row = (await adminApi.saveSource({
+        source: sourceKey,
+        enabled,
+        api_base: draft.api_base.trim(),
+        api_key: draft.api_key.trim(),
+        notes: draft.notes.trim(),
+        scope_labels: draft.scope_text
+          .split(/[\n\r]+/)
+          .map((x) => x.trim())
+          .filter(Boolean),
+      })) as Source;
+      setSourceCardDrafts((prev) => ({
+        ...prev,
+        [sourceKey]: {
+          api_base: row.api_base || "",
+          scope_text:
+            row.scope_labels && row.scope_labels.length > 0
+              ? row.scope_labels.join("\n")
+              : (row.scope_label || "").trim(),
+          notes: row.notes || "",
+          api_key: "",
+        },
+      }));
+      await loadAdminData();
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "save failed"));
+    } finally {
+      setSourceCardSaving(null);
     }
   }
 
@@ -1188,8 +1242,7 @@ export function App() {
                 <h3 style={{ margin: 0 }}>数据源</h3>
                 <p className="muted tiny" style={{ margin: "8px 0 0" }}>
                   上方卡片为<strong>内置模板 + 已保存的自定义标识</strong>同一列表：未入库时显示模板默认值与「未入库」；保存后展示库内接口与领域主题。生产环境请用卡片上的<strong>启用 / 停用</strong>控制是否参与调度，无需在后台删除整条配置。定时拉取在「AI
-                  资讯与数据」；连接器绑定标识后参与调度。每条模板标注<strong>内容类型</strong>（偏门户条目 / 学术 / 目录 / 行情等）；一次同步仍由系统聚合成<strong>一篇</strong>站内稿，若需「每条 RSS 单独一篇」请拆多条连接器或另行开发。GitLab 请用{" "}
-                  <code>https://gitlab.com/api/v4/version</code> 等具体路径，测试时选「GitLab Private Token」并粘贴 PAT。
+                  资讯与数据」页配置；连接器绑定标识后参与调度。每条模板标注<strong>内容类型</strong>（偏门户条目 / 学术 / 目录 / 行情等）；一次同步仍由系统聚合成<strong>一篇</strong>站内稿，若需「每条 RSS 单独一篇」请拆多条连接器或另行开发。GitLab 等地址在<strong>测试连接</strong>时会根据接口地址自动选择 Bearer 或 Private Token 头。
                 </p>
                 <p className="muted tiny" style={{ margin: "10px 0 0" }}>
                   连接器对「api_base」只做<strong>单次 HTTP GET</strong>（可选密钥头），<strong>不模拟浏览器、不执行站点前端 JS、也不代你登录任意网站后台</strong>，因此拿不到依赖登录页或整页 HTML 渲染才出现的「门户正文」；若上游 JSON
@@ -1218,21 +1271,16 @@ export function App() {
                   <div className="sources-board sources-board--presets">
                     {sourcePresets.map((p) => {
                         const saved = sources.find((s) => s.source === p.source);
-                        const displayBase = (saved?.api_base || "").trim() || p.api_base || "";
                         const pubFeed = publicFeedLaneForSourceKey(p.source);
-                        const scopeText =
-                          saved && ((saved.scope_labels && saved.scope_labels.length > 0) || (saved.scope_label || "").trim())
-                            ? saved.scope_labels && saved.scope_labels.length > 0
-                              ? saved.scope_labels.join("；")
-                              : saved.scope_label || ""
-                            : p.scope_labels && p.scope_labels.length > 0
-                              ? p.scope_labels.join("；")
-                              : p.scope_label || "";
+                        const draft = sourceCardDrafts[p.source] ?? defaultSourceCardDraft(saved, p);
+                        const testBase = draft.api_base.trim() || (saved?.api_base || "").trim() || p.api_base || "";
+                        const maskLine = saved?.api_key_masked ? formatApiKeyDisplay(saved.api_key_masked) : "";
+                        const cardTestKey = `card:${p.source}`;
                         return (
                           <article
                             key={p.source}
                             className={`source-card source-card--preset${saved ? " source-card--preset-exists" : ""}`}
-                            title={saved?.notes?.trim() ? saved.notes : p.notes}
+                            title={(saved?.notes || p.notes || "").trim() || undefined}
                           >
                             <div className="source-card__head">
                               <h4 className="source-card__title">{p.label}</h4>
@@ -1267,24 +1315,74 @@ export function App() {
                               </div>
                               <div className="source-card__meta-row">
                                 <dt>接口地址</dt>
-                                <dd className="source-card__preset-url">{displayBase || "—"}</dd>
+                                <dd style={{ margin: 0 }}>
+                                  <input
+                                    style={{
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      fontFamily: "var(--font-mono)",
+                                      fontSize: 12,
+                                      padding: "6px 8px",
+                                    }}
+                                    value={draft.api_base}
+                                    onChange={(e) =>
+                                      setSourceCardDrafts((prev) => ({
+                                        ...prev,
+                                        [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), api_base: e.target.value },
+                                      }))
+                                    }
+                                  />
+                                </dd>
                               </div>
                               <div className="source-card__meta-row">
                                 <dt>拉取节奏</dt>
                                 <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                               </div>
-                              {scopeText ? (
-                                <div className="source-card__meta-row">
-                                  <dt>领域主题</dt>
-                                  <dd>{scopeText}</dd>
-                                </div>
-                              ) : null}
-                              {saved?.api_key_masked ? (
-                                <div className="source-card__meta-row">
-                                  <dt>密钥掩码</dt>
-                                  <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{saved.api_key_masked}</dd>
-                                </div>
-                              ) : null}
+                              <div className="source-card__meta-row">
+                                <dt>领域主题</dt>
+                                <dd style={{ margin: 0 }}>
+                                  <textarea
+                                    rows={3}
+                                    style={{
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      fontSize: 12,
+                                      resize: "vertical",
+                                      padding: "6px 8px",
+                                    }}
+                                    placeholder="每行一个主题，可用「大类｜细分」"
+                                    value={draft.scope_text}
+                                    onChange={(e) =>
+                                      setSourceCardDrafts((prev) => ({
+                                        ...prev,
+                                        [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), scope_text: e.target.value },
+                                      }))
+                                    }
+                                  />
+                                </dd>
+                              </div>
+                              <div className="source-card__meta-row">
+                                <dt>备注</dt>
+                                <dd style={{ margin: 0 }}>
+                                  <textarea
+                                    rows={2}
+                                    style={{
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      fontSize: 12,
+                                      resize: "vertical",
+                                      padding: "6px 8px",
+                                    }}
+                                    value={draft.notes}
+                                    onChange={(e) =>
+                                      setSourceCardDrafts((prev) => ({
+                                        ...prev,
+                                        [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), notes: e.target.value },
+                                      }))
+                                    }
+                                  />
+                                </dd>
+                              </div>
                               {saved ? (
                                 <div className="source-card__meta-row">
                                   <dt>连接器 Token</dt>
@@ -1305,72 +1403,83 @@ export function App() {
                             </dl>
                             {canOperate ? (
                               <>
-                                <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                <div className="source-card__meta-row" style={{ marginTop: 10 }}>
+                                  <dt>API Key</dt>
+                                  <dd style={{ margin: 0 }}>
+                                    <input
+                                      type="password"
+                                      autoComplete="off"
+                                      placeholder="填写新密钥；留空并点保存表示不修改已有密钥"
+                                      style={{
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        fontFamily: "var(--font-mono)",
+                                        fontSize: 12,
+                                        padding: "6px 8px",
+                                      }}
+                                      value={draft.api_key}
+                                      onChange={(e) =>
+                                        setSourceCardDrafts((prev) => ({
+                                          ...prev,
+                                          [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), api_key: e.target.value },
+                                        }))
+                                      }
+                                    />
+                                    {maskLine ? (
+                                      <div
+                                        className="muted tiny"
+                                        style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
+                                      >
+                                        已保存：{maskLine}
+                                      </div>
+                                    ) : (
+                                      <div className="muted tiny" style={{ marginTop: 8 }}>
+                                        保存后在此显示首尾掩码；留空保存不改动已有密钥。
+                                      </div>
+                                    )}
+                                  </dd>
+                                </div>
+                                <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 12 }}>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    disabled={sourceTestLoading === cardTestKey || !testBase.trim() || !!sourceCardSaving}
+                                    title={!testBase.trim() ? "请先填写接口地址" : "测试连接（不落库）"}
+                                    onClick={() =>
+                                      void runSourceTest(
+                                        saved
+                                          ? { source: p.source, api_key: draft.api_key.trim() }
+                                          : { api_base: testBase, api_key: draft.api_key.trim() },
+                                        cardTestKey,
+                                        inferSourceTestAuthMode(testBase),
+                                      )
+                                    }
+                                  >
+                                    {sourceTestLoading === cardTestKey ? "测试中…" : "测试连接"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    disabled={!!sourceCardSaving || !!sourceToggleBusy}
+                                    style={{ fontWeight: 600 }}
+                                    title="保存当前卡片中的接口、主题、备注与密钥到数据库"
+                                    onClick={() => void saveSourceCard(p.source)}
+                                  >
+                                    {sourceCardSaving === p.source ? "保存中…" : "保存"}
+                                  </button>
                                   {saved ? (
                                     <button
                                       type="button"
                                       className="btn-ghost"
-                                      disabled={sourceToggleBusy === saved.source}
+                                      disabled={sourceToggleBusy === saved.source || !!sourceCardSaving}
                                       title={saved.enabled ? "暂停参与连接器调度" : "恢复参与连接器调度"}
                                       onClick={() => void onToggleSourceEnabled(saved)}
                                     >
-                                      {sourceToggleBusy === saved.source
-                                        ? "保存中…"
-                                        : saved.enabled
-                                          ? "停用"
-                                          : "启用"}
+                                      {sourceToggleBusy === saved.source ? "保存中…" : saved.enabled ? "停用" : "启用"}
                                     </button>
                                   ) : null}
-                                  <select
-                                    title="GitLab 使用 PRIVATE-TOKEN 头"
-                                    value={
-                                      sourceTestAuth[`preset:${p.source}`] ??
-                                      (displayBase.includes("gitlab") ? "private_token" : "bearer")
-                                    }
-                                    onChange={(e) =>
-                                      setSourceTestAuth((prev) => ({
-                                        ...prev,
-                                        [`preset:${p.source}`]: e.target.value as "bearer" | "private_token",
-                                      }))
-                                    }
-                                    style={{ minWidth: 118 }}
-                                  >
-                                    <option value="bearer">Bearer</option>
-                                    <option value="private_token">GitLab PAT</option>
-                                  </select>
-                                  <input
-                                    type="password"
-                                    autoComplete="off"
-                                    placeholder="测试用密钥（可选）"
-                                    value={sourceTestKeys[`preset:${p.source}`] ?? ""}
-                                    onChange={(e) =>
-                                      setSourceTestKeys((prev) => ({ ...prev, [`preset:${p.source}`]: e.target.value }))
-                                    }
-                                    style={{ minWidth: 140, flex: "1 1 140px", maxWidth: 220 }}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn-ghost"
-                                    disabled={sourceTestLoading === `preset:${p.source}` || !displayBase.trim()}
-                                    title={!displayBase.trim() ? "无接口地址" : "对已保存配置或模板地址发起 GET 测试"}
-                                    onClick={() =>
-                                      void runSourceTest(
-                                        saved
-                                          ? { source: p.source, api_key: sourceTestKeys[`preset:${p.source}`] ?? "" }
-                                          : { api_base: displayBase, api_key: sourceTestKeys[`preset:${p.source}`] ?? "" },
-                                        `preset:${p.source}`,
-                                        sourceTestAuth[`preset:${p.source}`] ??
-                                          (displayBase.includes("gitlab") ? "private_token" : "bearer"),
-                                      )
-                                    }
-                                  >
-                                    {sourceTestLoading === `preset:${p.source}` ? "测试中…" : "测试连接"}
-                                  </button>
-                                  <button type="button" className="btn-ghost" onClick={() => openPresetInEditor(p)}>
-                                    编辑
-                                  </button>
                                 </div>
-                                {sourceTestResult?.key === `preset:${p.source}` ? (
+                                {sourceTestResult?.key === cardTestKey ? (
                                   <div className="source-test-result" style={{ marginTop: 10 }}>
                                     <div className={sourceTestResult.ok ? "tag ok" : "tag"} style={{ display: "inline-block" }}>
                                       HTTP {sourceTestResult.http_status}
@@ -1402,8 +1511,12 @@ export function App() {
                       })}
                       {customSourcesOnly.map((s) => {
                         const pubFeed = publicFeedLaneForSourceKey(s.source);
+                        const draft = sourceCardDrafts[s.source] ?? defaultSourceCardDraft(s, undefined);
+                        const testBase = draft.api_base.trim() || (s.api_base || "").trim();
+                        const maskLine = s.api_key_masked ? formatApiKeyDisplay(s.api_key_masked) : "";
+                        const cardTestKey = `card:${s.source}`;
                         return (
-                        <article key={s.source} className="source-card source-card--preset-exists" title={s.notes?.trim() || undefined}>
+                        <article key={s.source} className="source-card source-card--preset-exists" title={draft.notes.trim() || undefined}>
                           <div className="source-card__head">
                             <h4 className="source-card__title">{s.source}</h4>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
@@ -1430,21 +1543,47 @@ export function App() {
                             </div>
                             <div className="source-card__meta-row">
                               <dt>接口地址</dt>
-                              <dd className="source-card__preset-url">{s.api_base || "—"}</dd>
-                            </div>
-                            <div className="source-card__meta-row">
-                              <dt>领域主题</dt>
-                              <dd>
-                                {s.scope_labels && s.scope_labels.length > 0
-                                  ? s.scope_labels.join("；")
-                                  : s.scope_label?.trim()
-                                    ? s.scope_label
-                                    : "—"}
+                              <dd style={{ margin: 0 }}>
+                                <input
+                                  style={{
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    fontFamily: "var(--font-mono)",
+                                    fontSize: 12,
+                                    padding: "6px 8px",
+                                  }}
+                                  value={draft.api_base}
+                                  onChange={(e) =>
+                                    setSourceCardDrafts((prev) => ({
+                                      ...prev,
+                                      [s.source]: { ...(prev[s.source] ?? defaultSourceCardDraft(s, undefined)), api_base: e.target.value },
+                                    }))
+                                  }
+                                />
                               </dd>
                             </div>
                             <div className="source-card__meta-row">
-                              <dt>密钥掩码</dt>
-                              <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{s.api_key_masked || "—"}</dd>
+                              <dt>领域主题</dt>
+                              <dd style={{ margin: 0 }}>
+                                <textarea
+                                  rows={3}
+                                  style={{
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    fontSize: 12,
+                                    resize: "vertical",
+                                    padding: "6px 8px",
+                                  }}
+                                  placeholder="每行一个主题，可用「大类｜细分」"
+                                  value={draft.scope_text}
+                                  onChange={(e) =>
+                                    setSourceCardDrafts((prev) => ({
+                                      ...prev,
+                                      [s.source]: { ...(prev[s.source] ?? defaultSourceCardDraft(s, undefined)), scope_text: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </dd>
                             </div>
                             <div className="source-card__meta-row">
                               <dt>连接器 Token</dt>
@@ -1463,72 +1602,102 @@ export function App() {
                             </div>
                             <div className="source-card__meta-row">
                               <dt>备注</dt>
-                              <dd>{s.notes?.trim() ? s.notes : "—"}</dd>
+                              <dd style={{ margin: 0 }}>
+                                <textarea
+                                  rows={2}
+                                  style={{
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    fontSize: 12,
+                                    resize: "vertical",
+                                    padding: "6px 8px",
+                                  }}
+                                  value={draft.notes}
+                                  onChange={(e) =>
+                                    setSourceCardDrafts((prev) => ({
+                                      ...prev,
+                                      [s.source]: { ...(prev[s.source] ?? defaultSourceCardDraft(s, undefined)), notes: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </dd>
                             </div>
                           </dl>
                           {canOperate ? (
                             <>
-                              <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                              <div className="source-card__meta-row" style={{ marginTop: 10 }}>
+                                <dt>API Key</dt>
+                                <dd style={{ margin: 0 }}>
+                                  <input
+                                    type="password"
+                                    autoComplete="off"
+                                    placeholder="填写新密钥；留空并点保存表示不修改已有密钥"
+                                    style={{
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      fontFamily: "var(--font-mono)",
+                                      fontSize: 12,
+                                      padding: "6px 8px",
+                                    }}
+                                    value={draft.api_key}
+                                    onChange={(e) =>
+                                      setSourceCardDrafts((prev) => ({
+                                        ...prev,
+                                        [s.source]: { ...(prev[s.source] ?? defaultSourceCardDraft(s, undefined)), api_key: e.target.value },
+                                      }))
+                                    }
+                                  />
+                                  {maskLine ? (
+                                    <div
+                                      className="muted tiny"
+                                      style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
+                                    >
+                                      已保存：{maskLine}
+                                    </div>
+                                  ) : (
+                                    <div className="muted tiny" style={{ marginTop: 8 }}>
+                                      保存后在此显示首尾掩码；留空保存不改动已有密钥。
+                                    </div>
+                                  )}
+                                </dd>
+                              </div>
+                              <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 12 }}>
                                 <button
                                   type="button"
                                   className="btn-ghost"
-                                  disabled={sourceToggleBusy === s.source}
+                                  disabled={sourceTestLoading === cardTestKey || !testBase.trim() || !!sourceCardSaving}
+                                  title={!testBase.trim() ? "请先填写接口地址" : "测试连接（不落库）"}
+                                  onClick={() =>
+                                    void runSourceTest(
+                                      { source: s.source, api_key: draft.api_key.trim() },
+                                      cardTestKey,
+                                      inferSourceTestAuthMode(testBase),
+                                    )
+                                  }
+                                >
+                                  {sourceTestLoading === cardTestKey ? "测试中…" : "测试连接"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-ghost"
+                                  disabled={!!sourceCardSaving || !!sourceToggleBusy}
+                                  style={{ fontWeight: 600 }}
+                                  title="保存当前卡片到数据库"
+                                  onClick={() => void saveSourceCard(s.source)}
+                                >
+                                  {sourceCardSaving === s.source ? "保存中…" : "保存"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-ghost"
+                                  disabled={sourceToggleBusy === s.source || !!sourceCardSaving}
                                   title={s.enabled ? "暂停参与连接器调度" : "恢复参与连接器调度"}
                                   onClick={() => void onToggleSourceEnabled(s)}
                                 >
                                   {sourceToggleBusy === s.source ? "保存中…" : s.enabled ? "停用" : "启用"}
                                 </button>
-                                <select
-                                  title="GitLab 使用 PRIVATE-TOKEN 头"
-                                  value={
-                                    sourceTestAuth[`saved:${s.source}`] ??
-                                    ((s.api_base || "").includes("gitlab") ? "private_token" : "bearer")
-                                  }
-                                  onChange={(e) =>
-                                    setSourceTestAuth((prev) => ({
-                                      ...prev,
-                                      [`saved:${s.source}`]: e.target.value as "bearer" | "private_token",
-                                    }))
-                                  }
-                                  style={{ minWidth: 118 }}
-                                >
-                                  <option value="bearer">Bearer</option>
-                                  <option value="private_token">GitLab PAT</option>
-                                </select>
-                                <input
-                                  type="password"
-                                  autoComplete="off"
-                                  placeholder="测试用密钥（可选）"
-                                  value={sourceTestKeys[`saved:${s.source}`] ?? ""}
-                                  onChange={(e) =>
-                                    setSourceTestKeys((prev) => ({ ...prev, [`saved:${s.source}`]: e.target.value }))
-                                  }
-                                  style={{ minWidth: 140, flex: "1 1 140px", maxWidth: 220 }}
-                                />
-                                <button
-                                  type="button"
-                                  className="btn-ghost"
-                                  disabled={sourceTestLoading === `saved:${s.source}` || !(s.api_base || "").trim()}
-                                  title={!(s.api_base || "").trim() ? "请先填写接口地址" : "对已保存的接口地址发起 GET"}
-                                  onClick={() =>
-                                    void runSourceTest(
-                                      {
-                                        source: s.source,
-                                        api_key: sourceTestKeys[`saved:${s.source}`] ?? "",
-                                      },
-                                      `saved:${s.source}`,
-                                      sourceTestAuth[`saved:${s.source}`] ??
-                                        ((s.api_base || "").includes("gitlab") ? "private_token" : "bearer"),
-                                    )
-                                  }
-                                >
-                                  {sourceTestLoading === `saved:${s.source}` ? "测试中…" : "测试连接"}
-                                </button>
-                                <button type="button" className="btn-ghost" onClick={() => fillSourceFormFromRow(s)}>
-                                  编辑
-                                </button>
                               </div>
-                              {sourceTestResult?.key === `saved:${s.source}` ? (
+                              {sourceTestResult?.key === cardTestKey ? (
                                 <div className="source-test-result" style={{ marginTop: 10 }}>
                                   <div className={sourceTestResult.ok ? "tag ok" : "tag"} style={{ display: "inline-block" }}>
                                     HTTP {sourceTestResult.http_status}
@@ -1570,7 +1739,7 @@ export function App() {
                   <span className="tag">表单</span>
                 </div>
                 <p className="muted tiny" style={{ margin: 0 }}>
-                  填写标识与接口信息保存即可；标识与已有 source 相同时为更新。也可在上方「数据源」卡片上点击「编辑」载入表单。
+                  填写标识与接口信息保存即可；标识与已有 source 相同时为更新。上方卡片可直接编辑并点<strong>保存</strong>。
                 </p>
                 <form className="source-card__form" onSubmit={onSaveSource}>
                   <div className="form-field">
