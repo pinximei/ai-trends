@@ -74,7 +74,6 @@ const STRINGS: Record<string, string> = {
 
   sidebarChartApps: "本栏 · AI 应用",
   sidebarChartNews: "本栏 · AI 资讯",
-  sidebarRailKicker: "本页速览",
   sidebarStatNew: "本页",
   sidebarStatCategories: "类别",
   sidebarStatVolume: "合计",
