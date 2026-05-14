@@ -39,7 +39,12 @@ from ..software_package_service import (
     list_packages_admin,
 )
 from ..article_ingest import create_published_articles_for_connector_targets
-from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS, PRODUCT_HUNT_POSTS_FIRST
+from ..connector_heat_fetch import (
+    huggingface_api_spaces_is_list_index,
+    sync_huggingface_spaces_top_details,
+    sync_product_hunt_top_details,
+)
+from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS
 from ..source_segment_resolve import first_metric_for_segment, resolve_admin_source_key_to_segments
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product-extended"])
@@ -394,15 +399,14 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
         else:
             headers["Authorization"] = f"Bearer {api_key}"
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             if source_key == "product_hunt":
-                ph_url = "https://api.producthunt.com/v2/api/graphql"
-                query = {
-                    "query": f"{{ posts(first: {PRODUCT_HUNT_POSTS_FIRST}) {{ edges {{ node {{ id name tagline votesCount createdAt }} }} }} }}"
-                }
-                r = client.post(ph_url, headers={**headers, "Content-Type": "application/json"}, json=query)
-            else:
-                r = client.request(method, url, headers=headers)
+                code, text = sync_product_hunt_top_details(headers)
+                return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            if source_key == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url):
+                code, text = sync_huggingface_spaces_top_details(url, headers)
+                return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            r = client.request(method, url, headers=headers)
         text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
         return r.status_code, text
     except Exception as e:

@@ -21,8 +21,8 @@ CONNECTOR_SNIPPET_MAX_CHARS = 524_288
 # 送入大模型润色的片段上限（与上者分离，避免半兆 JSON 撑爆上下文与费用）。
 CONNECTOR_LLM_SNIPPET_MAX_CHARS = 32_768
 
-# Product Hunt GraphQL ``posts(first: N)``：连接器同步与后台「测试连接」共用；过小会导致应用侧几乎只有一条稿。
-PRODUCT_HUNT_POSTS_FIRST = 20
+# 连接器「热度榜」条数：先拉榜单再逐条拉详情后入库（Product Hunt / Hugging Face Spaces 等）。
+CONNECTOR_HEAT_TOP_N = 10
 
 # —— 指纹 ——
 
@@ -200,6 +200,10 @@ def _extract_external_id_from_dict(d: dict) -> str | None:
         sid = _normalize_upstream_id_value(d["id"])
         if sid:
             return sid
+    if "slug" in d:
+        s = str(d.get("slug") or "").strip()
+        if 1 <= len(s) <= 200:
+            return s
     return None
 
 

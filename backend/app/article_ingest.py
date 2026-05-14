@@ -95,7 +95,34 @@ def _render_readable_snapshot(snippet: str) -> tuple[str, str]:
     return (val[:500], val[:3000])
 
 
-def create_published_articles_for_connector_targets(
+CONNECTOR_SYNC_ITEMS_V1_KEY = "connector_sync_items_v1"
+
+
+def parse_connector_sync_item_snippets(snippet: str) -> list[str] | None:
+    """若顶层为 ``connector_sync_items_v1`` 多段 pack，返回各段独立 JSON 字符串供逐条入库。"""
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    if not s:
+        return None
+    try:
+        root = json.loads(s)
+    except Exception:
+        return None
+    if not isinstance(root, dict):
+        return None
+    raw_items = root.get(CONNECTOR_SYNC_ITEMS_V1_KEY)
+    if not isinstance(raw_items, list) or not raw_items:
+        return None
+    out: list[str] = []
+    for it in raw_items[:15]:
+        if not isinstance(it, dict):
+            continue
+        chunk = it.get("snippet")
+        if isinstance(chunk, str) and chunk.strip():
+            out.append(chunk.strip()[:CONNECTOR_SNIPPET_MAX_CHARS])
+    return out or None
+
+
+def _create_one_published_article_from_connector_targets(
     db: Session,
     *,
     connector_id: int,
@@ -103,23 +130,16 @@ def create_published_articles_for_connector_targets(
     admin_source_key: str,
     targets: list[dict],
     http_status: int,
-    snippet: str,
+    single_snippet: str,
     now: datetime,
     connector_sync_log_id: int | None = None,
 ) -> int:
-    """
-    每个连接器成功响应最多入库 **一篇** 已发布文章（多板块 targets 共用同一响应正文时去重）。
-    流程：规则指纹去重 → 规则价值分（低于阈值整批丢弃）→ **必须** LLM 全文重写、分类与分 tab 结构；
-    未配置模型、调用失败或 JSON 不合规则 **不入库**；展示指纹与近期已发布冲突则丢弃。
-    """
-    if not targets:
-        return 0
     t0 = targets[0]
     industry_id = int(t0["industry_id"])
     segment_id = int(t0["segment_id"])
     label = (t0.get("label") or t0.get("segment_slug") or "板块")[:200]
 
-    safe = (snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+    safe = (single_snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
     ing_fp = ingest_fingerprint(safe)
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
         return 0
@@ -212,7 +232,6 @@ def create_published_articles_for_connector_targets(
 
     disp_fp = display_fingerprint(title, summary)
 
-    # 展示层去重：与近期已发布条目的标题+摘要指纹冲突则跳过
     recent = db.scalars(
         select(Article)
         .where(Article.industry_id == industry_id, Article.status == "published")
@@ -243,4 +262,56 @@ def create_published_articles_for_connector_targets(
             feed_kind=stored_feed_kind,
         )
     )
+    db.flush()
     return 1
+
+
+def create_published_articles_for_connector_targets(
+    db: Session,
+    *,
+    connector_id: int,
+    connector_name: str,
+    admin_source_key: str,
+    targets: list[dict],
+    http_status: int,
+    snippet: str,
+    now: datetime,
+    connector_sync_log_id: int | None = None,
+) -> int:
+    """
+    连接器成功响应后入库已发布文章。
+
+    - 若响应为 ``connector_sync_items_v1`` 多段 pack（热度榜 + 逐条详情），则**逐条**最多 15 篇；
+    - 否则仍按整段 ``snippet`` 最多入库 **一篇**。
+    每条均走：指纹去重 → 价值分 → LLM 润色 → 展示指纹去重。
+    """
+    if not targets:
+        return 0
+    safe_full = (snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+    parts = parse_connector_sync_item_snippets(safe_full)
+    if parts:
+        total = 0
+        for piece in parts:
+            total += _create_one_published_article_from_connector_targets(
+                db,
+                connector_id=connector_id,
+                connector_name=connector_name,
+                admin_source_key=admin_source_key,
+                targets=targets,
+                http_status=http_status,
+                single_snippet=piece,
+                now=now,
+                connector_sync_log_id=connector_sync_log_id,
+            )
+        return total
+    return _create_one_published_article_from_connector_targets(
+        db,
+        connector_id=connector_id,
+        connector_name=connector_name,
+        admin_source_key=admin_source_key,
+        targets=targets,
+        http_status=http_status,
+        single_snippet=safe_full,
+        now=now,
+        connector_sync_log_id=connector_sync_log_id,
+    )
