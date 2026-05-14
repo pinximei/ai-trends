@@ -131,3 +131,23 @@ class NewsletterSubscriber(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class NewsletterDailyDigest(Base):
+    """每日 AI 邮件摘要：按上海日历日一篇，正文落库后再 SMTP 发送。"""
+
+    __tablename__ = "newsletter_daily_digests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    digest_date: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    subject: Mapped[str] = mapped_column(String(512), default="")
+    body_md: Mapped[str] = mapped_column(Text, default="")
+    article_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    input_token_count: Mapped[int] = mapped_column(Integer, default=0)
+    output_token_count: Mapped[int] = mapped_column(Integer, default=0)
+    model_used: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -23,7 +23,7 @@ from .admin_auth import (
     require_role,
 )
 from .data_api_service import DataApiService
-from .models import AdminSession, AdminSourceConfig, AdminUser, EvidenceSignal, Trend
+from .models import AdminSession, AdminSourceConfig, AdminUser, EvidenceSignal, NewsletterDailyDigest, NewsletterSubscriber, Trend
 from .schemas import (
     AdminLoginRequest,
     AdminChangePasswordRequest,

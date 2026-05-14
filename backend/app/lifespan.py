@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .admin_auth import ensure_default_admin
@@ -17,6 +18,8 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _startup_sync() -> None:
+    from . import models as _core_site_models  # noqa: F401
+
     from . import product_models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
@@ -183,10 +186,22 @@ def _job_connector_sync_gate() -> None:
         db.close()
 
 
+def _job_newsletter_daily() -> None:
+    try:
+        from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
+
+        out = run_daily_newsletter_digest_job()
+        logger.info("newsletter daily job: %s", out)
+    except Exception as e:
+        logger.exception("newsletter daily job failed: %s", e)
+
+
 def _start_scheduler() -> None:
     global _scheduler
     if _scheduler is not None:
         return
+    import os
+
     _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
     _scheduler.add_job(_job_scheduled_hot, IntervalTrigger(days=3), id="hot_snapshot_3d")
     _scheduler.add_job(_job_anomaly, "interval", hours=1, id="hourly_anomaly")
@@ -195,9 +210,18 @@ def _start_scheduler() -> None:
         IntervalTrigger(minutes=15),
         id="connector_sync_gate",
     )
+    daily_h = max(0, min(23, int(os.environ.get("NEWSLETTER_DAILY_HOUR", "9") or 9)))
+    daily_m = max(0, min(59, int(os.environ.get("NEWSLETTER_DAILY_MINUTE", "0") or 0)))
+    _scheduler.add_job(
+        _job_newsletter_daily,
+        CronTrigger(hour=daily_h, minute=daily_m, timezone="Asia/Shanghai"),
+        id="newsletter_daily_digest",
+    )
     logger.info(
         "connector sync gate every 15m; interval hours from DB product_settings_kv.scheduler "
-        "(interval from DB product_settings_kv.scheduler)",
+        "(interval from DB product_settings_kv.scheduler); newsletter digest cron %02d:%02d Asia/Shanghai",
+        daily_h,
+        daily_m,
     )
     _scheduler.start()
 
