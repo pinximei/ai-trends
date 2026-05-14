@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import smtplib
 import ssl
@@ -292,15 +291,15 @@ def send_digest_to_subscribers(db: Session, *, digest_date: str, settings: dict[
 def run_daily_newsletter_digest_job(db: Session | None = None, settings: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     定时任务：上海日历「今天」；按 product_settings_kv.newsletter 决定是否生成/发送。
-    环境变量 NEWSLETTER_DAILY_ENABLED=0 仍可紧急关闭整条链路。
+    总开关为后台字段 daily_digest_job_enabled。
     """
-    if (os.environ.get("NEWSLETTER_DAILY_ENABLED") or "").strip().lower() in ("0", "false", "no", "off"):
-        return {"skipped": True, "reason": "NEWSLETTER_DAILY_ENABLED off"}
     own_session = db is None
     db = db or SessionLocal()
     try:
         if settings is None:
             settings = get_newsletter_settings_merged(db)
+        if not settings.get("daily_digest_job_enabled", True):
+            return {"skipped": True, "reason": "daily_digest_job_disabled"}
         if not settings.get("cron_enabled", True):
             return {"skipped": True, "reason": "cron_disabled"}
 
@@ -329,7 +328,7 @@ def run_daily_newsletter_digest_job(db: Session | None = None, settings: dict[st
             return {"digest_date": digest_key, "ok": True, "generated": True, "sent": False, "reason": "send_disabled"}
 
         if not _smtp_config_from_settings(settings):
-            logger.warning("newsletter daily: SMTP incomplete in settings/env, digest_date=%s", digest_key)
+            logger.warning("newsletter daily: SMTP incomplete in settings, digest_date=%s", digest_key)
             return {"digest_date": digest_key, "ok": True, "generated": True, "sent": False, "reason": "no_smtp"}
 
         try:

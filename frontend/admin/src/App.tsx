@@ -34,11 +34,16 @@ function friendlyErr(msg: string): string {
 }
 
 type Me = { username: string; role: string; expires_at: string; password_min_length: number };
+type ConnectorTokenStatus = { connector_id: number; name: string; enabled: boolean; has_api_key: boolean };
 type Source = {
   source: string;
   enabled: boolean;
   api_base: string;
   api_key_masked: string;
+  /** 数据源表单里是否曾保存过密钥（仅掩码展示；定时同步不读此字段） */
+  admin_key_configured?: boolean;
+  /** 绑定到该 source 的连接器及 config_json.api_key 是否非空（同步实际用此密钥） */
+  connectors_token_status?: ConnectorTokenStatus[];
   scope_label?: string;
   scope_labels?: string[];
   notes: string;
@@ -76,7 +81,6 @@ type LlmSettingsView = {
   model: string;
   api_key_masked: string;
   has_api_key: boolean;
-  env_fallback: boolean;
   pipeline: Array<{ id: string; label: string }>;
 };
 
@@ -85,13 +89,14 @@ type SchedulerSettingsView = {
   connector_sync_interval_hours: number;
   last_connector_batch_at: string | null;
   gate_interval_minutes: number;
-  env_default_hours_hint: number;
 };
 
 type NewsletterSettingsView = {
   cron_enabled: boolean;
   generate_enabled: boolean;
   send_enabled: boolean;
+  daily_digest_job_enabled: boolean;
+  subscribe_verify_mx: boolean;
   article_limit: number;
   daily_hour: number;
   daily_minute: number;
@@ -112,6 +117,8 @@ function newsletterFormFromView(nl: NewsletterSettingsView) {
     cron_enabled: nl.cron_enabled,
     generate_enabled: nl.generate_enabled,
     send_enabled: nl.send_enabled,
+    daily_digest_job_enabled: nl.daily_digest_job_enabled ?? true,
+    subscribe_verify_mx: nl.subscribe_verify_mx ?? true,
     article_limit: nl.article_limit,
     daily_hour: nl.daily_hour,
     daily_minute: nl.daily_minute,
@@ -135,6 +142,9 @@ type SourcePresetRow = {
   scope_labels: string[];
   notes: string;
   enabled: boolean;
+  /** 与后端预设 content_role 一致；旧后端可能无此字段 */
+  content_role?: string;
+  content_role_label_zh?: string;
 };
 
 export function App() {
@@ -170,7 +180,6 @@ export function App() {
   const [sourcePresets, setSourcePresets] = useState<SourcePresetRow[]>([]);
   const [sourcePresetsLoading, setSourcePresetsLoading] = useState(false);
   const [sourcePresetsError, setSourcePresetsError] = useState("");
-  const [sourcePresetsOrigin, setSourcePresetsOrigin] = useState<"api" | "fallback" | null>(null);
   /** 数据源卡片上「启用/停用」提交中（key 为 source 标识） */
   const [sourceToggleBusy, setSourceToggleBusy] = useState<string | null>(null);
   /** 数据源卡片「测试连接」可选密钥（仅浏览器内存，不写库） */
@@ -187,6 +196,24 @@ export function App() {
     url_tested?: string;
   } | null>(null);
 
+  /** 根据当前表单「标识」与已加载的 sources，提示是否已配置密钥（掩码 + 连接器） */
+  const sourceApiKeyStatusLine = useMemo(() => {
+    const key = sourceForm.source.trim().toLowerCase();
+    if (!key) return "";
+    const s = sources.find((x) => x.source === key);
+    if (!s) {
+      return "该标识尚未入库：保存时若在下方填写 API Key，会写入掩码并同步到绑定连接器；留空则首次不写入密钥。";
+    }
+    const mask = (s.api_key_masked || "").trim();
+    const rows = s.connectors_token_status ?? [];
+    const connPart =
+      rows.length > 0
+        ? `连接器：${rows.map((c) => `${c.name}（#${c.connector_id}）${c.has_api_key ? "已填 api_key" : "未填"}`).join("；")}。`
+        : "尚无绑定到该标识的连接器。";
+    const maskPart = mask ? `数据源掩码（已保存过密钥）：${mask}。` : "数据源侧尚无掩码（未在保存时填过密钥，或仅连接器内有 Key）。";
+    return `${maskPart}${connPart}修改密钥：在下方输入新值并保存；留空表示不改动已有密钥。`;
+  }, [sources, sourceForm.source]);
+
   const [llmSettings, setLlmSettings] = useState<LlmSettingsView | null>(null);
   const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
   const [llmSaving, setLlmSaving] = useState(false);
@@ -198,6 +225,8 @@ export function App() {
     cron_enabled: false,
     generate_enabled: false,
     send_enabled: false,
+    daily_digest_job_enabled: true,
+    subscribe_verify_mx: true,
     article_limit: 36,
     daily_hour: 9,
     daily_minute: 0,
@@ -397,14 +426,11 @@ export function App() {
     if (tab !== "sources" || !isAuthed || !canOperate) return;
     setSourcePresetsLoading(true);
     setSourcePresetsError("");
-    setSourcePresetsOrigin(null);
     try {
       const d = await adminApi.sourcePresets();
       setSourcePresets(d.items ?? []);
-      setSourcePresetsOrigin(d.origin);
     } catch (e) {
       setSourcePresets([]);
-      setSourcePresetsOrigin(null);
       setSourcePresetsError(friendlyErr(e instanceof Error ? e.message : "加载失败"));
     } finally {
       setSourcePresetsLoading(false);
@@ -617,6 +643,8 @@ export function App() {
         cron_enabled: newsletterForm.cron_enabled,
         generate_enabled: newsletterForm.generate_enabled,
         send_enabled: newsletterForm.send_enabled,
+        daily_digest_job_enabled: newsletterForm.daily_digest_job_enabled,
+        subscribe_verify_mx: newsletterForm.subscribe_verify_mx,
         article_limit: Math.min(80, Math.max(1, Math.floor(Number(newsletterForm.article_limit)) || 36)),
         daily_hour: Math.min(23, Math.max(0, Math.floor(Number(newsletterForm.daily_hour)) || 9)),
         daily_minute: Math.min(59, Math.max(0, Math.floor(Number(newsletterForm.daily_minute)) || 0)),
@@ -1141,14 +1169,16 @@ export function App() {
                 <h3 style={{ margin: 0 }}>数据源</h3>
                 <p className="muted tiny" style={{ margin: "8px 0 0" }}>
                   上方卡片为<strong>内置模板 + 已保存的自定义标识</strong>同一列表：未入库时显示模板默认值与「未入库」；保存后展示库内接口与领域主题。生产环境请用卡片上的<strong>启用 / 停用</strong>控制是否参与调度，无需在后台删除整条配置。定时拉取在「AI
-                  资讯与数据」；连接器绑定标识后参与调度。GitLab 请用 <code>https://gitlab.com/api/v4/version</code> 等具体路径，测试时选「GitLab Private Token」并粘贴 PAT。
+                  资讯与数据」；连接器绑定标识后参与调度。每条模板标注<strong>内容类型</strong>（偏门户条目 / 学术 / 目录 / 行情等）；一次同步仍由系统聚合成<strong>一篇</strong>站内稿，若需「每条 RSS 单独一篇」请拆多条连接器或另行开发。GitLab 请用{" "}
+                  <code>https://gitlab.com/api/v4/version</code> 等具体路径，测试时选「GitLab Private Token」并粘贴 PAT。
                 </p>
-                {sourcePresetsOrigin === "fallback" ? (
-                  <p className="preset-fallback-hint" style={{ margin: "10px 0 0" }}>
-                    当前后端未返回预设接口（常见于未重启的旧进程），已使用前端内置模板副本。重启或升级后端到含{" "}
-                    <code>GET /api/admin/v1/sources/presets</code> 的版本后，将自动与后端保持一致。
-                  </p>
-                ) : null}
+                <p className="muted tiny" style={{ margin: "10px 0 0" }}>
+                  连接器对「api_base」只做<strong>单次 HTTP GET</strong>（可选密钥头），<strong>不模拟浏览器、不执行站点前端 JS、也不代你登录任意网站后台</strong>，因此拿不到依赖登录页或整页 HTML 渲染才出现的「门户正文」；若上游 JSON
+                  本身只有元数据、计数、行情或目录字段，结果就会像「统计/目录」而非报道。要拉<strong>可读的条目型内容</strong>，请优先配置<strong>RSS/Atom</strong>或<strong>带标题/摘要/链接（或正文）字段的官方 API</strong>；整站爬取、无头浏览器、复杂登录流不在当前内置范围内。
+                </p>
+                <p className="muted tiny" style={{ margin: "10px 0 0" }}>
+                  <strong>密钥与同步</strong>：在<strong>保存数据源</strong>时若填写新密钥，会同时写入<strong>所有绑定该标识的连接器</strong>的 <code>config_json.api_key</code>（并默认 <code>auth_mode: bearer</code>），定时同步读连接器配置。密钥框<strong>留空</strong>表示<strong>不修改</strong>已有 Token 与掩码。下方「连接器 Token」显示各连接器内是否已有 api_key。
+                </p>
               </div>
               {sourcePresetsLoading ? <p className="muted tiny" style={{ marginTop: 12 }}>正在加载数据源列表…</p> : null}
               {sourcePresetsError ? (
@@ -1190,6 +1220,11 @@ export function App() {
                                 {saved ? (saved.enabled ? "已启用" : "已停用") : "未入库"}
                               </span>
                             </div>
+                            {p.content_role_label_zh ? (
+                              <p className="muted tiny" style={{ margin: "6px 0 0" }}>
+                                内容类型：{p.content_role_label_zh}
+                              </p>
+                            ) : null}
                             <dl className="source-card__meta">
                               <div className="source-card__meta-row">
                                 <dt>标识</dt>
@@ -1213,6 +1248,23 @@ export function App() {
                                 <div className="source-card__meta-row">
                                   <dt>密钥掩码</dt>
                                   <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{saved.api_key_masked}</dd>
+                                </div>
+                              ) : null}
+                              {saved ? (
+                                <div className="source-card__meta-row">
+                                  <dt>连接器 Token</dt>
+                                  <dd className="muted tiny">
+                                    {saved.connectors_token_status && saved.connectors_token_status.length > 0 ? (
+                                      saved.connectors_token_status.map((c) => (
+                                        <span key={c.connector_id} style={{ display: "block" }}>
+                                          {c.name}（#{c.connector_id}
+                                          {c.enabled ? "" : "，已停用"}）：{c.has_api_key ? "已填 api_key" : "未填 api_key（同步不会带头）"}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <>无绑定连接器；请到「连接器」绑定该标识或重启后端由系统补全。</>
+                                    )}
+                                  </dd>
                                 </div>
                               ) : null}
                             </dl>
@@ -1341,6 +1393,21 @@ export function App() {
                             <div className="source-card__meta-row">
                               <dt>密钥掩码</dt>
                               <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{s.api_key_masked || "—"}</dd>
+                            </div>
+                            <div className="source-card__meta-row">
+                              <dt>连接器 Token</dt>
+                              <dd className="muted tiny">
+                                {s.connectors_token_status && s.connectors_token_status.length > 0 ? (
+                                  s.connectors_token_status.map((c) => (
+                                    <span key={c.connector_id} style={{ display: "block" }}>
+                                      {c.name}（#{c.connector_id}
+                                      {c.enabled ? "" : "，已停用"}）：{c.has_api_key ? "已填 api_key" : "未填 api_key（同步不会带头）"}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <>无绑定连接器；请到「连接器」绑定该标识。</>
+                                )}
+                              </dd>
                             </div>
                             <div className="source-card__meta-row">
                               <dt>备注</dt>
@@ -1515,11 +1582,16 @@ export function App() {
                     </button>
                   </div>
                   <div className="form-field">
-                    <label>API Key</label>
+                    <label>API Key（可修改）</label>
+                    {sourceForm.source.trim() ? (
+                      <p className="muted tiny" style={{ margin: "0 0 6px" }}>
+                        {sourceApiKeyStatusLine}
+                      </p>
+                    ) : null}
                     <input
                       value={sourceForm.api_key}
                       onChange={(e) => setSourceForm((p) => ({ ...p, api_key: e.target.value }))}
-                      placeholder="明文仅本次提交；留空则不更新已有密钥"
+                      placeholder="输入新密钥以覆盖；留空则保存时不改动已有密钥"
                       type="password"
                       autoComplete="new-password"
                     />
@@ -1605,18 +1677,14 @@ export function App() {
                   <h2 className="ai-hero-title">AI 资讯生成与去重</h2>
                   <p className="muted tiny" style={{ marginTop: 10, maxWidth: 520, lineHeight: 1.6 }}>
                     连接器拉取原始片段 → 入库指纹去重 → 规则价值分 → <strong>DeepSeek</strong>{" "}
-                    全文重写（分类 + 多 tab）→ 展示指纹去重 → 发布；未配置模型则不入库。密钥可仅存库内，或在服务端{" "}
-                    <code className="inline-code">AITRENDS_LLM_API_KEY</code>（默认 DeepSeek 端点）；接口仅返回脱敏掩码。
+                    全文重写（分类 + 多 tab）→ 展示指纹去重 → 发布；未配置模型则不入库。请在下方保存{" "}
+                    <strong>Base URL / Model / API Key</strong>（保存后存于库表 <code className="inline-code">product_settings_kv.llm</code>）；接口仅返回脱敏掩码。可继续保留 <code className="inline-code">backend/.env</code> 中的 <code className="inline-code">AITRENDS_LLM_*</code> 作备份，若库内尚未配置，启动时会自动迁入。
                   </p>
                 </div>
                 <div className="ai-hero-metrics">
                   <div>
                     <span className="ai-metric-label">密钥状态</span>
                     <span className="ai-metric-value">{llmSettings?.has_api_key ? "已配置" : "未配置"}</span>
-                  </div>
-                  <div>
-                    <span className="ai-metric-label">环境变量回退</span>
-                    <span className="ai-metric-value">{llmSettings?.env_fallback ? "AITRENDS_LLM_* 可用" : "无"}</span>
                   </div>
                 </div>
               </div>
@@ -1643,14 +1711,13 @@ export function App() {
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
                 进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；若距上次<strong>整批成功</strong>已超过下方配置的间隔，则对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
                 <code className="inline-code">min_interval_seconds</code> 限制，避免定时任务被 429 静默跳过）。间隔与开关保存在库表{" "}
-                <code className="inline-code">product_settings_kv.scheduler</code>；新建库时默认小时数可来自环境变量{" "}
-                <code className="inline-code">AITRENDS_CONNECTOR_SYNC_INTERVAL_HOURS</code>（仅首次建行参考）。整批跑完后会根据「数据源」中的领域主题刷新前台行业/板块结构。
+                <code className="inline-code">product_settings_kv.scheduler</code>。整批跑完后会根据「数据源」中的领域主题刷新前台行业/板块结构。
               </p>
               {schedulerSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
                   上次整批成功时间：<strong style={{ color: "#312e81" }}>{schedulerSettings.last_connector_batch_at || "—（尚未成功跑过一批）"}</strong>
                   {" · "}
-                  环境默认小时提示：{schedulerSettings.env_default_hours_hint}
+                  当前整批间隔：<strong>{schedulerSettings.connector_sync_interval_hours}</strong> 小时
                 </p>
               ) : null}
               {canOperate ? (
@@ -1758,7 +1825,7 @@ export function App() {
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
                 配置存于 <code className="inline-code">product_settings_kv.newsletter</code>。进程每 <strong>5 分钟</strong>检查一次，在
                 上海时区所设 <strong>时:分</strong> 起的 5 分钟窗口内执行当日摘要（需已配置 LLM）与可选发信。退订链接依赖下方「站点对外根 URL」。
-                环境变量 <code className="inline-code">NEWSLETTER_SMTP_*</code> 仅在库内对应项为空时作回退。
+                所有参数保存后写入库表；<strong>建议继续保留</strong> <code className="inline-code">backend/.env</code>：其中 SMTP 等密钥可作备份，若库内对应项仍为空，启动时会从环境变量一次性迁入。
               </p>
               {newsletterSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
@@ -1796,6 +1863,28 @@ export function App() {
                         onChange={(e) => setNewsletterForm((p) => ({ ...p, send_enabled: e.target.checked }))}
                       />{" "}
                       发送邮件（需 SMTP 与站点根 URL）
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={newsletterForm.daily_digest_job_enabled}
+                        onChange={(e) =>
+                          setNewsletterForm((p) => ({ ...p, daily_digest_job_enabled: e.target.checked }))
+                        }
+                      />{" "}
+                      允许定时任务跑每日摘要（关闭后进程内调度器将跳过日报链路）
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={newsletterForm.subscribe_verify_mx}
+                        onChange={(e) => setNewsletterForm((p) => ({ ...p, subscribe_verify_mx: e.target.checked }))}
+                      />{" "}
+                      订阅邮箱时校验 MX（关闭可加快测试，生产建议开启）
                     </label>
                   </div>
                   <div className="form-field" style={{ maxWidth: 160 }}>
@@ -1925,10 +2014,7 @@ export function App() {
               </h3>
               <p className="muted tiny" style={{ marginTop: 6 }}>
                 默认 <code className="inline-code">https://api.deepseek.com/v1</code> 与{" "}
-                <code className="inline-code">deepseek-chat</code>。连接器同步依赖 LLM：可在本页保存 Key，或在{" "}
-                <code className="inline-code">backend/.env</code> 设置 <code className="inline-code">AITRENDS_LLM_API_KEY</code>
-                （可选 <code className="inline-code">AITRENDS_LLM_BASE_URL</code> / <code className="inline-code">AITRENDS_LLM_MODEL</code>
-                ）；优先级为<strong>库内已存 Key</strong> → 环境变量。
+                <code className="inline-code">deepseek-chat</code>。连接器同步依赖 LLM：请在本页保存 Key（写入 <code className="inline-code">product_settings_kv.llm</code>）；<code className="inline-code">backend/.env</code> 里的 <code className="inline-code">AITRENDS_LLM_*</code> 可继续保留，库内为空时启动会自动迁入。
               </p>
               <form className="create-user-form" onSubmit={onSaveLlm} style={{ marginTop: 16 }}>
                 <div className="form-field">
@@ -2188,7 +2274,7 @@ export function App() {
                       <input
                         value={runtimeForm.app_release_label}
                         onChange={(e) => setRuntimeForm((p) => ({ ...p, app_release_label: e.target.value }))}
-                        placeholder="留空则用环境变量 / pyproject 版本"
+                        placeholder="留空则用环境变量或库内已保存的版本标签"
                       />
                     </div>
                     <div className="form-field" style={{ maxWidth: 360 }}>

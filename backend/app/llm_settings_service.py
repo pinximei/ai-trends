@@ -1,7 +1,6 @@
-"""后台可配的 LLM（默认 DeepSeek OpenAI 兼容端点）；密钥仅存库内 JSON，接口只回显脱敏。"""
+"""后台可配的 LLM（默认 DeepSeek OpenAI 兼容端点）；密钥存库内 JSON，接口只回显脱敏。`.env` 中的 AITRENDS_LLM_* 可在库为空时由启动迁移写入库，文件可继续保留作备份。"""
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -45,20 +44,18 @@ def get_llm_settings_public(db: Session) -> dict:
         "model": str(m.get("model") or DEFAULT_LLM["model"]),
         "api_key_masked": _mask_key(key),
         "has_api_key": bool(key),
-        "env_fallback": bool(os.getenv("AITRENDS_LLM_API_KEY", "").strip()),
     }
 
 
 def resolve_llm_http_config(db: Session) -> tuple[str, str, str]:
     """
     返回 (base_url, api_key, model)。
-    优先级：库内 product_settings_kv.llm → 环境变量 AITRENDS_LLM_*。
-    环境变量未设 base/model 时默认 **DeepSeek** OpenAI 兼容端点（与 DEFAULT_LLM 一致）。
+    仅使用库内 product_settings_kv.llm；请在后台「LLM」页配置。
     """
     m = _merged_stored(db)
-    base = (m.get("base_url") or "").strip() or os.getenv("AITRENDS_LLM_BASE_URL", DEFAULT_LLM["base_url"]).strip()
-    key = (m.get("api_key") or "").strip() or os.getenv("AITRENDS_LLM_API_KEY", "").strip()
-    model = (m.get("model") or "").strip() or os.getenv("AITRENDS_LLM_MODEL", DEFAULT_LLM["model"]).strip()
+    base = (m.get("base_url") or "").strip() or DEFAULT_LLM["base_url"].strip()
+    key = (m.get("api_key") or "").strip()
+    model = (m.get("model") or "").strip() or DEFAULT_LLM["model"].strip()
     return base.rstrip("/"), key, model
 
 

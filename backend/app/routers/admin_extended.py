@@ -39,6 +39,7 @@ from ..software_package_service import (
     list_packages_admin,
 )
 from ..article_ingest import create_published_articles_for_connector_targets
+from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS
 from ..source_segment_resolve import first_metric_for_segment, resolve_admin_source_key_to_segments
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product-extended"])
@@ -139,6 +140,8 @@ class NewsletterSettingsPatch(BaseModel):
     cron_enabled: bool | None = None
     generate_enabled: bool | None = None
     send_enabled: bool | None = None
+    daily_digest_job_enabled: bool | None = None
+    subscribe_verify_mx: bool | None = None
     article_limit: int | None = Field(None, ge=1, le=80)
     daily_hour: int | None = Field(None, ge=0, le=23)
     daily_minute: int | None = Field(None, ge=0, le=59)
@@ -398,7 +401,7 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
                 r = client.post(ph_url, headers={**headers, "Content-Type": "application/json"}, json=query)
             else:
                 r = client.request(method, url, headers=headers)
-        text = (r.text or "")[:800]
+        text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
         return r.status_code, text
     except Exception as e:
         return 0, str(e)[:800]
@@ -432,7 +435,7 @@ def run_connector_sync(
         if src:
             cfg.setdefault("source_key", ask)
             cfg.setdefault("url", (src.api_base or "").strip())
-            # NOTE: 当前系统仅保存 masked key，若需要真实受保护源请在 connector.config_json 里单独填 api_key。
+            # 真实密钥以数据源保存为准：见 DataApiService.upsert_admin_source 写入各绑定连接器的 config_json.api_key。
             cfg.setdefault("auth_mode", "bearer")
 
     tnorm = (theme or "").strip() or None

@@ -211,12 +211,12 @@ def admin_db_info_v2(
 @app.get("/api/admin/v1/sources/presets")
 def admin_source_presets(
     request: Request,
+    db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("viewer")),
 ):
-    """与 services.MAINSTREAM_ADMIN_SOURCE_PRESETS 一致，供前台「新增数据源」一键填入。"""
-    from .services import build_admin_source_preset_items
-
-    return api_envelope(request, {"items": build_admin_source_preset_items()})
+    """与 admin_source_configs 表一致，供前台「新增数据源」一键填入（仅读数据库）。"""
+    _ = session
+    return api_envelope(request, {"items": DataApiService(db).list_admin_source_presets()})
 
 
 @app.get("/api/admin/v1/sources")

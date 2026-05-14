@@ -124,16 +124,16 @@ def seed_product_if_empty(db: Session) -> None:
             segment_id=segs[1].id,
             industry_id=ind.id,
             content_type="application",
-            third_party_source="npm / 演示数据源",
-            source_external_id="demo-npm-42",
+            third_party_source="huggingface_spaces / 演示数据源",
+            source_external_id="demo-hf-app-landscape",
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
             ai_categories_json='["应用产品"]',
             ai_tabs_json=_tabs_json(
                 [
-                    ("产品动态", "应用与模型发布线索。", "## 动态\n\n**应用**类文章需标注第三方来源（演示）。"),
-                    ("生态观察", "开源与 Agent 相关提示。", "## 生态\n\n演示数据，线上由 LLM 按连接器片段重写。"),
+                    ("产品动态", "应用与上新线索。", "## 动态\n\n**应用**类文章需标注第三方来源（演示）。"),
+                    ("生态观察", "开源与托管演示相关提示。", "## 生态\n\n演示数据，线上由 LLM 按连接器片段重写。"),
                 ]
             ),
         ),

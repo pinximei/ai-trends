@@ -31,6 +31,9 @@ def main() -> int:
             failed.append((src, "", "empty api_base"))
             print(f"FAIL {src} (empty api_base)")
             continue
+        if src == "product_hunt":
+            print(f"SKIP {src} (GraphQL 仅 POST + Bearer；免 GET 探测)")
+            continue
         try:
             r = httpx.get(
                 url,

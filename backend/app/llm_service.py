@@ -7,7 +7,7 @@ import re
 import httpx
 from sqlalchemy.orm import Session
 
-from .domain.articles import validate_llm_polish_for_publish
+from .domain.articles import CONNECTOR_LLM_SNIPPET_MAX_CHARS, validate_llm_polish_for_publish
 from .llm_settings_service import resolve_llm_http_config
 from .product_models import LlmUsageLog
 
@@ -52,11 +52,11 @@ def chat_completion(
     response_json: bool = False,
     max_tokens: int | None = None,
 ) -> tuple[str, int, int]:
-    """OpenAI 兼容 Chat Completions；优先读库内「AI 资讯」配置，其次环境变量 AITRENDS_LLM_*。"""
+    """OpenAI 兼容 Chat Completions；仅使用库内「AI 资讯」LLM 配置（product_settings_kv.llm）。"""
     base, key, model = resolve_llm_http_config(db)
     if not key:
         raise RuntimeError(
-            "LLM 未配置：在管理端「AI 资讯配置」填写 DeepSeek API Key，或在环境变量 / backend/.env 中设置 AITRENDS_LLM_API_KEY"
+            "LLM 未配置：请在管理端「AI 资讯配置」保存 API Key；或保留 backend/.env 中的 AITRENDS_LLM_API_KEY，启动时若库为空会自动迁入。"
         )
 
     url = base.rstrip("/") + "/chat/completions"
@@ -121,8 +121,8 @@ def polish_connector_article(
     fk = (feed_kind or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    # 与入库 fingerprint 上限对齐，避免模型只看到半截 JSON
-    snippet_cut = (snippet or "")[:12000]
+    # 指纹与解析在 article_ingest 使用完整片段；模型侧仅取前段以控制 token。
+    snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
     if fk == "apps":
         stream_hint = (
             "当前条目归类为 **AI 应用** 泳道：面向产品/可运行应用发布与能力更新；语气偏产品速递与开发者向。"

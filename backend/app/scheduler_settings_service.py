@@ -1,7 +1,6 @@
-"""连接器批量调度：间隔与开关存 product_settings_kv.scheduler（后台可改）；环境变量仅作首次默认。"""
+"""连接器批量调度：间隔与开关存 product_settings_kv.scheduler（后台可改）；新建行默认 6 小时。"""
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from typing import Any
 
@@ -12,20 +11,10 @@ from .product_models import ProductSetting
 SCHEDULER_KEY = "scheduler"
 
 
-def _env_default_hours() -> int:
-    raw = os.getenv("AITRENDS_CONNECTOR_SYNC_INTERVAL_HOURS", "").strip()
-    if not raw:
-        return 6
-    try:
-        return max(1, min(168, int(raw)))
-    except ValueError:
-        return 6
-
-
 def default_scheduler_json() -> dict[str, Any]:
     return {
         "connector_scheduler_enabled": True,
-        "connector_sync_interval_hours": _env_default_hours(),
+        "connector_sync_interval_hours": 6,
         "last_connector_batch_at": None,
     }
 
@@ -56,7 +45,6 @@ def get_scheduler_settings_public(db: Session) -> dict[str, Any]:
         "connector_sync_interval_hours": m["connector_sync_interval_hours"],
         "last_connector_batch_at": m.get("last_connector_batch_at"),
         "gate_interval_minutes": 15,
-        "env_default_hours_hint": _env_default_hours(),
     }
 
 

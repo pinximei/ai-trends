@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ...application import newsletter_public as nl_app
 from ...core.envelope import failure, success
 from ...db import get_db
+from ...newsletter_settings_service import get_newsletter_settings_merged
 
 router = APIRouter(tags=["public-newsletter"])
 
@@ -19,7 +20,9 @@ class NewsletterSubscribeBody(BaseModel):
 @router.post("/newsletter/subscribe")
 def newsletter_subscribe(body: NewsletterSubscribeBody, db: Session = Depends(get_db)):
     try:
-        norm = nl_app.normalize_and_validate_email(body.email)
+        settings = get_newsletter_settings_merged(db)
+        verify_mx = bool(settings.get("subscribe_verify_mx", True))
+        norm = nl_app.normalize_and_validate_email(body.email, verify_mx=verify_mx)
     except ValueError as e:
         return failure(str(e), code=400001)
     result = nl_app.subscribe(db, norm)

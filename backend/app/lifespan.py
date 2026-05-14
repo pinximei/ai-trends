@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -26,12 +25,18 @@ def _startup_sync() -> None:
     ensure_schema_compatibility()
     db = SessionLocal()
     try:
+        from .newsletter_settings_service import ensure_newsletter_settings_row
+        from .product_settings_seed import seed_product_settings_from_environment
         from .runtime_settings_service import assert_production_security, demo_seed_enabled_effective, refresh_runtime_snapshot
+        from .scheduler_settings_service import ensure_scheduler_settings_row
 
+        ensure_scheduler_settings_row(db)
+        ensure_newsletter_settings_row(db)
+        seed_product_settings_from_environment(db)
         refresh_runtime_snapshot(db)
         assert_production_security()
         ensure_default_admin(db)
-        from .services import ensure_mainstream_admin_sources, seed_if_empty
+        from .services import ensure_mainstream_admin_sources, seed_if_empty, sync_catalog_preset_metadata
 
         from .product_connectors_bootstrap import (
             ensure_core_admin_connectors,
@@ -41,6 +46,7 @@ def _startup_sync() -> None:
         )
 
         ensure_mainstream_admin_sources(db)
+        sync_catalog_preset_metadata(db)
         prune_discontinued_bootstrap_admin_sources(db)
         repair_github_admin_source_if_still_zen(db)
         repair_short_probe_admin_sources(db)
@@ -198,12 +204,12 @@ def _job_newsletter_daily() -> None:
     try:
         from zoneinfo import ZoneInfo
 
-        if (os.environ.get("NEWSLETTER_DAILY_ENABLED") or "").strip().lower() in ("0", "false", "no", "off"):
-            return
         from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
         from .newsletter_settings_service import get_newsletter_settings_merged
 
         s = get_newsletter_settings_merged(db)
+        if not s.get("daily_digest_job_enabled", True):
+            return
         if not s.get("cron_enabled", True):
             return
         now = datetime.now(ZoneInfo("Asia/Shanghai"))

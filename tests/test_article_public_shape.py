@@ -183,7 +183,16 @@ def test_feed_lane_github_stays_news_even_with_install_words() -> None:
     )
 
 
-def test_feed_lane_hf_space_agent_tooling_is_news() -> None:
+def test_feed_lane_huggingface_spaces_defaults_to_apps_except_agent_primary() -> None:
+    assert (
+        art.feed_lane_for_article(
+            "huggingface_spaces",
+            title="Demo Space",
+            summary="Gradio UI hosted on Hugging Face.",
+            ai_categories_json=json.dumps(["应用产品"], ensure_ascii=False),
+        )
+        == "apps"
+    )
     assert (
         art.feed_lane_for_article(
             "huggingface_spaces",

@@ -14,6 +14,13 @@ from sqlalchemy.orm import Session
 
 from ..product_models import Article
 
+# 连接器单次 HTTP 正文保留上限（指纹、上游 id 解析等须在同一段「尽量完整」的 JSON 上完成）。
+# 须覆盖 PyPI 单包元数据、crates.io、OpenAlex 等大块 JSON；过小会导致 json.loads 失败。
+CONNECTOR_SNIPPET_MAX_CHARS = 524_288
+
+# 送入大模型润色的片段上限（与上者分离，避免半兆 JSON 撑爆上下文与费用）。
+CONNECTOR_LLM_SNIPPET_MAX_CHARS = 32_768
+
 # —— 指纹 ——
 
 
@@ -22,7 +29,7 @@ def normalize_ws(s: str) -> str:
 
 
 def ingest_fingerprint(snippet: str) -> str:
-    raw = normalize_ws((snippet or "")[:12000])
+    raw = normalize_ws((snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS])
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
@@ -141,7 +148,7 @@ def extract_source_original_url_from_connector_snippet(snippet: str) -> str | No
     s = (snippet or "").strip()
     if not s:
         return None
-    head = s[:12000]
+    head = s[:CONNECTOR_SNIPPET_MAX_CHARS]
     try:
         payload = json.loads(head)
     except Exception:
@@ -199,7 +206,7 @@ def extract_source_external_id_from_connector_snippet(snippet: str) -> str | Non
 
     与 ``Article.id``（改写后入库主键）并列存储，便于后台/运营把改写稿与原始接口对象对应起来。
     """
-    s = (snippet or "").strip()[:12000]
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
     try:
         payload = json.loads(s)
     except Exception:
@@ -363,19 +370,13 @@ FEED_NEWS_KEYS = frozenset(
         "openalex",
         "youtube_data",
         "finnhub",
-        "alphavantage",
-        "coingecko",
-        "open_meteo",
         "mapbox",
         "github",
-        "huggingface",
         "mcp_skills",
-        "docker_hub",
-        "pypi",
-        "npm",
-        "crates_io",
         "openai",
         "google_gemini",
+        "rss_arstechnica",
+        "rss_theverge",
     }
 )
 # 应用：来自下列数据源的条目**仍须**通过 ``feed_lane_for_article`` 校验（可安装产品）才进 apps；
@@ -527,7 +528,9 @@ def feed_lane_for_article(
 ) -> str:
     """公开站泳道：apps 仅「可安装的客户端/商店分发」类产品；Agent/大模型/模型资讯等为 news。
 
-    对 ``FEED_APPS_KEYS`` 数据源按标题/摘要/tab 正文二次判别；其余数据源与 ``feed_lane`` 一致。
+    对 ``FEED_APPS_KEYS`` 数据源按标题/摘要/tab 正文二次判别；``huggingface_spaces`` 在排除 Agent/大模型等大类后
+    默认视为可运行应用演示（apps），避免仅靠「应用商店」关键词导致应用页长期为空。
+    其余数据源与 ``feed_lane`` 一致。
     """
     k = (admin_key or "").strip().lower()
     if not k or k == "未绑定数据源":
@@ -542,6 +545,8 @@ def feed_lane_for_article(
     blob = _feed_lane_text_blob(title=title, summary=summary, ai_tabs_json=ai_tabs_json)
     if _blob_suggests_agent_or_model_news(blob):
         return "news"
+    if k == "huggingface_spaces":
+        return "apps"
     if _blob_suggests_installable_consumer_app(blob):
         return "apps"
     return "news"

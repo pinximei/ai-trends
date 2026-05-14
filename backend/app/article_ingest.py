@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from .domain.articles import (
+    CONNECTOR_SNIPPET_MAX_CHARS,
     VALUE_SCORE_MIN,
     display_fingerprint,
     extract_source_external_id_from_connector_snippet,
@@ -118,7 +119,7 @@ def create_published_articles_for_connector_targets(
     segment_id = int(t0["segment_id"])
     label = (t0.get("label") or t0.get("segment_slug") or "板块")[:200]
 
-    safe = (snippet or "")[:12000]
+    safe = (snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
     ing_fp = ingest_fingerprint(safe)
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
         return 0

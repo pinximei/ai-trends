@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import AdminSetting, AdminSourceConfig, AdminUser, EvidenceSignal, Trend
+from .product_models import ProductConnector
 from .scope_labels_util import apply_scope_labels_to_row, get_scope_labels_from_source, normalize_scope_labels_from_payload
+from .services import CONTENT_ROLE_LABEL_ZH
 
 
 class DataApiService:
@@ -17,25 +19,75 @@ class DataApiService:
     def __init__(self, db: Session):
         self.db = db
 
+    def list_admin_source_presets(self) -> list[dict]:
+        """GET /api/admin/v1/sources/presets：全部来自 admin_source_configs，无静态 JSON / 代码内列表。"""
+        rows = self.db.scalars(select(AdminSourceConfig).order_by(AdminSourceConfig.source.asc())).all()
+        items: list[dict] = []
+        for i in rows:
+            sl = get_scope_labels_from_source(i)
+            scope_primary = (sl[0] if sl else (i.scope_label or "")).strip()
+            role = (i.content_role or "").strip() or "daily_editorial"
+            label = (i.preset_label or "").strip() or i.source.replace("_", " ").title()
+            items.append(
+                {
+                    "source": i.source,
+                    "label": label,
+                    "api_base": i.api_base or "",
+                    "frequency": "scheduled",
+                    "scope_label": scope_primary,
+                    "scope_labels": sl if sl else ([scope_primary] if scope_primary else []),
+                    "notes": i.notes or "",
+                    "enabled": bool(i.enabled),
+                    "content_role": role,
+                    "content_role_label_zh": CONTENT_ROLE_LABEL_ZH.get(role, role),
+                }
+            )
+        return items
+
     def list_admin_sources(self, keyword: str = "") -> list[dict]:
         stmt = select(AdminSourceConfig).order_by(AdminSourceConfig.source.asc())
         if keyword:
             stmt = stmt.where(AdminSourceConfig.source.contains(keyword))
         items = self.db.scalars(stmt).all()
-        return [
-            {
-                "source": i.source,
-                "enabled": i.enabled,
-                "frequency": "scheduled",
-                "api_base": i.api_base,
-                "api_key_masked": i.api_key_masked,
-                "scope_label": i.scope_label or "",
-                "scope_labels": get_scope_labels_from_source(i),
-                "notes": i.notes,
-                "updated_at": i.updated_at.isoformat(),
-            }
-            for i in items
-        ]
+        connectors = self.db.scalars(
+            select(ProductConnector)
+            .where(ProductConnector.admin_source_key.isnot(None))
+            .order_by(ProductConnector.id)
+        ).all()
+        by_key: dict[str, list[ProductConnector]] = {}
+        for c in connectors:
+            k = (c.admin_source_key or "").strip().lower()
+            if k:
+                by_key.setdefault(k, []).append(c)
+        out: list[dict] = []
+        for i in items:
+            sk = i.source
+            c_rows = by_key.get(sk, [])
+            connectors_token_status = [
+                {
+                    "connector_id": c.id,
+                    "name": c.name,
+                    "enabled": c.enabled,
+                    "has_api_key": bool(str((dict(c.config_json or {}).get("api_key") or "")).strip()),
+                }
+                for c in c_rows
+            ]
+            out.append(
+                {
+                    "source": i.source,
+                    "enabled": i.enabled,
+                    "frequency": "scheduled",
+                    "api_base": i.api_base,
+                    "api_key_masked": i.api_key_masked,
+                    "admin_key_configured": bool((i.api_key_masked or "").strip()),
+                    "connectors_token_status": connectors_token_status,
+                    "scope_label": i.scope_label or "",
+                    "scope_labels": get_scope_labels_from_source(i),
+                    "notes": i.notes,
+                    "updated_at": i.updated_at.isoformat(),
+                }
+            )
+        return out
 
     def upsert_admin_source(self, payload: dict, mask_func) -> dict:
         source = payload["source"].strip().lower()
@@ -48,8 +100,20 @@ class DataApiService:
         item.enabled = payload["enabled"]
         item.frequency = "scheduled"
         item.api_base = payload["api_base"].strip()
-        if payload["api_key"].strip():
-            item.api_key_masked = mask_func(payload["api_key"])
+        raw_key = (payload.get("api_key") or "").strip()
+        if raw_key:
+            item.api_key_masked = mask_func(raw_key)
+            # 同步实际只读连接器 config_json.api_key；避免运营只在「数据源」表单填钥而连接器仍为空。
+            for c in self.db.scalars(
+                select(ProductConnector).where(
+                    ProductConnector.admin_source_key.isnot(None),
+                    ProductConnector.admin_source_key == item.source,
+                )
+            ).all():
+                cfg = dict(c.config_json or {})
+                cfg["api_key"] = raw_key
+                cfg.setdefault("auth_mode", "bearer")
+                c.config_json = cfg
         item.notes = payload["notes"].strip()
         labels = normalize_scope_labels_from_payload(payload)
         apply_scope_labels_to_row(item, labels)
@@ -59,12 +123,26 @@ class DataApiService:
 
         sync_product_taxonomy_from_admin_sources(self.db)
         labels = get_scope_labels_from_source(item)
+        c_rows = self.db.scalars(
+            select(ProductConnector).where(ProductConnector.admin_source_key == item.source).order_by(ProductConnector.id)
+        ).all()
+        connectors_token_status = [
+            {
+                "connector_id": c.id,
+                "name": c.name,
+                "enabled": c.enabled,
+                "has_api_key": bool(str((dict(c.config_json or {}).get("api_key") or "")).strip()),
+            }
+            for c in c_rows
+        ]
         return {
             "source": item.source,
             "enabled": item.enabled,
             "frequency": item.frequency,
             "api_base": item.api_base,
             "api_key_masked": item.api_key_masked,
+            "admin_key_configured": bool((item.api_key_masked or "").strip()),
+            "connectors_token_status": connectors_token_status,
             "scope_label": item.scope_label or "",
             "scope_labels": labels,
             "notes": item.notes,
@@ -173,22 +251,6 @@ class DataApiService:
                     }
                     r = client.post(an_url, headers=an_headers, json=payload)
                     url = an_url
-                elif sk == "alphavantage":
-                    # 某些环境对该域名 TLS 握手不稳定，失败时降级 urllib 再试一次。
-                    try:
-                        r = client.get(url, headers=headers)
-                    except Exception:
-                        from urllib import request as ureq
-
-                        req = ureq.Request(url, headers=headers, method="GET")
-                        with ureq.urlopen(req, timeout=20) as resp:
-                            body = resp.read().decode("utf-8", errors="ignore")
-
-                        class _Resp:
-                            status_code = 200
-                            text = body
-
-                        r = _Resp()
                 else:
                     r = client.get(url, headers=headers)
             snippet = (r.text or "")[:600]

@@ -1,7 +1,6 @@
-"""邮件订阅日报：配置存 product_settings_kv.newsletter；发信参数可脱敏读写。"""
+"""邮件订阅日报：配置存 product_settings_kv.newsletter；发信参数可脱敏读写（运行以库为准）。`backend/.env` 中的 NEWSLETTER_* / AITRENDS_PUBLIC_BASE_URL 可继续保留作备份，库内为空时启动会一次性迁入。"""
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +28,9 @@ def default_newsletter_json() -> dict[str, Any]:
         "smtp_use_tls": False,
         "bcc_batch": 40,
         "footer_note": "",
+        # 定时任务与订阅校验：可在后台「邮件订阅」页修改
+        "daily_digest_job_enabled": True,
+        "subscribe_verify_mx": True,
     }
 
 
@@ -37,30 +39,13 @@ def _merged_stored(db: Session) -> dict[str, Any]:
     return {**default_newsletter_json(), **((row.value_json if row else {}) or {})}
 
 
-def _env_fallback_smtp(m: dict[str, Any]) -> dict[str, Any]:
-    """库内为空时回退环境变量（兼容旧部署）。"""
-    out = dict(m)
-    if not str(out.get("smtp_host") or "").strip():
-        out["smtp_host"] = (os.environ.get("NEWSLETTER_SMTP_HOST") or "").strip()
-    port = int(out.get("smtp_port") or 0)
-    if not port:
-        out["smtp_port"] = int(os.environ.get("NEWSLETTER_SMTP_PORT", "465") or 465)
-    if not str(out.get("smtp_user") or "").strip():
-        out["smtp_user"] = (os.environ.get("NEWSLETTER_SMTP_USER") or "").strip()
-    if not str(out.get("smtp_password") or "").strip():
-        out["smtp_password"] = (os.environ.get("NEWSLETTER_SMTP_PASSWORD") or "").strip()
-    if not str(out.get("mail_from") or "").strip():
-        out["mail_from"] = (os.environ.get("NEWSLETTER_MAIL_FROM") or out.get("smtp_user") or "").strip()
-    if not str(out.get("public_site_base_url") or "").strip():
-        out["public_site_base_url"] = (os.environ.get("AITRENDS_PUBLIC_BASE_URL") or "").strip()
-    return out
-
-
 def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     out = dict(m)
     out["cron_enabled"] = bool(out.get("cron_enabled", False))
     out["generate_enabled"] = bool(out.get("generate_enabled", False))
     out["send_enabled"] = bool(out.get("send_enabled", False))
+    out["daily_digest_job_enabled"] = bool(out.get("daily_digest_job_enabled", True))
+    out["subscribe_verify_mx"] = bool(out.get("subscribe_verify_mx", True))
     out["article_limit"] = max(1, min(80, int(out.get("article_limit") or 36)))
     out["daily_hour"] = max(0, min(23, int(out.get("daily_hour") or 9)))
     out["daily_minute"] = max(0, min(59, int(out.get("daily_minute") or 0)))
@@ -73,8 +58,8 @@ def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_newsletter_settings_merged(db: Session) -> dict[str, Any]:
-    """运行时使用：含环境变量回退后的 SMTP 等。"""
-    return _normalize_merged(_env_fallback_smtp(_merged_stored(db)))
+    """运行时使用：仅数据库配置。"""
+    return _normalize_merged(_merged_stored(db))
 
 
 def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
@@ -100,7 +85,14 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
     if not row:
         row = ProductSetting(key=NEWSLETTER_KEY, value_json={})
         db.add(row)
-    bool_keys = ("cron_enabled", "generate_enabled", "send_enabled", "smtp_use_tls")
+    bool_keys = (
+        "cron_enabled",
+        "generate_enabled",
+        "send_enabled",
+        "smtp_use_tls",
+        "daily_digest_job_enabled",
+        "subscribe_verify_mx",
+    )
     int_keys = ("article_limit", "daily_hour", "daily_minute", "smtp_port", "bcc_batch")
     str_keys = (
         "public_site_base_url",

@@ -71,18 +71,8 @@ export type AdminSourcePresetItem = {
   enabled: boolean;
 };
 
-async function loadFallbackSourcePresets(): Promise<AdminSourcePresetItem[]> {
-  const res = await fetch("/source-presets-fallback.json", { credentials: "same-origin" });
-  if (!res.ok) return [];
-  const j = (await res.json()) as { items?: AdminSourcePresetItem[] };
-  return Array.isArray(j.items) ? j.items : [];
-}
-
-/** 优先请求后端；若接口 404/空列表（常见于未重启的旧进程），则使用打包的静态副本。 */
-async function loadSourcePresetsWithOrigin(): Promise<{
-  items: AdminSourcePresetItem[];
-  origin: "api" | "fallback";
-}> {
+/** 仅从 GET /api/admin/v1/sources/presets（数据库）加载，不使用前端静态 JSON。 */
+async function loadSourcePresetsFromApi(): Promise<{ items: AdminSourcePresetItem[] }> {
   const res = await fetch("/api/admin/v1/sources/presets", { credentials: "include" });
   const text = await res.text();
   let j: Record<string, unknown> = {};
@@ -93,29 +83,10 @@ async function loadSourcePresetsWithOrigin(): Promise<{
       j = {};
     }
   }
-  const data = j.data as { items?: AdminSourcePresetItem[] } | undefined;
-  const apiItems = data?.items;
-  const apiOk =
-    res.ok &&
-    typeof j.code === "number" &&
-    j.code === 0 &&
-    Array.isArray(apiItems) &&
-    apiItems.length > 0;
-
-  if (apiOk) {
-    return { items: apiItems, origin: "api" };
-  }
-
   if (res.status === 401 || res.status === 403) {
     const msg = describeDetail(j.detail) || `HTTP ${res.status}`;
     throw new Error(msg);
   }
-
-  const fb = await loadFallbackSourcePresets();
-  if (fb.length > 0) {
-    return { items: fb, origin: "fallback" };
-  }
-
   if (!res.ok) {
     const msg = describeDetail(j.detail) || `HTTP ${res.status}`;
     throw new Error(msg);
@@ -124,7 +95,9 @@ async function loadSourcePresetsWithOrigin(): Promise<{
     const msg = describeDetail(j.detail) || (typeof j.message === "string" ? j.message : "") || "业务错误";
     throw new Error(msg);
   }
-  throw new Error("预设模板为空");
+  const data = j.data as { items?: AdminSourcePresetItem[] } | undefined;
+  const items = Array.isArray(data?.items) ? data!.items! : [];
+  return { items };
 }
 
 export type ThemeFetchConnectorDetail = {
@@ -174,8 +147,8 @@ export const adminApi = {
         notes: string;
       }>;
     }>(`/api/admin/v1/sources?keyword=${encodeURIComponent(keyword)}`),
-  /** 与后端 MAINSTREAM_ADMIN_SOURCE_PRESETS 同步；旧后端无此路由时使用 public/source-presets-fallback.json */
-  sourcePresets: () => loadSourcePresetsWithOrigin(),
+  /** 数据源模板列表：与 admin_source_configs 一致，仅后端数据库。 */
+  sourcePresets: () => loadSourcePresetsFromApi(),
   saveSource: (payload: unknown) =>
     request("/api/admin/v1/sources", {
       method: "POST",
@@ -315,7 +288,6 @@ export const adminApi = {
       model: string;
       api_key_masked: string;
       has_api_key: boolean;
-      env_fallback: boolean;
       pipeline: Array<{ id: string; label: string }>;
     }>("/api/admin/v1/product/settings/llm"),
   saveLlmSettings: (payload: { provider?: string; base_url?: string; model?: string; api_key?: string }) =>
@@ -325,7 +297,6 @@ export const adminApi = {
       model: string;
       api_key_masked: string;
       has_api_key: boolean;
-      env_fallback: boolean;
       pipeline: Array<{ id: string; label: string }>;
     }>("/api/admin/v1/product/settings/llm", {
       method: "PUT",
@@ -338,7 +309,6 @@ export const adminApi = {
       connector_sync_interval_hours: number;
       last_connector_batch_at: string | null;
       gate_interval_minutes: number;
-      env_default_hours_hint: number;
     }>("/api/admin/v1/product/settings/scheduler"),
   getRuntimeSettings: () =>
     request<{
@@ -382,7 +352,6 @@ export const adminApi = {
       connector_sync_interval_hours: number;
       last_connector_batch_at: string | null;
       gate_interval_minutes: number;
-      env_default_hours_hint: number;
     }>("/api/admin/v1/product/settings/scheduler", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -393,6 +362,8 @@ export const adminApi = {
       cron_enabled: boolean;
       generate_enabled: boolean;
       send_enabled: boolean;
+      daily_digest_job_enabled: boolean;
+      subscribe_verify_mx: boolean;
       article_limit: number;
       daily_hour: number;
       daily_minute: number;
@@ -412,6 +383,8 @@ export const adminApi = {
       cron_enabled: boolean;
       generate_enabled: boolean;
       send_enabled: boolean;
+      daily_digest_job_enabled: boolean;
+      subscribe_verify_mx: boolean;
       article_limit: number;
       daily_hour: number;
       daily_minute: number;

@@ -7,11 +7,18 @@ from sqlalchemy import Select, and_, desc, or_, select
 from sqlalchemy.orm import Session
 
 from ..domain import articles as art
+from ..models import AdminSourceConfig
 from ..product_models import Article, Industry, Segment
-from ..services import PRESET_SOURCE_LABELS
 from ..taxonomy_from_sources import MERGED_TAXONOMY_INDUSTRY_SLUG
 
 _MAX_FEED_SEARCH_LEN = 80
+
+
+def _admin_source_label_by_key(db: Session) -> dict[str, str]:
+    rows = db.scalars(select(AdminSourceConfig)).all()
+    return {
+        r.source: ((r.preset_label or "").strip() or r.source.replace("_", " ").title()) for r in rows
+    }
 
 
 def normalize_feed_search(raw: str | None) -> str | None:
@@ -190,10 +197,10 @@ def _apply_published_keyset(stmt: Select, pos: tuple[datetime, int] | None) -> S
     )
 
 
-def _feed_card_from_article(a: Article) -> dict:
+def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict:
     ak = art.admin_source_key(a.third_party_source)
     row_lane = _row_feed_lane(a)
-    plat = PRESET_SOURCE_LABELS.get(ak, ak.replace("_", " ").title() if ak else "")
+    plat = label_by_key.get(ak) or (ak.replace("_", " ").title() if ak else "")
     tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
     tab_summaries = (
         [{"label": x["label"], "summary": (x["summary"] or "")[:280]} for x in tabs_parsed[:6]] if tabs_parsed else []
@@ -308,6 +315,8 @@ def list_articles_feed_by_day_page(
     if not ind:
         return empty
 
+    label_by_key = _admin_source_label_by_key(db)
+
     winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
 
     ordered_days, truncated = _collect_ordered_days_for_feed(
@@ -353,7 +362,7 @@ def list_articles_feed_by_day_page(
         if fp in seen_fp:
             continue
         seen_fp.add(fp)
-        out.append(_feed_card_from_article(a))
+        out.append(_feed_card_from_article(a, label_by_key=label_by_key))
 
     return {
         "items": out,
@@ -436,6 +445,7 @@ def list_articles_feed(
     if not ind:
         return {"items": [], "next_cursor": None, "has_more": False, "page_size": page_size}
     n = normalize_feed_search(search)
+    label_by_key = _admin_source_label_by_key(db)
 
     winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
 
@@ -468,7 +478,7 @@ def list_articles_feed(
             if fp in seen_fp:
                 continue
             seen_fp.add(fp)
-            out.append(_feed_card_from_article(a))
+            out.append(_feed_card_from_article(a, label_by_key=label_by_key))
             if len(out) >= page_size:
                 break
         internal = last_scanned

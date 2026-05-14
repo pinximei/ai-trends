@@ -1,5 +1,6 @@
 """
 运行时可调参数：存 product_settings_kv.runtime，供管理端修改。
+合并顺序：代码内置默认 ← 数据库覆盖；空库时可通过 product_settings_seed 一次性从环境变量灌入。
 密钥类（JWT_SECRET、SIGNING_KEY、AITRENDS_DATABASE_URL 等）仍仅用环境变量，不入库。
 """
 from __future__ import annotations
@@ -21,6 +22,23 @@ _DEFAULT_CORS = (
     "http://127.0.0.1:5172,http://localhost:5172,http://127.0.0.1:5173,http://localhost:5173,"
     "http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:5174,http://localhost:5174"
 )
+
+
+def _static_defaults() -> dict[str, Any]:
+    """与历史 dev 体验一致的内置默认；运行时不读取环境变量（环境仅在空库迁移时写入 DB）。"""
+    return {
+        "cors_origins_csv": _DEFAULT_CORS.strip(),
+        "jwt_ttl_seconds": 1800,
+        "allowed_skew_seconds": 300,
+        "require_https": True,
+        "allow_insecure_localhost": True,
+        "admin_cookie_secure": False,
+        "app_env": "dev",
+        "demo_seed_enabled": None,
+        "legacy_admin_enabled": False,
+        "app_release_label": "",
+        "hot_llm_model": "rule-based",
+    }
 
 
 def _env_defaults() -> dict[str, Any]:
@@ -90,7 +108,7 @@ def refresh_runtime_snapshot(db: Session) -> dict[str, Any]:
     global _SNAPSHOT, _SNAPSHOT_MONO
     ensure_runtime_settings_row(db)
     row = db.get(ProductSetting, RUNTIME_KEY)
-    merged = _normalize(_merge_row_into(_env_defaults(), row))
+    merged = _normalize(_merge_row_into(_static_defaults(), row))
     with _LOCK:
         _SNAPSHOT = merged
         _SNAPSHOT_MONO = time.monotonic()
@@ -101,7 +119,7 @@ def get_snapshot() -> dict[str, Any]:
     """内存快照；在 lifespan 启动与保存「运行参数」后刷新。未刷新前为环境默认值。"""
     with _LOCK:
         if not _SNAPSHOT:
-            return _normalize(_env_defaults())
+            return _normalize(_static_defaults())
         return dict(_SNAPSHOT)
 
 
@@ -154,15 +172,13 @@ def _demo_seed_effective_from_merged(merged: dict[str, Any]) -> bool:
     v = merged.get("demo_seed_enabled")
     if v is not None:
         return bool(v)
-    if os.getenv("AITRENDS_ENABLE_DEMO_SEED") is not None:
-        return os.getenv("AITRENDS_ENABLE_DEMO_SEED", "").lower() in {"1", "true", "yes", "on"}
     ae = str(merged.get("app_env") or "dev").lower()
     return ae in {"dev", "local"}
 
 
 def get_runtime_settings_public(db: Session) -> dict[str, Any]:
     ensure_runtime_settings_row(db)
-    merged = _normalize(_merge_row_into(_env_defaults(), db.get(ProductSetting, RUNTIME_KEY)))
+    merged = _normalize(_merge_row_into(_static_defaults(), db.get(ProductSetting, RUNTIME_KEY)))
     return {
         "cors_origins_csv": merged["cors_origins_csv"],
         "jwt_ttl_seconds": merged["jwt_ttl_seconds"],
@@ -176,7 +192,7 @@ def get_runtime_settings_public(db: Session) -> dict[str, Any]:
         "legacy_admin_enabled": merged["legacy_admin_enabled"],
         "app_release_label": merged["app_release_label"],
         "hot_llm_model": merged["hot_llm_model"],
-        "secrets_note": "JWT_SECRET / SIGNING_KEY / AITRENDS_AUTH_BOOTSTRAP_KEY / AITRENDS_DATABASE_URL / AITRENDS_ADMIN_TOKEN 仍仅通过环境变量配置，不入库。",
+        "secrets_note": "JWT_SECRET / SIGNING_KEY / AITRENDS_AUTH_BOOTSTRAP_KEY / AITRENDS_DATABASE_URL / AITRENDS_ADMIN_TOKEN 仍仅通过环境变量或 backend/.env 配置，不入库。建议保留 backend/.env：LLM、邮件等密钥可继续放在其中，库内为空时启动会一次性迁入 product_settings_kv。",
     }
 
 
@@ -184,7 +200,7 @@ def save_runtime_settings_patch(db: Session, patch: dict[str, Any]) -> dict[str,
     ensure_runtime_settings_row(db)
     row = db.get(ProductSetting, RUNTIME_KEY)
     assert row is not None
-    cur = _normalize(_merge_row_into(_env_defaults(), row))
+    cur = _normalize(_merge_row_into(_static_defaults(), row))
     allowed_keys = {
         "cors_origins_csv",
         "jwt_ttl_seconds",
@@ -229,5 +245,5 @@ def assert_production_security() -> None:
 
 
 with _LOCK:
-    _SNAPSHOT = _normalize(_env_defaults())
+    _SNAPSHOT = _normalize(_static_defaults())
     _SNAPSHOT_MONO = time.monotonic()

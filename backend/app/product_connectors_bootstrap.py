@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .models import AdminSourceConfig
 from .product_models import ProductConnector
-from .services import MAINSTREAM_ADMIN_SOURCE_PRESETS, PRESET_SOURCE_LABELS
+from .services import MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
@@ -20,28 +20,54 @@ def repair_github_admin_source_if_still_zen(db: Session) -> None:
         return
     u = (row.api_base or "").strip().lower()
     if "api.github.com/zen" in u or u.rstrip("/").endswith("/zen"):
-        row.api_base = "https://api.github.com/repos/octocat/Hello-World"
+        row.api_base = (
+            "https://api.github.com/repos/microsoft/vscode/issues?state=all&per_page=8&sort=updated"
+        )
         row.updated_at = datetime.utcnow()
         db.commit()
 
 
 def repair_short_probe_admin_sources(db: Session) -> None:
-    """旧预设中 maxitem、/ping 等过短响应无法通过入库价值分，自动升级为长 JSON 端点。"""
+    """旧预设中 maxitem、/ping 等过短响应无法通过入库价值分；并将若干「统计型」默认 URL 升为条目型端点。"""
     changed = False
     for row in db.scalars(select(AdminSourceConfig)).all():
         if row.source == "hacker_news":
             u = (row.api_base or "").strip().lower()
-            if "maxitem" in u:
-                row.api_base = "https://hacker-news.firebaseio.com/v0/topstories.json"
+            if "maxitem" in u or "firebaseio.com" in u or "topstories.json" in u:
+                row.api_base = "https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=20"
                 row.updated_at = datetime.utcnow()
                 changed = True
-        elif row.source == "coingecko":
+        elif row.source == "stackoverflow":
             u = (row.api_base or "").strip().lower()
-            if u.endswith("/ping") or "/api/v3/ping" in u:
+            if "/2.3/info" in u:
                 row.api_base = (
-                    "https://api.coingecko.com/api/v3/coins/markets"
-                    "?vs_currency=usd&order=market_cap_desc&per_page=5&page=1&sparkline=false"
+                    "https://api.stackexchange.com/2.3/questions?order=desc&sort=activity"
+                    "&site=stackoverflow&pagesize=10"
                 )
+                row.updated_at = datetime.utcnow()
+                changed = True
+        elif row.source == "github":
+            u = (row.api_base or "").strip().lower()
+            if "/repos/octocat/hello-world" in u and "/issues" not in u:
+                row.api_base = (
+                    "https://api.github.com/repos/microsoft/vscode/issues?state=all&per_page=8&sort=updated"
+                )
+                row.updated_at = datetime.utcnow()
+                changed = True
+        elif row.source == "arxiv":
+            u = (row.api_base or "").strip()
+            ul = u.lower()
+            if "max_results=1" in u or ("search_query=all" in ul and "export.arxiv.org" in ul):
+                row.api_base = (
+                    "https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=lastUpdatedDate"
+                    "&sortOrder=descending&max_results=5"
+                )
+                row.updated_at = datetime.utcnow()
+                changed = True
+        elif row.source == "openalex":
+            u = (row.api_base or "").strip()
+            if u in ("https://api.openalex.org/works?per_page=3", "http://api.openalex.org/works?per_page=3"):
+                row.api_base = "https://api.openalex.org/works?per_page=5&sort=cited_by_count:desc"
                 row.updated_at = datetime.utcnow()
                 changed = True
     if changed:
@@ -59,7 +85,7 @@ def ensure_core_admin_connectors(db: Session) -> None:
         )
         if exists:
             continue
-        label = PRESET_SOURCE_LABELS.get(key, key)
+        label = ((src.preset_label or "").strip() or key.replace("_", " ").title())
         db.add(
             ProductConnector(
                 name=f"{label} 拉取",

@@ -87,9 +87,11 @@ AITRENDS_ENV=production
 
 首次启动后，管理员密码即为上面的 **`AITRENDS_ADMIN_INIT_PASSWORD`**，与本地开发默认的 `admin123456` **无关**。若遗忘，可在服务器项目目录执行 **`py scripts/reset_admin_password.py`**（交互输入新密码，需与线上同一 `AITRENDS_DATABASE_URL`）。
 
-**运行参数（CORS、JWT 时长、HTTPS 策略、app_env、演示种子、旧版内部接口开关、版本展示串、热门默认模型等）** 已迁至库表 **`product_settings_kv.runtime`**，在管理端 **「账号管理」→「运行参数」** 修改即可；**数据库连接串、JWT_SECRET、SIGNING_KEY、AUTH_BOOTSTRAP_KEY、LLM 密钥、AITRENDS_ADMIN_TOKEN** 仍仅用环境变量。
+**运行参数（CORS、JWT 时长、HTTPS 策略、app_env、演示种子、旧版内部接口开关、版本展示串、热门默认模型等）** 已迁至库表 **`product_settings_kv.runtime`**，在管理端 **「账号管理」→「运行参数」** 修改即可。**数据库连接串、JWT_SECRET、SIGNING_KEY、AUTH_BOOTSTRAP_KEY、AITRENDS_ADMIN_TOKEN** 仍仅用环境变量或 **`backend/.env`**（建议保留该文件作凭据单一来源与备份）。
 
-已启用连接器由后端 **APScheduler** 按 **库内配置**（`product_settings_kv.scheduler`：间隔小时数、是否启用）做整批同步；进程每 **15 分钟**检查一次是否到点，无需改代码或重启即可在管理端 **「AI 资讯与数据」→ 定时同步与数据清理」** 保存。新建库时若未写过库表，默认间隔可读环境变量 **`AITRENDS_CONNECTOR_SYNC_INTERVAL_HOURS`**（1～168）。**管理员**可在同页一键清空连接器入库相关表（文章、指标点、同步日志、热门快照、LLM 用量）并重置连接器上次同步时间。
+**LLM、邮件 SMTP、日报开关等** 可在管理端配置并存 **`product_settings_kv`**；若库内尚未写入，**首次启动**会把 `backend/.env`（或进程环境）里已有的 `AITRENDS_LLM_*`、`NEWSLETTER_*` 等 **一次性迁入** 库，`.env` 里的 Key **无需删除**，可继续复用与备份。
+
+已启用连接器由后端 **APScheduler** 按 **库内配置**（`product_settings_kv.scheduler`：间隔小时数、是否启用）做整批同步；进程每 **15 分钟**检查一次是否到点，无需改代码或重启即可在管理端 **「AI 资讯与数据」→「定时同步与数据清理」** 保存。**管理员**可在同页一键清空连接器入库相关表（文章、指标点、同步日志、热门快照、LLM 用量）并重置连接器上次同步时间。
 
 前端构建：
 

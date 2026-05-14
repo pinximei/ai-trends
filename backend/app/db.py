@@ -4,7 +4,12 @@ import os
 
 
 def _load_backend_dotenv() -> None:
-    """启动时加载 backend/.env（无 python-dotenv 依赖）；仅当环境变量尚未设置时写入。"""
+    """启动时加载 backend/.env（无 python-dotenv 依赖）；仅当环境变量尚未设置时写入 os.environ。
+
+    建议长期保留该文件：生产密钥、数据库连接等仍可只放在 .env / systemd EnvironmentFile 中；
+    部分可后台管理的项（如 LLM、邮件 SMTP）若库内尚未配置，启动时会尝试把 .env 里已有变量一次性写入库，
+    文件本身可继续作为凭据备份与运维单一来源，无需删除。
+    """
     env_path = Path(__file__).resolve().parent.parent / ".env"
     if not env_path.is_file():
         return
@@ -94,6 +99,10 @@ def ensure_schema_compatibility() -> None:
                         text("UPDATE admin_source_configs SET scope_labels_json = :j WHERE id = :id"),
                         {"j": arr, "id": rid},
                     )
+            if "preset_label" not in cols:
+                conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN preset_label VARCHAR(128) DEFAULT ''"))
+            if "content_role" not in cols:
+                conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN content_role VARCHAR(32) DEFAULT ''"))
         cols = _column_names(conn, "product_connectors")
         if cols and "admin_source_key" not in cols:
             conn.execute(text("ALTER TABLE product_connectors ADD COLUMN admin_source_key VARCHAR(64)"))

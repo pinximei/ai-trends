@@ -9,149 +9,116 @@ from .models import AuditLog, AdminSession, AdminSourceConfig, EvidenceSignal, P
 from .scope_labels_util import dump_scope_labels_json
 
 
+# 预设条目 content_role（后台展示与运营选型；与入库「一篇稿」能力无关）：
+# - daily_editorial：条目型资讯/动态（报道、RSS、问答帖、仓库 issue 等）
+# - academic：论文/著作记录
+CONTENT_ROLE_LABEL_ZH: dict[str, str] = {
+    "daily_editorial": "条目型内容（资讯/RSS/问答/动态）",
+    "academic": "学术论文元数据",
+    "runnable_apps": "可运行应用（Spaces 等演示入口）",
+    "app_launches": "应用首发（Product Hunt）",
+}
+
+
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
-# 下列为 **免密钥 GET 即可稳定 200** 且响应足够长的公开端点（便于连通与入库探测）。
-# 系统对「数据源」总条数 **没有上限**：后台「添加数据源」可任意新增标识并填写 Key；下列仅为内置一键模板。
-# 需 OAuth / 必 Key 的源（Product Hunt、NewsAPI、OpenAI 等）不在此插入，请自行在后台添加。
-# scope_label：标明所属领域/板块，便于与「行业→板块」前台结构对应。
+# 下列含 **免 Key** 与 **需 OAuth** 的模板：Product Hunt 须在连接器或「测试连接」中提供 **Bearer access_token**。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
+        "preset_label": "GitHub",
         "enabled": True,
-        "api_base": "https://api.github.com/repos/octocat/Hello-World",
+        "api_base": "https://api.github.com/repos/microsoft/vscode/issues?state=all&per_page=8&sort=updated",
         "api_key_masked": "",
         "scope_label": "AI｜通用·开源协作",
-        "notes": "公开仓库元数据 JSON（免 Key，有速率限制）。高配额可填 PAT 并改为 issues/releases 等路径。",
-    },
-    {
-        "source": "huggingface",
-        "enabled": True,
-        "api_base": "https://huggingface.co/api/models?limit=3",
-        "api_key_masked": "",
-        "scope_label": "AI｜大模型/生态",
-        "notes": "Hugging Face Hub 公开模型列表；私有或提配额请填 HF_TOKEN。",
+        "content_role": "daily_editorial",
+        "notes": "公开仓库 **Issues 列表** JSON（免 Key，有速率限制）。更接近「仓库动态」；可改为其它 org/repo 路径。",
     },
     {
         "source": "huggingface_spaces",
+        "preset_label": "Hugging Face Spaces",
         "enabled": True,
         "api_base": "https://huggingface.co/api/spaces?limit=3",
         "api_key_masked": "",
         "scope_label": "AI｜Spaces·应用",
-        "notes": "Spaces 公开列表；私有 Space 请填 HF_TOKEN。",
+        "content_role": "runnable_apps",
+        "notes": "Spaces 公开列表 JSON：用于 **应用/可运行演示** 发现（免 Key）；私有 Space 请填 HF_TOKEN。后台请 **启用** 对应连接器并配置 LLM，稿件才会进「应用」泳道。",
+    },
+    {
+        "source": "product_hunt",
+        "preset_label": "Product Hunt",
+        "enabled": True,
+        "api_base": "https://api.producthunt.com/v2/api/graphql",
+        "api_key_masked": "",
+        "scope_label": "AI｜应用发现",
+        "content_role": "app_launches",
+        "notes": "Product Hunt **GraphQL v2**（同步与测试连接走 POST，见连接器逻辑）。须在连接器 ``config_json`` 填 **Bearer access_token**（Developer OAuth），或在「测试连接」粘贴临时 Token。无 Token 时探测可能为 401，属正常。",
     },
     {
         "source": "hacker_news",
+        "preset_label": "Hacker News",
         "enabled": True,
-        "api_base": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "api_base": "https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=20",
         "api_key_masked": "",
         "scope_label": "通用·技术资讯",
-        "notes": "Hacker News 官方 Firebase API：热门 story id 列表（免 Key）。勿用 maxitem 单数字端点（响应过短无法入库）。",
+        "content_role": "daily_editorial",
+        "notes": "HN Algolia 公开搜索 JSON：含标题/链接/时间等 **条目型** 字段（免 Key）。",
     },
     {
         "source": "stackoverflow",
+        "preset_label": "Stack Overflow",
         "enabled": True,
-        "api_base": "https://api.stackexchange.com/2.3/info?site=stackoverflow",
+        "api_base": "https://api.stackexchange.com/2.3/questions?order=desc&sort=activity&site=stackoverflow&pagesize=10",
         "api_key_masked": "",
         "scope_label": "开发·问答",
-        "notes": "Stack Exchange API；公开配额可用，可选填 app key 提高限额。",
+        "content_role": "daily_editorial",
+        "notes": "Stack Overflow **最新问题** JSON（标题+摘要等）；可选填 app key 提高配额。",
     },
     {
         "source": "arxiv",
+        "preset_label": "arXiv",
         "enabled": True,
-        "api_base": "https://export.arxiv.org/api/query?search_query=all&start=0&max_results=1",
+        "api_base": "https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=lastUpdatedDate&sortOrder=descending&max_results=5",
         "api_key_masked": "",
         "scope_label": "学术·论文",
-        "notes": "arXiv 开放元数据与摘要，免 Key。",
-    },
-    {
-        "source": "open_meteo",
-        "enabled": True,
-        "api_base": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true",
-        "api_key_masked": "",
-        "scope_label": "气象·公开数据",
-        "notes": "Open-Meteo 预报 JSON，免 Key。",
-    },
-    {
-        "source": "coingecko",
-        "enabled": True,
-        "api_base": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=5&page=1&sparkline=false",
-        "api_key_masked": "",
-        "scope_label": "加密·行情",
-        "notes": "CoinGecko 公开市场列表 JSON（公开 tier 有速率限制；勿用 /ping 短响应）。",
-    },
-    {
-        "source": "pypi",
-        "enabled": True,
-        "api_base": "https://pypi.org/pypi/pip/json",
-        "api_key_masked": "",
-        "scope_label": "AI｜工具链·Python",
-        "notes": "PyPI 包元数据 JSON API，免 Key。",
-    },
-    {
-        "source": "npm",
-        "enabled": True,
-        "api_base": "https://registry.npmjs.org/react/latest",
-        "api_key_masked": "",
-        "scope_label": "AI｜工具链·Node",
-        "notes": "npm Registry 包元数据，免 Key。",
-    },
-    {
-        "source": "alphavantage",
-        "enabled": True,
-        "api_base": "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo",
-        "api_key_masked": "",
-        "scope_label": "财经·时间序列",
-        "notes": "Alpha Vantage 官方 demo key，仅用于连通与示例；生产请换自有 Key。",
-    },
-    {
-        "source": "docker_hub",
-        "enabled": True,
-        "api_base": "https://hub.docker.com/v2/repositories/library/ubuntu/",
-        "api_key_masked": "",
-        "scope_label": "AI｜工具链·容器",
-        "notes": "Docker Hub 公开镜像元数据，免 Key。",
-    },
-    {
-        "source": "crates_io",
-        "enabled": True,
-        "api_base": "https://crates.io/api/v1/crates/serde",
-        "api_key_masked": "",
-        "scope_label": "AI｜工具链·Rust",
-        "notes": "crates.io 包元数据，免 Key。",
+        "content_role": "academic",
+        "notes": "arXiv **cs.AI** 按最近更新排序的 Atom（论文条目+摘要）。",
     },
     {
         "source": "openalex",
+        "preset_label": "OpenAlex",
         "enabled": True,
-        "api_base": "https://api.openalex.org/works?per_page=3",
+        "api_base": "https://api.openalex.org/works?per_page=5&sort=cited_by_count:desc",
         "api_key_masked": "",
         "scope_label": "学术·开放图谱",
-        "notes": "OpenAlex 开放学术图谱，免 Key；polite pool 建议按文档加 polite 参数（可选）。",
+        "content_role": "academic",
+        "notes": "OpenAlex 著作 JSON；偏 **学术条目**，不是大众门户资讯；polite pool 可按文档加 polite 参数（可选）。",
+    },
+    {
+        "source": "rss_arstechnica",
+        "preset_label": "Ars Technica RSS",
+        "enabled": True,
+        "api_base": "https://feeds.arstechnica.com/arstechnica/index",
+        "api_key_masked": "",
+        "scope_label": "通用·科技媒体",
+        "content_role": "daily_editorial",
+        "notes": "Ars Technica **RSS（XML）**：站点文章条目；单连接器仍合成一篇稿，可改为你方站点/栏目 Feed。",
+    },
+    {
+        "source": "rss_theverge",
+        "preset_label": "The Verge RSS",
+        "enabled": True,
+        "api_base": "https://www.theverge.com/rss/index.xml",
+        "api_key_masked": "",
+        "scope_label": "通用·科技媒体",
+        "content_role": "daily_editorial",
+        "notes": "The Verge **RSS（XML）**：站点文章条目。",
     },
 ]
-
-# 与 admin GET /api/admin/v1/sources/presets 展示名一致；供前端静态回退 JSON 与后端共用逻辑。
-PRESET_SOURCE_LABELS: dict[str, str] = {
-    "github": "GitHub",
-    "huggingface": "Hugging Face",
-    "huggingface_spaces": "Hugging Face Spaces",
-    "hacker_news": "Hacker News",
-    "stackoverflow": "Stack Overflow",
-    "arxiv": "arXiv",
-    "open_meteo": "Open-Meteo",
-    "coingecko": "CoinGecko",
-    "pypi": "PyPI",
-    "npm": "npm",
-    "alphavantage": "Alpha Vantage",
-    "docker_hub": "Docker Hub",
-    "crates_io": "crates.io",
-    "openalex": "OpenAlex",
-}
 
 # 历史上由 ensure_mainstream_admin_sources 写入、但已从产品移除的 source；启动时删库内对应行及同 admin_source_key 的连接器。
 # 勿把仍保留在 MAINSTREAM_ADMIN_SOURCE_PRESETS 中的标识放进本集合，否则会误删运营已配置的 Key。
 DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
     {
-        "product_hunt",
         "mcp_skills",
         "newsapi",
         "openai",
@@ -166,25 +133,28 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
 ), "DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES overlaps MAINSTREAM_ADMIN_SOURCE_PRESETS"
 
 
-def build_admin_source_preset_items() -> list[dict]:
-    """供 /api/admin/v1/sources/presets 与前端静态回退文件生成。"""
-    items: list[dict] = []
+def sync_catalog_preset_metadata(db: Session) -> int:
+    """将内置目录中的 preset_label / content_role 写入主流 source，仅当对应列为空（便于运营日后自定义）。"""
+    n = 0
     for row in MAINSTREAM_ADMIN_SOURCE_PRESETS:
         src = row["source"]
-        sl = row.get("scope_label") or ""
-        items.append(
-            {
-                "source": src,
-                "label": PRESET_SOURCE_LABELS.get(src, src.replace("_", " ").title()),
-                "api_base": row["api_base"],
-                "frequency": "scheduled",
-                "scope_label": sl,
-                "scope_labels": [sl] if sl else [],
-                "notes": row.get("notes") or "",
-                "enabled": bool(row.get("enabled", True)),
-            }
-        )
-    return items
+        item = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == src))
+        if not item:
+            continue
+        pl = (row.get("preset_label") or "").strip() or src.replace("_", " ").title()
+        cr = str(row.get("content_role") or "daily_editorial").strip() or "daily_editorial"
+        changed = False
+        if not (item.preset_label or "").strip():
+            item.preset_label = pl
+            changed = True
+        if not (item.content_role or "").strip():
+            item.content_role = cr
+            changed = True
+        if changed:
+            n += 1
+    if n:
+        db.commit()
+    return n
 
 
 def ensure_mainstream_admin_sources(db: Session) -> int:
@@ -196,6 +166,8 @@ def ensure_mainstream_admin_sources(db: Session) -> int:
         if exists:
             continue
         sl = row.get("scope_label") or ""
+        pl = (row.get("preset_label") or "").strip() or source.replace("_", " ").title()
+        cr = str(row.get("content_role") or "daily_editorial").strip() or "daily_editorial"
         db.add(
             AdminSourceConfig(
                 source=source,
@@ -206,6 +178,8 @@ def ensure_mainstream_admin_sources(db: Session) -> int:
                 scope_label=sl,
                 scope_labels_json=dump_scope_labels_json([sl]) if sl else "[]",
                 notes=row["notes"],
+                preset_label=pl,
+                content_role=cr,
                 updated_at=datetime.utcnow(),
             )
         )
@@ -288,8 +262,8 @@ def seed_if_empty(db: Session):
         EvidenceSignal(
             signal_id="sig_002",
             trend_key="customer-support-agent",
-            source="huggingface",
-            evidence_url="https://huggingface.co/spaces/example/support-agent",
+            source="hacker_news",
+            evidence_url="https://news.ycombinator.com/item?id=1",
             evidence_score=0.81,
             source_diversity=0.55,
             label_stability=0.77,

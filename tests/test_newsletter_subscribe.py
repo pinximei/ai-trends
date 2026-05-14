@@ -9,11 +9,6 @@ from backend.app.application import newsletter_public as nl_pub
 from backend.app.models import NewsletterSubscriber
 
 
-@pytest.fixture(autouse=True)
-def _newsletter_no_mx(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("NEWSLETTER_VERIFY_MX", "0")
-
-
 def test_normalize_rejects_bad_email() -> None:
     with pytest.raises(ValueError):
         nl_pub.normalize_and_validate_email("not-an-email")
@@ -25,7 +20,7 @@ def test_normalize_rejects_disposable_domain() -> None:
 
 
 def test_normalize_accepts_example_com() -> None:
-    assert nl_pub.normalize_and_validate_email("Test@EXAMPLE.com") == "test@example.com"
+    assert nl_pub.normalize_and_validate_email("Test@EXAMPLE.com", verify_mx=False) == "test@example.com"
 
 
 @pytest.fixture()
@@ -42,13 +37,13 @@ def nl_db():
 
 
 def test_subscribe_created_then_duplicate(nl_db) -> None:
-    em = nl_pub.normalize_and_validate_email("dup@example.com")
+    em = nl_pub.normalize_and_validate_email("dup@example.com", verify_mx=False)
     assert nl_pub.subscribe(nl_db, em) == "created"
     assert nl_pub.subscribe(nl_db, em) == "duplicate"
 
 
 def test_subscribe_race_duplicate_via_integrity(nl_db) -> None:
-    em = nl_pub.normalize_and_validate_email("race@example.com")
+    em = nl_pub.normalize_and_validate_email("race@example.com", verify_mx=False)
     nl_db.add(NewsletterSubscriber(email=em, unsubscribe_token="x" * 64))
     nl_db.commit()
     assert nl_pub.subscribe(nl_db, em) == "duplicate"
@@ -61,7 +56,7 @@ def test_subscribe_reactivate_after_unsub(nl_db) -> None:
 
     from sqlalchemy import select
 
-    em = nl_pub.normalize_and_validate_email("re@example.com")
+    em = nl_pub.normalize_and_validate_email("re@example.com", verify_mx=False)
     assert nl_pub.subscribe(nl_db, em) == "created"
     row = nl_db.scalar(select(NewsletterSubscriber).where(NewsletterSubscriber.email == em))
     assert row and row.unsubscribe_token
@@ -75,7 +70,7 @@ def test_subscribe_reactivate_after_unsub(nl_db) -> None:
 def test_unsubscribe_by_token(nl_db) -> None:
     from sqlalchemy import select
 
-    em = nl_pub.normalize_and_validate_email("un@example.com")
+    em = nl_pub.normalize_and_validate_email("un@example.com", verify_mx=False)
     assert nl_pub.subscribe(nl_db, em) == "created"
     row = nl_db.scalar(select(NewsletterSubscriber).where(NewsletterSubscriber.email == em))
     tok = row.unsubscribe_token

@@ -1,7 +1,6 @@
 """首页等公开入口的邮件订阅：规范化、可投递性、临时域名拦截、落库去重。"""
 from __future__ import annotations
 
-import os
 import secrets
 from datetime import datetime
 from typing import Literal
@@ -31,18 +30,12 @@ _DISPOSABLE_DOMAINS = frozenset(
 )
 
 
-def _verify_mx_default() -> bool:
-    v = (os.environ.get("NEWSLETTER_VERIFY_MX", "true") or "").strip().lower()
-    return v in ("1", "true", "yes", "on")
-
-
-def normalize_and_validate_email(raw: str) -> str:
+def normalize_and_validate_email(raw: str, *, verify_mx: bool = True) -> str:
     s = (raw or "").strip()
     if not s:
         raise ValueError("请填写邮箱")
     if len(s) > 320:
         raise ValueError("邮箱过长")
-    verify_mx = _verify_mx_default()
     try:
         info = validate_email(s, check_deliverability=verify_mx)
     except EmailNotValidError:
