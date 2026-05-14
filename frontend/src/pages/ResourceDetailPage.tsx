@@ -297,6 +297,19 @@ export function ResourceDetailPage() {
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
         >
           <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
+            {a.categories && a.categories.length > 0 ? (
+              <div data-testid="resource-detail-category-tags" className="flex flex-wrap gap-2">
+                {a.categories.map((c) => (
+                  <span
+                    key={c}
+                    className="inline-flex items-center rounded-full border border-slate-200/90 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
             {isApp ? (
               <div className="ui-card overflow-hidden p-6 sm:p-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
@@ -305,15 +318,7 @@ export function ResourceDetailPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-slate-500">{t("detailAppMeta")}</p>
-                    <h1 className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-                      <span
-                        data-testid="resource-detail-feed-type"
-                        className="inline-flex shrink-0 items-center rounded-full bg-violet-600 px-3 py-1 text-xs font-semibold tracking-wide text-white shadow-sm ring-1 ring-violet-700/20"
-                      >
-                        {t("navApps")}
-                      </span>
-                      <span className="min-w-0 flex-1">{a.title}</span>
-                    </h1>
+                    <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{a.title}</h1>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
                       {a.published_at ? (
                         <span className="tabular-nums">{a.published_at.slice(0, 10)}</span>
@@ -326,15 +331,8 @@ export function ResourceDetailPage() {
               </div>
             ) : (
               <div className="ui-card border-l-4 border-l-brand-500 bg-brand-50/40 px-6 py-8 sm:px-8">
-                <h1 className="flex flex-wrap items-baseline gap-x-3 gap-y-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">
-                  <span
-                    data-testid="resource-detail-feed-type"
-                    className="inline-flex shrink-0 items-center rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold tracking-wide text-white shadow-sm ring-1 ring-brand-700/25"
-                  >
-                    {t("navNews")}
-                  </span>
-                  <span className="min-w-0 flex-1">{a.title}</span>
-                </h1>
+                <p className="text-xs font-medium uppercase tracking-wide text-brand-700">{t("detailFeaturedTag")}</p>
+                <h1 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
                 {a.summary ? (
                   <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
                 ) : null}
@@ -352,19 +350,6 @@ export function ResourceDetailPage() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            ) : null}
-
-            {a.categories && a.categories.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {a.categories.map((c) => (
-                  <span
-                    key={c}
-                    className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700"
-                  >
-                    {c}
-                  </span>
-                ))}
               </div>
             ) : null}
 
