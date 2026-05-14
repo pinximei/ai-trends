@@ -33,6 +33,25 @@ function friendlyErr(msg: string): string {
   return msg;
 }
 
+/** 与后端 ``FEED_APPS_KEYS`` 对齐：仅下列标识默认进前台「应用」Feed。 */
+const APPS_FEED_SOURCE_KEYS = new Set(["product_hunt", "huggingface_spaces"]);
+
+function publicFeedLaneForSourceKey(sourceKey: string): { lane: "apps" | "news"; title: string; detail: string } {
+  const k = sourceKey.trim().toLowerCase();
+  if (APPS_FEED_SOURCE_KEYS.has(k)) {
+    return {
+      lane: "apps",
+      title: "应用",
+      detail: "默认进前台「应用」列表；主类为 Agent/大模型等或正文含模型资讯信号时仍可能归为资讯。",
+    };
+  }
+  return {
+    lane: "news",
+    title: "资讯",
+    detail: "默认进前台「资讯」列表（与当前后端 feed 规则一致）。",
+  };
+}
+
 type Me = { username: string; role: string; expires_at: string; password_min_length: number };
 type ConnectorTokenStatus = { connector_id: number; name: string; enabled: boolean; has_api_key: boolean };
 type Source = {
@@ -1200,6 +1219,7 @@ export function App() {
                     {sourcePresets.map((p) => {
                         const saved = sources.find((s) => s.source === p.source);
                         const displayBase = (saved?.api_base || "").trim() || p.api_base || "";
+                        const pubFeed = publicFeedLaneForSourceKey(p.source);
                         const scopeText =
                           saved && ((saved.scope_labels && saved.scope_labels.length > 0) || (saved.scope_label || "").trim())
                             ? saved.scope_labels && saved.scope_labels.length > 0
@@ -1216,9 +1236,18 @@ export function App() {
                           >
                             <div className="source-card__head">
                               <h4 className="source-card__title">{p.label}</h4>
-                              <span className={saved ? (saved.enabled ? "tag ok" : "tag") : "tag"}>
-                                {saved ? (saved.enabled ? "已启用" : "已停用") : "未入库"}
-                              </span>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                                <span
+                                  className={pubFeed.lane === "apps" ? "tag ok" : "tag"}
+                                  title={pubFeed.detail}
+                                  style={{ fontWeight: 600 }}
+                                >
+                                  前台：{pubFeed.title}
+                                </span>
+                                <span className={saved ? (saved.enabled ? "tag ok" : "tag") : "tag"}>
+                                  {saved ? (saved.enabled ? "已启用" : "已停用") : "未入库"}
+                                </span>
+                              </div>
                             </div>
                             {p.content_role_label_zh ? (
                               <p className="muted tiny" style={{ margin: "6px 0 0" }}>
@@ -1226,6 +1255,12 @@ export function App() {
                               </p>
                             ) : null}
                             <dl className="source-card__meta">
+                              <div className="source-card__meta-row">
+                                <dt>前台 Feed</dt>
+                                <dd className="muted tiny" title={pubFeed.detail}>
+                                  {pubFeed.title}
+                                </dd>
+                              </div>
                               <div className="source-card__meta-row">
                                 <dt>标识</dt>
                                 <dd style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{p.source}</dd>
@@ -1365,13 +1400,30 @@ export function App() {
                           </article>
                         );
                       })}
-                      {customSourcesOnly.map((s) => (
+                      {customSourcesOnly.map((s) => {
+                        const pubFeed = publicFeedLaneForSourceKey(s.source);
+                        return (
                         <article key={s.source} className="source-card source-card--preset-exists" title={s.notes?.trim() || undefined}>
                           <div className="source-card__head">
                             <h4 className="source-card__title">{s.source}</h4>
-                            <span className={s.enabled ? "tag ok" : "tag"}>{s.enabled ? "已启用" : "已停用"}</span>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                              <span
+                                className={pubFeed.lane === "apps" ? "tag ok" : "tag"}
+                                title={pubFeed.detail}
+                                style={{ fontWeight: 600 }}
+                              >
+                                前台：{pubFeed.title}
+                              </span>
+                              <span className={s.enabled ? "tag ok" : "tag"}>{s.enabled ? "已启用" : "已停用"}</span>
+                            </div>
                           </div>
                           <dl className="source-card__meta">
+                            <div className="source-card__meta-row">
+                              <dt>前台 Feed</dt>
+                              <dd className="muted tiny" title={pubFeed.detail}>
+                                {pubFeed.title}
+                              </dd>
+                            </div>
                             <div className="source-card__meta-row">
                               <dt>拉取节奏</dt>
                               <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
@@ -1504,7 +1556,8 @@ export function App() {
                             </>
                           ) : null}
                         </article>
-                      ))}
+                        );
+                      })}
                     </div>
                 </>
               ) : null}
