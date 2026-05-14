@@ -207,7 +207,7 @@ export function ResourceDetailPage() {
 
   const backBtnClass =
     "inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200/90 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 sm:w-auto sm:justify-start " +
-    "lg:border-slate-200/70 lg:bg-white/90 lg:shadow-none";
+    "lg:border-slate-200/60 lg:bg-white/80 lg:shadow-sm lg:backdrop-blur-sm lg:hover:bg-white";
 
   if (err) {
     return (
@@ -237,13 +237,13 @@ export function ResourceDetailPage() {
   const tocLinkClass = (id: string) =>
     `mx-1 block rounded-lg px-2.5 py-1.5 text-left text-[13px] leading-snug transition-colors ${
       activeTocId === id
-        ? "bg-slate-200/80 font-medium text-slate-900"
-        : "text-slate-600 hover:bg-slate-200/50"
+        ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200/70"
+        : "text-slate-600 hover:bg-white/50"
     }`;
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:pr-0">
-      <div className="mb-3 flex shrink-0 justify-end lg:mb-2">
+      <div className="mb-3 flex shrink-0 justify-end lg:hidden">
         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {isApp ? t("navApps") : t("navNews")}
         </span>
@@ -255,25 +255,24 @@ export function ResourceDetailPage() {
         </Link>
       </div>
 
-      {/* 大屏：DeepSeek 式「会话窗口」——圆角壳、左列浅底独立滚动、右列主内容区独立滚动；小屏仍整列可滚 */}
+      {/* 大屏：对齐 DeepSeek — 扁平分栏、左列冷灰底、右列白底双区独立滚动；小屏整列可滚 */}
       <div
         className={
           "flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-y-contain " +
-          "lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden " +
-          "lg:rounded-2xl lg:border lg:border-slate-200/80 lg:bg-white lg:shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
+          "lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none"
         }
       >
         <aside
           className={
             "flex w-full shrink-0 flex-col self-start overflow-hidden " +
-            "max-h-[min(42vh,26rem)] min-h-0 lg:max-h-none lg:w-[min(280px,calc(100%-1rem))] lg:self-stretch xl:w-[300px] " +
-            "lg:border-r lg:border-slate-200/70 lg:bg-[#f4f5f7]"
+            "max-h-[min(42vh,26rem)] min-h-0 lg:max-h-none lg:min-h-0 lg:w-[260px] lg:shrink-0 lg:self-stretch xl:w-[272px] " +
+            "lg:border-r lg:border-slate-300/35 lg:bg-[#ecedf2]"
           }
         >
           <div
             className={
-              "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain px-1 py-1 " +
-              "[scrollbar-width:thin] lg:px-2 lg:py-3 lg:lg-scrollbar-hide"
+              "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain px-1 py-1 scrollbar-hide " +
+              "lg:px-2.5 lg:py-3"
             }
           >
             <Link to={backTo} className={`${backBtnClass} hidden shrink-0 lg:inline-flex`}>
@@ -312,8 +311,8 @@ export function ResourceDetailPage() {
                       to={`/resources/${row.id}`}
                       className={`mx-1 block rounded-lg px-3 py-2.5 text-sm transition-colors ${
                         activeHere
-                          ? "bg-slate-200/90 font-medium text-slate-900"
-                          : "text-slate-700 hover:bg-slate-200/45"
+                          ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200/70"
+                          : "text-slate-700 hover:bg-white/50"
                       }`}
                     >
                       <span className="line-clamp-2 leading-snug">{row.title}</span>
@@ -331,9 +330,15 @@ export function ResourceDetailPage() {
         <div
           ref={articleScrollRef}
           data-testid="resource-detail-article"
-          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white lg:-mr-10 lg:bg-[#fafbfc] lg:pr-10 lg:lg-scrollbar-hide lg:overflow-x-hidden xl:-mr-14 xl:pr-14 2xl:-mr-20 2xl:pr-20"
+          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white scrollbar-hide lg:-mr-10 lg:bg-white lg:pr-10 lg:overflow-x-hidden xl:-mr-14 xl:pr-14 2xl:-mr-20 2xl:pr-20"
         >
-          <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-6 lg:pt-4 xl:px-10">
+          <div className="sticky top-0 z-10 hidden shrink-0 border-b border-slate-200/70 bg-white/90 px-4 py-2.5 backdrop-blur-md supports-[backdrop-filter]:bg-white/75 lg:flex lg:items-center lg:justify-between lg:gap-3 lg:px-6 xl:px-10">
+            <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{a.title}</p>
+            <span className="shrink-0 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              {isApp ? t("navApps") : t("navNews")}
+            </span>
+          </div>
+          <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-3 xl:px-10">
             {isApp ? (
               <div className="ui-card overflow-hidden p-6 sm:p-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start">

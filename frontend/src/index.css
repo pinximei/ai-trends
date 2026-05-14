@@ -110,15 +110,14 @@
 }
 
 @layer utilities {
-  @media (min-width: 1024px) {
-    .lg-scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    .lg-scrollbar-hide::-webkit-scrollbar {
-      display: none;
-      width: 0;
-      height: 0;
-    }
+  /** 隐藏滚动条但保留滚轮（DeepSeek / 聊天式分栏常用） */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }

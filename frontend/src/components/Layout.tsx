@@ -140,7 +140,7 @@ export function Layout() {
             isHome
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
               : isResourceDetail
-                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-2 pb-10 sm:pt-3 sm:pb-12 lg:pt-4"
+                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 pt-2 pb-10 sm:pt-3 sm:pb-12 lg:bg-[#eef0f4] lg:pt-3"
                 : isHubTightTop
                   ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
                   : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
