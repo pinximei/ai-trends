@@ -65,6 +65,9 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     },
 ]
 
+# 当前产品保留的内置数据源标识（与 MAINSTREAM_ADMIN_SOURCE_PRESETS 一致）；启动时用于删库中「多余」行。
+MAINSTREAM_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
+
 # 历史上由 ensure_mainstream_admin_sources 写入、但已从产品移除的 source；启动时删库内对应行及同 admin_source_key 的连接器。
 # 勿把仍保留在 MAINSTREAM_ADMIN_SOURCE_PRESETS 中的标识放进本集合，否则会误删运营已配置的 Key。
 DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(

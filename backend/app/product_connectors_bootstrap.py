@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .models import AdminSourceConfig
 from .product_models import ProductConnector
-from .services import MAINSTREAM_ADMIN_SOURCE_PRESETS
+from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
@@ -77,6 +77,34 @@ def ensure_core_admin_connectors(db: Session) -> None:
             )
         )
     db.commit()
+
+
+def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
+    """删除库中一切不在当前 MAINSTREAM 预置列表内的 admin 数据源及其绑定连接器。
+
+    自定义标识、旧版预置残留等都会被清掉；随后 ``ensure_mainstream_admin_sources`` 会补回四条 AI 内置行。
+    """
+    import logging
+
+    from sqlalchemy import delete
+
+    log = logging.getLogger(__name__)
+    if not MAINSTREAM_ADMIN_SOURCE_KEYS:
+        return {"connectors_deleted": 0, "admin_sources_deleted": 0}
+    keys = tuple(MAINSTREAM_ADMIN_SOURCE_KEYS)
+    rc = db.execute(
+        delete(ProductConnector).where(
+            ProductConnector.admin_source_key.isnot(None),
+            ~ProductConnector.admin_source_key.in_(keys),
+        )
+    )
+    ra = db.execute(delete(AdminSourceConfig).where(~AdminSourceConfig.source.in_(keys)))
+    db.commit()
+    n_c = int(rc.rowcount) if rc.rowcount is not None and rc.rowcount >= 0 else 0
+    n_a = int(ra.rowcount) if ra.rowcount is not None and ra.rowcount >= 0 else 0
+    if n_c or n_a:
+        log.info("pruned admin sources outside mainstream: connectors=%s admin_sources=%s", n_c, n_a)
+    return {"connectors_deleted": n_c, "admin_sources_deleted": n_a}
 
 
 def prune_disabled_admin_sources(db: Session) -> dict[str, int]:
