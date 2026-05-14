@@ -205,12 +205,6 @@ export function ResourceDetailPage() {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:px-0">
-      <div className="mb-3 flex shrink-0 justify-end lg:hidden">
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          {isApp ? t("navApps") : t("navNews")}
-        </span>
-      </div>
-
       <div className="sticky top-16 z-30 mb-3 shrink-0 lg:hidden">
         <Link to={backTo} className={backBtnClass}>
           ← {t("detailBackFeed")}
@@ -309,8 +303,13 @@ export function ResourceDetailPage() {
                     {(a.title || "?").slice(0, 1)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-slate-500">{t("detailAppMeta")}</p>
-                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{a.title}</h1>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-violet-800">
+                        {t("navApps")}
+                      </span>
+                      <span className="text-xs font-medium text-slate-500">{t("detailAppMeta")}</span>
+                    </div>
+                    <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{a.title}</h1>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
                       {a.published_at ? (
                         <span className="tabular-nums">{a.published_at.slice(0, 10)}</span>
@@ -323,8 +322,12 @@ export function ResourceDetailPage() {
               </div>
             ) : (
               <div className="ui-card border-l-4 border-l-brand-500 bg-brand-50/40 px-6 py-8 sm:px-8">
-                <p className="text-xs font-medium uppercase tracking-wide text-brand-700">{t("detailFeaturedTag")}</p>
-                <h1 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center rounded-full border border-brand-300/80 bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-brand-800 shadow-sm">
+                    {t("navNews")}
+                  </span>
+                </div>
+                <h1 className="mt-3 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
                 {a.summary ? (
                   <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
                 ) : null}
