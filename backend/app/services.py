@@ -51,7 +51,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜应用发现",
         "content_role": "app_launches",
-        "notes": "Product Hunt **GraphQL v2**（同步与测试连接走 POST，见连接器逻辑）。须在连接器 ``config_json`` 填 **Bearer access_token**（Developer OAuth），或在「测试连接」粘贴临时 Token。无 Token 时探测可能为 401，属正常。",
+        "notes": "Product Hunt **GraphQL v2**（同步与测试连接走 POST，见连接器逻辑）。须在连接器 ``config_json`` 填 **Bearer access_token**（Developer OAuth），后台卡片另可存 **OAuth Client Secret** 至 ``oauth_client_secret``；或在「测试连接」粘贴临时 Token。无 Token 时探测可能为 401，属正常。",
     },
     {
         "source": "hacker_news",
@@ -145,6 +145,16 @@ ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
         "stackoverflow",
     }
 )
+
+# 凭据形态速查（内置 9 个 + 已下线 7 个 + 运营自定义任意标识；文档常笼统称「数据源」）：
+# - 典型 OAuth「Client ID + Client Secret」换 Bearer：product_hunt（在用）；已下线 youtube_data 等 Google OAuth 同类。
+# - 单串 API Key / Token：newsapi、finnhub、openai、google_gemini（常见）、mapbox（access token）等。
+# - 公开免钥或单 Bearer 可选：github、hacker_news、stackoverflow、arxiv、openalex、rss_*；huggingface_spaces 公开列表免钥。
+# 后台第二输入框「APP Secret」仅对 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD 为真时展示（当前仅 product_hunt）。
+
+# 后台卡片在「Bearer Access Token」之外另展示「OAuth Client Secret」输入的预置（Developer OAuth 换 token 用）。
+# 其余 8 个在用预置 + 7 个已下线标识：多为单 API Key / 单 Token / 免钥；仅 product_hunt 在此集合。
+ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product_hunt"})
 
 
 def sync_catalog_preset_metadata(db: Session) -> int:

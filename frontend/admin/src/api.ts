@@ -71,6 +71,8 @@ export type AdminSourcePresetItem = {
   enabled: boolean;
   /** false：免 Key 公开模板，卡片不展示密钥输入 */
   show_api_key_field?: boolean;
+  /** true：另展示 OAuth Client Secret（当前仅 product_hunt） */
+  show_app_secret_field?: boolean;
 };
 
 /** 仅从 GET /api/admin/v1/sources/presets（数据库）加载，不使用前端静态 JSON。 */
@@ -144,6 +146,7 @@ export const adminApi = {
         enabled: boolean;
         api_base: string;
         api_key_masked: string;
+        app_secret_masked?: string;
         scope_label?: string;
         scope_labels?: string[];
         notes: string;

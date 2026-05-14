@@ -15,7 +15,11 @@ from .connector_heat_fetch import (
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
-from .services import ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY, CONTENT_ROLE_LABEL_ZH
+from .services import (
+    ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY,
+    ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD,
+    CONTENT_ROLE_LABEL_ZH,
+)
 
 
 class DataApiService:
@@ -34,6 +38,7 @@ class DataApiService:
             role = (i.content_role or "").strip() or "daily_editorial"
             label = (i.preset_label or "").strip() or i.source.replace("_", " ").title()
             show_api_key_field = i.source not in ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY
+            show_app_secret_field = i.source in ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD
             items.append(
                 {
                     "source": i.source,
@@ -47,6 +52,7 @@ class DataApiService:
                     "content_role": role,
                     "content_role_label_zh": CONTENT_ROLE_LABEL_ZH.get(role, role),
                     "show_api_key_field": show_api_key_field,
+                    "show_app_secret_field": show_app_secret_field,
                 }
             )
         return items
@@ -76,6 +82,9 @@ class DataApiService:
                     "name": c.name,
                     "enabled": c.enabled,
                     "has_api_key": bool(str((dict(c.config_json or {}).get("api_key") or "")).strip()),
+                    "has_oauth_client_secret": bool(
+                        str((dict(c.config_json or {}).get("oauth_client_secret") or "")).strip()
+                    ),
                 }
                 for c in c_rows
             ]
@@ -86,6 +95,7 @@ class DataApiService:
                     "frequency": "scheduled",
                     "api_base": i.api_base,
                     "api_key_masked": i.api_key_masked,
+                    "app_secret_masked": getattr(i, "app_secret_masked", "") or "",
                     "admin_key_configured": bool((i.api_key_masked or "").strip()),
                     "connectors_token_status": connectors_token_status,
                     "scope_label": i.scope_label or "",
@@ -121,6 +131,18 @@ class DataApiService:
                 cfg["api_key"] = raw_key
                 cfg.setdefault("auth_mode", "bearer")
                 c.config_json = cfg
+        raw_secret = (payload.get("app_secret") or "").strip()
+        if raw_secret:
+            item.app_secret_masked = mask_func(raw_secret)
+            for c in self.db.scalars(
+                select(ProductConnector).where(
+                    ProductConnector.admin_source_key.isnot(None),
+                    ProductConnector.admin_source_key == item.source,
+                )
+            ).all():
+                cfg = dict(c.config_json or {})
+                cfg["oauth_client_secret"] = raw_secret
+                c.config_json = cfg
         item.notes = payload["notes"].strip()
         labels = normalize_scope_labels_from_payload(payload)
         apply_scope_labels_to_row(item, labels)
@@ -138,16 +160,20 @@ class DataApiService:
                 "connector_id": c.id,
                 "name": c.name,
                 "enabled": c.enabled,
-                "has_api_key": bool(str((dict(c.config_json or {}).get("api_key") or "")).strip()),
-            }
-            for c in c_rows
-        ]
+                    "has_api_key": bool(str((dict(c.config_json or {}).get("api_key") or "")).strip()),
+                    "has_oauth_client_secret": bool(
+                        str((dict(c.config_json or {}).get("oauth_client_secret") or "")).strip()
+                    ),
+                }
+                for c in c_rows
+            ]
         return {
             "source": item.source,
             "enabled": item.enabled,
             "frequency": item.frequency,
             "api_base": item.api_base,
             "api_key_masked": item.api_key_masked,
+            "app_secret_masked": getattr(item, "app_secret_masked", "") or "",
             "admin_key_configured": bool((item.api_key_masked or "").strip()),
             "connectors_token_status": connectors_token_status,
             "scope_label": item.scope_label or "",

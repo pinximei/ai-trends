@@ -71,6 +71,7 @@ class AdminSourceConfig(Base):
     frequency: Mapped[str] = mapped_column(String(32), default="scheduled")
     api_base: Mapped[str] = mapped_column(String(256), default="")
     api_key_masked: Mapped[str] = mapped_column(String(128), default="")
+    app_secret_masked: Mapped[str] = mapped_column(String(128), default="")
     scope_label: Mapped[str] = mapped_column(String(128), default="")
     # 多条「所属领域/板块」JSON 数组文本；旧行可仅有 scope_label，由读取逻辑合并。
     scope_labels_json: Mapped[str] = mapped_column(Text, default="[]")

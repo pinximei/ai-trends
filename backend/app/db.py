@@ -103,6 +103,8 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN preset_label VARCHAR(128) DEFAULT ''"))
             if "content_role" not in cols:
                 conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN content_role VARCHAR(32) DEFAULT ''"))
+            if "app_secret_masked" not in cols:
+                conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN app_secret_masked VARCHAR(128) DEFAULT ''"))
         cols = _column_names(conn, "product_connectors")
         if cols and "admin_source_key" not in cols:
             conn.execute(text("ALTER TABLE product_connectors ADD COLUMN admin_source_key VARCHAR(64)"))

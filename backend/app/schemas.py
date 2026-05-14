@@ -8,6 +8,8 @@ class AdminSourceConfigUpsert(BaseModel):
     enabled: bool = True
     api_base: str = ""
     api_key: str = ""
+    """OAuth 等场景的应用密钥（如 Product Hunt 的 client_secret）；空串表示不修改已存值。"""
+    app_secret: str = ""
     notes: str = ""
     scope_label: str = ""
     # 多条领域/板块；提交时优先于单字段 scope_label。

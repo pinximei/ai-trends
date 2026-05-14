@@ -52,7 +52,7 @@ function publicFeedLaneForSourceKey(sourceKey: string): { lane: "apps" | "news";
   };
 }
 
-type SourceCardDraft = { api_base: string; scope_text: string; api_key: string };
+type SourceCardDraft = { api_base: string; scope_text: string; api_key: string; app_secret: string };
 
 function inferSourceTestAuthMode(apiBase: string): "bearer" | "private_token" {
   return apiBase.toLowerCase().includes("gitlab") ? "private_token" : "bearer";
@@ -72,12 +72,19 @@ function formatApiKeyDisplay(masked: string | undefined | null): string {
 }
 
 type Me = { username: string; role: string; expires_at: string; password_min_length: number };
-type ConnectorTokenStatus = { connector_id: number; name: string; enabled: boolean; has_api_key: boolean };
+type ConnectorTokenStatus = {
+  connector_id: number;
+  name: string;
+  enabled: boolean;
+  has_api_key: boolean;
+  has_oauth_client_secret?: boolean;
+};
 type Source = {
   source: string;
   enabled: boolean;
   api_base: string;
   api_key_masked: string;
+  app_secret_masked?: string;
   /** 数据源表单里是否曾保存过密钥（仅掩码展示；定时同步不读此字段） */
   admin_key_configured?: boolean;
   /** 绑定到该 source 的连接器及 config_json.api_key 是否非空（同步实际用此密钥） */
@@ -183,6 +190,8 @@ type SourcePresetRow = {
   enabled: boolean;
   /** 为 false 时卡片不展示 API Key 输入（公开/免 Key 模板）；缺省按 true */
   show_api_key_field?: boolean;
+  /** 为 true 时另展示 OAuth Client Secret（如 Product Hunt） */
+  show_app_secret_field?: boolean;
   /** 与后端预设 content_role 一致；旧后端可能无此字段 */
   content_role?: string;
   content_role_label_zh?: string;
@@ -199,6 +208,7 @@ function defaultSourceCardDraft(saved: Source | undefined, preset: SourcePresetR
     api_base: (saved?.api_base ?? preset?.api_base ?? "").trim(),
     scope_text: scopeTextFromSavedOrPreset(saved, preset),
     api_key: "",
+    app_secret: "",
   };
 }
 
@@ -226,6 +236,7 @@ export function App() {
     enabled: true,
     api_base: "",
     api_key: "",
+    app_secret: "",
     scope_labels: [""] as string[],
     notes: "",
   });
@@ -271,6 +282,12 @@ export function App() {
     const maskPart = mask ? `数据源掩码（已保存过密钥）：${mask}。` : "数据源侧尚无掩码（未在保存时填过密钥，或仅连接器内有 Key）。";
     return `${maskPart}${connPart}修改密钥：在下方输入新值并保存；留空表示不改动已有密钥。`;
   }, [sources, sourceForm.source]);
+
+  const sourceFormPreset = useMemo(
+    () => sourcePresets.find((p) => p.source === sourceForm.source.trim().toLowerCase()),
+    [sourcePresets, sourceForm.source],
+  );
+  const sourceFormShowsAppSecret = sourceFormPreset?.show_app_secret_field === true;
 
   const [llmSettings, setLlmSettings] = useState<LlmSettingsView | null>(null);
   const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
@@ -744,6 +761,7 @@ export function App() {
     const preset = sourcePresets.find((p) => p.source === key);
     const draft = sourceCardDrafts[key] ?? defaultSourceCardDraft(row, preset);
     const showKey = preset?.show_api_key_field !== false;
+    const showAppSecret = preset?.show_app_secret_field === true;
     setSourceToggleBusy(key);
     setErr("");
     try {
@@ -752,6 +770,7 @@ export function App() {
         enabled: !row.enabled,
         api_base: draft.api_base.trim(),
         api_key: showKey ? draft.api_key.trim() : "",
+        app_secret: showAppSecret ? draft.app_secret.trim() : "",
         notes: (row.notes ?? "").trim(),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
@@ -760,7 +779,7 @@ export function App() {
       });
       setSourceCardDrafts((prev) => ({
         ...prev,
-        [key]: { ...draft, api_key: "" },
+        [key]: { ...draft, api_key: "", app_secret: "" },
       }));
       await loadAdminData();
     } catch (error) {
@@ -776,6 +795,7 @@ export function App() {
     const preset = sourcePresets.find((p) => p.source === sourceKey);
     const draft = sourceCardDrafts[sourceKey] ?? defaultSourceCardDraft(saved, preset);
     const showKey = preset?.show_api_key_field !== false;
+    const showAppSecret = preset?.show_app_secret_field === true;
     const enabled = saved?.enabled ?? preset?.enabled ?? true;
     setSourceCardSaving(sourceKey);
     setErr("");
@@ -785,6 +805,7 @@ export function App() {
         enabled,
         api_base: draft.api_base.trim(),
         api_key: showKey ? draft.api_key.trim() : "",
+        app_secret: showAppSecret ? draft.app_secret.trim() : "",
         notes: sourceNotesForUpsert(saved, preset),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
@@ -800,6 +821,7 @@ export function App() {
               ? row.scope_labels.join("\n")
               : (row.scope_label || "").trim(),
           api_key: "",
+          app_secret: "",
         },
       }));
       await loadAdminData();
@@ -819,10 +841,11 @@ export function App() {
         enabled: sourceForm.enabled,
         api_base: sourceForm.api_base,
         api_key: sourceForm.api_key,
+        app_secret: sourceFormShowsAppSecret ? sourceForm.app_secret : "",
         notes: sourceForm.notes,
         scope_labels: sourceForm.scope_labels.map((s) => s.trim()).filter(Boolean),
       });
-      setSourceForm((p) => ({ ...p, api_key: "" }));
+      setSourceForm((p) => ({ ...p, api_key: "", app_secret: "" }));
       await loadAdminData();
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "save failed"));
@@ -1255,7 +1278,7 @@ export function App() {
                   本身只有元数据、计数、行情或目录字段，结果就会像「统计/目录」而非报道。要拉<strong>可读的条目型内容</strong>，请优先配置<strong>RSS/Atom</strong>或<strong>带标题/摘要/链接（或正文）字段的官方 API</strong>；整站爬取、无头浏览器、复杂登录流不在当前内置范围内。
                 </p>
                 <p className="muted tiny" style={{ margin: "10px 0 0" }}>
-                  <strong>密钥与同步</strong>：公开/免 Key 的预置模板卡片<strong>不展示</strong>密钥输入，仅在有掩码时显示一行脱敏；需 Token 的预置（如 Product Hunt、Hugging Face 私有等）及<strong>自定义标识</strong>可在卡片上填写 API Key。亦可始终在页面下方<strong>保存数据源</strong>表单维护密钥：保存时写入绑定连接器的 <code>config_json.api_key</code>，留空表示<strong>不修改</strong>已有 Token。「连接器 Token」显示各连接器内是否已有 api_key。
+                  <strong>密钥与同步</strong>：公开/免 Key 的预置模板卡片<strong>不展示</strong>密钥输入，仅在有掩码时显示一行脱敏；需 Token 的预置（如 Product Hunt 需 <strong>Bearer access_token</strong>，且可另存 <strong>OAuth Client Secret</strong>）及<strong>自定义标识</strong>可在卡片上填写。亦可始终在页面下方<strong>保存数据源</strong>表单维护：保存时写入绑定连接器的 <code>config_json.api_key</code> / <code>oauth_client_secret</code>（后者仅 Product Hunt 等），留空表示<strong>不修改</strong>已有值。「连接器 Token」显示各连接器内是否已有 api_key 与（若适用）OAuth Secret。
                 </p>
               </div>
               {sourcePresetsLoading ? <p className="muted tiny" style={{ marginTop: 12 }}>正在加载数据源列表…</p> : null}
@@ -1283,6 +1306,10 @@ export function App() {
                         const maskLine = saved?.api_key_masked ? formatApiKeyDisplay(saved.api_key_masked) : "";
                         const cardTestKey = `card:${p.source}`;
                         const showApiKey = p.show_api_key_field !== false;
+                        const showAppSecret = p.show_app_secret_field === true;
+                        const secretMaskLine = saved?.app_secret_masked
+                          ? formatApiKeyDisplay(saved.app_secret_masked)
+                          : "";
                         return (
                           <article
                             key={p.source}
@@ -1376,6 +1403,9 @@ export function App() {
                                         <span key={c.connector_id} style={{ display: "block" }}>
                                           {c.name}（#{c.connector_id}
                                           {c.enabled ? "" : "，已停用"}）：{c.has_api_key ? "已填 api_key" : "未填 api_key（同步不会带头）"}
+                                          {showAppSecret
+                                            ? `；OAuth Client Secret：${c.has_oauth_client_secret ? "已填" : "未填"}`
+                                            : ""}
                                         </span>
                                       ))
                                     ) : (
@@ -1397,12 +1427,16 @@ export function App() {
                               <>
                                 {showApiKey ? (
                                   <div className="source-card__meta-row" style={{ marginTop: 10 }}>
-                                    <dt>API Key</dt>
+                                    <dt>{showAppSecret ? "Bearer Access Token" : "API Key"}</dt>
                                     <dd style={{ margin: 0 }}>
                                       <input
                                         type="password"
                                         autoComplete="off"
-                                        placeholder="填写新密钥；留空并保存表示不修改已有密钥"
+                                        placeholder={
+                                          showAppSecret
+                                            ? "OAuth 换到的 access_token；留空保存不修改"
+                                            : "填写新密钥；留空并保存表示不修改已有密钥"
+                                        }
                                         style={{
                                           width: "100%",
                                           boxSizing: "border-box",
@@ -1423,11 +1457,51 @@ export function App() {
                                           className="muted tiny"
                                           style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
                                         >
-                                          已保存：{maskLine}
+                                          已保存 Token：{maskLine}
                                         </div>
                                       ) : (
                                         <div className="muted tiny" style={{ marginTop: 8 }}>
-                                          保存后在此显示首尾掩码；留空保存不改动已有密钥。
+                                          {showAppSecret
+                                            ? "Client ID 在 Product Hunt 开发者后台查看；此处填换到的 Bearer Token。"
+                                            : "保存后在此显示首尾掩码；留空保存不改动已有密钥。"}
+                                        </div>
+                                      )}
+                                    </dd>
+                                  </div>
+                                ) : null}
+                                {showApiKey && showAppSecret ? (
+                                  <div className="source-card__meta-row" style={{ marginTop: 10 }}>
+                                    <dt>APP Secret</dt>
+                                    <dd style={{ margin: 0 }}>
+                                      <input
+                                        type="password"
+                                        autoComplete="off"
+                                        placeholder="OAuth Client Secret；留空保存不修改"
+                                        style={{
+                                          width: "100%",
+                                          boxSizing: "border-box",
+                                          fontFamily: "var(--font-mono)",
+                                          fontSize: 12,
+                                          padding: "6px 8px",
+                                        }}
+                                        value={draft.app_secret}
+                                        onChange={(e) =>
+                                          setSourceCardDrafts((prev) => ({
+                                            ...prev,
+                                            [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), app_secret: e.target.value },
+                                          }))
+                                        }
+                                      />
+                                      {secretMaskLine ? (
+                                        <div
+                                          className="muted tiny"
+                                          style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
+                                        >
+                                          已保存 Secret：{secretMaskLine}
+                                        </div>
+                                      ) : (
+                                        <div className="muted tiny" style={{ marginTop: 8 }}>
+                                          与 Developer OAuth 的 client_secret 一致；写入绑定连接器 config_json.oauth_client_secret。
                                         </div>
                                       )}
                                     </dd>
@@ -1470,7 +1544,9 @@ export function App() {
                                     style={{ fontWeight: 600 }}
                                     title={
                                       showApiKey
-                                        ? "保存当前卡片中的接口、领域主题与密钥（留空密钥不修改）"
+                                        ? showAppSecret
+                                          ? "保存接口、领域主题、Bearer Token 与 APP Secret（留空不修改对应项）"
+                                          : "保存当前卡片中的接口、领域主题与密钥（留空密钥不修改）"
                                         : "保存当前卡片中的接口与领域主题（密钥请在下方表单或需密钥的预置卡片上维护）"
                                     }
                                     onClick={() => void saveSourceCard(p.source)}
@@ -1795,7 +1871,7 @@ export function App() {
                     </button>
                   </div>
                   <div className="form-field">
-                    <label>API Key（可修改）</label>
+                    <label>{sourceFormShowsAppSecret ? "Bearer Access Token（可修改）" : "API Key（可修改）"}</label>
                     {sourceForm.source.trim() ? (
                       <p className="muted tiny" style={{ margin: "0 0 6px" }}>
                         {sourceApiKeyStatusLine}
@@ -1804,11 +1880,31 @@ export function App() {
                     <input
                       value={sourceForm.api_key}
                       onChange={(e) => setSourceForm((p) => ({ ...p, api_key: e.target.value }))}
-                      placeholder="输入新密钥以覆盖；留空则保存时不改动已有密钥"
+                      placeholder={
+                        sourceFormShowsAppSecret
+                          ? "OAuth access_token；留空则保存时不改动已有 Token"
+                          : "输入新密钥以覆盖；留空则保存时不改动已有密钥"
+                      }
                       type="password"
                       autoComplete="new-password"
                     />
                   </div>
+                  {sourceFormShowsAppSecret ? (
+                    <div className="form-field">
+                      <label>APP Secret / OAuth Client Secret（可修改）</label>
+                      <p className="muted tiny" style={{ margin: "0 0 6px" }}>
+                        Product Hunt Developer 应用的 client_secret；留空保存表示不修改已存值。会同步到绑定连接器的{" "}
+                        <code className="inline-code">oauth_client_secret</code>。
+                      </p>
+                      <input
+                        value={sourceForm.app_secret}
+                        onChange={(e) => setSourceForm((p) => ({ ...p, app_secret: e.target.value }))}
+                        placeholder="留空则保存时不改动已有 Secret"
+                        type="password"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  ) : null}
                   <label className="check-row">
                     <input type="checkbox" checked={sourceForm.enabled} onChange={(e) => setSourceForm((p) => ({ ...p, enabled: e.target.checked }))} />
                     创建或更新后启用该数据源
