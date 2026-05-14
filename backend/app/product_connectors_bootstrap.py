@@ -79,6 +79,32 @@ def ensure_core_admin_connectors(db: Session) -> None:
     db.commit()
 
 
+def prune_disabled_admin_sources(db: Session) -> dict[str, int]:
+    """删除所有已停用（enabled=False）的数据源行及其绑定连接器。
+
+    内置 AI 预置若曾被停用，删除后由随后的 ``ensure_mainstream_admin_sources`` 按模板重新插入（默认启用）。
+    """
+    import logging
+
+    from sqlalchemy import delete
+
+    log = logging.getLogger(__name__)
+    rows = db.scalars(select(AdminSourceConfig).where(AdminSourceConfig.enabled.is_(False))).all()
+    if not rows:
+        return {"connectors_deleted": 0, "admin_sources_deleted": 0}
+    keys = tuple({r.source.strip().lower() for r in rows if (r.source or "").strip()})
+    if not keys:
+        return {"connectors_deleted": 0, "admin_sources_deleted": 0}
+    rc = db.execute(delete(ProductConnector).where(ProductConnector.admin_source_key.in_(keys)))
+    ra = db.execute(delete(AdminSourceConfig).where(AdminSourceConfig.enabled.is_(False)))
+    db.commit()
+    n_c = int(rc.rowcount) if rc.rowcount is not None and rc.rowcount >= 0 else 0
+    n_a = int(ra.rowcount) if ra.rowcount is not None and ra.rowcount >= 0 else 0
+    if n_c or n_a:
+        log.info("pruned disabled admin sources: connectors=%s admin_sources=%s keys=%s", n_c, n_a, keys)
+    return {"connectors_deleted": n_c, "admin_sources_deleted": n_a}
+
+
 def prune_discontinued_bootstrap_admin_sources(db: Session) -> dict[str, int]:
     """删除已下线的内置数据源及其绑定连接器，与当前 MAINSTREAM 预设对齐。"""
     import logging

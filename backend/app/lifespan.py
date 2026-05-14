@@ -40,14 +40,16 @@ def _startup_sync() -> None:
 
         from .product_connectors_bootstrap import (
             ensure_core_admin_connectors,
+            prune_disabled_admin_sources,
             prune_discontinued_bootstrap_admin_sources,
             repair_github_admin_source_if_still_zen,
             repair_short_probe_admin_sources,
         )
 
+        prune_discontinued_bootstrap_admin_sources(db)
+        prune_disabled_admin_sources(db)
         ensure_mainstream_admin_sources(db)
         sync_catalog_preset_metadata(db)
-        prune_discontinued_bootstrap_admin_sources(db)
         repair_github_admin_source_if_still_zen(db)
         repair_short_probe_admin_sources(db)
         ensure_core_admin_connectors(db)
