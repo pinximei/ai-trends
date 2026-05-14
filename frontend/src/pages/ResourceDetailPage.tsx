@@ -204,6 +204,23 @@ export function ResourceDetailPage() {
   const isApp = feedKind === "apps";
   const backTo = isApp ? "/apps" : "/news";
 
+  const categoryTagsEl =
+    a.categories && a.categories.length > 0 ? (
+      <div
+        data-testid="resource-detail-category-tags"
+        className="mt-4 flex flex-wrap gap-2 border-t border-slate-200/60 pt-4"
+      >
+        {a.categories.map((c) => (
+          <span
+            key={c}
+            className="inline-flex items-center rounded-full border border-slate-200/90 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm"
+          >
+            {c}
+          </span>
+        ))}
+      </div>
+    ) : null;
+
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:px-0">
       <div className="sticky top-16 z-30 mb-3 shrink-0 lg:hidden">
@@ -297,19 +314,6 @@ export function ResourceDetailPage() {
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
         >
           <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
-            {a.categories && a.categories.length > 0 ? (
-              <div data-testid="resource-detail-category-tags" className="flex flex-wrap gap-2">
-                {a.categories.map((c) => (
-                  <span
-                    key={c}
-                    className="inline-flex items-center rounded-full border border-slate-200/90 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
             {isApp ? (
               <div className="ui-card overflow-hidden p-6 sm:p-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
@@ -328,6 +332,7 @@ export function ResourceDetailPage() {
                     {a.summary ? <p className="mt-4 text-sm leading-relaxed text-slate-600">{a.summary}</p> : null}
                   </div>
                 </div>
+                {categoryTagsEl}
               </div>
             ) : (
               <div className="ui-card border-l-4 border-l-brand-500 bg-brand-50/40 px-6 py-8 sm:px-8">
@@ -336,6 +341,7 @@ export function ResourceDetailPage() {
                 {a.summary ? (
                   <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
                 ) : null}
+                {categoryTagsEl}
               </div>
             )}
 
