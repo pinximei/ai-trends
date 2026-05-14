@@ -1,3 +1,5 @@
+import { tryMockPublicGet } from "./mockPublicData";
+
 const API_BASE = (import.meta.env.VITE_API_BASE || "").trim().replace(/\/$/, "");
 
 type Envelope<T> = { code: number; message: string; data: T };
@@ -20,6 +22,9 @@ async function parse<T>(res: Response): Promise<T> {
 }
 
 export async function publicGet<T>(path: string): Promise<T> {
+  const mocked = tryMockPublicGet<T>(path);
+  if (mocked != null) return mocked;
+
   const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
   const res = await fetch(url);
   return parse<T>(res);

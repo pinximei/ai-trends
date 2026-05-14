@@ -119,7 +119,7 @@ export function ResourceDetailPage() {
   }
 
   return (
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col px-2 sm:px-4">
+    <div className="flex w-full min-w-0 flex-col px-2 sm:px-4">
       <div className="mb-3 flex shrink-0 justify-end lg:mb-2">
         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {isApp ? t("navApps") : t("navNews")}
@@ -132,12 +132,13 @@ export function ResourceDetailPage() {
         </Link>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-        <aside className="flex min-w-0 w-full shrink-0 flex-col lg:sticky lg:top-0 lg:z-10 lg:max-h-[calc(100dvh-5rem)] lg:w-[min(280px,calc(100%-1rem))] xl:w-[300px]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        <aside className="flex min-w-0 w-full shrink-0 flex-col lg:sticky lg:top-[4.75rem] lg:z-10 lg:w-[min(280px,calc(100%-1rem))] lg:self-start xl:w-[300px]">
           <Link to={backTo} className={`${backBtnClass} mb-1 hidden shrink-0 lg:mb-0 lg:inline-flex`}>
             ← {t("detailBackFeed")}
           </Link>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain lg:mt-3">
+          {/* 不要用 flex-1 + overflow-y-auto 撑满侧栏：无溢出时也会吃掉滚轮，导致只能拖滚动条 */}
+          <div className="max-h-[min(40vh,22rem)] overflow-y-auto lg:mt-3 lg:max-h-[calc(100dvh-6.25rem)]">
             <div className="ui-card overflow-hidden">
               <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("detailSidebarTitle")}</p>
@@ -165,7 +166,7 @@ export function ResourceDetailPage() {
           </div>
         </aside>
 
-        <div className="min-h-0 min-w-0 w-full flex-1 lg:overflow-x-hidden">
+        <div className="min-w-0 w-full flex-1 lg:overflow-x-hidden">
           <article className="min-w-0 w-full max-w-none space-y-6 pb-4">
               {isApp ? (
             <div className="ui-card overflow-hidden p-6 sm:p-8">
