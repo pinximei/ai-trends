@@ -16,6 +16,7 @@ test.describe("详情页 · 内置 mock 与滚轮", () => {
     await page.goto("/resources/7");
 
     await expect(page.getByRole("heading", { name: /Mock 文章 #7/u })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("resource-detail-feed-type")).toContainText("AI 资讯");
     await expect(page.getByText("模拟长文").first()).toBeVisible();
 
     const panel = page.getByTestId("resource-detail-article");

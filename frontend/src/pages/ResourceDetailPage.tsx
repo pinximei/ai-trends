@@ -168,9 +168,6 @@ export function ResourceDetailPage() {
       .slice(0, 5);
   }, [a, tabs]);
 
-  const backTo = a?.feed_kind === "apps" ? "/apps" : "/news";
-  const isApp = a?.feed_kind === "apps";
-
   const mdBody =
     "max-w-none w-full space-y-4 text-slate-600 leading-relaxed [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:underline [&_strong]:text-slate-900 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:marker:text-brand-300 [&_code]:rounded-md [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-slate-800 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand-100 [&_blockquote]:pl-4 [&_blockquote]:text-slate-500";
 
@@ -202,6 +199,10 @@ export function ResourceDetailPage() {
       </div>
     );
   }
+
+  const feedKind: "news" | "apps" = a.feed_kind === "apps" ? "apps" : "news";
+  const isApp = feedKind === "apps";
+  const backTo = isApp ? "/apps" : "/news";
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:px-0">
@@ -303,13 +304,16 @@ export function ResourceDetailPage() {
                     {(a.title || "?").slice(0, 1)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-violet-800">
+                    <p className="text-xs font-medium text-slate-500">{t("detailAppMeta")}</p>
+                    <h1 className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                      <span
+                        data-testid="resource-detail-feed-type"
+                        className="inline-flex shrink-0 items-center rounded-full bg-violet-600 px-3 py-1 text-xs font-semibold tracking-wide text-white shadow-sm ring-1 ring-violet-700/20"
+                      >
                         {t("navApps")}
                       </span>
-                      <span className="text-xs font-medium text-slate-500">{t("detailAppMeta")}</span>
-                    </div>
-                    <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{a.title}</h1>
+                      <span className="min-w-0 flex-1">{a.title}</span>
+                    </h1>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
                       {a.published_at ? (
                         <span className="tabular-nums">{a.published_at.slice(0, 10)}</span>
@@ -322,12 +326,15 @@ export function ResourceDetailPage() {
               </div>
             ) : (
               <div className="ui-card border-l-4 border-l-brand-500 bg-brand-50/40 px-6 py-8 sm:px-8">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex shrink-0 items-center rounded-full border border-brand-300/80 bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-brand-800 shadow-sm">
+                <h1 className="flex flex-wrap items-baseline gap-x-3 gap-y-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">
+                  <span
+                    data-testid="resource-detail-feed-type"
+                    className="inline-flex shrink-0 items-center rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold tracking-wide text-white shadow-sm ring-1 ring-brand-700/25"
+                  >
                     {t("navNews")}
                   </span>
-                </div>
-                <h1 className="mt-3 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
+                  <span className="min-w-0 flex-1">{a.title}</span>
+                </h1>
                 {a.summary ? (
                   <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
                 ) : null}
