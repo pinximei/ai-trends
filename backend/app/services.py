@@ -132,6 +132,20 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
     {row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS}
 ), "DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES overlaps MAINSTREAM_ADMIN_SOURCE_PRESETS"
 
+# 后台数据源卡片：下列预置 source 的公开模板可不填 Key 即可拉取；卡片上隐藏「API Key」输入。
+# 其余预置（如 product_hunt、huggingface_spaces）及运营自增的任意标识默认显示密钥框。
+ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
+    {
+        "github",
+        "hacker_news",
+        "arxiv",
+        "openalex",
+        "rss_arstechnica",
+        "rss_theverge",
+        "stackoverflow",
+    }
+)
+
 
 def sync_catalog_preset_metadata(db: Session) -> int:
     """将内置目录中的 preset_label / content_role 写入主流 source，仅当对应列为空（便于运营日后自定义）。"""

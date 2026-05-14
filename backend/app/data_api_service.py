@@ -15,7 +15,7 @@ from .connector_heat_fetch import (
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
-from .services import CONTENT_ROLE_LABEL_ZH
+from .services import ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY, CONTENT_ROLE_LABEL_ZH
 
 
 class DataApiService:
@@ -33,6 +33,7 @@ class DataApiService:
             scope_primary = (sl[0] if sl else (i.scope_label or "")).strip()
             role = (i.content_role or "").strip() or "daily_editorial"
             label = (i.preset_label or "").strip() or i.source.replace("_", " ").title()
+            show_api_key_field = i.source not in ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY
             items.append(
                 {
                     "source": i.source,
@@ -45,6 +46,7 @@ class DataApiService:
                     "enabled": bool(i.enabled),
                     "content_role": role,
                     "content_role_label_zh": CONTENT_ROLE_LABEL_ZH.get(role, role),
+                    "show_api_key_field": show_api_key_field,
                 }
             )
         return items

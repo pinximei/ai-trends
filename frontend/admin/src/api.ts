@@ -69,6 +69,8 @@ export type AdminSourcePresetItem = {
   scope_labels: string[];
   notes: string;
   enabled: boolean;
+  /** false：免 Key 公开模板，卡片不展示密钥输入 */
+  show_api_key_field?: boolean;
 };
 
 /** 仅从 GET /api/admin/v1/sources/presets（数据库）加载，不使用前端静态 JSON。 */

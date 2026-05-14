@@ -52,7 +52,7 @@ function publicFeedLaneForSourceKey(sourceKey: string): { lane: "apps" | "news";
   };
 }
 
-type SourceCardDraft = { api_base: string; scope_text: string; notes: string; api_key: string };
+type SourceCardDraft = { api_base: string; scope_text: string; api_key: string };
 
 function inferSourceTestAuthMode(apiBase: string): "bearer" | "private_token" {
   return apiBase.toLowerCase().includes("gitlab") ? "private_token" : "bearer";
@@ -181,6 +181,8 @@ type SourcePresetRow = {
   scope_labels: string[];
   notes: string;
   enabled: boolean;
+  /** 为 false 时卡片不展示 API Key 输入（公开/免 Key 模板）；缺省按 true */
+  show_api_key_field?: boolean;
   /** 与后端预设 content_role 一致；旧后端可能无此字段 */
   content_role?: string;
   content_role_label_zh?: string;
@@ -196,9 +198,12 @@ function defaultSourceCardDraft(saved: Source | undefined, preset: SourcePresetR
   return {
     api_base: (saved?.api_base ?? preset?.api_base ?? "").trim(),
     scope_text: scopeTextFromSavedOrPreset(saved, preset),
-    notes: (saved?.notes ?? preset?.notes ?? "").trim(),
     api_key: "",
   };
+}
+
+function sourceNotesForUpsert(saved: Source | undefined, preset: SourcePresetRow | undefined): string {
+  return (saved?.notes ?? preset?.notes ?? "").trim();
 }
 
 export function App() {
@@ -234,7 +239,7 @@ export function App() {
   const [sourcePresets, setSourcePresets] = useState<SourcePresetRow[]>([]);
   const [sourcePresetsLoading, setSourcePresetsLoading] = useState(false);
   const [sourcePresetsError, setSourcePresetsError] = useState("");
-  /** 数据源卡片内联编辑草稿（api_key 仅浏览器内，保存成功后清空） */
+  /** 数据源卡片草稿（需密钥的预置/自定义含 api_key；免 Key 预置不传密钥） */
   const [sourceCardDrafts, setSourceCardDrafts] = useState<Record<string, SourceCardDraft>>({});
   const [sourceCardSaving, setSourceCardSaving] = useState<string | null>(null);
   /** 数据源卡片上「启用/停用」提交中（key 为 source 标识） */
@@ -738,6 +743,7 @@ export function App() {
     const key = row.source;
     const preset = sourcePresets.find((p) => p.source === key);
     const draft = sourceCardDrafts[key] ?? defaultSourceCardDraft(row, preset);
+    const showKey = preset?.show_api_key_field !== false;
     setSourceToggleBusy(key);
     setErr("");
     try {
@@ -745,8 +751,8 @@ export function App() {
         source: row.source,
         enabled: !row.enabled,
         api_base: draft.api_base.trim(),
-        api_key: draft.api_key.trim(),
-        notes: draft.notes.trim(),
+        api_key: showKey ? draft.api_key.trim() : "",
+        notes: (row.notes ?? "").trim(),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
           .map((x) => x.trim())
@@ -769,6 +775,7 @@ export function App() {
     const saved = sources.find((s) => s.source === sourceKey);
     const preset = sourcePresets.find((p) => p.source === sourceKey);
     const draft = sourceCardDrafts[sourceKey] ?? defaultSourceCardDraft(saved, preset);
+    const showKey = preset?.show_api_key_field !== false;
     const enabled = saved?.enabled ?? preset?.enabled ?? true;
     setSourceCardSaving(sourceKey);
     setErr("");
@@ -777,8 +784,8 @@ export function App() {
         source: sourceKey,
         enabled,
         api_base: draft.api_base.trim(),
-        api_key: draft.api_key.trim(),
-        notes: draft.notes.trim(),
+        api_key: showKey ? draft.api_key.trim() : "",
+        notes: sourceNotesForUpsert(saved, preset),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
           .map((x) => x.trim())
@@ -792,7 +799,6 @@ export function App() {
             row.scope_labels && row.scope_labels.length > 0
               ? row.scope_labels.join("\n")
               : (row.scope_label || "").trim(),
-          notes: row.notes || "",
           api_key: "",
         },
       }));
@@ -1249,7 +1255,7 @@ export function App() {
                   本身只有元数据、计数、行情或目录字段，结果就会像「统计/目录」而非报道。要拉<strong>可读的条目型内容</strong>，请优先配置<strong>RSS/Atom</strong>或<strong>带标题/摘要/链接（或正文）字段的官方 API</strong>；整站爬取、无头浏览器、复杂登录流不在当前内置范围内。
                 </p>
                 <p className="muted tiny" style={{ margin: "10px 0 0" }}>
-                  <strong>密钥与同步</strong>：在<strong>保存数据源</strong>时若填写新密钥，会同时写入<strong>所有绑定该标识的连接器</strong>的 <code>config_json.api_key</code>（并默认 <code>auth_mode: bearer</code>），定时同步读连接器配置。密钥框<strong>留空</strong>表示<strong>不修改</strong>已有 Token 与掩码。下方「连接器 Token」显示各连接器内是否已有 api_key。
+                  <strong>密钥与同步</strong>：公开/免 Key 的预置模板卡片<strong>不展示</strong>密钥输入，仅在有掩码时显示一行脱敏；需 Token 的预置（如 Product Hunt、Hugging Face 私有等）及<strong>自定义标识</strong>可在卡片上填写 API Key。亦可始终在页面下方<strong>保存数据源</strong>表单维护密钥：保存时写入绑定连接器的 <code>config_json.api_key</code>，留空表示<strong>不修改</strong>已有 Token。「连接器 Token」显示各连接器内是否已有 api_key。
                 </p>
               </div>
               {sourcePresetsLoading ? <p className="muted tiny" style={{ marginTop: 12 }}>正在加载数据源列表…</p> : null}
@@ -1276,11 +1282,11 @@ export function App() {
                         const testBase = draft.api_base.trim() || (saved?.api_base || "").trim() || p.api_base || "";
                         const maskLine = saved?.api_key_masked ? formatApiKeyDisplay(saved.api_key_masked) : "";
                         const cardTestKey = `card:${p.source}`;
+                        const showApiKey = p.show_api_key_field !== false;
                         return (
                           <article
                             key={p.source}
                             className={`source-card source-card--preset${saved ? " source-card--preset-exists" : ""}`}
-                            title={(saved?.notes || p.notes || "").trim() || undefined}
                           >
                             <div className="source-card__head">
                               <h4 className="source-card__title">{p.label}</h4>
@@ -1338,11 +1344,11 @@ export function App() {
                                 <dt>拉取节奏</dt>
                                 <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                               </div>
-                              <div className="source-card__meta-row">
+                              <div className="source-card__meta-row source-card__meta-row--scope-inline">
                                 <dt>领域主题</dt>
-                                <dd style={{ margin: 0 }}>
+                                <dd>
                                   <textarea
-                                    rows={3}
+                                    rows={2}
                                     style={{
                                       width: "100%",
                                       boxSizing: "border-box",
@@ -1356,28 +1362,6 @@ export function App() {
                                       setSourceCardDrafts((prev) => ({
                                         ...prev,
                                         [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), scope_text: e.target.value },
-                                      }))
-                                    }
-                                  />
-                                </dd>
-                              </div>
-                              <div className="source-card__meta-row">
-                                <dt>备注</dt>
-                                <dd style={{ margin: 0 }}>
-                                  <textarea
-                                    rows={2}
-                                    style={{
-                                      width: "100%",
-                                      boxSizing: "border-box",
-                                      fontSize: 12,
-                                      resize: "vertical",
-                                      padding: "6px 8px",
-                                    }}
-                                    value={draft.notes}
-                                    onChange={(e) =>
-                                      setSourceCardDrafts((prev) => ({
-                                        ...prev,
-                                        [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), notes: e.target.value },
                                       }))
                                     }
                                   />
@@ -1401,55 +1385,77 @@ export function App() {
                                 </div>
                               ) : null}
                             </dl>
+                            {!showApiKey && maskLine ? (
+                              <div
+                                className="muted tiny"
+                                style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
+                              >
+                                {maskLine}
+                              </div>
+                            ) : null}
                             {canOperate ? (
                               <>
-                                <div className="source-card__meta-row" style={{ marginTop: 10 }}>
-                                  <dt>API Key</dt>
-                                  <dd style={{ margin: 0 }}>
-                                    <input
-                                      type="password"
-                                      autoComplete="off"
-                                      placeholder="填写新密钥；留空并点保存表示不修改已有密钥"
-                                      style={{
-                                        width: "100%",
-                                        boxSizing: "border-box",
-                                        fontFamily: "var(--font-mono)",
-                                        fontSize: 12,
-                                        padding: "6px 8px",
-                                      }}
-                                      value={draft.api_key}
-                                      onChange={(e) =>
-                                        setSourceCardDrafts((prev) => ({
-                                          ...prev,
-                                          [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), api_key: e.target.value },
-                                        }))
-                                      }
-                                    />
-                                    {maskLine ? (
-                                      <div
-                                        className="muted tiny"
-                                        style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
-                                      >
-                                        已保存：{maskLine}
-                                      </div>
-                                    ) : (
-                                      <div className="muted tiny" style={{ marginTop: 8 }}>
-                                        保存后在此显示首尾掩码；留空保存不改动已有密钥。
-                                      </div>
-                                    )}
-                                  </dd>
-                                </div>
+                                {showApiKey ? (
+                                  <div className="source-card__meta-row" style={{ marginTop: 10 }}>
+                                    <dt>API Key</dt>
+                                    <dd style={{ margin: 0 }}>
+                                      <input
+                                        type="password"
+                                        autoComplete="off"
+                                        placeholder="填写新密钥；留空并保存表示不修改已有密钥"
+                                        style={{
+                                          width: "100%",
+                                          boxSizing: "border-box",
+                                          fontFamily: "var(--font-mono)",
+                                          fontSize: 12,
+                                          padding: "6px 8px",
+                                        }}
+                                        value={draft.api_key}
+                                        onChange={(e) =>
+                                          setSourceCardDrafts((prev) => ({
+                                            ...prev,
+                                            [p.source]: { ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)), api_key: e.target.value },
+                                          }))
+                                        }
+                                      />
+                                      {maskLine ? (
+                                        <div
+                                          className="muted tiny"
+                                          style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}
+                                        >
+                                          已保存：{maskLine}
+                                        </div>
+                                      ) : (
+                                        <div className="muted tiny" style={{ marginTop: 8 }}>
+                                          保存后在此显示首尾掩码；留空保存不改动已有密钥。
+                                        </div>
+                                      )}
+                                    </dd>
+                                  </div>
+                                ) : null}
                                 <div className="source-card__actions row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 12 }}>
                                   <button
                                     type="button"
                                     className="btn-ghost"
                                     disabled={sourceTestLoading === cardTestKey || !testBase.trim() || !!sourceCardSaving}
-                                    title={!testBase.trim() ? "请先填写接口地址" : "测试连接（不落库）"}
+                                    title={
+                                      !testBase.trim()
+                                        ? "请先填写接口地址"
+                                        : showApiKey
+                                          ? "测试连接（不落库）"
+                                          : "测试连接（不落库；免 Key 模板通常不带鉴权头）"
+                                    }
                                     onClick={() =>
                                       void runSourceTest(
                                         saved
-                                          ? { source: p.source, api_key: draft.api_key.trim() }
-                                          : { api_base: testBase, api_key: draft.api_key.trim() },
+                                          ? {
+                                              source: p.source,
+                                              ...(draft.api_key.trim() && showApiKey ? { api_key: draft.api_key.trim() } : {}),
+                                            }
+                                          : {
+                                              api_base: testBase,
+                                              ...(draft.api_key.trim() && showApiKey ? { api_key: draft.api_key.trim() } : {}),
+                                            },
                                         cardTestKey,
                                         inferSourceTestAuthMode(testBase),
                                       )
@@ -1462,7 +1468,11 @@ export function App() {
                                     className="btn-ghost"
                                     disabled={!!sourceCardSaving || !!sourceToggleBusy}
                                     style={{ fontWeight: 600 }}
-                                    title="保存当前卡片中的接口、主题、备注与密钥到数据库"
+                                    title={
+                                      showApiKey
+                                        ? "保存当前卡片中的接口、领域主题与密钥（留空密钥不修改）"
+                                        : "保存当前卡片中的接口与领域主题（密钥请在下方表单或需密钥的预置卡片上维护）"
+                                    }
                                     onClick={() => void saveSourceCard(p.source)}
                                   >
                                     {sourceCardSaving === p.source ? "保存中…" : "保存"}
@@ -1516,7 +1526,7 @@ export function App() {
                         const maskLine = s.api_key_masked ? formatApiKeyDisplay(s.api_key_masked) : "";
                         const cardTestKey = `card:${s.source}`;
                         return (
-                        <article key={s.source} className="source-card source-card--preset-exists" title={draft.notes.trim() || undefined}>
+                        <article key={s.source} className="source-card source-card--preset-exists">
                           <div className="source-card__head">
                             <h4 className="source-card__title">{s.source}</h4>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
@@ -1562,11 +1572,11 @@ export function App() {
                                 />
                               </dd>
                             </div>
-                            <div className="source-card__meta-row">
+                            <div className="source-card__meta-row source-card__meta-row--scope-inline">
                               <dt>领域主题</dt>
-                              <dd style={{ margin: 0 }}>
+                              <dd>
                                 <textarea
-                                  rows={3}
+                                  rows={2}
                                   style={{
                                     width: "100%",
                                     boxSizing: "border-box",
@@ -1600,28 +1610,6 @@ export function App() {
                                 )}
                               </dd>
                             </div>
-                            <div className="source-card__meta-row">
-                              <dt>备注</dt>
-                              <dd style={{ margin: 0 }}>
-                                <textarea
-                                  rows={2}
-                                  style={{
-                                    width: "100%",
-                                    boxSizing: "border-box",
-                                    fontSize: 12,
-                                    resize: "vertical",
-                                    padding: "6px 8px",
-                                  }}
-                                  value={draft.notes}
-                                  onChange={(e) =>
-                                    setSourceCardDrafts((prev) => ({
-                                      ...prev,
-                                      [s.source]: { ...(prev[s.source] ?? defaultSourceCardDraft(s, undefined)), notes: e.target.value },
-                                    }))
-                                  }
-                                />
-                              </dd>
-                            </div>
                           </dl>
                           {canOperate ? (
                             <>
@@ -1631,7 +1619,7 @@ export function App() {
                                   <input
                                     type="password"
                                     autoComplete="off"
-                                    placeholder="填写新密钥；留空并点保存表示不修改已有密钥"
+                                    placeholder="填写新密钥；留空并保存表示不修改已有密钥"
                                     style={{
                                       width: "100%",
                                       boxSizing: "border-box",
@@ -1669,7 +1657,10 @@ export function App() {
                                   title={!testBase.trim() ? "请先填写接口地址" : "测试连接（不落库）"}
                                   onClick={() =>
                                     void runSourceTest(
-                                      { source: s.source, api_key: draft.api_key.trim() },
+                                      {
+                                        source: s.source,
+                                        ...(draft.api_key.trim() ? { api_key: draft.api_key.trim() } : {}),
+                                      },
                                       cardTestKey,
                                       inferSourceTestAuthMode(testBase),
                                     )
@@ -1682,7 +1673,7 @@ export function App() {
                                   className="btn-ghost"
                                   disabled={!!sourceCardSaving || !!sourceToggleBusy}
                                   style={{ fontWeight: 600 }}
-                                  title="保存当前卡片到数据库"
+                                  title="保存当前卡片中的接口、领域主题与密钥（留空密钥不修改）"
                                   onClick={() => void saveSourceCard(s.source)}
                                 >
                                   {sourceCardSaving === s.source ? "保存中…" : "保存"}
@@ -1739,7 +1730,7 @@ export function App() {
                   <span className="tag">表单</span>
                 </div>
                 <p className="muted tiny" style={{ margin: 0 }}>
-                  填写标识与接口信息保存即可；标识与已有 source 相同时为更新。上方卡片可直接编辑并点<strong>保存</strong>。
+                  填写标识与接口信息保存即可；标识与已有 source 相同时为更新。上方卡片可编辑接口与领域主题并点<strong>保存</strong>；免 Key 预置无卡片密钥框时密钥在本表单填写。
                 </p>
                 <form className="source-card__form" onSubmit={onSaveSource}>
                   <div className="form-field">

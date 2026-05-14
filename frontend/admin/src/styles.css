@@ -870,6 +870,26 @@ button.source-card {
   padding-bottom: 0;
 }
 
+.source-card__meta-row--scope-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.source-card__meta-row--scope-inline dt {
+  flex: 0 0 auto;
+  padding-top: 7px;
+  max-width: 4.5rem;
+}
+.source-card__meta-row--scope-inline dd {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.source-card__meta-row--scope-inline textarea {
+  min-height: 2.5rem;
+  max-height: 5rem;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
