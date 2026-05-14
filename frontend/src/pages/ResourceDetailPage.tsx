@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { Search } from "lucide-react";
@@ -52,7 +52,17 @@ export function ResourceDetailPage() {
   const [err, setErr] = useState("");
   const [sidebar, setSidebar] = useState<ArticleFeedCard[]>([]);
   const [sidebarQuery, setSidebarQuery] = useState("");
+  const detailColumnScrollRef = useRef<HTMLDivElement>(null);
   const articleScrollRef = useRef<HTMLDivElement>(null);
+
+  /** 同页切换文章时路由 id 变但组件不卸载，须重置右侧（及小屏整列）滚动位置 */
+  useLayoutEffect(() => {
+    if (!id) return;
+    const col = detailColumnScrollRef.current;
+    const art = articleScrollRef.current;
+    if (col) col.scrollTop = 0;
+    if (art) art.scrollTop = 0;
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -241,6 +251,7 @@ export function ResourceDetailPage() {
 
       {/* 大屏：对齐 DeepSeek — 扁平分栏、左列冷灰底、右列白底双区独立滚动；小屏整列可滚 */}
       <div
+        ref={detailColumnScrollRef}
         className={
           "flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-y-contain " +
           "lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none"

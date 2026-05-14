@@ -57,4 +57,27 @@ test.describe("详情页 · 内置 mock 与滚轮", () => {
       })
       .toBeGreaterThan(st0 + 30);
   });
+
+  test("大屏：侧栏切换文章后正文区域回到顶部", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/resources/7");
+    await expect(page.getByRole("heading", { name: /Mock 文章 #7/u })).toBeVisible({ timeout: 60_000 });
+
+    const panel = page.getByTestId("resource-detail-article");
+    await panel.evaluate((el) => {
+      el.scrollTop = Math.min(800, el.scrollHeight - el.clientHeight);
+    });
+    const scrolled = await panel.evaluate((el) => el.scrollTop);
+    expect(scrolled, "mock 长文应先滚到较深位置").toBeGreaterThan(80);
+
+    await page.getByRole("navigation", { name: "同类推荐" }).getByRole("link").nth(1).click();
+    await expect(page.getByRole("heading", { name: /Mock 文章 #1/u })).toBeVisible({ timeout: 15_000 });
+
+    await expect
+      .poll(async () => panel.evaluate((el) => el.scrollTop), {
+        timeout: 8000,
+        message: "切换文章后正文容器应回到顶部附近",
+      })
+      .toBeLessThan(8);
+  });
 });
