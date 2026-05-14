@@ -388,6 +388,48 @@ export const adminApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
+  getNewsletterSettings: () =>
+    request<{
+      cron_enabled: boolean;
+      generate_enabled: boolean;
+      send_enabled: boolean;
+      article_limit: number;
+      daily_hour: number;
+      daily_minute: number;
+      public_site_base_url: string;
+      smtp_host: string;
+      smtp_port: number;
+      smtp_user: string;
+      smtp_password_masked: string;
+      has_smtp_password: boolean;
+      mail_from: string;
+      smtp_use_tls: boolean;
+      bcc_batch: number;
+      footer_note: string;
+    }>("/api/admin/v1/product/settings/newsletter"),
+  saveNewsletterSettings: (payload: Record<string, unknown>) =>
+    request<{
+      cron_enabled: boolean;
+      generate_enabled: boolean;
+      send_enabled: boolean;
+      article_limit: number;
+      daily_hour: number;
+      daily_minute: number;
+      public_site_base_url: string;
+      smtp_host: string;
+      smtp_port: number;
+      smtp_user: string;
+      smtp_password_masked: string;
+      has_smtp_password: boolean;
+      mail_from: string;
+      smtp_use_tls: boolean;
+      bcc_batch: number;
+      footer_note: string;
+    }>("/api/admin/v1/product/settings/newsletter", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
   softwarePackages: (limit = 80) =>
     request<
       Array<{

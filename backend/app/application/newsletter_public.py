@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+import secrets
+from datetime import datetime
 from typing import Literal
 
 from email_validator import EmailNotValidError, validate_email
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -54,14 +56,53 @@ def normalize_and_validate_email(raw: str) -> str:
     return out
 
 
-def subscribe(db: Session, email_norm: str) -> Literal["created", "duplicate"]:
-    hit = db.scalar(select(NewsletterSubscriber.id).where(NewsletterSubscriber.email == email_norm))
-    if hit is not None:
+def _new_unsubscribe_token() -> str:
+    return secrets.token_urlsafe(32)[:64]
+
+
+def subscribe(db: Session, email_norm: str) -> Literal["created", "duplicate", "reactivated"]:
+    row = db.scalar(select(NewsletterSubscriber).where(NewsletterSubscriber.email == email_norm))
+    if row is not None and row.unsubscribed_at is None:
         return "duplicate"
-    db.add(NewsletterSubscriber(email=email_norm))
+    if row is not None and row.unsubscribed_at is not None:
+        row.unsubscribed_at = None
+        row.unsubscribe_token = _new_unsubscribe_token()
+        db.commit()
+        return "reactivated"
+    db.add(NewsletterSubscriber(email=email_norm, unsubscribe_token=_new_unsubscribe_token()))
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         return "duplicate"
     return "created"
+
+
+def unsubscribe_by_token(db: Session, token: str) -> bool:
+    t = (token or "").strip()
+    if len(t) < 8:
+        return False
+    row = db.scalar(select(NewsletterSubscriber).where(NewsletterSubscriber.unsubscribe_token == t))
+    if not row or row.unsubscribed_at is not None:
+        return False
+    row.unsubscribed_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
+def backfill_newsletter_unsubscribe_tokens(db: Session) -> int:
+    """旧数据补 token；返回更新行数。"""
+    rows = list(
+        db.scalars(
+            select(NewsletterSubscriber).where(
+                or_(NewsletterSubscriber.unsubscribe_token.is_(None), NewsletterSubscriber.unsubscribe_token == "")
+            )
+        ).all()
+    )
+    n = 0
+    for r in rows:
+        r.unsubscribe_token = _new_unsubscribe_token()
+        n += 1
+    if n:
+        db.commit()
+    return n

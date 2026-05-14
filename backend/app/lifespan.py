@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .admin_auth import ensure_default_admin
@@ -62,6 +62,13 @@ def _startup_sync() -> None:
         from .scheduler_settings_service import ensure_scheduler_settings_row
 
         ensure_scheduler_settings_row(db)
+        from .newsletter_settings_service import ensure_newsletter_settings_row
+        from .application.newsletter_public import backfill_newsletter_unsubscribe_tokens
+
+        ensure_newsletter_settings_row(db)
+        ntok = backfill_newsletter_unsubscribe_tokens(db)
+        if ntok:
+            logger.info("newsletter: backfilled %s unsubscribe tokens", ntok)
         from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
         sync_product_taxonomy_from_admin_sources(db)
@@ -187,20 +194,37 @@ def _job_connector_sync_gate() -> None:
 
 
 def _job_newsletter_daily() -> None:
+    db = SessionLocal()
     try:
-        from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
+        from zoneinfo import ZoneInfo
 
-        out = run_daily_newsletter_digest_job()
+        if (os.environ.get("NEWSLETTER_DAILY_ENABLED") or "").strip().lower() in ("0", "false", "no", "off"):
+            return
+        from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
+        from .newsletter_settings_service import get_newsletter_settings_merged
+
+        s = get_newsletter_settings_merged(db)
+        if not s.get("cron_enabled", True):
+            return
+        now = datetime.now(ZoneInfo("Asia/Shanghai"))
+        h = int(s.get("daily_hour", 9))
+        m = int(s.get("daily_minute", 0))
+        slot_start = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        slot_end = slot_start + timedelta(minutes=5)
+        if not (slot_start <= now < slot_end):
+            return
+        out = run_daily_newsletter_digest_job(db=db, settings=s)
         logger.info("newsletter daily job: %s", out)
     except Exception as e:
         logger.exception("newsletter daily job failed: %s", e)
+    finally:
+        db.close()
 
 
 def _start_scheduler() -> None:
     global _scheduler
     if _scheduler is not None:
         return
-    import os
 
     _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
     _scheduler.add_job(_job_scheduled_hot, IntervalTrigger(days=3), id="hot_snapshot_3d")
@@ -210,18 +234,13 @@ def _start_scheduler() -> None:
         IntervalTrigger(minutes=15),
         id="connector_sync_gate",
     )
-    daily_h = max(0, min(23, int(os.environ.get("NEWSLETTER_DAILY_HOUR", "9") or 9)))
-    daily_m = max(0, min(59, int(os.environ.get("NEWSLETTER_DAILY_MINUTE", "0") or 0)))
     _scheduler.add_job(
         _job_newsletter_daily,
-        CronTrigger(hour=daily_h, minute=daily_m, timezone="Asia/Shanghai"),
+        IntervalTrigger(minutes=5),
         id="newsletter_daily_digest",
     )
     logger.info(
-        "connector sync gate every 15m; interval hours from DB product_settings_kv.scheduler "
-        "(interval from DB product_settings_kv.scheduler); newsletter digest cron %02d:%02d Asia/Shanghai",
-        daily_h,
-        daily_m,
+        "connector sync gate every 15m; newsletter digest checks every 5m (fires in configured Asia/Shanghai window)",
     )
     _scheduler.start()
 

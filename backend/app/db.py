@@ -121,6 +121,12 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_software_downloads ADD COLUMN artifact_download_name VARCHAR(256)"))
             if "artifact_mime" not in cols:
                 conn.execute(text("ALTER TABLE product_software_downloads ADD COLUMN artifact_mime VARCHAR(128)"))
+        cols = _column_names(conn, "newsletter_subscribers")
+        if cols:
+            if "unsubscribe_token" not in cols:
+                conn.execute(text("ALTER TABLE newsletter_subscribers ADD COLUMN unsubscribe_token VARCHAR(64)"))
+            if "unsubscribed_at" not in cols:
+                conn.execute(text("ALTER TABLE newsletter_subscribers ADD COLUMN unsubscribed_at TIMESTAMP"))
 
 
 def get_db():

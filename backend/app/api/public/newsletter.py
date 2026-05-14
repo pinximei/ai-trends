@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -24,4 +25,26 @@ def newsletter_subscribe(body: NewsletterSubscribeBody, db: Session = Depends(ge
     result = nl_app.subscribe(db, norm)
     if result == "duplicate":
         return failure("该邮箱已订阅，无需重复提交", code=409001)
-    return success({"subscribed": True})
+    return success({"subscribed": True, "reactivated": result == "reactivated"})
+
+
+@router.get("/newsletter/unsubscribe", response_class=HTMLResponse)
+def newsletter_unsubscribe(token: str | None = Query(None), db: Session = Depends(get_db)):
+    t = (token or "").strip()
+    ok = len(t) >= 8 and nl_app.unsubscribe_by_token(db, t)
+    title = "退订成功" if ok else "退订链接无效或已退订"
+    body = (
+        "<p>您已成功退订本站邮件。如需再次订阅，可回到首页提交邮箱。</p>"
+        if ok
+        else "<p>链接无效或该邮箱已退订。若需帮助，请联系站点管理员。</p>"
+    )
+    return HTMLResponse(
+        content=(
+            "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"/>"
+            f"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><title>{title}</title>"
+            "<style>body{font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;color:#0f172a;}"
+            "a{color:#4f46e5;}</style></head><body>"
+            f"<h1>{title}</h1>{body}<p><a href=\"/\">返回首页</a></p></body></html>"
+        ),
+        status=200,
+    )

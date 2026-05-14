@@ -16,6 +16,7 @@ from ..application.news_agent import pipeline_steps
 from ..hot_service import get_hot_settings, save_hot_settings
 from ..llm_settings_service import get_llm_settings_public, save_llm_settings_patch
 from ..runtime_settings_service import get_runtime_settings_public, save_runtime_settings_patch
+from ..newsletter_settings_service import get_newsletter_settings_public, save_newsletter_settings_patch
 from ..scheduler_settings_service import get_scheduler_settings_public, save_scheduler_settings_patch
 from ..llm_service import generate_inspiration_body
 from ..models import AdminSession, AdminSourceConfig
@@ -131,6 +132,44 @@ def put_scheduler_setting(
     patch = {k: v for k, v in payload.model_dump().items() if v is not None}
     merged = save_scheduler_settings_patch(db, patch)
     audit(db, actor=session.username, action="product.settings.scheduler", target="scheduler", detail=str(patch))
+    return ok(merged)
+
+
+class NewsletterSettingsPatch(BaseModel):
+    cron_enabled: bool | None = None
+    generate_enabled: bool | None = None
+    send_enabled: bool | None = None
+    article_limit: int | None = Field(None, ge=1, le=80)
+    daily_hour: int | None = Field(None, ge=0, le=23)
+    daily_minute: int | None = Field(None, ge=0, le=59)
+    public_site_base_url: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = Field(None, ge=1, le=65535)
+    smtp_user: str | None = None
+    smtp_password: str | None = Field(None, description="非空则覆盖已存 SMTP 密码；空串表示保留")
+    mail_from: str | None = None
+    smtp_use_tls: bool | None = None
+    bcc_batch: int | None = Field(None, ge=1, le=80)
+    footer_note: str | None = None
+
+
+@router.get("/product/settings/newsletter")
+def get_newsletter_setting(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    return ok(get_newsletter_settings_public(db))
+
+
+@router.put("/product/settings/newsletter")
+def put_newsletter_setting(
+    payload: NewsletterSettingsPatch,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    patch = payload.model_dump(exclude_unset=True)
+    merged = save_newsletter_settings_patch(db, patch)
+    audit(db, actor=session.username, action="product.settings.newsletter", target="newsletter", detail=str({k: v for k, v in patch.items() if k != "smtp_password"}))
     return ok(merged)
 
 

@@ -88,6 +88,45 @@ type SchedulerSettingsView = {
   env_default_hours_hint: number;
 };
 
+type NewsletterSettingsView = {
+  cron_enabled: boolean;
+  generate_enabled: boolean;
+  send_enabled: boolean;
+  article_limit: number;
+  daily_hour: number;
+  daily_minute: number;
+  public_site_base_url: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password_masked: string;
+  has_smtp_password: boolean;
+  mail_from: string;
+  smtp_use_tls: boolean;
+  bcc_batch: number;
+  footer_note: string;
+};
+
+function newsletterFormFromView(nl: NewsletterSettingsView) {
+  return {
+    cron_enabled: nl.cron_enabled,
+    generate_enabled: nl.generate_enabled,
+    send_enabled: nl.send_enabled,
+    article_limit: nl.article_limit,
+    daily_hour: nl.daily_hour,
+    daily_minute: nl.daily_minute,
+    public_site_base_url: nl.public_site_base_url,
+    smtp_host: nl.smtp_host,
+    smtp_port: nl.smtp_port,
+    smtp_user: nl.smtp_user,
+    smtp_password: "",
+    mail_from: nl.mail_from,
+    smtp_use_tls: nl.smtp_use_tls,
+    bcc_batch: nl.bcc_batch,
+    footer_note: nl.footer_note,
+  };
+}
+
 type SourcePresetRow = {
   source: string;
   label: string;
@@ -154,6 +193,26 @@ export function App() {
   const [schedulerSettings, setSchedulerSettings] = useState<SchedulerSettingsView | null>(null);
   const [schedulerForm, setSchedulerForm] = useState({ enabled: true, hours: 6 });
   const [schedulerSaving, setSchedulerSaving] = useState(false);
+  const [newsletterSettings, setNewsletterSettings] = useState<NewsletterSettingsView | null>(null);
+  const [newsletterForm, setNewsletterForm] = useState(() => newsletterFormFromView({
+    cron_enabled: true,
+    generate_enabled: true,
+    send_enabled: true,
+    article_limit: 36,
+    daily_hour: 9,
+    daily_minute: 0,
+    public_site_base_url: "",
+    smtp_host: "",
+    smtp_port: 465,
+    smtp_user: "",
+    smtp_password_masked: "",
+    has_smtp_password: false,
+    mail_from: "",
+    smtp_use_tls: false,
+    bcc_batch: 40,
+    footer_note: "",
+  }));
+  const [newsletterSaving, setNewsletterSaving] = useState(false);
   const [clearIngestBusy, setClearIngestBusy] = useState(false);
   const [themeFetchBusy, setThemeFetchBusy] = useState(false);
   const [themeKeyword, setThemeKeyword] = useState("");
@@ -289,9 +348,15 @@ export function App() {
         hot_llm_model: rt.hot_llm_model,
       });
     } else if (tab === "ai") {
-      const [llm, sched] = await Promise.all([adminApi.getLlmSettings(), adminApi.getSchedulerSettings()]);
+      const [llm, sched, nl] = await Promise.all([
+        adminApi.getLlmSettings(),
+        adminApi.getSchedulerSettings(),
+        adminApi.getNewsletterSettings(),
+      ]);
       setLlmSettings(llm);
       setSchedulerSettings(sched);
+      setNewsletterSettings(nl);
+      setNewsletterForm(newsletterFormFromView(nl));
       setSchedulerForm({ enabled: sched.connector_scheduler_enabled, hours: sched.connector_sync_interval_hours });
       setLlmForm((p) => ({
         ...p,
@@ -539,6 +604,39 @@ export function App() {
       setErr(friendlyErr(error instanceof Error ? error.message : "save scheduler failed"));
     } finally {
       setSchedulerSaving(false);
+    }
+  }
+
+  async function onSaveNewsletter(e: FormEvent) {
+    e.preventDefault();
+    if (!canOperate) return;
+    setNewsletterSaving(true);
+    setErr("");
+    try {
+      const payload: Record<string, unknown> = {
+        cron_enabled: newsletterForm.cron_enabled,
+        generate_enabled: newsletterForm.generate_enabled,
+        send_enabled: newsletterForm.send_enabled,
+        article_limit: Math.min(80, Math.max(1, Math.floor(Number(newsletterForm.article_limit)) || 36)),
+        daily_hour: Math.min(23, Math.max(0, Math.floor(Number(newsletterForm.daily_hour)) || 9)),
+        daily_minute: Math.min(59, Math.max(0, Math.floor(Number(newsletterForm.daily_minute)) || 0)),
+        public_site_base_url: newsletterForm.public_site_base_url.trim(),
+        smtp_host: newsletterForm.smtp_host.trim(),
+        smtp_port: Math.min(65535, Math.max(1, Math.floor(Number(newsletterForm.smtp_port)) || 465)),
+        smtp_user: newsletterForm.smtp_user.trim(),
+        mail_from: newsletterForm.mail_from.trim(),
+        smtp_use_tls: newsletterForm.smtp_use_tls,
+        bcc_batch: Math.min(80, Math.max(1, Math.floor(Number(newsletterForm.bcc_batch)) || 40)),
+        footer_note: newsletterForm.footer_note.trim(),
+      };
+      if (newsletterForm.smtp_password.trim()) payload.smtp_password = newsletterForm.smtp_password.trim();
+      const out = await adminApi.saveNewsletterSettings(payload);
+      setNewsletterSettings(out);
+      setNewsletterForm(newsletterFormFromView(out));
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "save newsletter failed"));
+    } finally {
+      setNewsletterSaving(false);
     }
   }
 
@@ -1649,6 +1747,174 @@ export function App() {
               ) : (
                 <p className="muted tiny" style={{ marginTop: 12 }}>
                   仅管理员可清空资源入库数据。
+                </p>
+              )}
+            </div>
+
+            <div className="card settings-panel">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
+                邮件订阅 · 每日摘要与 SMTP
+              </h3>
+              <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
+                配置存于 <code className="inline-code">product_settings_kv.newsletter</code>。进程每 <strong>5 分钟</strong>检查一次，在
+                上海时区所设 <strong>时:分</strong> 起的 5 分钟窗口内执行当日摘要（需已配置 LLM）与可选发信。退订链接依赖下方「站点对外根 URL」。
+                环境变量 <code className="inline-code">NEWSLETTER_SMTP_*</code> 仅在库内对应项为空时作回退。
+              </p>
+              {newsletterSettings ? (
+                <p className="muted tiny" style={{ marginTop: 8 }}>
+                  SMTP 密码：{newsletterSettings.has_smtp_password ? "已保存" : "未保存"}
+                  {newsletterSettings.smtp_password_masked ? `（掩码 ${newsletterSettings.smtp_password_masked}）` : ""}
+                </p>
+              ) : null}
+              {canOperate ? (
+                <form className="create-user-form" onSubmit={onSaveNewsletter} style={{ marginTop: 14 }}>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={newsletterForm.cron_enabled}
+                        onChange={(e) => setNewsletterForm((p) => ({ ...p, cron_enabled: e.target.checked }))}
+                      />{" "}
+                      启用定时任务（总开关）
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={newsletterForm.generate_enabled}
+                        onChange={(e) => setNewsletterForm((p) => ({ ...p, generate_enabled: e.target.checked }))}
+                      />{" "}
+                      生成 AI 摘要并落库
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={newsletterForm.send_enabled}
+                        onChange={(e) => setNewsletterForm((p) => ({ ...p, send_enabled: e.target.checked }))}
+                      />{" "}
+                      发送邮件（需 SMTP 与站点根 URL）
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 160 }}>
+                    <label>纳入摘要文章条数（1～80）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={80}
+                      value={newsletterForm.article_limit}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, article_limit: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 120 }}>
+                    <label>发送时刻 · 时（0～23）</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={newsletterForm.daily_hour}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, daily_hour: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 120 }}>
+                    <label>发送时刻 · 分（0～59）</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={newsletterForm.daily_minute}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, daily_minute: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>站点对外根 URL（用于退订链接，如 https://example.com）</label>
+                    <input
+                      value={newsletterForm.public_site_base_url}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, public_site_base_url: e.target.value }))}
+                      placeholder="https://你的域名"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>SMTP 主机</label>
+                    <input
+                      value={newsletterForm.smtp_host}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_host: e.target.value }))}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 140 }}>
+                    <label>SMTP 端口</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={newsletterForm.smtp_port}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_port: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>SMTP 用户名</label>
+                    <input
+                      value={newsletterForm.smtp_user}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_user: e.target.value }))}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>SMTP 密码（留空保留已存）</label>
+                    <input
+                      type="password"
+                      value={newsletterForm.smtp_password}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_password: e.target.value }))}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>发件人 From</label>
+                    <input
+                      value={newsletterForm.mail_from}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, mail_from: e.target.value }))}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={newsletterForm.smtp_use_tls}
+                        onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_use_tls: e.target.checked }))}
+                      />{" "}
+                      非 465 端口使用 STARTTLS
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 140 }}>
+                    <label>每连接连续发送封数参考（1～80）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={80}
+                      value={newsletterForm.bcc_batch}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, bcc_batch: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>邮件底部附加说明（退订链接上方）</label>
+                    <textarea
+                      rows={2}
+                      value={newsletterForm.footer_note}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, footer_note: e.target.value }))}
+                    />
+                  </div>
+                  <button type="submit" disabled={newsletterSaving}>
+                    {newsletterSaving ? "保存中…" : "保存邮件订阅配置"}
+                  </button>
+                </form>
+              ) : (
+                <p className="muted tiny" style={{ marginTop: 10 }}>
+                  只读：需要运营或管理员角色才可修改。
                 </p>
               )}
             </div>

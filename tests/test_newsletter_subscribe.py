@@ -49,8 +49,38 @@ def test_subscribe_created_then_duplicate(nl_db) -> None:
 
 def test_subscribe_race_duplicate_via_integrity(nl_db) -> None:
     em = nl_pub.normalize_and_validate_email("race@example.com")
-    nl_db.add(NewsletterSubscriber(email=em))
+    nl_db.add(NewsletterSubscriber(email=em, unsubscribe_token="x" * 64))
     nl_db.commit()
     assert nl_pub.subscribe(nl_db, em) == "duplicate"
     nl_db.execute(delete(NewsletterSubscriber).where(NewsletterSubscriber.email == em))
     nl_db.commit()
+
+
+def test_subscribe_reactivate_after_unsub(nl_db) -> None:
+    from datetime import datetime
+
+    from sqlalchemy import select
+
+    em = nl_pub.normalize_and_validate_email("re@example.com")
+    assert nl_pub.subscribe(nl_db, em) == "created"
+    row = nl_db.scalar(select(NewsletterSubscriber).where(NewsletterSubscriber.email == em))
+    assert row and row.unsubscribe_token
+    row.unsubscribed_at = datetime.utcnow()
+    nl_db.commit()
+    assert nl_pub.subscribe(nl_db, em) == "reactivated"
+    nl_db.refresh(row)
+    assert row.unsubscribed_at is None
+
+
+def test_unsubscribe_by_token(nl_db) -> None:
+    from sqlalchemy import select
+
+    em = nl_pub.normalize_and_validate_email("un@example.com")
+    assert nl_pub.subscribe(nl_db, em) == "created"
+    row = nl_db.scalar(select(NewsletterSubscriber).where(NewsletterSubscriber.email == em))
+    tok = row.unsubscribe_token
+    assert tok
+    assert nl_pub.unsubscribe_by_token(nl_db, tok) is True
+    nl_db.refresh(row)
+    assert row.unsubscribed_at is not None
+    assert nl_pub.unsubscribe_by_token(nl_db, tok) is False

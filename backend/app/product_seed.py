@@ -309,6 +309,9 @@ def ensure_product_settings_and_demo_connector(db: Session) -> None:
 
     ensure_runtime_settings_row(db)
     ensure_scheduler_settings_row(db)
+    from .newsletter_settings_service import ensure_newsletter_settings_row
+
+    ensure_newsletter_settings_row(db)
 
 
 def ensure_public_about_page(db: Session) -> None:
