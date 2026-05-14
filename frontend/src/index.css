@@ -120,4 +120,26 @@
     width: 0;
     height: 0;
   }
+
+  /** 正文区：细滚动条，便于看出可滚动 */
+  .article-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.65) rgb(241 245 249 / 0.6);
+  }
+  .article-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .article-scrollbar::-webkit-scrollbar-track {
+    background: rgb(248 250 252 / 0.9);
+  }
+  .article-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgb(148 163 184 / 0.55);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .article-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139 / 0.65);
+    background-clip: padding-box;
+  }
 }

@@ -111,7 +111,13 @@ export function Layout() {
         </div>
       </header>
 
-      <div className={`flex min-h-0 min-w-0 flex-1 flex-row ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`}>
+      <div
+        className={
+          isResourceDetail
+            ? "mx-auto flex min-h-0 min-w-0 w-full max-w-[min(1920px,100%)] flex-1 flex-row px-0"
+            : `flex min-h-0 min-w-0 flex-1 flex-row ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`
+        }
+      >
         {!hideSidebar ? (
           <aside className="hidden w-52 shrink-0 border-r border-slate-200/80 bg-white/80 lg:block">
             <div className="sticky top-[4.75rem] space-y-1 px-3 py-6">
@@ -140,7 +146,7 @@ export function Layout() {
             isHome
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
               : isResourceDetail
-                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 pt-2 pb-10 sm:pt-3 sm:pb-12 lg:bg-[#eef0f4] lg:pt-3"
+                ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 pt-2 pb-0 sm:pt-3 lg:bg-[#eef0f4] lg:pt-2"
                 : isHubTightTop
                   ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
                   : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
