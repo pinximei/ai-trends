@@ -39,16 +39,6 @@ def repair_short_probe_admin_sources(db: Session) -> None:
                 )
                 row.updated_at = datetime.utcnow()
                 changed = True
-        elif row.source == "arxiv":
-            u = (row.api_base or "").strip()
-            ul = u.lower()
-            if "max_results=1" in u or ("search_query=all" in ul and "export.arxiv.org" in ul):
-                row.api_base = (
-                    "https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=lastUpdatedDate"
-                    "&sortOrder=descending&max_results=5"
-                )
-                row.updated_at = datetime.utcnow()
-                changed = True
     if changed:
         db.commit()
 

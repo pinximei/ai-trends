@@ -1271,7 +1271,7 @@ export function App() {
                 <h3 style={{ margin: 0 }}>数据源</h3>
                 <p className="muted tiny" style={{ margin: "8px 0 0" }}>
                   上方卡片为<strong>内置模板 + 已保存的自定义标识</strong>同一列表：未入库时显示模板默认值与「未入库」；保存后展示库内接口与领域主题。生产环境请用卡片上的<strong>启用 / 停用</strong>控制是否参与调度，无需在后台删除整条配置。定时拉取在「AI
-                  资讯与数据」页配置；连接器绑定标识后参与调度。内置模板现仅保留 <strong>AI 向</strong> 源（代码协作、Spaces、应用首发、cs.AI 论文等）；一次同步仍由系统聚合成<strong>一篇</strong>站内稿。GitLab 等地址在<strong>测试连接</strong>时会根据接口地址自动选择 Bearer 或 Private Token 头。
+                  资讯与数据」页配置；连接器绑定标识后参与调度。内置模板现仅保留 <strong>AI 向</strong> 源（代码协作、Spaces、应用首发等）；一次同步仍由系统聚合成<strong>一篇</strong>站内稿。GitLab 等地址在<strong>测试连接</strong>时会根据接口地址自动选择 Bearer 或 Private Token 头。
                 </p>
                 <p className="muted tiny" style={{ margin: "10px 0 0" }}>
                   连接器对「api_base」只做<strong>单次 HTTP GET</strong>（可选密钥头），<strong>不模拟浏览器、不执行站点前端 JS、也不代你登录任意网站后台</strong>，因此拿不到依赖登录页或整页 HTML 渲染才出现的「门户正文」；若上游 JSON

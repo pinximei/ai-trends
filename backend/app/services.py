@@ -21,7 +21,7 @@ CONTENT_ROLE_LABEL_ZH: dict[str, str] = {
 
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
-# 下列为 **AI 向** 内置预置：GitHub 协作、HF Spaces、Product Hunt、arXiv cs.AI；Product Hunt 须 OAuth Bearer。
+# 下列为 **AI 向** 内置预置：GitHub 协作、HF Spaces、Product Hunt；Product Hunt 须 OAuth Bearer。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
@@ -53,16 +53,6 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "content_role": "app_launches",
         "notes": "Product Hunt **GraphQL v2**（同步与测试连接走 POST，见连接器逻辑）。须在连接器 ``config_json`` 填 **Bearer access_token**（Developer OAuth），后台卡片另可存 **OAuth Client Secret** 至 ``oauth_client_secret``；或在「测试连接」粘贴临时 Token。无 Token 时探测可能为 401，属正常。",
     },
-    {
-        "source": "arxiv",
-        "preset_label": "arXiv",
-        "enabled": True,
-        "api_base": "https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=lastUpdatedDate&sortOrder=descending&max_results=5",
-        "api_key_masked": "",
-        "scope_label": "学术·论文",
-        "content_role": "academic",
-        "notes": "arXiv **cs.AI** 按最近更新排序的 Atom（论文条目+摘要）。",
-    },
 ]
 
 # 当前产品保留的内置数据源标识（与 MAINSTREAM_ADMIN_SOURCE_PRESETS 一致）；启动时用于删库中「多余」行。
@@ -84,6 +74,7 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "openalex",
         "rss_arstechnica",
         "rss_theverge",
+        "arxiv",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
@@ -95,11 +86,10 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
 ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
-        "arxiv",
     }
 )
 
-# 凭据形态：当前仅保留 AI 向内置预置；旧预置（HN / SO / OpenAlex / RSS 等）已进 DISCONTINUED 并由启动任务删库。
+# 凭据形态：当前仅保留三条 AI 工程/产品向内置预置；旧预置（含 arXiv 论文流）已进 DISCONTINUED 并由启动任务删库。
 # 后台第二输入框「APP Secret」仅对 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD 为真时展示（当前仅 product_hunt）。
 # 后台卡片在「Bearer Access Token」之外另展示「OAuth Client Secret」输入的预置（Developer OAuth 换 token 用）。
 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product_hunt"})
@@ -234,8 +224,8 @@ def seed_if_empty(db: Session):
         EvidenceSignal(
             signal_id="sig_002",
             trend_key="customer-support-agent",
-            source="arxiv",
-            evidence_url="https://arxiv.org/abs/1706.03762",
+            source="github",
+            evidence_url="https://github.com/microsoft/vscode/issues",
             evidence_score=0.81,
             source_diversity=0.55,
             label_stability=0.77,

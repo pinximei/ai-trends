@@ -371,7 +371,6 @@ def ingest_duplicate_by_source_external_id_exists(
 FEED_NEWS_KEYS = frozenset(
     {
         "newsapi",
-        "arxiv",
         "youtube_data",
         "finnhub",
         "mapbox",
