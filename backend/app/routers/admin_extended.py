@@ -387,7 +387,16 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
         "User-Agent": "AiTrends-ConnectorSync/1.0",
         "Accept": "application/json",
     }
-    if api_key:
+    oauth_secret = str((cfg or {}).get("oauth_client_secret") or "").strip()
+    if source_key == "product_hunt":
+        from ..product_hunt_oauth import resolve_product_hunt_bearer
+
+        try:
+            bearer, _mode = resolve_product_hunt_bearer(api_key=api_key, oauth_client_secret=oauth_secret)
+            headers["Authorization"] = f"Bearer {bearer}"
+        except (ValueError, RuntimeError) as e:
+            return 0, str(e)[:800]
+    elif api_key:
         if auth_mode == "private_token":
             headers["PRIVATE-TOKEN"] = api_key
         elif auth_mode == "query_key":

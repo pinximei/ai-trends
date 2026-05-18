@@ -95,6 +95,7 @@ const STRINGS: Record<string, string> = {
   resourcesTimeFilter: "发布时间",
   resourcesLatestDay: "今日（世界时）",
   resourcesTimeAll: "不限",
+  resourcesDays3: "近 3 天",
   resourcesDays7: "近 7 天",
   resourcesDays30: "近 30 天",
   resourcesDays90: "近 90 天",
@@ -106,7 +107,7 @@ const STRINGS: Record<string, string> = {
   resourcesFeedNews: "最新 AI 资讯",
   resourcesFeedApps: "最新 AI 应用",
   resourcesFeedDayHint:
-    "按世界时日历日分页：每页为该日内全部文章（列表已去重）。第 1 页为当前筛选下「最新一个有内容的日期」。可用上一页、下一页或输入页码跳转。",
+    "按世界时日历日分页：每页连续 3 天内的全部文章（列表已去重）。第 1 页为当前筛选下最新的 3 个有内容的日期。可用上一页、下一页或输入页码跳转。",
   resourcesPagePrev: "上一页",
   resourcesPageNext: "下一页",
   resourcesPageGo: "跳转",

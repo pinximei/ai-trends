@@ -224,8 +224,29 @@ class DataApiService:
             "Accept": "application/json",
         }
         k = (api_key or "").strip()
+        ph_secret = ""
+        if sk == "product_hunt":
+            conn = self.db.scalar(
+                select(ProductConnector)
+                .where(ProductConnector.admin_source_key == "product_hunt")
+                .order_by(ProductConnector.id)
+                .limit(1)
+            )
+            if conn:
+                cfg = dict(conn.config_json or {})
+                if not k:
+                    k = str(cfg.get("api_key") or "").strip()
+                ph_secret = str(cfg.get("oauth_client_secret") or "").strip()
         mode = (auth_mode or "bearer").strip().lower()
-        if k:
+        if sk == "product_hunt":
+            from .product_hunt_oauth import resolve_product_hunt_bearer
+
+            try:
+                bearer, _auth_mode_used = resolve_product_hunt_bearer(api_key=k, oauth_client_secret=ph_secret)
+                headers["Authorization"] = f"Bearer {bearer}"
+            except (ValueError, RuntimeError) as e:
+                raise ValueError(str(e)) from e
+        elif k:
             if mode == "private_token":
                 headers["PRIVATE-TOKEN"] = k
             elif mode == "query_key":
@@ -243,7 +264,9 @@ class DataApiService:
                 # Product Hunt true data fetch: always use v2 GraphQL POST with a real query.
                 if sk == "product_hunt":
                     if "Authorization" not in headers:
-                        raise ValueError("product_hunt 需要 Bearer Access Token（先用 client_id/client_secret 换取 access_token）")
+                        raise ValueError(
+                            "product_hunt 需要 API Key（access_token）或同时填写 API Key（client_id）与 APP Secret（client_secret）"
+                        )
                     code, body_text = sync_product_hunt_top_details(headers)
                     class _Resp:
                         status_code = code

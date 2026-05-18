@@ -25,6 +25,7 @@ export const publicApi = {
     industry_slug?: string;
     paginate_by?: "cursor" | "day" | "heat";
     page?: number;
+    days_per_page?: number;
     heat_offset?: number;
     heat_page_size?: number;
     heat_max_ranked?: number;
@@ -41,6 +42,7 @@ export const publicApi = {
     if (opts.industry_slug) sp.set("industry_slug", opts.industry_slug);
     if (opts.paginate_by) sp.set("paginate_by", opts.paginate_by);
     if (opts.page != null) sp.set("page", String(opts.page));
+    if (opts.days_per_page != null) sp.set("days_per_page", String(opts.days_per_page));
     if (opts.heat_offset != null) sp.set("heat_offset", String(opts.heat_offset));
     if (opts.heat_page_size != null) sp.set("heat_page_size", String(opts.heat_page_size));
     if (opts.heat_max_ranked != null) sp.set("heat_max_ranked", String(opts.heat_max_ranked));

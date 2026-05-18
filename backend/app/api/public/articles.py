@@ -62,7 +62,13 @@ def list_articles_feed(
         pattern="^(cursor|day|heat)$",
         description="cursor=按条数游标分页；day=按 UTC 日历日整页；heat=当前时间窗内按热度 Top N。",
     ),
-    page: int | None = Query(None, ge=1, le=5000, description="paginate_by=day 时页码，从 1 开始（最新日为第 1 页）。"),
+    page: int | None = Query(None, ge=1, le=5000, description="paginate_by=day 时页码，从 1 开始（最新一段日历日为第 1 页）。"),
+    days_per_page: int = Query(
+        article_app.DAYS_PER_PAGE_DEFAULT,
+        ge=1,
+        le=31,
+        description="paginate_by=day 时每页包含的连续 UTC 日历日数（默认 3）。",
+    ),
     heat_offset: int = Query(
         0,
         ge=0,
@@ -115,6 +121,7 @@ def list_articles_feed(
                 published_on_latest_day=published_on_latest_day,
                 category=category,
                 search=q,
+                days_per_page=days_per_page,
             )
         elif paginate_by == "heat":
             data = article_app.list_articles_feed_by_heat_top(

@@ -56,7 +56,12 @@ export type ArticlesFeedDayResponse = {
   paginate_by: "day";
   page: number;
   total_pages: number;
+  /** 本页所含日历日数（默认 3） */
+  days_per_page: number;
+  /** 本页最新一日（UTC） */
   day_utc: string | null;
+  /** 本页最旧一日（UTC）；与 day_utc 相同时为单日页 */
+  day_utc_end?: string | null;
   has_prev: boolean;
   has_next: boolean;
   days_scan_truncated: boolean;

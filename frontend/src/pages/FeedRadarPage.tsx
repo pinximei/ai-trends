@@ -7,10 +7,14 @@ import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisu
 import { useI18n } from "@/i18n";
 
 const INDUSTRY_SLUG = "ai";
+/** 按日期列表：每行最多 2 张卡片（资讯 / 应用一致） */
+const FEED_CARD_GRID_CLASS = "mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-7 lg:gap-8";
+const DAYS_PER_PAGE = 3;
 
-type TimeKey = "latest_day" | "all" | "d7" | "d30" | "d90";
+type TimeKey = "d3" | "latest_day" | "all" | "d7" | "d30" | "d90";
 
 const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
+  { key: "d3", labelKey: "resourcesDays3" },
   { key: "latest_day", labelKey: "resourcesLatestDay" },
   { key: "all", labelKey: "resourcesTimeAll" },
   { key: "d7", labelKey: "resourcesDays7" },
@@ -24,7 +28,7 @@ function timeKeyToArticleParams(timeKey: TimeKey): {
 } {
   if (timeKey === "latest_day") return { published_on_latest_day: true };
   if (timeKey === "all") return {};
-  const n = timeKey === "d7" ? 7 : timeKey === "d30" ? 30 : 90;
+  const n = timeKey === "d3" ? 3 : timeKey === "d7" ? 7 : timeKey === "d30" ? 30 : 90;
   return { published_within_days: n };
 }
 
@@ -41,6 +45,12 @@ function formatFeedDateLabel(isoDay: string): string {
   return d.toLocaleDateString("zh-CN", { dateStyle: "long", timeZone: "UTC" });
 }
 
+function formatFeedDayRange(newest: string | null, oldest: string | null): string | null {
+  if (!newest) return null;
+  if (!oldest || oldest === newest) return formatFeedDateLabel(newest);
+  return `${formatFeedDateLabel(oldest)} – ${formatFeedDateLabel(newest)}`;
+}
+
 function isDayFeedResponse(d: unknown): d is ArticlesFeedDayResponse {
   return Boolean(d && typeof d === "object" && (d as ArticlesFeedDayResponse).paginate_by === "day");
 }
@@ -55,7 +65,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const [timeKey, setTimeKey] = useState<TimeKey>("latest_day");
+  const [timeKey, setTimeKey] = useState<TimeKey>("d3");
   const [feedPage, setFeedPage] = useState(1);
   const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>("date");
   const [heatHasMore, setHeatHasMore] = useState(false);
@@ -68,6 +78,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [pageMeta, setPageMeta] = useState({
     total_pages: 0,
     day_utc: null as string | null,
+    day_utc_end: null as string | null,
     has_prev: false,
     has_next: false,
     days_scan_truncated: false,
@@ -191,6 +202,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         industry_slug: INDUSTRY_SLUG,
         paginate_by: "day",
         page: feedPage,
+        days_per_page: DAYS_PER_PAGE,
         ...timeParams,
         category: categoryKey,
         q: searchQ || null,
@@ -210,6 +222,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         setPageMeta({
           total_pages: d.total_pages,
           day_utc: d.day_utc,
+          day_utc_end: d.day_utc_end ?? d.day_utc,
           has_prev: d.has_prev,
           has_next: d.has_next,
           days_scan_truncated: d.days_scan_truncated,
@@ -257,6 +270,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         setPageMeta({
           total_pages: 0,
           day_utc: null,
+          day_utc_end: null,
           has_prev: false,
           has_next: false,
           days_scan_truncated: false,
@@ -322,7 +336,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         <div className="text-sm text-slate-600">
           <span className="font-medium text-slate-900">{pageSummaryText}</span>
           {pageMeta.day_utc ? (
-            <span className="ml-2 text-slate-500">· 世界时 {formatFeedDateLabel(pageMeta.day_utc)}</span>
+            <span className="ml-2 text-slate-500">
+              · 世界时 {formatFeedDayRange(pageMeta.day_utc, pageMeta.day_utc_end)}
+            </span>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -534,11 +550,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                   </div>
                 )}
                 <div
-                  className={
-                    mode === "apps"
-                      ? "mt-5 grid gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4"
-                      : "mt-5 grid gap-6 sm:grid-cols-2 sm:gap-7"
-                  }
+                  className={FEED_CARD_GRID_CLASS}
                 >
                   {rows.map((a) => {
                     const pub = a.published_at ? a.published_at.slice(0, 10) : null;

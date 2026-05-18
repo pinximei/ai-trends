@@ -15,6 +15,7 @@ _MAX_FEED_SEARCH_LEN = 80
 HEAT_FEED_MAX = 100
 HEAT_PAGE_DEFAULT = 20
 HEAT_PAGE_MAX = 20
+DAYS_PER_PAGE_DEFAULT = 3
 
 
 def _admin_source_label_by_key(db: Session) -> dict[str, str]:
@@ -301,8 +302,9 @@ def list_articles_feed_by_day_page(
     published_on_latest_day: bool,
     category: str | None = None,
     search: str | None = None,
+    days_per_page: int = DAYS_PER_PAGE_DEFAULT,
 ) -> dict:
-    """按 UTC 自然日分页：第 1 页为最新一个有内容的日历日，整页包含该日全部匹配文章（指纹去重）。"""
+    """按 UTC 自然日分页：每页连续 ``days_per_page`` 个有内容的日历日（默认 3），第 1 页为最新一段。"""
     cat_filter = (category or "").strip() or None
     n = normalize_feed_search(search)
 
@@ -314,12 +316,15 @@ def list_articles_feed_by_day_page(
         published_within_days=published_within_days,
         published_on_latest_day=published_on_latest_day,
     )
+    dpp = max(1, min(int(days_per_page or DAYS_PER_PAGE_DEFAULT), 31))
     empty = {
         "items": [],
         "paginate_by": "day",
         "page": page,
         "total_pages": 0,
+        "days_per_page": dpp,
         "day_utc": None,
+        "day_utc_end": None,
         "has_prev": False,
         "has_next": False,
         "days_scan_truncated": False,
@@ -334,7 +339,8 @@ def list_articles_feed_by_day_page(
     ordered_days, truncated = _collect_ordered_days_for_feed(
         db, q, feed=feed, cat_filter=cat_filter, search_n=n, winner_ids=winner_ids
     )
-    total_pages = len(ordered_days)
+    n_days = len(ordered_days)
+    total_pages = (n_days + dpp - 1) // dpp if n_days else 0
     if total_pages == 0:
         return {**empty, "days_scan_truncated": truncated}
 
@@ -345,15 +351,20 @@ def list_articles_feed_by_day_page(
             "paginate_by": "day",
             "page": safe_page,
             "total_pages": total_pages,
+            "days_per_page": dpp,
             "day_utc": None,
+            "day_utc_end": None,
             "has_prev": total_pages > 0,
             "has_next": False,
             "days_scan_truncated": truncated,
         }
 
-    target_day = ordered_days[safe_page - 1]
-    day_start = datetime.combine(target_day, datetime.min.time())
-    day_end = day_start + timedelta(days=1)
+    start_i = (safe_page - 1) * dpp
+    chunk_days = ordered_days[start_i : start_i + dpp]
+    newest_day = chunk_days[0]
+    oldest_day = chunk_days[-1]
+    day_start = datetime.combine(oldest_day, datetime.min.time())
+    day_end = datetime.combine(newest_day, datetime.min.time()) + timedelta(days=1)
 
     q_day = q.where(Article.published_at >= day_start, Article.published_at < day_end)
     rows = db.scalars(q_day.order_by(*_feed_day_inner_order_by(feed))).all()
@@ -381,7 +392,9 @@ def list_articles_feed_by_day_page(
         "paginate_by": "day",
         "page": safe_page,
         "total_pages": total_pages,
-        "day_utc": target_day.isoformat(),
+        "days_per_page": dpp,
+        "day_utc": newest_day.isoformat(),
+        "day_utc_end": oldest_day.isoformat(),
         "has_prev": safe_page > 1,
         "has_next": safe_page < total_pages,
         "days_scan_truncated": truncated,

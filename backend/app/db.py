@@ -31,6 +31,24 @@ def _load_backend_dotenv() -> None:
 
 _load_backend_dotenv()
 
+
+def _migrate_aisou_env_aliases() -> None:
+    """兼容已废弃的 AISOU_* 前缀（backend/.env 或 systemd 仍可能使用）。"""
+    for new_key, old_key in (
+        ("AITRENDS_DATABASE_URL", "AISOU_DATABASE_URL"),
+        ("AITRENDS_DB_MODE", "AISOU_DB_MODE"),
+        ("AITRENDS_DB_URL_TEST", "AISOU_DB_URL_TEST"),
+        ("AITRENDS_DB_URL_PROD", "AISOU_DB_URL_PROD"),
+        ("AITRENDS_LLM_API_KEY", "AISOU_LLM_API_KEY"),
+        ("AITRENDS_LLM_BASE_URL", "AISOU_LLM_BASE_URL"),
+        ("AITRENDS_LLM_MODEL", "AISOU_LLM_MODEL"),
+    ):
+        if not (os.getenv(new_key) or "").strip() and (os.getenv(old_key) or "").strip():
+            os.environ[new_key] = os.environ[old_key]
+
+
+_migrate_aisou_env_aliases()
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker

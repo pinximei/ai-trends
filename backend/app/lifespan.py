@@ -39,6 +39,7 @@ def _startup_sync() -> None:
         from .services import ensure_mainstream_admin_sources, seed_if_empty, sync_catalog_preset_metadata
 
         from .product_connectors_bootstrap import (
+            enable_auto_pull_admin_sources_and_connectors,
             ensure_core_admin_connectors,
             prune_admin_sources_outside_mainstream,
             prune_disabled_admin_sources,
@@ -55,6 +56,7 @@ def _startup_sync() -> None:
         repair_github_admin_source_if_still_zen(db)
         repair_short_probe_admin_sources(db)
         ensure_core_admin_connectors(db)
+        enable_auto_pull_admin_sources_and_connectors(db)
         if demo_seed_enabled_effective():
             seed_if_empty(db)
             from .product_seed import (

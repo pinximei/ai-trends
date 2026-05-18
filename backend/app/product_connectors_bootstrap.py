@@ -12,6 +12,9 @@ from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRES
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
+# 启动时默认启用拉取（参与定时连接器批量同步）；HF Spaces 仍由运营手动开启以免与 GitHub/PH 同时暴量请求。
+AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = frozenset({"github", "product_hunt"})
+
 
 def repair_github_admin_source_if_still_zen(db: Session) -> None:
     """旧库若仍为 /zen，响应过短无法通过 rule_value_score（<80 字符），同步永远不入库。"""
@@ -61,12 +64,42 @@ def ensure_core_admin_connectors(db: Session) -> None:
                 provider_name=key,
                 type="api",
                 config_json={"method": "GET"},
-                enabled=False,
+                enabled=key in AUTO_ENABLE_PULL_SOURCE_KEYS,
                 min_interval_seconds=3600,
                 admin_source_key=key,
             )
         )
     db.commit()
+
+
+def enable_auto_pull_admin_sources_and_connectors(db: Session) -> dict[str, int]:
+    """将 GitHub、Product Hunt 数据源与绑定连接器设为启用（新建与已有库均生效）。"""
+    import logging
+
+    log = logging.getLogger(__name__)
+    n_src = 0
+    n_conn = 0
+    for key in AUTO_ENABLE_PULL_SOURCE_KEYS:
+        src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == key))
+        if src and not src.enabled:
+            src.enabled = True
+            src.updated_at = datetime.utcnow()
+            n_src += 1
+        for c in db.scalars(
+            select(ProductConnector).where(ProductConnector.admin_source_key == key)
+        ).all():
+            if not c.enabled:
+                c.enabled = True
+                n_conn += 1
+    if n_src or n_conn:
+        db.commit()
+        log.info(
+            "enabled auto-pull sources: admin_sources=%s connectors=%s keys=%s",
+            n_src,
+            n_conn,
+            sorted(AUTO_ENABLE_PULL_SOURCE_KEYS),
+        )
+    return {"admin_sources_enabled": n_src, "connectors_enabled": n_conn}
 
 
 def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
