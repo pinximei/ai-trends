@@ -17,6 +17,8 @@ function feedCard(id: number, feed: "news" | "apps", titleSuffix: string): Artic
     content_type: "article",
     third_party_source: null,
     published_at: "2026-01-10T08:00:00Z",
+    heat_score: id * 10,
+    updated_at: "2026-01-10T08:00:00Z",
     fingerprint: `mock-fp-${id}`,
     platform_label: feed === "apps" ? "iOS" : "Web",
     admin_source_key: "mock",
@@ -38,6 +40,8 @@ export function buildMockArticleDetail(id: number): ArticleDetail {
     content_type: "article",
     third_party_source: null,
     published_at: "2026-05-01T10:00:00Z",
+    heat_score: id * 100,
+    updated_at: "2026-05-01T10:00:00Z",
     body,
     feed_kind: feed,
     platform_label: feed === "apps" ? "TestFlight" : "RSS",
@@ -71,6 +75,26 @@ export function tryMockPublicGet<T>(path: string): T | null {
   if (path.includes("/articles/feed")) {
     const sp = new URLSearchParams(path.includes("?") ? path.split("?")[1] ?? "" : "");
     const feed = sp.get("feed") === "apps" ? "apps" : "news";
+    if (sp.get("paginate_by") === "heat") {
+      const off = Number.parseInt(sp.get("heat_offset") || "0", 10) || 0;
+      const items: ArticleFeedCard[] = [];
+      for (let i = 0; i < 20; i++) {
+        const id = off + i + 1;
+        if (id > 55) break;
+        items.push(feedCard(id, feed, "热度 mock"));
+      }
+      const total = 55;
+      const hasMore = off + items.length < total;
+      return {
+        paginate_by: "heat" as const,
+        items,
+        offset: off,
+        page_size: 20,
+        heat_max: 100,
+        total,
+        has_more: hasMore,
+      } as T;
+    }
     return buildMockArticlesFeed(feed) as T;
   }
 

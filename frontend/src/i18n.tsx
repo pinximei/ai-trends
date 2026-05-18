@@ -83,6 +83,12 @@ const STRINGS: Record<string, string> = {
   sidebarCategoryEmpty: "暂无类别统计",
 
   resourcesByDate: "按发布日",
+  resourcesByHeat: "按热度",
+  resourcesHeatTopHint: "当前时间范围与筛选下，按统一热度排序，至多 100 条（已去重）；每次加载 20 条，滑到底自动继续。",
+  resourcesHeatLoadingMore: "正在加载更多…",
+  resourcesDisplayMode: "列表方式",
+  resourcesListByDate: "按日期分页",
+  resourcesListByHeat: "按热度 Top100",
   resourcesSearchLabel: "搜索",
   resourcesSearchPlaceholder: "标题或摘要关键词…",
   resourcesSearchClear: "清除",

@@ -2,7 +2,7 @@ import { publicGet, publicPost } from "./client";
 import type { ArticleDetail, ArticlesFeedResponse } from "./types";
 
 export { publicGet, publicPost } from "./client";
-export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse } from "./types";
+export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse, ArticlesFeedHeatResponse } from "./types";
 
 export const publicApi = {
   articleCategories: (opts: {
@@ -23,8 +23,11 @@ export const publicApi = {
   articlesFeed: (opts: {
     feed: "news" | "apps";
     industry_slug?: string;
-    paginate_by?: "cursor" | "day";
+    paginate_by?: "cursor" | "day" | "heat";
     page?: number;
+    heat_offset?: number;
+    heat_page_size?: number;
+    heat_max_ranked?: number;
     page_size?: number;
     cursor?: string | null;
     exclude_fp?: string;
@@ -38,6 +41,9 @@ export const publicApi = {
     if (opts.industry_slug) sp.set("industry_slug", opts.industry_slug);
     if (opts.paginate_by) sp.set("paginate_by", opts.paginate_by);
     if (opts.page != null) sp.set("page", String(opts.page));
+    if (opts.heat_offset != null) sp.set("heat_offset", String(opts.heat_offset));
+    if (opts.heat_page_size != null) sp.set("heat_page_size", String(opts.heat_page_size));
+    if (opts.heat_max_ranked != null) sp.set("heat_max_ranked", String(opts.heat_max_ranked));
     if (opts.page_size != null) sp.set("page_size", String(opts.page_size));
     if (opts.cursor) sp.set("cursor", opts.cursor);
     if (opts.exclude_fp) sp.set("exclude_fp", opts.exclude_fp);

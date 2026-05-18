@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Select, and_, desc, or_, select
+from sqlalchemy import Select, and_, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..domain import articles as art
@@ -12,6 +12,9 @@ from ..product_models import Article, Industry, Segment
 from ..taxonomy_from_sources import MERGED_TAXONOMY_INDUSTRY_SLUG
 
 _MAX_FEED_SEARCH_LEN = 80
+HEAT_FEED_MAX = 100
+HEAT_PAGE_DEFAULT = 20
+HEAT_PAGE_MAX = 20
 
 
 def _admin_source_label_by_key(db: Session) -> dict[str, str]:
@@ -185,6 +188,13 @@ def _base_article_query_for_scope(
     return ind, q
 
 
+def _feed_day_inner_order_by(feed: str):
+    """按 UTC 日分页时，**同一天内**条目的 SQL 排序（不改变按 published_at 收集日历日的扫描逻辑）。"""
+    if feed == "apps":
+        return (desc(Article.heat_score), desc(Article.updated_at), desc(Article.published_at), desc(Article.id))
+    return (desc(Article.published_at), desc(Article.id))
+
+
 def _apply_published_keyset(stmt: Select, pos: tuple[datetime, int] | None) -> Select:
     if not pos:
         return stmt
@@ -218,6 +228,8 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
         "connector_sync_log_id": getattr(a, "connector_sync_log_id", None),
         "source_external_id": getattr(a, "source_external_id", None),
         "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
+        "updated_at": a.updated_at.isoformat() + "Z" if a.updated_at else None,
+        "heat_score": float(getattr(a, "heat_score", 0.0) or 0.0),
         "fingerprint": fp,
         "platform_label": plat,
         "admin_source_key": ak,
@@ -344,7 +356,7 @@ def list_articles_feed_by_day_page(
     day_end = day_start + timedelta(days=1)
 
     q_day = q.where(Article.published_at >= day_start, Article.published_at < day_end)
-    rows = db.scalars(q_day.order_by(desc(Article.published_at), desc(Article.id))).all()
+    rows = db.scalars(q_day.order_by(*_feed_day_inner_order_by(feed))).all()
 
     seen_fp: set[str] = set()
     out: list[dict] = []
@@ -373,6 +385,100 @@ def list_articles_feed_by_day_page(
         "has_prev": safe_page > 1,
         "has_next": safe_page < total_pages,
         "days_scan_truncated": truncated,
+    }
+
+
+def list_articles_feed_by_heat_top(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    segment_id: int | None,
+    segment_ids: list[int] | None,
+    published_within_days: int | None,
+    published_on_latest_day: bool,
+    category: str | None = None,
+    search: str | None = None,
+    heat_offset: int = 0,
+    heat_page_size: int = HEAT_PAGE_DEFAULT,
+    heat_max_ranked: int = HEAT_FEED_MAX,
+) -> dict:
+    """
+    与「按日」相同的时间窗与筛选；在展示指纹胜者集合内按 ``heat_score`` 排序，
+    先截取至多 ``heat_max_ranked`` 条作为热度池，再按 ``heat_offset`` + ``heat_page_size`` 分页返回（供前端触底懒加载）。
+    """
+    cat_filter = (category or "").strip() or None
+    n = normalize_feed_search(search)
+    ps = max(1, min(int(heat_page_size or HEAT_PAGE_DEFAULT), HEAT_PAGE_MAX))
+    off = max(0, int(heat_offset or 0))
+    cap = max(1, min(int(heat_max_ranked or HEAT_FEED_MAX), HEAT_FEED_MAX))
+
+    ind, q = _base_article_query_for_scope(
+        db,
+        industry_slug=industry_slug,
+        segment_id=segment_id,
+        segment_ids=segment_ids,
+        published_within_days=published_within_days,
+        published_on_latest_day=published_on_latest_day,
+    )
+    empty = {
+        "items": [],
+        "paginate_by": "heat",
+        "offset": off,
+        "page_size": ps,
+        "heat_max": cap,
+        "total": 0,
+        "has_more": False,
+    }
+    if not ind:
+        return empty
+
+    label_by_key = _admin_source_label_by_key(db)
+    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
+    if not winner_ids:
+        return empty
+
+    wc = q.whereclause
+    pool_where = and_(wc, Article.id.in_(winner_ids)) if wc is not None else Article.id.in_(winner_ids)
+    ranked_pool = (
+        select(Article.id.label("rid"))
+        .where(pool_where)
+        .order_by(
+            desc(Article.heat_score),
+            desc(Article.updated_at),
+            desc(Article.published_at),
+            desc(Article.id),
+        )
+        .limit(cap)
+        .subquery()
+    )
+    total_ranked = int(db.scalar(select(func.count()).select_from(ranked_pool)) or 0)
+    if total_ranked == 0:
+        return empty
+
+    slice_ids = list(
+        db.scalars(select(ranked_pool.c.rid).offset(off).limit(ps)).all(),
+    )
+    if not slice_ids:
+        return {
+            **empty,
+            "total": total_ranked,
+            "has_more": off < total_ranked,
+        }
+
+    rows = db.scalars(select(Article).where(Article.id.in_(slice_ids))).all()
+    pos = {i: p for p, i in enumerate(slice_ids)}
+    rows_sorted = sorted(rows, key=lambda a: pos[a.id])
+    out = [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows_sorted]
+    has_more = off + len(out) < total_ranked
+    return {
+        "items": out,
+        "paginate_by": "heat",
+        "offset": off,
+        "page_size": ps,
+        "heat_max": cap,
+        "total": total_ranked,
+        "has_more": has_more,
     }
 
 
@@ -516,6 +622,8 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "content_type": a.content_type,
         "third_party_source": a.third_party_source,
         "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
+        "updated_at": a.updated_at.isoformat() + "Z" if a.updated_at else None,
+        "heat_score": float(getattr(a, "heat_score", 0.0) or 0.0),
         "connector_sync_log_id": getattr(a, "connector_sync_log_id", None),
         "source_external_id": getattr(a, "source_external_id", None),
         "categories": art.display_categories_for_article(getattr(a, "ai_categories_json", None)),

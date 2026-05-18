@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from datetime import datetime
 
@@ -20,6 +21,7 @@ from .domain.articles import (
     ingest_fingerprint,
     primary_canonical_from_raw_labels,
     rule_value_score,
+    unified_connector_heat,
     validate_llm_polish_for_publish,
     FACET_ALL_LABELS,
 )
@@ -232,6 +234,13 @@ def _create_one_published_article_from_connector_targets(
 
     disp_fp = display_fingerprint(title, summary)
 
+    heat = unified_connector_heat(
+        admin_source_key=src_tag,
+        snippet=safe,
+        value_score=vs,
+        sync_unix=float(time.time()),
+    )
+
     recent = db.scalars(
         select(Article)
         .where(Article.industry_id == industry_id, Article.status == "published")
@@ -260,6 +269,7 @@ def _create_one_published_article_from_connector_targets(
             ai_categories_json=ai_categories_json,
             ai_tabs_json=ai_tabs_json,
             feed_kind=stored_feed_kind,
+            heat_score=heat,
         )
     )
     db.flush()

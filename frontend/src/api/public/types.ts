@@ -11,6 +11,9 @@ export type ArticleCard = {
   /** 上游 API 条目的稳定 id（如 HN objectID、GitHub node_id） */
   source_external_id?: string | null;
   published_at: string | null;
+  /** 可更新热度；应用泳道按日列表内优先于发布时间排序 */
+  heat_score?: number;
+  updated_at?: string | null;
   categories?: string[];
 };
 
@@ -59,4 +62,17 @@ export type ArticlesFeedDayResponse = {
   days_scan_truncated: boolean;
 };
 
-export type ArticlesFeedResponse = ArticlesFeedCursorResponse | ArticlesFeedDayResponse;
+/** 公开资讯/应用列表：当前时间窗内按热度分页（触底懒加载，与按日/游标互斥） */
+export type ArticlesFeedHeatResponse = {
+  items: ArticleFeedCard[];
+  paginate_by: "heat";
+  /** 本页起始偏移（热度池内，与 heat_max 上限一致） */
+  offset: number;
+  page_size: number;
+  /** 参与排序的热度条数上限（默认 100） */
+  heat_max: number;
+  total: number;
+  has_more: boolean;
+};
+
+export type ArticlesFeedResponse = ArticlesFeedCursorResponse | ArticlesFeedDayResponse | ArticlesFeedHeatResponse;

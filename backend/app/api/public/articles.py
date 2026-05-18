@@ -59,10 +59,28 @@ def list_articles_feed(
     ),
     paginate_by: str = Query(
         "cursor",
-        pattern="^(cursor|day)$",
-        description="cursor=按条数游标分页；day=按 UTC 日历日整页，一页为一整天全部条目。",
+        pattern="^(cursor|day|heat)$",
+        description="cursor=按条数游标分页；day=按 UTC 日历日整页；heat=当前时间窗内按热度 Top N。",
     ),
     page: int | None = Query(None, ge=1, le=5000, description="paginate_by=day 时页码，从 1 开始（最新日为第 1 页）。"),
+    heat_offset: int = Query(
+        0,
+        ge=0,
+        le=99,
+        description="paginate_by=heat 时已跳过条数（与已展示 items 条数对齐，用于触底继续拉取）。",
+    ),
+    heat_page_size: int = Query(
+        20,
+        ge=1,
+        le=20,
+        description="paginate_by=heat 时每页条数，最大 20；热度池最多 heat_max_ranked 条。",
+    ),
+    heat_max_ranked: int = Query(
+        article_app.HEAT_FEED_MAX,
+        ge=1,
+        le=article_app.HEAT_FEED_MAX,
+        description="paginate_by=heat 时参与排序的热度池上限（默认 100）。",
+    ),
     page_size: int = Query(18, ge=1, le=48),
     cursor: str | None = Query(None, description="Keyset cursor from previous response (next_cursor)."),
     exclude_fp: str | None = Query(
@@ -97,6 +115,21 @@ def list_articles_feed(
                 published_on_latest_day=published_on_latest_day,
                 category=category,
                 search=q,
+            )
+        elif paginate_by == "heat":
+            data = article_app.list_articles_feed_by_heat_top(
+                db,
+                feed=feed,
+                industry_slug=industry_slug,
+                segment_id=segment_id,
+                segment_ids=segment_ids_parsed,
+                published_within_days=published_within_days,
+                published_on_latest_day=published_on_latest_day,
+                category=category,
+                search=q,
+                heat_offset=heat_offset,
+                heat_page_size=heat_page_size,
+                heat_max_ranked=heat_max_ranked,
             )
         else:
             data = article_app.list_articles_feed(

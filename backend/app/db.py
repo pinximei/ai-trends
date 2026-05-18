@@ -124,6 +124,8 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN connector_sync_log_id INTEGER"))
             if "source_external_id" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN source_external_id VARCHAR(512)"))
+            if "heat_score" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN heat_score DOUBLE PRECISION DEFAULT 0"))
         cols = _column_names(conn, "product_software_downloads")
         if cols:
             if "artifact_rel_path" not in cols:

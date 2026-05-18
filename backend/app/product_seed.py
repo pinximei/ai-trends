@@ -108,6 +108,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="news",
+            heat_score=100.0,
             ai_categories_json='["大模型"]',
             ai_tabs_json=_tabs_json(
                 [
@@ -129,6 +130,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
+            heat_score=200.0,
             ai_categories_json='["应用产品"]',
             ai_tabs_json=_tabs_json(
                 [
@@ -150,6 +152,7 @@ def seed_product_if_empty(db: Session) -> None:
             status="published",
             published_at=datetime.utcnow(),
             feed_kind="apps",
+            heat_score=300.0,
             ai_categories_json='["应用产品"]',
             ai_tabs_json=_tabs_json(
                 [

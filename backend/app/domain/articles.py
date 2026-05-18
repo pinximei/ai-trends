@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import re
 from datetime import datetime
 from typing import Iterator
@@ -341,6 +342,162 @@ def rule_value_score(*, snippet: str, summary: str, http_status: int) -> float:
     if low.count("error") >= 3 and len(s) < 500:
         score -= 25.0
     return max(0.0, min(100.0, score))
+
+
+# —— 跨平台统一热度（单一 heat_score 量纲：对数归一 + 按数据源权重，便于横向比较与后续叠加因子）——
+
+
+def _heat_log_norm(x: float, *, cap: float) -> float:
+    """将非负计数压到 [0,1]，大平台间量级差用 log1p 拉齐。"""
+    if cap <= 0 or x <= 0 or not math.isfinite(x):
+        return 0.0
+    return min(1.0, math.log1p(float(x)) / math.log1p(float(cap)))
+
+
+_ENGAGEMENT_BUCKETS = frozenset(
+    {
+        "stars",
+        "forks",
+        "issues",
+        "votes",
+        "comments",
+        "likes",
+        "trending",
+        "hn_points",
+        "reddit_score",
+        "downloads",
+        "views",
+    }
+)
+
+
+def _heat_accum_numeric(out: dict[str, float], bucket: str, v: object) -> None:
+    if bucket not in out or isinstance(v, bool) or v is None:
+        return
+    if isinstance(v, int):
+        if v < 0 or v > 2**53:
+            return
+        x = float(v)
+    elif isinstance(v, float):
+        if not math.isfinite(v) or v < 0:
+            return
+        x = v
+    else:
+        return
+    out[bucket] = max(out[bucket], x)
+
+
+def _heat_map_key_to_bucket(key: str) -> str | None:
+    nk = str(key or "").strip().lower()
+    if nk in ("stargazers_count", "stars", "star_count", "watchers_count", "watchers"):
+        return "stars"
+    if nk in ("forks", "forks_count", "fork_count"):
+        return "forks"
+    if nk in ("open_issues_count", "open_issues"):
+        return "issues"
+    if nk in ("votescount", "vote_count", "votes", "upvotes", "ups"):
+        return "votes"
+    if nk in ("commentscount", "comments_count", "num_comments", "comment_count", "numcomments", "children"):
+        return "comments"
+    if nk in ("likes", "like_count", "likescount"):
+        return "likes"
+    if nk in ("trendingscore", "trending_score"):
+        return "trending"
+    if nk == "points":
+        return "hn_points"
+    if nk in ("score", "reddit_score"):
+        return "reddit_score"
+    if nk in ("download_count", "downloads", "downloadcount"):
+        return "downloads"
+    if nk in ("view_count", "viewcount", "views", "playback_count", "play_count"):
+        return "views"
+    return None
+
+
+def _walk_engagement_for_signals(obj: object, out: dict[str, float], depth: int) -> None:
+    if depth > 14:
+        return
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if not isinstance(k, str):
+                continue
+            b = _heat_map_key_to_bucket(k)
+            if b:
+                _heat_accum_numeric(out, b, v)
+            if isinstance(v, (dict, list)):
+                _walk_engagement_for_signals(v, out, depth + 1)
+    elif isinstance(obj, list):
+        for item in obj[:80]:
+            _walk_engagement_for_signals(item, out, depth + 1)
+
+
+def extract_engagement_signals(snippet: str) -> dict[str, float]:
+    """从连接器 JSON 片段中尽力抽取各平台「可比的」互动计数（越大越热）。"""
+    out = {b: 0.0 for b in _ENGAGEMENT_BUCKETS}
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    if len(s) < 2:
+        return out
+    try:
+        root = json.loads(s)
+    except Exception:
+        return out
+    _walk_engagement_for_signals(root, out, 0)
+    return out
+
+
+def unified_connector_heat(
+    *,
+    admin_source_key: str,
+    snippet: str,
+    value_score: float,
+    sync_unix: float,
+) -> float:
+    """
+    连接器入库用的统一热度：不同平台原始计数经 log 归一后，按数据源加权合成 ~0–800+，
+    再叠加入库质量分（rule_value_score）与极小时间项，保证同量纲可排序、可再被运营 PATCH 覆盖。
+    """
+    sig = extract_engagement_signals(snippet)
+    k = (admin_source_key or "").strip().lower()
+    vs = max(0.0, min(100.0, float(value_score or 0.0)))
+    if k == "github":
+        eng = (
+            420.0 * _heat_log_norm(sig["stars"], cap=80_000.0)
+            + 240.0 * _heat_log_norm(sig["forks"], cap=12_000.0)
+            + 120.0 * _heat_log_norm(sig["issues"], cap=8_000.0)
+            + 100.0 * _heat_log_norm(sig["comments"], cap=6_000.0)
+        )
+    elif k == "product_hunt":
+        eng = (
+            520.0 * _heat_log_norm(sig["votes"], cap=10_000.0)
+            + 300.0 * _heat_log_norm(sig["comments"], cap=5_000.0)
+        )
+    elif k == "huggingface_spaces":
+        eng = (
+            460.0 * _heat_log_norm(sig["likes"], cap=80_000.0)
+            + 280.0 * _heat_log_norm(sig["trending"], cap=2_000_000.0)
+            + 90.0 * _heat_log_norm(sig["downloads"], cap=5_000_000.0)
+            + 70.0 * _heat_log_norm(sig["views"], cap=50_000_000.0)
+        )
+    else:
+        eng = 540.0 * max(
+            _heat_log_norm(sig["stars"], cap=120_000.0),
+            _heat_log_norm(sig["votes"], cap=12_000.0),
+            _heat_log_norm(sig["likes"], cap=100_000.0),
+            _heat_log_norm(sig["hn_points"], cap=12_000.0),
+            _heat_log_norm(sig["reddit_score"], cap=80_000.0),
+            _heat_log_norm(sig["trending"], cap=2_000_000.0),
+            _heat_log_norm(sig["views"], cap=80_000_000.0),
+            _heat_log_norm(sig["downloads"], cap=8_000_000.0),
+        )
+    tie = (float(sync_unix) % 86_400_000.0) * 1e-7
+    return float(max(0.0, eng + 0.32 * vs + tie))
+
+
+def unified_editorial_heat(*, sync_unix: float, quality_hint: float = 58.0) -> float:
+    """无连接器片段时（后台手建稿）：落在统一量纲的中低段，避免与自然高互动稿件倒挂。"""
+    qh = max(0.0, min(100.0, float(quality_hint)))
+    tie = (float(sync_unix) % 86_400_000.0) * 1e-7
+    return float(95.0 + 0.22 * qh + tie)
 
 
 def ingest_duplicate_exists(db: Session, *, industry_id: int, ingest_fp: str) -> bool:

@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ScrollText, Search, Sparkles } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
-import type { ArticlesFeedDayResponse } from "@/api/public/types";
+import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
 import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisual";
 import { useI18n } from "@/i18n";
 
@@ -45,12 +45,24 @@ function isDayFeedResponse(d: unknown): d is ArticlesFeedDayResponse {
   return Boolean(d && typeof d === "object" && (d as ArticlesFeedDayResponse).paginate_by === "day");
 }
 
+function isHeatFeedResponse(d: unknown): d is ArticlesFeedHeatResponse {
+  return Boolean(d && typeof d === "object" && (d as ArticlesFeedHeatResponse).paginate_by === "heat");
+}
+
+type ListDisplayMode = "date" | "heat";
+
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const [timeKey, setTimeKey] = useState<TimeKey>("latest_day");
   const [feedPage, setFeedPage] = useState(1);
+  const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>("date");
+  const [heatHasMore, setHeatHasMore] = useState(false);
+  const [heatLoadingMore, setHeatLoadingMore] = useState(false);
+  const heatSentinelRef = useRef<HTMLDivElement | null>(null);
+  const heatMoreLockRef = useRef(false);
+  const heatNextOffsetRef = useRef(0);
   const [jumpDraft, setJumpDraft] = useState("1");
   const [list, setList] = useState<ArticleFeedCard[]>([]);
   const [pageMeta, setPageMeta] = useState({
@@ -97,9 +109,14 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return Array.from(m.entries()).sort((x, y) => (x[0] < y[0] ? 1 : x[0] > y[0] ? -1 : 0));
   }, [list]);
 
+  const groupedForList = useMemo((): [string, ArticleFeedCard[]][] => {
+    if (listDisplayMode === "heat") return [["_", list]];
+    return listByDate;
+  }, [listDisplayMode, list, listByDate]);
+
   useEffect(() => {
     setFeedPage(1);
-  }, [mode, timeKey, categoryKey, searchQ]);
+  }, [mode, timeKey, categoryKey, searchQ, listDisplayMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,7 +139,48 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     }
   }, [categoryOptions, categoryKey]);
 
+  const heatFeedBase = useMemo(
+    () => ({
+      feed: mode,
+      industry_slug: INDUSTRY_SLUG,
+      paginate_by: "heat" as const,
+      heat_page_size: 20,
+      heat_max_ranked: 100,
+      ...timeParams,
+      category: categoryKey,
+      q: searchQ || null,
+    }),
+    [mode, timeParams, categoryKey, searchQ],
+  );
+
+  const loadMoreHeat = useCallback(async () => {
+    if (listDisplayMode !== "heat" || !heatHasMore || heatLoadingMore || loading || heatMoreLockRef.current) return;
+    heatMoreLockRef.current = true;
+    setHeatLoadingMore(true);
+    try {
+      const d = await publicApi.articlesFeed({
+        ...heatFeedBase,
+        heat_offset: heatNextOffsetRef.current,
+      });
+      if (!isHeatFeedResponse(d)) {
+        setErr("Unexpected feed response");
+        setHeatHasMore(false);
+        return;
+      }
+      setList((prev) => [...prev, ...d.items]);
+      setHeatHasMore(d.has_more);
+      heatNextOffsetRef.current += d.items.length;
+    } catch (e) {
+      setErr(String(e));
+      setHeatHasMore(false);
+    } finally {
+      setHeatLoadingMore(false);
+      heatMoreLockRef.current = false;
+    }
+  }, [listDisplayMode, heatHasMore, heatLoadingMore, loading, heatFeedBase]);
+
   useEffect(() => {
+    if (listDisplayMode !== "date") return;
     let cancelled = false;
     setLoading(true);
     setErr("");
@@ -169,13 +227,81 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeParams, categoryKey, searchQ, feedPage]);
+  }, [listDisplayMode, mode, timeParams, categoryKey, searchQ, feedPage]);
 
   useEffect(() => {
-    if (!loading) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [feedPage, loading]);
+    if (listDisplayMode !== "heat") return;
+    let cancelled = false;
+    heatNextOffsetRef.current = 0;
+    setHeatHasMore(true);
+    setHeatLoadingMore(false);
+    setLoading(true);
+    setErr("");
+
+    publicApi
+      .articlesFeed({
+        ...heatFeedBase,
+        heat_offset: 0,
+      })
+      .then((d) => {
+        if (cancelled) return;
+        if (!isHeatFeedResponse(d)) {
+          setErr("Unexpected feed response");
+          setHeatHasMore(false);
+          setLoading(false);
+          return;
+        }
+        setList(d.items);
+        setHeatHasMore(d.has_more);
+        heatNextOffsetRef.current = d.offset + d.items.length;
+        setPageMeta({
+          total_pages: 0,
+          day_utc: null,
+          has_prev: false,
+          has_next: false,
+          days_scan_truncated: false,
+        });
+        setJumpDraft("1");
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setErr(String(e));
+          setHeatHasMore(false);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listDisplayMode, heatFeedBase]);
+
+  useEffect(() => {
+    if (listDisplayMode !== "heat" || !heatHasMore || loading) return;
+    const el = heatSentinelRef.current;
+    if (!el) return;
+    const ob = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.some((e) => e.isIntersecting);
+        if (!hit) return;
+        void loadMoreHeat();
+      },
+      { root: null, rootMargin: "240px", threshold: 0 },
+    );
+    ob.observe(el);
+    return () => ob.disconnect();
+  }, [listDisplayMode, heatHasMore, loading, loadMoreHeat, list.length]);
+
+  const scrollKey = useMemo(
+    () => `${listDisplayMode}-${mode}-${timeKey}-${categoryKey ?? ""}-${searchQ}-${feedPage}`,
+    [listDisplayMode, mode, timeKey, categoryKey, searchQ, feedPage],
+  );
+
+  useEffect(() => {
+    if (loading) return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [scrollKey, loading]);
 
   const onJump = () => {
     const n = Number.parseInt(jumpDraft.trim(), 10);
@@ -191,7 +317,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       : "";
 
   const paginationBar = () =>
-    !loading && pageMeta.total_pages > 0 ? (
+    listDisplayMode === "date" && !loading && pageMeta.total_pages > 0 ? (
       <div className="ui-card flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
         <div className="text-sm text-slate-600">
           <span className="font-medium text-slate-900">{pageSummaryText}</span>
@@ -299,6 +425,30 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       </div>
 
       <div className="ui-card p-4 sm:p-4">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesDisplayMode")}</span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setListDisplayMode("date")}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              listDisplayMode === "date" ? "pill-active shadow-md" : "pill-idle"
+            }`}
+          >
+            {t("resourcesListByDate")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setListDisplayMode("heat")}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              listDisplayMode === "heat" ? "pill-active shadow-md" : "pill-idle"
+            }`}
+          >
+            {t("resourcesListByHeat")}
+          </button>
+        </div>
+      </div>
+
+      <div className="ui-card p-4 sm:p-4">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesTimeFilter")}</span>
         <div className="mt-3 flex flex-wrap gap-2">
           {TIME_FILTERS.map((f) => (
@@ -347,7 +497,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         </div>
       </div>
 
-      {pageMeta.days_scan_truncated ? (
+      {listDisplayMode === "date" && pageMeta.days_scan_truncated ? (
         <p className="ui-card px-4 py-3 text-xs font-medium text-violet-700">{t("resourcesDaysTruncated")}</p>
       ) : null}
     </div>
@@ -367,16 +517,22 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
       {!loading ? (
         <>
-          <p className="mt-1 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400 sm:mt-2">{t("resourcesByDate")}</p>
+          <p className="mt-1 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400 sm:mt-2">
+            {listDisplayMode === "heat" ? t("resourcesByHeat") : t("resourcesByDate")}
+          </p>
           <div className="mt-4 space-y-14 sm:mt-5">
-            {listByDate.map(([dayKey, rows]) => (
+            {groupedForList.map(([dayKey, rows]) => (
               <Fragment key={dayKey}>
-                <div className="flex items-center gap-4 px-1">
-                  <span className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
-                    {formatFeedDateLabel(dayKey)}
-                  </span>
-                  <span className="h-px flex-1 bg-slate-200" aria-hidden />
-                </div>
+                {listDisplayMode === "heat" ? (
+                  <p className="px-1 text-center text-xs text-slate-500">{t("resourcesHeatTopHint")}</p>
+                ) : (
+                  <div className="flex items-center gap-4 px-1">
+                    <span className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+                      {formatFeedDateLabel(dayKey)}
+                    </span>
+                    <span className="h-px flex-1 bg-slate-200" aria-hidden />
+                  </div>
+                )}
                 <div
                   className={
                     mode === "apps"
@@ -476,6 +632,15 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
               </Fragment>
             ))}
           </div>
+
+          {listDisplayMode === "heat" && !loading ? (
+            <div className="mt-8">
+              {heatLoadingMore ? (
+                <p className="text-center text-sm text-slate-500">{t("resourcesHeatLoadingMore")}</p>
+              ) : null}
+              {heatHasMore ? <div ref={heatSentinelRef} className="mx-auto mt-4 h-8 max-w-md" aria-hidden /> : null}
+            </div>
+          ) : null}
 
           {list.length === 0 ? (
             <p className="mt-6 text-center text-sm text-slate-500 sm:mt-8">

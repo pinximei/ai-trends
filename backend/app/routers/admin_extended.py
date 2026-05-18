@@ -1,6 +1,7 @@
 """产品管理扩展 API：板块/指标/文章/连接器/配置/异动/灵感/用量。"""
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 import httpx
@@ -44,7 +45,7 @@ from ..connector_heat_fetch import (
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
-from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS
+from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS, unified_editorial_heat
 from ..source_segment_resolve import first_metric_for_segment, resolve_admin_source_key_to_segments
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product-extended"])
@@ -818,6 +819,7 @@ def list_articles(
                 "published_at": r.published_at.isoformat() + "Z" if r.published_at else None,
                 "is_featured": r.is_featured,
                 "updated_at": r.updated_at.isoformat() + "Z" if r.updated_at else None,
+                "heat_score": float(getattr(r, "heat_score", 0.0) or 0.0),
                 "connector_sync_log_id": getattr(r, "connector_sync_log_id", None),
                 "source_external_id": getattr(r, "source_external_id", None),
             }
@@ -851,6 +853,8 @@ def get_article(
             "status": a.status,
             "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
             "is_featured": a.is_featured,
+            "updated_at": a.updated_at.isoformat() + "Z" if a.updated_at else None,
+            "heat_score": float(getattr(a, "heat_score", 0.0) or 0.0),
         }
     )
 
@@ -868,6 +872,7 @@ class ArticleCreate(BaseModel):
     source_external_id: str | None = None
     status: str = "draft"
     is_featured: bool = False
+    heat_score: float | None = None
 
 
 class ArticlePatch(BaseModel):
@@ -882,6 +887,7 @@ class ArticlePatch(BaseModel):
     source_external_id: str | None = None
     status: str | None = None
     is_featured: bool | None = None
+    heat_score: float | None = None
 
 
 @router.post("/product/articles")
@@ -892,6 +898,11 @@ def create_article(
 ):
     if payload.content_type == "application" and not (payload.third_party_source or "").strip():
         raise HTTPException(400, "application-type articles require third_party_source")
+    heat_val = payload.heat_score
+    if heat_val is None:
+        heat_val = unified_editorial_heat(sync_unix=time.time()) if payload.status == "published" else 0.0
+    else:
+        heat_val = float(heat_val)
     a = Article(
         title=payload.title,
         slug=payload.slug,
@@ -905,6 +916,7 @@ def create_article(
         source_external_id=(payload.source_external_id or "").strip() or None,
         status=payload.status,
         is_featured=payload.is_featured,
+        heat_score=heat_val,
         published_at=datetime.utcnow() if payload.status == "published" else None,
     )
     db.add(a)
@@ -924,6 +936,7 @@ def patch_article(
     a = db.get(Article, article_id)
     if not a:
         raise HTTPException(404, "not found")
+    old_status = a.status
     data = payload.model_dump(exclude_unset=True)
     if "source_external_id" in data:
         v = data.get("source_external_id")
@@ -932,6 +945,9 @@ def patch_article(
         setattr(a, k, v)
     if data.get("status") == "published" and not a.published_at:
         a.published_at = datetime.utcnow()
+    if old_status != "published" and a.status == "published" and "heat_score" not in data:
+        if float(getattr(a, "heat_score", 0.0) or 0.0) == 0.0:
+            a.heat_score = unified_editorial_heat(sync_unix=time.time())
     a.updated_at = datetime.utcnow()
     db.commit()
     audit(db, actor=session.username, action="product.article.patch", target=str(article_id))
