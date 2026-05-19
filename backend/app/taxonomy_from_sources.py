@@ -71,10 +71,11 @@ def parse_scope_label(label: str) -> tuple[str, str] | None:
     return (MERGED_TAXONOMY_INDUSTRY_NAME, topic)
 
 
-def sync_product_taxonomy_from_admin_sources(db: Session) -> int:
+def sync_product_taxonomy_from_admin_sources(db: Session, *, commit: bool = True) -> int:
     """
     根据 admin_source_configs 的领域标签创建/补齐 **一个** 根 Industry（domains）及下属 Segment（合并主题）。
     返回新建行数（近似）。
+    ``commit=False`` 时仅 flush，由调用方在同一事务末尾统一提交（整批拉取写诊断日志用）。
     """
     from .models import AdminSourceConfig
     from .product_models import Industry, Segment
@@ -126,7 +127,10 @@ def sync_product_taxonomy_from_admin_sources(db: Session) -> int:
                 db.add(seg)
                 created += 1
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return created
 
 

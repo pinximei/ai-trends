@@ -68,6 +68,11 @@ def write(
     db.flush()
 
 
+def commit_diagnostics(db: Session) -> None:
+    """立即提交当前会话中的诊断日志（避免 taxonomy 中途 commit 后仅留下 batch_start）。"""
+    db.commit()
+
+
 def list_logs(
     db: Session,
     *,

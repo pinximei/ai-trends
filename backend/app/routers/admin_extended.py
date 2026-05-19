@@ -635,34 +635,62 @@ def run_connector_sync(
 
 def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict:
     """按后台数据源领域标签刷新 taxonomy，并对所有已启用连接器立即同步（不受单连接器最短间隔限制）。"""
+    import logging
+
     from ..llm_service import resolve_llm_http_config
     from ..product_connectors_bootstrap import repair_short_probe_admin_sources
-    from ..sync_diagnostic_log import begin_run, end_run, write as diag_write
+    from ..sync_diagnostic_log import begin_run, commit_diagnostics, end_run, write as diag_write
     from ..taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
+    log = logging.getLogger(__name__)
     repair_short_probe_admin_sources(db)
     run_id = begin_run(db, actor=actor)
     tnorm = (theme or "").strip() or None
-    if tnorm:
-        diag_write(db, run_id=run_id, step="theme_kw", message=f"本次 URL 搜索词 q={tnorm!r}")
-    n_tax = sync_product_taxonomy_from_admin_sources(db)
-    diag_write(db, run_id=run_id, step="taxonomy", message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）")
-    _llm_base, llm_key, _llm_model = resolve_llm_http_config(db)
-    llm_ok = bool((llm_key or "").strip())
-    diag_write(
-        db,
-        run_id=run_id,
-        level="info" if llm_ok else "error",
-        step="llm_config",
-        message="LLM API Key 已配置，可润色入库" if llm_ok else "未配置 LLM：拉取成功也不会生成文章，请在「AI 资讯与数据」配置 DeepSeek",
-    )
-    rows = db.scalars(
-        select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)
-    ).all()
-    diag_write(db, run_id=run_id, step="connectors", message=f"将同步已启用连接器 {len(rows)} 个")
     details: list[dict] = []
     ok_n = 0
     fail_n = 0
+    rows: list[ProductConnector] = []
+    try:
+        if tnorm:
+            diag_write(db, run_id=run_id, step="theme_kw", message=f"本次 URL 搜索词 q={tnorm!r}")
+        n_tax = sync_product_taxonomy_from_admin_sources(db, commit=False)
+        diag_write(db, run_id=run_id, step="taxonomy", message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）")
+        _llm_base, llm_key, _llm_model = resolve_llm_http_config(db)
+        llm_ok = bool((llm_key or "").strip())
+        diag_write(
+            db,
+            run_id=run_id,
+            level="info" if llm_ok else "error",
+            step="llm_config",
+            message="LLM API Key 已配置，可润色入库" if llm_ok else "未配置 LLM：拉取成功也不会生成文章，请在「AI 资讯与数据」配置 DeepSeek",
+        )
+        rows = db.scalars(
+            select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)
+        ).all()
+        diag_write(db, run_id=run_id, step="connectors", message=f"将同步已启用连接器 {len(rows)} 个")
+        commit_diagnostics(db)
+    except Exception as e:
+        log.exception("theme_fetch_batch early phase failed run_id=%s", run_id)
+        diag_write(
+            db,
+            run_id=run_id,
+            level="error",
+            step="batch_fatal",
+            message=f"整批拉取在准备阶段失败：{type(e).__name__}: {str(e)[:600]}",
+        )
+        end_run(db, run_id=run_id, ok=0, fail=0, total=0)
+        commit_diagnostics(db)
+        audit(db, actor=actor, action="product.ingest.theme_fetch", detail=f"fatal={type(e).__name__}")
+        return {
+            "diagnostic_run_id": run_id,
+            "taxonomy_synced": False,
+            "theme_applied_to_url": bool(tnorm),
+            "connectors_total": 0,
+            "ok": 0,
+            "fail": 0,
+            "details": details,
+            "batch_error": str(e)[:500],
+        }
     for c in rows:
         try:
             out = run_connector_sync(db, c.id, actor=actor, bypass_rate_limit=True, theme=tnorm)
@@ -721,7 +749,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
         ),
     )
     end_run(db, run_id=run_id, ok=ok_n, fail=fail_n, total=len(rows))
-    db.commit()
+    commit_diagnostics(db)
     audit(db, actor=actor, action="product.ingest.theme_fetch", detail=f"theme={tnorm!r}, ok={ok_n}, fail={fail_n}")
     return {
         "diagnostic_run_id": run_id,
