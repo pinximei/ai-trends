@@ -645,6 +645,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
     log = logging.getLogger(__name__)
     repair_short_probe_admin_sources(db)
     run_id = begin_run(db, actor=actor)
+    commit_diagnostics(db)
     tnorm = (theme or "").strip() or None
     details: list[dict] = []
     ok_n = 0
@@ -653,8 +654,12 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
     try:
         if tnorm:
             diag_write(db, run_id=run_id, step="theme_kw", message=f"本次 URL 搜索词 q={tnorm!r}")
+            commit_diagnostics(db)
+        diag_write(db, run_id=run_id, step="taxonomy_sync", message="正在同步数据源领域 → 行业/板块…")
+        commit_diagnostics(db)
         n_tax = sync_product_taxonomy_from_admin_sources(db, commit=False)
         diag_write(db, run_id=run_id, step="taxonomy", message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）")
+        commit_diagnostics(db)
         _llm_base, llm_key, _llm_model = resolve_llm_http_config(db)
         llm_ok = bool((llm_key or "").strip())
         diag_write(
@@ -664,6 +669,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
             step="llm_config",
             message="LLM API Key 已配置，可润色入库" if llm_ok else "未配置 LLM：拉取成功也不会生成文章，请在「AI 资讯与数据」配置 DeepSeek",
         )
+        commit_diagnostics(db)
         rows = db.scalars(
             select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)
         ).all()

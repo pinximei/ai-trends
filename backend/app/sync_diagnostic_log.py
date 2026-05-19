@@ -5,6 +5,9 @@ import contextvars
 import uuid
 from datetime import datetime
 
+# 写入 batch_start 消息，便于确认线上是否已部署最新诊断提交逻辑。
+DIAG_PIPELINE_VERSION = "3"
+
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -23,7 +26,7 @@ def begin_run(db: Session, *, actor: str, kind: str = "theme_fetch") -> str:
         run_id=run_id,
         level="info",
         step="batch_start",
-        message=f"开始整批拉取（{kind}）操作者={actor}",
+        message=f"开始整批拉取（{kind}）操作者={actor} diag_v={DIAG_PIPELINE_VERSION}",
     )
     return run_id
 
