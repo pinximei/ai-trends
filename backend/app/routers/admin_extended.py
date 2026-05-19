@@ -41,7 +41,9 @@ from ..software_package_service import (
 )
 from ..article_ingest import create_published_articles_for_connector_targets
 from ..connector_heat_fetch import (
+    github_trending_is_discovery_url,
     huggingface_api_spaces_is_list_index,
+    sync_github_trending_top_details,
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
@@ -412,6 +414,9 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
         with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             if source_key == "product_hunt":
                 code, text = sync_product_hunt_top_details(headers)
+                return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            if source_key == "github" and github_trending_is_discovery_url(url):
+                code, text = sync_github_trending_top_details(url, headers)
                 return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
             if source_key == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url):
                 code, text = sync_huggingface_spaces_top_details(url, headers)

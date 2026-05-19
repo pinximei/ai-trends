@@ -255,6 +255,8 @@ export function App() {
   const [sourceCardSaving, setSourceCardSaving] = useState<string | null>(null);
   /** 数据源卡片上「启用/停用」提交中（key 为 source 标识） */
   const [sourceToggleBusy, setSourceToggleBusy] = useState<string | null>(null);
+  /** Product Hunt：仅 Access Token 直连（清除 OAuth Secret，不走 client_credentials） */
+  const [phTokenDirect, setPhTokenDirect] = useState(true);
   const [formTestAuth, setFormTestAuth] = useState<"bearer" | "private_token">("bearer");
   const [sourceTestLoading, setSourceTestLoading] = useState<string | null>(null);
   const [sourceTestResult, setSourceTestResult] = useState<{
@@ -805,7 +807,8 @@ export function App() {
         enabled,
         api_base: draft.api_base.trim(),
         api_key: showKey ? draft.api_key.trim() : "",
-        app_secret: showAppSecret ? draft.app_secret.trim() : "",
+        app_secret: showAppSecret && !phTokenDirect ? draft.app_secret.trim() : "",
+        clear_app_secret: sourceKey === "product_hunt" && phTokenDirect,
         notes: sourceNotesForUpsert(saved, preset),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
@@ -841,7 +844,11 @@ export function App() {
         enabled: sourceForm.enabled,
         api_base: sourceForm.api_base,
         api_key: sourceForm.api_key,
-        app_secret: sourceFormShowsAppSecret ? sourceForm.app_secret : "",
+        app_secret:
+          sourceFormShowsAppSecret && !(sourceForm.source.trim().toLowerCase() === "product_hunt" && phTokenDirect)
+            ? sourceForm.app_secret
+            : "",
+        clear_app_secret: sourceForm.source.trim().toLowerCase() === "product_hunt" && phTokenDirect,
         notes: sourceForm.notes,
         scope_labels: sourceForm.scope_labels.map((s) => s.trim()).filter(Boolean),
       });
@@ -1433,9 +1440,11 @@ export function App() {
                                         type="password"
                                         autoComplete="off"
                                         placeholder={
-                                          showAppSecret
-                                            ? "OAuth 换到的 access_token；留空保存不修改"
-                                            : "填写新密钥；留空并保存表示不修改已有密钥"
+                                          showAppSecret && p.source === "product_hunt" && phTokenDirect
+                                            ? "粘贴 Product Hunt Access Token"
+                                            : showAppSecret
+                                              ? "OAuth 换到的 access_token；留空保存不修改"
+                                              : "填写新密钥；留空并保存表示不修改已有密钥"
                                         }
                                         style={{
                                           width: "100%",
@@ -1461,15 +1470,34 @@ export function App() {
                                         </div>
                                       ) : (
                                         <div className="muted tiny" style={{ marginTop: 8 }}>
-                                          {showAppSecret
-                                            ? "Client ID 在 Product Hunt 开发者后台查看；此处填换到的 Bearer Token。"
-                                            : "保存后在此显示首尾掩码；留空保存不改动已有密钥。"}
+                                          {showAppSecret && p.source === "product_hunt" && phTokenDirect
+                                            ? "在 Product Hunt 开发者后台创建 Access Token，粘贴到上方并保存。"
+                                            : showAppSecret
+                                              ? "Client ID 在 Product Hunt 开发者后台查看；此处填换到的 Bearer Token。"
+                                              : "保存后在此显示首尾掩码；留空保存不改动已有密钥。"}
                                         </div>
                                       )}
                                     </dd>
                                   </div>
                                 ) : null}
-                                {showApiKey && showAppSecret ? (
+                                {showApiKey && p.source === "product_hunt" ? (
+                                  <div className="source-card__meta-row" style={{ marginTop: 10 }}>
+                                    <dt>鉴权方式</dt>
+                                    <dd style={{ margin: 0 }}>
+                                      <label className="row" style={{ gap: 8, alignItems: "center", cursor: "pointer" }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={phTokenDirect}
+                                          onChange={(e) => setPhTokenDirect(e.target.checked)}
+                                        />
+                                        <span className="muted tiny">
+                                          仅使用 Access Token（Bearer 直连；保存时清除已存的 APP Secret）
+                                        </span>
+                                      </label>
+                                    </dd>
+                                  </div>
+                                ) : null}
+                                {showApiKey && showAppSecret && !(p.source === "product_hunt" && phTokenDirect) ? (
                                   <div className="source-card__meta-row" style={{ marginTop: 10 }}>
                                     <dt>APP Secret</dt>
                                     <dd style={{ margin: 0 }}>

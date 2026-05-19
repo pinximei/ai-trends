@@ -27,11 +27,11 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "source": "github",
         "preset_label": "GitHub",
         "enabled": True,
-        "api_base": "https://api.github.com/repos/microsoft/vscode/issues?state=all&per_page=8&sort=updated",
+        "api_base": "https://github.com/trending?since=daily",
         "api_key_masked": "",
         "scope_label": "AI｜通用·开源协作",
         "content_role": "daily_editorial",
-        "notes": "公开仓库 **Issues 列表** JSON（免 Key，有速率限制）。更接近「仓库动态」；可改为其它 org/repo 路径。",
+        "notes": "默认 **Trending 日榜** HTML 发现（stars today 增速）→ 再 GET ``api.github.com/repos/{owner}/{repo}`` 详情。可选 PAT 提高限流；``since=weekly|monthly`` 可改 query。若 api_base 仍为 ``api.github.com/...`` 则走单次 REST GET（如 issues 列表）。",
     },
     {
         "source": "huggingface_spaces",
@@ -51,7 +51,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜应用发现",
         "content_role": "app_launches",
-        "notes": "Product Hunt **GraphQL v2**（同步与测试连接走 POST，见连接器逻辑）。须在连接器 ``config_json`` 填 **Bearer access_token**（Developer OAuth），后台卡片另可存 **OAuth Client Secret** 至 ``oauth_client_secret``；或在「测试连接」粘贴临时 Token。无 Token 时探测可能为 401，属正常。",
+        "notes": "Product Hunt **GraphQL v2**（POST）。推荐：开发者后台生成 **Access Token**，仅填 API Key、勾选「Token 直连」并清空 APP Secret。亦可填 API Key（client_id）+ APP Secret 走 OAuth 换 token。",
     },
 ]
 

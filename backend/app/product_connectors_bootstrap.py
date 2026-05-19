@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .models import AdminSourceConfig
 from .product_models import ProductConnector
+from .connector_heat_fetch import GITHUB_TRENDING_DEFAULT
 from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
@@ -23,9 +24,7 @@ def repair_github_admin_source_if_still_zen(db: Session) -> None:
         return
     u = (row.api_base or "").strip().lower()
     if "api.github.com/zen" in u or u.rstrip("/").endswith("/zen"):
-        row.api_base = (
-            "https://api.github.com/repos/microsoft/vscode/issues?state=all&per_page=8&sort=updated"
-        )
+        row.api_base = GITHUB_TRENDING_DEFAULT
         row.updated_at = datetime.utcnow()
         db.commit()
 
@@ -36,10 +35,13 @@ def repair_short_probe_admin_sources(db: Session) -> None:
     for row in db.scalars(select(AdminSourceConfig)).all():
         if row.source == "github":
             u = (row.api_base or "").strip().lower()
-            if "/repos/octocat/hello-world" in u and "/issues" not in u:
-                row.api_base = (
-                    "https://api.github.com/repos/microsoft/vscode/issues?state=all&per_page=8&sort=updated"
-                )
+            legacy = (
+                "/repos/octocat/hello-world" in u
+                or "/repos/microsoft/vscode/issues" in u
+                or "api.github.com/zen" in u
+            )
+            if legacy:
+                row.api_base = GITHUB_TRENDING_DEFAULT
                 row.updated_at = datetime.utcnow()
                 changed = True
     if changed:

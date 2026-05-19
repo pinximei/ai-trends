@@ -10,6 +10,8 @@ class AdminSourceConfigUpsert(BaseModel):
     api_key: str = ""
     """OAuth 等场景的应用密钥（如 Product Hunt 的 client_secret）；空串表示不修改已存值。"""
     app_secret: str = ""
+    """为 true 时清除已存的 APP Secret（Product Hunt 改用 Access Token 直连 Bearer）。"""
+    clear_app_secret: bool = False
     notes: str = ""
     scope_label: str = ""
     # 多条领域/板块；提交时优先于单字段 scope_label。

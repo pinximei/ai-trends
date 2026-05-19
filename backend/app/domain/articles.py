@@ -401,7 +401,7 @@ def _heat_map_key_to_bucket(key: str) -> str | None:
         return "comments"
     if nk in ("likes", "like_count", "likescount"):
         return "likes"
-    if nk in ("trendingscore", "trending_score"):
+    if nk in ("trendingscore", "trending_score", "trending_stars_today", "stars_today", "stars_gained_today"):
         return "trending"
     if nk == "points":
         return "hn_points"
@@ -462,6 +462,7 @@ def unified_connector_heat(
     if k == "github":
         eng = (
             420.0 * _heat_log_norm(sig["stars"], cap=80_000.0)
+            + 280.0 * _heat_log_norm(sig["trending"], cap=50_000.0)
             + 240.0 * _heat_log_norm(sig["forks"], cap=12_000.0)
             + 120.0 * _heat_log_norm(sig["issues"], cap=8_000.0)
             + 100.0 * _heat_log_norm(sig["comments"], cap=6_000.0)

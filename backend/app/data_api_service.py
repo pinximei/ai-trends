@@ -11,7 +11,9 @@ from .models import AdminSetting, AdminSourceConfig, AdminUser, EvidenceSignal, 
 from .product_models import ProductConnector
 from .scope_labels_util import apply_scope_labels_to_row, get_scope_labels_from_source, normalize_scope_labels_from_payload
 from .connector_heat_fetch import (
+    github_trending_is_discovery_url,
     huggingface_api_spaces_is_list_index,
+    sync_github_trending_top_details,
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
@@ -132,7 +134,18 @@ class DataApiService:
                 cfg.setdefault("auth_mode", "bearer")
                 c.config_json = cfg
         raw_secret = (payload.get("app_secret") or "").strip()
-        if raw_secret:
+        if payload.get("clear_app_secret"):
+            item.app_secret_masked = ""
+            for c in self.db.scalars(
+                select(ProductConnector).where(
+                    ProductConnector.admin_source_key.isnot(None),
+                    ProductConnector.admin_source_key == item.source,
+                )
+            ).all():
+                cfg = dict(c.config_json or {})
+                cfg.pop("oauth_client_secret", None)
+                c.config_json = cfg
+        elif raw_secret:
             item.app_secret_masked = mask_func(raw_secret)
             for c in self.db.scalars(
                 select(ProductConnector).where(
@@ -274,6 +287,13 @@ class DataApiService:
 
                     r = _Resp()
                     url = "https://api.producthunt.com/v2/api/graphql"
+                elif sk == "github" and github_trending_is_discovery_url(url):
+                    code, body_text = sync_github_trending_top_details(url, headers)
+                    class _RespGh:
+                        status_code = code
+                        text = body_text
+
+                    r = _RespGh()
                 elif sk == "huggingface_spaces":
                     if huggingface_api_spaces_is_list_index(url):
                         code, body_text = sync_huggingface_spaces_top_details(url, headers)
@@ -306,6 +326,7 @@ class DataApiService:
             cap = (
                 8000
                 if sk == "product_hunt"
+                or (sk == "github" and github_trending_is_discovery_url(url))
                 or (sk == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url))
                 else 600
             )

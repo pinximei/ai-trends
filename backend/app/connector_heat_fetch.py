@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -10,9 +11,148 @@ import httpx
 from .domain.articles import CONNECTOR_HEAT_TOP_N, CONNECTOR_SNIPPET_MAX_CHARS
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
+GITHUB_TRENDING_DEFAULT = "https://github.com/trending?since=daily"
+_GITHUB_TRENDING_HOSTS = frozenset({"github.com", "www.github.com"})
+_GITHUB_TRENDING_SKIP_SLUGS = frozenset(
+    {
+        "trending",
+        "features",
+        "enterprise",
+        "pricing",
+        "login",
+        "signup",
+        "topics",
+        "collections",
+        "sponsors",
+        "customer-stories",
+        "readme",
+        "security",
+        "about",
+    }
+)
 
 # 单条详情写入 pack 前的上限，避免 10 条撑爆总 snippet
 _PER_ITEM_SNIPPET_MAX = min(48_000, CONNECTOR_SNIPPET_MAX_CHARS // 10)
+
+
+def github_trending_is_discovery_url(url: str) -> bool:
+    """``github.com/trending`` 为 HTML 发现页；``api.github.com`` 为 REST 直拉。"""
+    p = urlsplit((url or "").strip())
+    host = (p.netloc or "").lower().split(":", 1)[0]
+    if host not in _GITHUB_TRENDING_HOSTS:
+        return False
+    path = (p.path or "").strip("/").lower()
+    return path == "trending" or path.startswith("trending/")
+
+
+def _github_valid_repo_slug(slug: str) -> bool:
+    s = (slug or "").strip().strip("/")
+    if s.count("/") != 1:
+        return False
+    owner, repo = s.split("/", 1)
+    if not owner or not repo:
+        return False
+    if owner.lower() in _GITHUB_TRENDING_SKIP_SLUGS or repo.lower() in _GITHUB_TRENDING_SKIP_SLUGS:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", s))
+
+
+def _github_trending_since(url: str) -> str:
+    q = dict(parse_qsl(urlsplit((url or "").strip()).query, keep_blank_values=True))
+    since = str(q.get("since") or "daily").strip().lower()
+    return since if since in {"daily", "weekly", "monthly"} else "daily"
+
+
+def parse_github_trending_repos(html: str, *, limit: int = CONNECTOR_HEAT_TOP_N) -> list[dict[str, Any]]:
+    """从 Trending HTML 解析 ``owner/repo`` 与可选的 ``N stars today``（按页面顺序）。"""
+    if not (html or "").strip():
+        return []
+    chunks = re.split(r"<article\b", html, flags=re.IGNORECASE)
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for chunk in chunks[1:]:
+        m = re.search(r'href="/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)"', chunk)
+        if not m:
+            continue
+        slug = m.group(1).split("?")[0].strip("/")
+        if not _github_valid_repo_slug(slug) or slug in seen:
+            continue
+        seen.add(slug)
+        stars_today: int | None = None
+        sm = re.search(r"([\d,]+)\s+stars?\s+today", chunk, flags=re.IGNORECASE)
+        if sm:
+            try:
+                stars_today = int(sm.group(1).replace(",", ""))
+            except ValueError:
+                stars_today = None
+        out.append({"full_name": slug, "stars_today": stars_today, "rank": len(out) + 1})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """GET Trending HTML → 解析榜单 → 对每个 repo GET ``api.github.com/repos/{owner}/{repo}``。"""
+    n = CONNECTOR_HEAT_TOP_N
+    url = (discovery_url or "").strip() or GITHUB_TRENDING_DEFAULT
+    since = _github_trending_since(url)
+    html_headers = {
+        **headers,
+        "Accept": "text/html,application/xhtml+xml",
+        "User-Agent": headers.get("User-Agent") or "AiTrends-GitHubTrending/1.0",
+    }
+    api_headers = {
+        **headers,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": headers.get("User-Agent") or "AiTrends-GitHubTrending/1.0",
+    }
+    try:
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+            r = client.get(url, headers=html_headers)
+            if r.status_code < 200 or r.status_code >= 300:
+                return r.status_code, (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            ranked = parse_github_trending_repos(r.text or "", limit=n)
+            if not ranked:
+                return r.status_code, json.dumps(
+                    {"connector_sync_items_v1": [], "note": "trending_parse_empty", "since": since},
+                    ensure_ascii=False,
+                )
+            payloads: list[dict[str, Any]] = []
+            for row in ranked:
+                slug = str(row.get("full_name") or "").strip()
+                if not slug:
+                    continue
+                api_url = f"https://api.github.com/repos/{slug}"
+                r2 = client.get(api_url, headers=api_headers)
+                if r2.status_code < 200 or r2.status_code >= 300:
+                    continue
+                try:
+                    repo = json.loads(r2.text or "{}")
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(repo, dict):
+                    continue
+                extra: dict[str, Any] = {"since": since, "rank": row.get("rank"), "discovery_url": url}
+                if row.get("stars_today") is not None:
+                    extra["stars_today"] = row["stars_today"]
+                repo["_aisoul_trending"] = extra
+                if row.get("stars_today") is not None:
+                    repo["trending_stars_today"] = row["stars_today"]
+                payloads.append(repo)
+            if not payloads:
+                return r.status_code, json.dumps(
+                    {"connector_sync_items_v1": [], "note": "repo_api_empty", "since": since},
+                    ensure_ascii=False,
+                )
+            pack = {
+                "connector_sync_items_v1": [
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
+                ],
+                "note": f"github_trending_{since}",
+            }
+            return 200, _trim_pack_json(pack)
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
 
 
 def huggingface_api_spaces_is_list_index(url: str) -> bool:
