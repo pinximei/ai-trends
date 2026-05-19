@@ -645,7 +645,8 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
         diag_write(db, run_id=run_id, step="theme_kw", message=f"本次 URL 搜索词 q={tnorm!r}")
     n_tax = sync_product_taxonomy_from_admin_sources(db)
     diag_write(db, run_id=run_id, step="taxonomy", message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）")
-    _, llm_ok = resolve_llm_http_config(db)
+    _llm_base, llm_key, _llm_model = resolve_llm_http_config(db)
+    llm_ok = bool((llm_key or "").strip())
     diag_write(
         db,
         run_id=run_id,
