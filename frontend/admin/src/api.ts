@@ -114,12 +114,24 @@ export type ThemeFetchConnectorDetail = {
 };
 
 export type ThemeFetchResult = {
+  diagnostic_run_id?: string;
   taxonomy_synced: boolean;
   theme_applied_to_url: boolean;
   connectors_total: number;
   ok: number;
   fail: number;
   details: ThemeFetchConnectorDetail[];
+};
+
+export type SyncDiagnosticLogItem = {
+  id: number;
+  run_id: string;
+  created_at: string | null;
+  level: string;
+  step: string;
+  message: string;
+  connector_id: number | null;
+  source_key: string | null;
 };
 
 export const adminApi = {
@@ -185,6 +197,19 @@ export const adminApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts?.theme?.trim() ? { theme: opts.theme.trim() } : {}),
     }),
+  syncDiagnosticLogs: (opts?: { run_id?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (opts?.run_id) sp.set("run_id", opts.run_id);
+    if (opts?.limit != null) sp.set("limit", String(opts.limit));
+    const q = sp.toString();
+    return request<{
+      items: SyncDiagnosticLogItem[];
+      recent_run_ids: string[];
+      run_id: string | null;
+    }>(`/api/admin/v1/product/sync-diagnostic-logs${q ? `?${q}` : ""}`);
+  },
+  clearSyncDiagnosticLogs: () =>
+    request<{ deleted: number }>("/api/admin/v1/product/sync-diagnostic-logs", { method: "DELETE" }),
   dbInfo: () =>
     request<{
       mode: string;

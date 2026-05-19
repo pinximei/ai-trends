@@ -215,14 +215,32 @@ def _create_one_published_article_from_connector_targets(
 
     safe = (single_snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
     ing_fp = ingest_fingerprint(safe)
+    src_tag = (admin_source_key or "").strip() or "未绑定数据源"
+
+    def _diag(level: str, step: str, msg: str) -> None:
+        try:
+            from .sync_diagnostic_log import write as diag_write
+
+            diag_write(
+                db,
+                level=level,
+                step=step,
+                message=msg,
+                connector_id=connector_id,
+                source_key=src_tag if src_tag != "未绑定数据源" else None,
+            )
+        except Exception:
+            pass
+
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
+        _diag("info", "skip_dup_fp", f"跳过：内容指纹重复（ingest_fingerprint）")
         return 0
 
     source_external_id = extract_source_external_id_from_connector_snippet(safe)
     if ingest_duplicate_by_source_external_id_exists(
         db, industry_id=industry_id, source_external_id=source_external_id
     ):
-        return _refresh_article_heat_if_duplicate_external_id(
+        n = _refresh_article_heat_if_duplicate_external_id(
             db,
             industry_id=industry_id,
             admin_source_key=admin_source_key,
@@ -231,15 +249,17 @@ def _create_one_published_article_from_connector_targets(
             http_status=http_status,
             now=now,
         )
+        _diag("info", "skip_dup_ext", f"重复上游 id={source_external_id or '—'}：已刷新热度/star，未新建")
+        return n
 
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
 
     vs = rule_value_score(snippet=safe, summary=summary_base, http_status=http_status or 0)
     if vs < VALUE_SCORE_MIN:
+        _diag("warn", "skip_score", f"跳过：规则价值分 {vs:.0f} < 门槛 {VALUE_SCORE_MIN:.0f}")
         return 0
 
-    src_tag = (admin_source_key or "").strip() or "未绑定数据源"
     fk = feed_lane(src_tag)
     slug = f"sync-c{connector_id}-s{segment_id}-{uuid.uuid4().hex[:16]}"[:128]
     rule_title = f"同步资源 · {label} · {connector_name}"[:500]
@@ -271,7 +291,11 @@ def _create_one_published_article_from_connector_targets(
         ref_id=f"c{connector_id}:{ing_fp[:12]}",
         feed_kind=fk,
     )
-    if not polished or not validate_llm_polish_for_publish(polished):
+    if not polished:
+        _diag("error", "skip_llm", "跳过：LLM 未返回内容（未配置 Key、调用失败或超时）")
+        return 0
+    if not validate_llm_polish_for_publish(polished):
+        _diag("warn", "skip_llm_shape", "跳过：LLM 输出未通过发布校验（tabs/分类/长度等）")
         return 0
 
     tabs = polished.get("tabs") or []
@@ -329,6 +353,7 @@ def _create_one_published_article_from_connector_targets(
     ).all()
     for a in recent:
         if display_fingerprint(a.title, a.summary or "") == disp_fp:
+            _diag("info", "skip_disp_fp", "跳过：展示指纹与近期文章重复")
             return 0
 
     art = Article(
@@ -359,6 +384,11 @@ def _create_one_published_article_from_connector_targets(
     art.updated_at = now
     db.add(art)
     db.flush()
+    _diag(
+        "info",
+        "article_ok",
+        f"入库成功 id={art.id} feed={stored_feed_kind} 标题={(title or '')[:80]}",
+    )
     return 1
 
 
@@ -386,6 +416,18 @@ def create_published_articles_for_connector_targets(
     safe_full = (snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
     parts = parse_connector_sync_item_snippets(safe_full)
     if parts:
+        try:
+            from .sync_diagnostic_log import write as diag_write
+
+            diag_write(
+                db,
+                step="pack_items",
+                message=f"多段 pack：共 {len(parts)} 条，逐条价值分+LLM",
+                connector_id=connector_id,
+                source_key=(admin_source_key or "").strip() or None,
+            )
+        except Exception:
+            pass
         total = 0
         for piece in parts:
             total += _create_one_published_article_from_connector_targets(

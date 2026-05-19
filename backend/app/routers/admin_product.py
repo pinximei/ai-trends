@@ -56,6 +56,37 @@ def post_theme_fetch_ingest(
     return ok(data)
 
 
+@router.get("/product/sync-diagnostic-logs")
+def get_sync_diagnostic_logs(
+    run_id: str | None = None,
+    limit: int = 500,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    from ..sync_diagnostic_log import list_logs, list_recent_run_ids
+
+    return ok(
+        {
+            "items": list_logs(db, run_id=run_id, limit=limit),
+            "recent_run_ids": list_recent_run_ids(db),
+            "run_id": (run_id or "").strip() or None,
+        }
+    )
+
+
+@router.delete("/product/sync-diagnostic-logs")
+def delete_sync_diagnostic_logs(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("admin")),
+):
+    from ..sync_diagnostic_log import clear_all
+
+    n = clear_all(db)
+    db.commit()
+    audit(db, actor=session.username, action="product.sync_diagnostic.clear", detail=str(n))
+    return ok({"deleted": n})
+
+
 @router.post("/product/hot/rebuild")
 def post_hot_rebuild(
     db: Session = Depends(get_db),

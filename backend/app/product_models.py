@@ -226,6 +226,21 @@ class ProductConnector(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ProductSyncDiagnosticLog(Base):
+    """管理后台「同步日志」：记录拉取 / 入库各步骤，便于排查前台无数据。"""
+
+    __tablename__ = "product_sync_diagnostic_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    level: Mapped[str] = mapped_column(String(16), default="info")
+    step: Mapped[str] = mapped_column(String(64), default="log")
+    message: Mapped[str] = mapped_column(Text, default="")
+    connector_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class ProductConnectorLog(Base):
     __tablename__ = "product_connector_logs"
 

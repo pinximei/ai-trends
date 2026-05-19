@@ -106,7 +106,7 @@ type AdminUser = {
 type Health = { status: string; db: string; time: string; metrics: Record<string, number> };
 type Settings = { password_min_length: number };
 type DbInfo = { mode: string; database_url: string; test_url: string; prod_url: string };
-type TabKey = "overview" | "queries" | "sources" | "ai" | "software" | "settings";
+type TabKey = "overview" | "queries" | "sources" | "ai" | "software" | "logs" | "settings";
 
 type SwPkgRow = {
   id: number;
@@ -321,6 +321,21 @@ export function App() {
   const [newsletterSaving, setNewsletterSaving] = useState(false);
   const [clearIngestBusy, setClearIngestBusy] = useState(false);
   const [themeFetchBusy, setThemeFetchBusy] = useState(false);
+  const [diagLogs, setDiagLogs] = useState<
+    Array<{
+      id: number;
+      run_id: string;
+      created_at: string | null;
+      level: string;
+      step: string;
+      message: string;
+      connector_id: number | null;
+      source_key: string | null;
+    }>
+  >([]);
+  const [diagRunIds, setDiagRunIds] = useState<string[]>([]);
+  const [diagRunFilter, setDiagRunFilter] = useState("");
+  const [diagLoading, setDiagLoading] = useState(false);
   /** 与公开接口同源：便于核对后台看到的后端是否为当前部署 */
   const [publicApiRelease, setPublicApiRelease] = useState<string | null>(null);
 
@@ -473,6 +488,22 @@ export function App() {
     } else if (tab === "software") {
       const pk = await adminApi.softwarePackages(100);
       setSwPackages(pk);
+    } else if (tab === "logs") {
+      await loadDiagnosticLogs(diagRunFilter || undefined);
+    }
+  }
+
+  async function loadDiagnosticLogs(runId?: string) {
+    setDiagLoading(true);
+    try {
+      const d = await adminApi.syncDiagnosticLogs({ run_id: runId, limit: 800 });
+      setDiagLogs(d.items ?? []);
+      setDiagRunIds(d.recent_run_ids ?? []);
+      if (runId) setDiagRunFilter(runId);
+    } catch (e) {
+      setErr(friendlyErr(e instanceof Error ? e.message : "load diagnostic logs failed"));
+    } finally {
+      setDiagLoading(false);
     }
   }
 
@@ -918,15 +949,14 @@ export function App() {
     setErr("");
     try {
       const r = await adminApi.themeFetchProductData({});
-      const lines = (r.details || [])
-        .map((d) => {
-          const err = d.error ? ` 错误: ${d.error}` : "";
-          return `${d.name} (#${d.connector_id}) HTTP ${d.http_status ?? "—"} 文章+${d.articles_created ?? 0}${err}`;
-        })
-        .join("\n");
-      window.alert(
-        `拉取完成。\n领域结构已同步；已启用连接器共 ${r.connectors_total} 个，成功 ${r.ok}，失败 ${r.fail}。\n\n${lines || "（无已启用连接器）"}`,
-      );
+      if (r.diagnostic_run_id) {
+        setDiagRunFilter(r.diagnostic_run_id);
+        setTab("logs");
+        await loadDiagnosticLogs(r.diagnostic_run_id);
+      } else {
+        await loadDiagnosticLogs();
+        setTab("logs");
+      }
       await loadAdminData();
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "theme fetch failed"));
@@ -1119,6 +1149,14 @@ export function App() {
             onClick={() => setTab("software")}
           >
             应用分发
+          </button>
+          <button
+            type="button"
+            className={tab === "logs" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"}
+            onClick={() => setTab("logs")}
+            title="连接器拉取与入库步骤日志"
+          >
+            同步日志
           </button>
           <button
             type="button"
@@ -2460,6 +2498,95 @@ export function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </section>
+        ) : null}
+
+        {tab === "logs" ? (
+          <section className="settings-stack">
+            <div className="card settings-panel">
+              <h3 className="settings-title" style={{ marginTop: 0 }}>
+                同步诊断日志
+              </h3>
+              <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.65 }}>
+                记录「拉取全部数据」与各连接器同步的每一步。拉取完成后会自动打开本页；请点「复制日志」发运维排查。
+              </p>
+              <div className="row wrap" style={{ marginTop: 12, gap: 8, alignItems: "flex-end" }}>
+                <div className="form-field" style={{ minWidth: 200, flex: 1 }}>
+                  <label>批次 run_id</label>
+                  <select
+                    value={diagRunFilter}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDiagRunFilter(v);
+                      void loadDiagnosticLogs(v || undefined);
+                    }}
+                  >
+                    <option value="">最近全部（最多 800 行）</option>
+                    {diagRunIds.map((rid) => (
+                      <option key={rid} value={rid}>
+                        {rid}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button type="button" onClick={() => void loadDiagnosticLogs(diagRunFilter || undefined)} disabled={diagLoading}>
+                  {diagLoading ? "刷新中…" : "刷新"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = diagLogs
+                      .map(
+                        (r) =>
+                          `[${r.created_at ?? ""}] [${r.level}] [${r.step}]${r.source_key ? ` (${r.source_key})` : ""} ${r.message}`,
+                      )
+                      .join("\n");
+                    void navigator.clipboard.writeText(text);
+                  }}
+                  disabled={!diagLogs.length}
+                >
+                  复制日志
+                </button>
+                {canManageSettings ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm("清空全部同步诊断日志？")) return;
+                      void adminApi.clearSyncDiagnosticLogs().then(() => loadDiagnosticLogs());
+                    }}
+                  >
+                    清空日志
+                  </button>
+                ) : null}
+              </div>
+              <pre
+                className="mono"
+                style={{
+                  marginTop: 14,
+                  maxHeight: "min(70vh, 640px)",
+                  overflow: "auto",
+                  padding: 12,
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  background: "rgba(15,23,42,0.04)",
+                  borderRadius: 8,
+                  border: "1px solid rgba(148,163,184,0.25)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {diagLoading
+                  ? "加载中…"
+                  : diagLogs.length
+                    ? diagLogs
+                        .map(
+                          (r) =>
+                            `[${r.created_at ?? ""}] [${r.level}] [${r.step}]${r.connector_id != null ? ` #${r.connector_id}` : ""}${r.source_key ? ` ${r.source_key}` : ""}\n  ${r.message}`,
+                        )
+                        .join("\n\n")
+                    : "（暂无日志，请先点击「拉取全部数据」）"}
+              </pre>
             </div>
           </section>
         ) : null}

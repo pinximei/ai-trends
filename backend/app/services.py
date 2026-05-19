@@ -287,8 +287,10 @@ def clear_product_ingest_data(db: Session) -> dict[str, int]:
         ProductConnector,
         ProductConnectorLog,
     )
+    from .sync_diagnostic_log import clear_all as clear_sync_diagnostic_logs
     from .taxonomy_from_sources import clear_merged_domains_taxonomy
 
+    n_diag = clear_sync_diagnostic_logs(db)
     n_logs = int(db.query(ProductConnectorLog).delete() or 0)
     n_points = int(db.query(MetricPoint).delete() or 0)
     n_articles = int(db.query(Article).delete() or 0)
@@ -300,6 +302,7 @@ def clear_product_ingest_data(db: Session) -> dict[str, int]:
         c.last_error = None
     db.commit()
     return {
+        "product_sync_diagnostic_logs": n_diag,
         "product_connector_logs": n_logs,
         "product_metric_points": n_points,
         "product_articles": n_articles,

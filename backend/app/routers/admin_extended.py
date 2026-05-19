@@ -436,6 +436,8 @@ def run_connector_sync(
     bypass_rate_limit: bool = False,
     theme: str | None = None,
 ) -> dict:
+    from ..sync_diagnostic_log import get_current_run_id, write as diag_write
+
     c = db.get(ProductConnector, connector_id)
     if not c:
         raise HTTPException(404, "not found")
@@ -444,7 +446,26 @@ def run_connector_sync(
     if not bypass_rate_limit and c.last_sync_at and c.min_interval_seconds:
         delta = (now - c.last_sync_at).total_seconds()
         if delta < c.min_interval_seconds:
+            diag_write(
+                db,
+                level="warn",
+                step="rate_limit",
+                message=f"连接器 #{c.id} {c.name!r} 被最短间隔限制（{c.min_interval_seconds}s）",
+                connector_id=c.id,
+                source_key=(c.admin_source_key or ""),
+            )
             raise HTTPException(429, f"rate limited: min_interval_seconds={c.min_interval_seconds}")
+    ask_preview = (c.admin_source_key or "").strip().lower()
+    diag_write(
+        db,
+        step="connector_start",
+        message=(
+            f"连接器 #{c.id} {c.name!r} source={ask_preview or '—'} enabled={c.enabled} "
+            f"bypass_interval={bypass_rate_limit}"
+        ),
+        connector_id=c.id,
+        source_key=ask_preview or None,
+    )
     log = ProductConnectorLog(connector_id=c.id, started_at=now, status="running")
     db.add(log)
     db.flush()
@@ -466,6 +487,24 @@ def run_connector_sync(
             cfg["url"] = apply_theme_to_connector_url(u0, tnorm)
 
     status_code, snippet = _run_connector_request(cfg)
+    snip_len = len(snippet or "")
+    pack_n = 0
+    try:
+        from ..domain.articles import parse_connector_sync_item_snippets
+
+        pack_n = len(parse_connector_sync_item_snippets((snippet or "")[:120000]))
+    except Exception:
+        pack_n = 0
+    diag_write(
+        db,
+        step="http_done",
+        message=(
+            f"HTTP {status_code or '—'} 响应长度={snip_len} "
+            f"connector_sync_items={pack_n if pack_n else '非多段/整段'}"
+        ),
+        connector_id=c.id,
+        source_key=ask or None,
+    )
     rows_ingested = 0
     articles_created = 0
     err = None
@@ -475,7 +514,22 @@ def run_connector_sync(
             targets = resolve_admin_source_key_to_segments(db, ask)
             if not targets:
                 err = "已绑定数据源但无法解析出行业/板块：请检查数据源「所属领域」是否与 taxonomy 一致"
+                diag_write(
+                    db,
+                    level="error",
+                    step="segments",
+                    message=err,
+                    connector_id=c.id,
+                    source_key=ask,
+                )
             else:
+                diag_write(
+                    db,
+                    step="ingest_start",
+                    message=f"解析到 {len(targets)} 个板块，开始入库（需 LLM 润色）",
+                    connector_id=c.id,
+                    source_key=ask,
+                )
                 articles_created = create_published_articles_for_connector_targets(
                     db,
                     connector_id=c.id,
@@ -545,12 +599,32 @@ def run_connector_sync(
         c.last_error = err
         log.status = "error"
         log.error_message = err
+        diag_write(
+            db,
+            level="error",
+            step="http_fail",
+            message=err + (f" 片段预览: {(snippet or '')[:200]}" if snippet else ""),
+            connector_id=c.id,
+            source_key=ask or None,
+        )
 
     log.finished_at = datetime.utcnow()
     log.rows_ingested = rows_ingested + articles_created
+    diag_write(
+        db,
+        level="info" if not err and articles_created else ("warn" if not err else "error"),
+        step="connector_done",
+        message=(
+            f"同步结束 status={log.status} 新建文章={articles_created} "
+            f"指标点={rows_ingested}" + (f" 错误={err}" if err else "")
+        ),
+        connector_id=c.id,
+        source_key=ask or None,
+    )
     db.commit()
     audit(db, actor=actor, action="product.connector.sync", target=str(connector_id))
     return {
+        "diagnostic_run_id": get_current_run_id(),
         "connector_id": c.id,
         "http_status": status_code,
         "rows_ingested": rows_ingested,
@@ -561,13 +635,28 @@ def run_connector_sync(
 
 def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict:
     """按后台数据源领域标签刷新 taxonomy，并对所有已启用连接器立即同步（不受单连接器最短间隔限制）。"""
+    from ..llm_service import resolve_llm_http_config
+    from ..sync_diagnostic_log import begin_run, end_run, write as diag_write
     from ..taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
-    sync_product_taxonomy_from_admin_sources(db)
+    run_id = begin_run(db, actor=actor)
     tnorm = (theme or "").strip() or None
+    if tnorm:
+        diag_write(db, run_id=run_id, step="theme_kw", message=f"本次 URL 搜索词 q={tnorm!r}")
+    n_tax = sync_product_taxonomy_from_admin_sources(db)
+    diag_write(db, run_id=run_id, step="taxonomy", message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）")
+    _, llm_ok = resolve_llm_http_config(db)
+    diag_write(
+        db,
+        run_id=run_id,
+        level="info" if llm_ok else "error",
+        step="llm_config",
+        message="LLM API Key 已配置，可润色入库" if llm_ok else "未配置 LLM：拉取成功也不会生成文章，请在「AI 资讯与数据」配置 DeepSeek",
+    )
     rows = db.scalars(
         select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)
     ).all()
+    diag_write(db, run_id=run_id, step="connectors", message=f"将同步已启用连接器 {len(rows)} 个")
     details: list[dict] = []
     ok_n = 0
     fail_n = 0
@@ -591,12 +680,33 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
             )
         except HTTPException as e:
             fail_n += 1
+            diag_write(
+                db,
+                run_id=run_id,
+                level="error",
+                step="connector_fail",
+                message=f"连接器 #{c.id} {c.name!r}: {e.detail}",
+                connector_id=c.id,
+                source_key=(c.admin_source_key or ""),
+            )
             details.append({"connector_id": c.id, "name": c.name, "error": str(e.detail)})
         except Exception as e:
             fail_n += 1
+            diag_write(
+                db,
+                run_id=run_id,
+                level="error",
+                step="connector_fail",
+                message=f"连接器 #{c.id} {c.name!r}: {str(e)[:400]}",
+                connector_id=c.id,
+                source_key=(c.admin_source_key or ""),
+            )
             details.append({"connector_id": c.id, "name": c.name, "error": str(e)[:240]})
+    end_run(db, run_id=run_id, ok=ok_n, fail=fail_n, total=len(rows))
+    db.commit()
     audit(db, actor=actor, action="product.ingest.theme_fetch", detail=f"theme={tnorm!r}, ok={ok_n}, fail={fail_n}")
     return {
+        "diagnostic_run_id": run_id,
         "taxonomy_synced": True,
         "theme_applied_to_url": bool(tnorm),
         "connectors_total": len(rows),

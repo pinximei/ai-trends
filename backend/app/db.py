@@ -148,6 +148,38 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN engagement_stars_total INTEGER"))
             if "engagement_stars_today" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN engagement_stars_today INTEGER"))
+        if not _column_names(conn, "product_sync_diagnostic_logs"):
+            conn.execute(
+                text(
+                    "CREATE TABLE product_sync_diagnostic_logs ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    "run_id VARCHAR(32) NOT NULL, "
+                    "created_at TIMESTAMP, "
+                    "level VARCHAR(16) DEFAULT 'info', "
+                    "step VARCHAR(64) DEFAULT 'log', "
+                    "message TEXT, "
+                    "connector_id INTEGER, "
+                    "source_key VARCHAR(64)"
+                    ")"
+                )
+                if DATABASE_URL.startswith("sqlite")
+                else text(
+                    "CREATE TABLE product_sync_diagnostic_logs ("
+                    "id SERIAL PRIMARY KEY, "
+                    "run_id VARCHAR(32) NOT NULL, "
+                    "created_at TIMESTAMP, "
+                    "level VARCHAR(16) DEFAULT 'info', "
+                    "step VARCHAR(64) DEFAULT 'log', "
+                    "message TEXT, "
+                    "connector_id INTEGER, "
+                    "source_key VARCHAR(64)"
+                    ")"
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sync_diag_run_id ON product_sync_diagnostic_logs (run_id)"))
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_sync_diag_created_at ON product_sync_diagnostic_logs (created_at)")
+            )
         cols = _column_names(conn, "product_software_downloads")
         if cols:
             if "artifact_rel_path" not in cols:
