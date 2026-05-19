@@ -87,4 +87,18 @@ export const publicApi = {
   },
   newsletterSubscribe: (email: string) =>
     publicPost<{ subscribed: boolean }>("/api/public/v1/newsletter/subscribe", { email }),
+  homeTrendOverview: (opts?: { industry_slug?: string; sparkline_days?: number; period_days?: number }) => {
+    const sp = new URLSearchParams();
+    if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
+    if (opts?.sparkline_days != null) sp.set("sparkline_days", String(opts.sparkline_days));
+    if (opts?.period_days != null) sp.set("period_days", String(opts.period_days));
+    const qs = sp.toString();
+    return publicGet<{
+      sparkline: Array<{ day: string; count: number }>;
+      apps_count: number;
+      news_count: number;
+      apps_growth_pct: number | null;
+      news_growth_pct: number | null;
+    }>(`/api/public/v1/home/trend-overview${qs ? `?${qs}` : ""}`);
+  },
 };

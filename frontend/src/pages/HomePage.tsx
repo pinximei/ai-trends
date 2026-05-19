@@ -216,7 +216,32 @@ function HeroGraphic() {
   );
 }
 
-function TrendSparkline() {
+function buildSparklinePaths(values: number[], width = 280, height = 100): { area: string; line: string } | null {
+  if (!values.length) return null;
+  const padY = 10;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const innerH = height - padY * 2;
+  const pts = values.map((v, i) => {
+    const x = values.length === 1 ? width / 2 : (i / (values.length - 1)) * width;
+    const y = padY + innerH - ((v - min) / span) * innerH;
+    return { x, y };
+  });
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const area = `${line} L${width} ${height} L0 ${height} Z`;
+  return { area, line };
+}
+
+function TrendSparkline({ values }: { values: number[] }) {
+  const paths = buildSparklinePaths(values);
+  if (!paths) {
+    return (
+      <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">
+        —
+      </div>
+    );
+  }
   return (
     <svg viewBox="0 0 280 100" className="h-36 w-full text-violet-500 sm:h-40" aria-hidden>
       <defs>
@@ -225,19 +250,20 @@ function TrendSparkline() {
           <stop offset="100%" stopColor="rgb(139 92 246)" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path
-        d="M0 78 C40 72 60 40 100 52 C140 64 160 28 200 38 C240 48 260 18 280 22 L280 100 L0 100 Z"
-        fill="url(#trend-fill)"
-      />
-      <path
-        d="M0 78 C40 72 60 40 100 52 C140 64 160 28 200 38 C240 48 260 18 280 22"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
+      <path d={paths.area} fill="url(#trend-fill)" />
+      <path d={paths.line} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+function formatCount(n: number): string {
+  return n.toLocaleString("zh-CN");
+}
+
+function formatGrowth(pct: number | null | undefined): string | null {
+  if (pct == null || Number.isNaN(pct)) return null;
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct}%`;
 }
 
 export function HomePage() {
@@ -249,6 +275,19 @@ export function HomePage() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [subscribeErr, setSubscribeErr] = useState("");
+  const [trendOverview, setTrendOverview] = useState<{
+    sparkline: Array<{ day: string; count: number }>;
+    apps_count: number;
+    news_count: number;
+    apps_growth_pct: number | null;
+    news_growth_pct: number | null;
+  } | null>(null);
+  const [trendLoading, setTrendLoading] = useState(true);
+
+  const sparklineValues = useMemo(
+    () => trendOverview?.sparkline.map((p) => p.count) ?? [],
+    [trendOverview],
+  );
 
   const popularCats = useMemo(
     () => [
@@ -289,6 +328,25 @@ export function HomePage() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTrendLoading(true);
+    publicApi
+      .homeTrendOverview({ industry_slug: INDUSTRY, sparkline_days: 14, period_days: 30 })
+      .then((data) => {
+        if (!cancelled) setTrendOverview(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTrendOverview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setTrendLoading(false);
       });
     return () => {
       cancelled = true;
@@ -496,19 +554,40 @@ export function HomePage() {
           <div className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
             <h3 className="text-base font-bold text-slate-900">{t("homeAiTrend")}</h3>
             <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeTrendChartTitle")}</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
             <div className="mt-4 rounded-xl bg-slate-50/90 px-2 py-3 ring-1 ring-slate-100">
-              <TrendSparkline />
+              {trendLoading ? (
+                <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">{t("homeLoading")}</div>
+              ) : (
+                <TrendSparkline values={sparklineValues} />
+              )}
             </div>
             <div className="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 text-center">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeStatActiveTools")}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">2,847</p>
-                <p className="text-xs font-semibold text-emerald-600 sm:text-sm">+12.5% {t("homeStatGrowth")}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                  {trendLoading ? "—" : formatCount(trendOverview?.apps_count ?? 0)}
+                </p>
+                {formatGrowth(trendOverview?.apps_growth_pct) ? (
+                  <p className="text-xs font-semibold text-emerald-600 sm:text-sm">
+                    {formatGrowth(trendOverview?.apps_growth_pct)} {t("homeStatGrowth")}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 sm:text-sm">{t("homeStatNoCompare")}</p>
+                )}
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeStatNewArticles")}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">18,920</p>
-                <p className="text-xs font-semibold text-emerald-600 sm:text-sm">+8.2% {t("homeStatGrowth")}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                  {trendLoading ? "—" : formatCount(trendOverview?.news_count ?? 0)}
+                </p>
+                {formatGrowth(trendOverview?.news_growth_pct) ? (
+                  <p className="text-xs font-semibold text-emerald-600 sm:text-sm">
+                    {formatGrowth(trendOverview?.news_growth_pct)} {t("homeStatGrowth")}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 sm:text-sm">{t("homeStatNoCompare")}</p>
+                )}
               </div>
             </div>
           </div>
