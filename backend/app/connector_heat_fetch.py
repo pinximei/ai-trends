@@ -1,8 +1,10 @@
 """连接器两阶段取数：先按热度取前 N 条，再逐条拉详情，打包为 ``connector_sync_items_v1`` 供入库。"""
 from __future__ import annotations
 
+import base64
 import json
 import re
+import time
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -33,6 +35,50 @@ _GITHUB_TRENDING_SKIP_SLUGS = frozenset(
 
 # 单条详情写入 pack 前的上限，避免 10 条撑爆总 snippet
 _PER_ITEM_SNIPPET_MAX = min(48_000, CONNECTOR_SNIPPET_MAX_CHARS // 10)
+_README_MD_MAX = 24_000
+
+
+def _decode_github_readme_body(readme_json: dict[str, Any]) -> str:
+    enc = str(readme_json.get("encoding") or "").strip().lower()
+    raw = readme_json.get("content") or ""
+    if enc == "base64" and isinstance(raw, str):
+        try:
+            return base64.b64decode(raw).decode("utf-8", errors="replace")
+        except (ValueError, UnicodeDecodeError):
+            return ""
+    if isinstance(raw, str):
+        return raw
+    return ""
+
+
+def _attach_github_readme(
+    client: httpx.Client,
+    api_url: str,
+    api_headers: dict[str, str],
+    repo: dict[str, Any],
+) -> None:
+    """GET /repos/{owner}/{repo}/readme，解码正文供 LLM 理解项目用途。"""
+    md = ""
+    try:
+        rr = client.get(
+            f"{api_url}/readme",
+            headers={**api_headers, "Accept": "application/vnd.github.raw+json"},
+        )
+        if rr.status_code == 200 and (rr.text or "").strip():
+            md = (rr.text or "")[:_README_MD_MAX]
+        else:
+            rr2 = client.get(f"{api_url}/readme", headers={**api_headers, "Accept": "application/json"})
+            if 200 <= rr2.status_code < 300:
+                try:
+                    readme = rr2.json()
+                except json.JSONDecodeError:
+                    readme = None
+                if isinstance(readme, dict):
+                    md = _decode_github_readme_body(readme)[:_README_MD_MAX]
+        if md.strip():
+            repo["readme_md"] = md
+    except Exception:
+        return
 
 
 def github_trending_is_discovery_url(url: str) -> bool:
@@ -118,12 +164,19 @@ def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]
                     ensure_ascii=False,
                 )
             payloads: list[dict[str, Any]] = []
+            has_auth = bool((api_headers.get("Authorization") or "").strip())
+            api_pause_s = 0.15 if has_auth else 1.25
             for row in ranked:
                 slug = str(row.get("full_name") or "").strip()
                 if not slug:
                     continue
                 api_url = f"https://api.github.com/repos/{slug}"
+                if payloads:
+                    time.sleep(api_pause_s)
                 r2 = client.get(api_url, headers=api_headers)
+                if r2.status_code == 403 and not has_auth:
+                    time.sleep(3.0)
+                    r2 = client.get(api_url, headers=api_headers)
                 if r2.status_code < 200 or r2.status_code >= 300:
                     continue
                 try:
@@ -138,6 +191,7 @@ def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]
                 repo["_aisoul_trending"] = extra
                 if row.get("stars_today") is not None:
                     repo["trending_stars_today"] = row["stars_today"]
+                _attach_github_readme(client, api_url, api_headers, repo)
                 payloads.append(repo)
             if not payloads:
                 return r.status_code, json.dumps(

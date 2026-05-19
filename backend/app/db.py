@@ -144,6 +144,10 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN source_external_id VARCHAR(512)"))
             if "heat_score" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN heat_score DOUBLE PRECISION DEFAULT 0"))
+            if "engagement_stars_total" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN engagement_stars_total INTEGER"))
+            if "engagement_stars_today" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN engagement_stars_today INTEGER"))
         cols = _column_names(conn, "product_software_downloads")
         if cols:
             if "artifact_rel_path" not in cols:

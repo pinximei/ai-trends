@@ -45,6 +45,18 @@ function formatFeedDateLabel(isoDay: string): string {
   return d.toLocaleDateString("zh-CN", { dateStyle: "long", timeZone: "UTC" });
 }
 
+/** 列表排序/分组与卡片时间：优先更新时间（重复同步 star 后会刷新） */
+function articleDisplayDay(a: { updated_at?: string | null; published_at?: string | null }): string {
+  return (a.updated_at || a.published_at || "").slice(0, 10) || "_";
+}
+
+function formatStarCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
+
 function formatFeedDayRange(newest: string | null, oldest: string | null): string | null {
   if (!newest) return null;
   if (!oldest || oldest === newest) return formatFeedDateLabel(newest);
@@ -113,7 +125,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const listByDate = useMemo((): [string, ArticleFeedCard[]][] => {
     const m = new Map<string, ArticleFeedCard[]>();
     for (const a of list) {
-      const day = (a.published_at || "").slice(0, 10) || "_";
+      const day = articleDisplayDay(a);
       if (!m.has(day)) m.set(day, []);
       m.get(day)!.push(a);
     }
@@ -553,7 +565,10 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                   className={FEED_CARD_GRID_CLASS}
                 >
                   {rows.map((a) => {
-                    const pub = a.published_at ? a.published_at.slice(0, 10) : null;
+                    const displayDay = articleDisplayDay(a);
+                    const displayIso = a.updated_at || a.published_at;
+                    const starsTotal = a.engagement_stars_total;
+                    const starsToday = a.engagement_stars_today;
                     return (
                       <Link
                         key={a.id}
@@ -583,14 +598,24 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                             <span className="inline-flex max-w-[min(100%,18rem)] items-center truncate rounded-md bg-gradient-to-r from-emerald-50/90 to-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-100/90">
                               {a.platform_label || t("source")}
                             </span>
-                            {pub ? (
-                              <time
-                                className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400"
-                                dateTime={a.published_at || undefined}
-                              >
-                                {pub}
-                              </time>
-                            ) : null}
+                            <div className="flex shrink-0 flex-col items-end gap-0.5">
+                              {displayDay && displayDay !== "_" ? (
+                                <time
+                                  className="text-[11px] font-medium tabular-nums text-slate-400"
+                                  dateTime={displayIso || undefined}
+                                >
+                                  {displayDay}
+                                </time>
+                              ) : null}
+                              {starsTotal != null ? (
+                                <span className="text-[10px] font-medium tabular-nums text-amber-700/90">
+                                  ★ {formatStarCount(starsTotal)}
+                                  {starsToday != null
+                                    ? ` · ${t("feedStarsToday").replace("{n}", formatStarCount(starsToday))}`
+                                    : ""}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
 
                           {a.categories && a.categories.length > 0 ? (

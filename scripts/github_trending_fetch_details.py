@@ -87,19 +87,9 @@ def fetch_details(
                     "discovery_html_url": row.get("html_url"),
                 }
                 if include_readme:
-                    rr = client.get(f"{api_url}/readme", headers={**headers, "Accept": "application/json"})
-                    if 200 <= rr.status_code < 300:
-                        try:
-                            readme = rr.json()
-                            if isinstance(readme, dict) and readme.get("content"):
-                                repo["_readme_meta"] = {
-                                    "name": readme.get("name"),
-                                    "path": readme.get("path"),
-                                    "size": readme.get("size"),
-                                    "encoding": readme.get("encoding"),
-                                }
-                        except json.JSONDecodeError:
-                            pass
+                    from backend.app.connector_heat_fetch import _attach_github_readme
+
+                    _attach_github_readme(client, api_url, headers, repo)
                 results.append(repo)
             except Exception as e:
                 errors.append({"full_name": slug, "error": str(e)[:200]})

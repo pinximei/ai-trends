@@ -208,6 +208,37 @@ def _extract_external_id_from_dict(d: dict) -> str | None:
     return None
 
 
+def extract_github_engagement_from_snippet(snippet: str) -> dict[str, int | None]:
+    """从 GitHub 仓库 JSON 片段解析总 star 与今日 star 增速（Trending 同步写入）。"""
+    out: dict[str, int | None] = {"stars_total": None, "stars_today": None}
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    try:
+        obj = json.loads(s)
+    except Exception:
+        return out
+    if not isinstance(obj, dict):
+        return out
+    try:
+        total = int(obj.get("stargazers_count") or 0)
+        if total >= 0:
+            out["stars_total"] = total
+    except (TypeError, ValueError):
+        pass
+    today_raw = obj.get("trending_stars_today")
+    if today_raw is None:
+        tr = obj.get("_aisoul_trending")
+        if isinstance(tr, dict):
+            today_raw = tr.get("stars_today")
+    try:
+        if today_raw is not None:
+            today = int(today_raw)
+            if today >= 0:
+                out["stars_today"] = today
+    except (TypeError, ValueError):
+        pass
+    return out
+
+
 def extract_source_external_id_from_connector_snippet(snippet: str) -> str | None:
     """
     从连接器 JSON 中解析上游「原始条目」的稳定标识（如 HN Algolia 的 objectID、GitHub 的 node_id 或数字 id）。

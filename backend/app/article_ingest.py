@@ -13,6 +13,7 @@ from .domain.articles import (
     CONNECTOR_SNIPPET_MAX_CHARS,
     VALUE_SCORE_MIN,
     display_fingerprint,
+    extract_github_engagement_from_snippet,
     extract_source_external_id_from_connector_snippet,
     feed_lane,
     feed_lane_for_article,
@@ -124,6 +125,77 @@ def parse_connector_sync_item_snippets(snippet: str) -> list[str] | None:
     return out or None
 
 
+def _apply_github_engagement_to_article(
+    row: Article,
+    *,
+    admin_source_key: str,
+    single_snippet: str,
+    http_status: int,
+    now: datetime,
+) -> None:
+    """写入/刷新 GitHub star 指标、热度分与 ``updated_at``（供前台按更新时间排序展示）。"""
+    safe = (single_snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+    summary_base = ""
+    try:
+        obj = json.loads(safe)
+        if isinstance(obj, dict):
+            summary_base = (obj.get("description") or obj.get("readme_md") or "")[:512]
+    except json.JSONDecodeError:
+        pass
+    vs = rule_value_score(snippet=safe, summary=summary_base, http_status=http_status or 0)
+    row.heat_score = unified_connector_heat(
+        admin_source_key=(admin_source_key or "").strip(),
+        snippet=safe,
+        value_score=vs,
+        sync_unix=float(now.timestamp()),
+    )
+    if (admin_source_key or "").strip().lower() == "github":
+        metrics = extract_github_engagement_from_snippet(safe)
+        if metrics.get("stars_total") is not None:
+            row.engagement_stars_total = metrics["stars_total"]
+        if metrics.get("stars_today") is not None:
+            row.engagement_stars_today = metrics["stars_today"]
+    row.updated_at = now
+
+
+def _refresh_article_heat_if_duplicate_external_id(
+    db: Session,
+    *,
+    industry_id: int,
+    admin_source_key: str,
+    source_external_id: str | None,
+    single_snippet: str,
+    http_status: int,
+    now: datetime | None = None,
+) -> int:
+    """同一上游条目已入库时：刷新 star 指标、``heat_score`` 与 ``updated_at``，不新建文章。"""
+    sid = (source_external_id or "").strip()
+    if not sid:
+        return 0
+    row = db.scalar(
+        select(Article)
+        .where(
+            Article.industry_id == industry_id,
+            Article.source_external_id == sid[:512],
+            Article.status == "published",
+        )
+        .order_by(desc(Article.id))
+        .limit(1)
+    )
+    if not row:
+        return 0
+    ts = now or datetime.utcnow()
+    _apply_github_engagement_to_article(
+        row,
+        admin_source_key=admin_source_key,
+        single_snippet=single_snippet,
+        http_status=http_status,
+        now=ts,
+    )
+    db.flush()
+    return 1
+
+
 def _create_one_published_article_from_connector_targets(
     db: Session,
     *,
@@ -150,7 +222,15 @@ def _create_one_published_article_from_connector_targets(
     if ingest_duplicate_by_source_external_id_exists(
         db, industry_id=industry_id, source_external_id=source_external_id
     ):
-        return 0
+        return _refresh_article_heat_if_duplicate_external_id(
+            db,
+            industry_id=industry_id,
+            admin_source_key=admin_source_key,
+            source_external_id=source_external_id,
+            single_snippet=safe,
+            http_status=http_status,
+            now=now,
+        )
 
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
@@ -251,27 +331,33 @@ def _create_one_published_article_from_connector_targets(
         if display_fingerprint(a.title, a.summary or "") == disp_fp:
             return 0
 
-    db.add(
-        Article(
-            title=title,
-            slug=slug,
-            summary=summary,
-            body=body,
-            segment_id=segment_id,
-            industry_id=industry_id,
-            content_type="third_party_derived",
-            third_party_source=f"{src_tag} / {connector_name}"[:512],
-            connector_sync_log_id=connector_sync_log_id,
-            source_external_id=(source_external_id[:512] if source_external_id else None),
-            status="published",
-            published_at=now,
-            ingest_fingerprint=ing_fp,
-            ai_categories_json=ai_categories_json,
-            ai_tabs_json=ai_tabs_json,
-            feed_kind=stored_feed_kind,
-            heat_score=heat,
-        )
+    art = Article(
+        title=title,
+        slug=slug,
+        summary=summary,
+        body=body,
+        segment_id=segment_id,
+        industry_id=industry_id,
+        content_type="third_party_derived",
+        third_party_source=f"{src_tag} / {connector_name}"[:512],
+        connector_sync_log_id=connector_sync_log_id,
+        source_external_id=(source_external_id[:512] if source_external_id else None),
+        status="published",
+        published_at=now,
+        ingest_fingerprint=ing_fp,
+        ai_categories_json=ai_categories_json,
+        ai_tabs_json=ai_tabs_json,
+        feed_kind=stored_feed_kind,
+        heat_score=heat,
     )
+    if src_tag.lower() == "github":
+        metrics = extract_github_engagement_from_snippet(safe)
+        if metrics.get("stars_total") is not None:
+            art.engagement_stars_total = metrics["stars_total"]
+        if metrics.get("stars_today") is not None:
+            art.engagement_stars_today = metrics["stars_today"]
+    art.updated_at = now
+    db.add(art)
     db.flush()
     return 1
 

@@ -293,3 +293,30 @@ def test_extract_source_external_id_list_root() -> None:
 def test_extract_source_external_id_invalid_returns_none() -> None:
     assert art.extract_source_external_id_from_connector_snippet("not json") is None
     assert art.extract_source_external_id_from_connector_snippet("{}") is None
+
+
+def test_extract_github_engagement_stargazers_and_trending_today() -> None:
+    payload = json.dumps(
+        {
+            "stargazers_count": 12000,
+            "trending_stars_today": 3991,
+            "id": 1,
+        },
+        ensure_ascii=False,
+    )
+    m = art.extract_github_engagement_from_snippet(payload)
+    assert m["stars_total"] == 12000
+    assert m["stars_today"] == 3991
+
+
+def test_extract_github_engagement_stars_today_from_aisoul_trending() -> None:
+    payload = json.dumps(
+        {
+            "stargazers_count": 500,
+            "_aisoul_trending": {"stars_today": 42},
+        },
+        ensure_ascii=False,
+    )
+    m = art.extract_github_engagement_from_snippet(payload)
+    assert m["stars_total"] == 500
+    assert m["stars_today"] == 42

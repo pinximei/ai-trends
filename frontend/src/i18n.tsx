@@ -115,6 +115,7 @@ const STRINGS: Record<string, string> = {
   resourcesPageSummary: "第 {page} / {total} 页",
   resourcesDaysTruncated: "日期列表可能不完整（已扫描文章达到上限）。请缩小时间范围或增加筛选条件。",
   listViewDetail: "查看",
+  feedStarsToday: "+{n} 今日",
 
   resourceBackList: "返回列表",
   resourceLoadingDetail: "加载文章…",

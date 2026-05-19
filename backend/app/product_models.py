@@ -104,6 +104,9 @@ class Article(Base):
     feed_kind: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     # 可更新热度（应用泳道按日列表内优先排序）；连接器入库与后台均可改写。
     heat_score: Mapped[float] = mapped_column(Float, default=0.0)
+    # GitHub 等连接器重复同步时刷新：总 star、今日 star 增速（Trending 页解析）
+    engagement_stars_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    engagement_stars_today: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)

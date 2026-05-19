@@ -14,6 +14,10 @@ export type ArticleCard = {
   /** 可更新热度；应用泳道按日列表内优先于发布时间排序 */
   heat_score?: number;
   updated_at?: string | null;
+  /** GitHub 等：总 star（重复同步时刷新） */
+  engagement_stars_total?: number | null;
+  /** GitHub Trending：今日 star 增速 */
+  engagement_stars_today?: number | null;
   categories?: string[];
 };
 
