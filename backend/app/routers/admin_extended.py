@@ -456,12 +456,18 @@ def run_connector_sync(
             )
             raise HTTPException(429, f"rate limited: min_interval_seconds={c.min_interval_seconds}")
     ask_preview = (c.admin_source_key or "").strip().lower()
+    sync_url = ""
+    if ask_preview:
+        _src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask_preview))
+        if _src:
+            sync_url = (_src.api_base or "").strip()[:120]
     diag_write(
         db,
         step="connector_start",
         message=(
             f"连接器 #{c.id} {c.name!r} source={ask_preview or '—'} enabled={c.enabled} "
             f"bypass_interval={bypass_rate_limit}"
+            + (f" url={sync_url!r}" if sync_url else "")
         ),
         connector_id=c.id,
         source_key=ask_preview or None,
@@ -476,7 +482,9 @@ def run_connector_sync(
         src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask))
         if src:
             cfg.setdefault("source_key", ask)
-            cfg.setdefault("url", (src.api_base or "").strip())
+            api_base = (src.api_base or "").strip()
+            if api_base:
+                cfg["url"] = api_base
             # 真实密钥以数据源保存为准：见 DataApiService.upsert_admin_source 写入各绑定连接器的 config_json.api_key。
             cfg.setdefault("auth_mode", "bearer")
 
@@ -638,12 +646,16 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
     import logging
 
     from ..llm_service import resolve_llm_http_config
-    from ..product_connectors_bootstrap import repair_short_probe_admin_sources
+    from ..product_connectors_bootstrap import (
+        repair_connector_urls_from_admin_sources,
+        repair_short_probe_admin_sources,
+    )
     from ..sync_diagnostic_log import begin_run, commit_diagnostics, end_run, write as diag_write
     from ..taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
     log = logging.getLogger(__name__)
     repair_short_probe_admin_sources(db)
+    n_url = repair_connector_urls_from_admin_sources(db)
     run_id = begin_run(db, actor=actor)
     commit_diagnostics(db)
     tnorm = (theme or "").strip() or None
@@ -658,7 +670,13 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
         diag_write(db, run_id=run_id, step="taxonomy_sync", message="正在同步数据源领域 → 行业/板块…")
         commit_diagnostics(db)
         n_tax = sync_product_taxonomy_from_admin_sources(db, commit=False)
-        diag_write(db, run_id=run_id, step="taxonomy", message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）")
+        diag_write(
+            db,
+            run_id=run_id,
+            step="taxonomy",
+            message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）"
+            + (f"；已对齐连接器 URL {n_url} 个" if n_url else ""),
+        )
         commit_diagnostics(db)
         _llm_base, llm_key, _llm_model = resolve_llm_http_config(db)
         llm_ok = bool((llm_key or "").strip())

@@ -48,6 +48,31 @@ def repair_short_probe_admin_sources(db: Session) -> None:
         db.commit()
 
 
+def repair_connector_urls_from_admin_sources(db: Session) -> int:
+    """绑定数据源的连接器 ``config_json.url`` 与 ``admin_source_configs.api_base`` 对齐（避免仍请求 /zen 等旧地址）。"""
+    n = 0
+    for c in db.scalars(
+        select(ProductConnector).where(ProductConnector.admin_source_key.isnot(None))
+    ).all():
+        ask = (c.admin_source_key or "").strip().lower()
+        if not ask:
+            continue
+        src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask))
+        if not src:
+            continue
+        base = (src.api_base or "").strip()
+        if not base:
+            continue
+        cfg = dict(c.config_json or {})
+        if (cfg.get("url") or "").strip() != base:
+            cfg["url"] = base
+            c.config_json = cfg
+            n += 1
+    if n:
+        db.commit()
+    return n
+
+
 def ensure_core_admin_connectors(db: Session) -> None:
     """每个核心 admin 数据源最多补一条连接器（admin_source_key 对齐），便于后台「连接器」里直接启用同步。"""
     for key in _CORE_ADMIN_SOURCE_KEYS:

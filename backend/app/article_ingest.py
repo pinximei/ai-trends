@@ -257,7 +257,19 @@ def _create_one_published_article_from_connector_targets(
 
     vs = rule_value_score(snippet=safe, summary=summary_base, http_status=http_status or 0)
     if vs < VALUE_SCORE_MIN:
-        _diag("warn", "skip_score", f"跳过：规则价值分 {vs:.0f} < 门槛 {VALUE_SCORE_MIN:.0f}")
+        hint = ""
+        if len((safe or "").strip()) < 80:
+            hint = f" 响应过短（{len((safe or '').strip())} 字符）"
+            if (admin_source_key or "").strip().lower() == "github":
+                hint += "：请将数据源 api_base 设为 https://github.com/trending?since=daily"
+            preview = (safe or "").strip().replace("\n", " ")[:120]
+            if preview:
+                hint += f" 片段={preview!r}"
+        _diag(
+            "warn",
+            "skip_score",
+            f"跳过：规则价值分 {vs:.0f} < 门槛 {VALUE_SCORE_MIN:.0f}{hint}",
+        )
         return 0
 
     fk = feed_lane(src_tag)
