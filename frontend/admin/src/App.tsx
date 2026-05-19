@@ -33,6 +33,25 @@ function friendlyErr(msg: string): string {
   return msg;
 }
 
+/** 复制同步日志到剪贴板时压成单行（去掉换行，便于粘贴到聊天/工单）。 */
+function flattenDiagLogForClipboard(text: string): string {
+  return text.replace(/\r\n|\n|\r/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function formatDiagLogLine(r: {
+  created_at?: string | null;
+  level?: string;
+  step?: string;
+  message?: string;
+  connector_id?: number | null;
+  source_key?: string | null;
+}): string {
+  const head = `[${r.created_at ?? ""}] [${r.level}] [${r.step}]`;
+  const meta =
+    (r.connector_id != null ? ` #${r.connector_id}` : "") + (r.source_key ? ` ${r.source_key}` : "");
+  return `${head}${meta} ${r.message ?? ""}`;
+}
+
 /** 与后端 ``FEED_APPS_KEYS`` 对齐：仅下列标识默认进前台「应用」Feed。 */
 const APPS_FEED_SOURCE_KEYS = new Set(["product_hunt", "huggingface_spaces"]);
 
@@ -2530,12 +2549,7 @@ export function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    const text = diagLogs
-                      .map(
-                        (r) =>
-                          `[${r.created_at ?? ""}] [${r.level}] [${r.step}]${r.source_key ? ` (${r.source_key})` : ""} ${r.message}`,
-                      )
-                      .join("\n");
+                    const text = diagLogs.map((r) => flattenDiagLogForClipboard(formatDiagLogLine(r))).join("");
                     void navigator.clipboard.writeText(text);
                   }}
                   disabled={!diagLogs.length}
@@ -2574,10 +2588,10 @@ export function App() {
                   ? "加载中…"
                   : diagLogs.length
                     ? diagLogs
-                        .map(
-                          (r) =>
-                            `[${r.created_at ?? ""}] [${r.level}] [${r.step}]${r.connector_id != null ? ` #${r.connector_id}` : ""}${r.source_key ? ` ${r.source_key}` : ""}\n  ${r.message}`,
-                        )
+                        .map((r) => {
+                          const head = `[${r.created_at ?? ""}] [${r.level}] [${r.step}]${r.connector_id != null ? ` #${r.connector_id}` : ""}${r.source_key ? ` ${r.source_key}` : ""}`;
+                          return `${head}\n  ${r.message ?? ""}`;
+                        })
                         .join("\n\n")
                     : "（暂无日志，请先点击「拉取全部数据」）"}
               </pre>
