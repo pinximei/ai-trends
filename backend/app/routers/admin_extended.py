@@ -636,9 +636,11 @@ def run_connector_sync(
 def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict:
     """按后台数据源领域标签刷新 taxonomy，并对所有已启用连接器立即同步（不受单连接器最短间隔限制）。"""
     from ..llm_service import resolve_llm_http_config
+    from ..product_connectors_bootstrap import repair_short_probe_admin_sources
     from ..sync_diagnostic_log import begin_run, end_run, write as diag_write
     from ..taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
+    repair_short_probe_admin_sources(db)
     run_id = begin_run(db, actor=actor)
     tnorm = (theme or "").strip() or None
     if tnorm:
@@ -703,6 +705,21 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
                 source_key=(c.admin_source_key or ""),
             )
             details.append({"connector_id": c.id, "name": c.name, "error": str(e)[:240]})
+    articles_total = sum(int(d.get("articles_created") or 0) for d in details)
+    diag_write(
+        db,
+        run_id=run_id,
+        level="info" if articles_total else "warn",
+        step="batch_articles",
+        message=(
+            f"本批新建文章合计 {articles_total} 篇（GitHub 等进前台「资讯」/news，Product Hunt 进「应用」/apps）。"
+            + (
+                " 若为 0：请看上方 llm_config、各连接器 http_done / skip_llm / skip_score。"
+                if not articles_total
+                else ""
+            )
+        ),
+    )
     end_run(db, run_id=run_id, ok=ok_n, fail=fail_n, total=len(rows))
     db.commit()
     audit(db, actor=actor, action="product.ingest.theme_fetch", detail=f"theme={tnorm!r}, ok={ok_n}, fail={fail_n}")

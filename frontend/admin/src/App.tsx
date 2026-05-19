@@ -939,12 +939,6 @@ export function App() {
 
   async function onThemeFetch() {
     if (!canManageSettings) return;
-    if (
-      !window.confirm(
-        "将先根据「数据源」中的领域标签刷新行业/板块结构，再对所有已启用的连接器立即执行一次同步（不受单次最短间隔限制），会访问外网。确定继续？",
-      )
-    )
-      return;
     setThemeFetchBusy(true);
     setErr("");
     try {
