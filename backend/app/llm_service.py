@@ -116,6 +116,11 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
             "【Hugging Face Space 稿】「描述」按：Space 用途 → 交互方式 → 典型场景；"
             "「数据支撑」列：Space 名、作者/组织、点赞、运行环境、外链等。"
         )
+    if k == "hacker_news":
+        return (
+            "【Hacker News 社区帖】「描述」按：帖子主题 → 讨论背景 → 对 AI/技术读者的意义；"
+            "「数据支撑」表格列：标题、票数 points、评论数、作者、讨论链接（url 或 item?id=objectID）。"
+        )
     if k in ("newsapi", "finnhub", "youtube_data", "mapbox"):
         return (
             "【资讯/API 快讯稿】「描述」按：谁 → 发生了什么 → 影响/结论；"

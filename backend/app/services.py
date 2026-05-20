@@ -22,6 +22,7 @@ CONTENT_ROLE_LABEL_ZH: dict[str, str] = {
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
 # 下列为 **AI 向** 内置预置：GitHub 协作、HF Spaces、Product Hunt；Product Hunt 须 OAuth Bearer。
+# 新增数据源：须先通过 scripts/verify_source_local.py 与 docs/DATA_SOURCE_ONBOARDING.md 门禁，再改本列表。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
@@ -53,6 +54,16 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "content_role": "app_launches",
         "notes": "Product Hunt **GraphQL v2**（POST）。拉取规则：PT **昨日** 单日窗口内精选按票数 Top10（对齐邮件 Leaderboard「昨日 launches」；非今日榜、非 RANKING）。推荐 Access Token 直连。",
     },
+    {
+        "source": "hacker_news",
+        "preset_label": "Hacker News",
+        "enabled": True,
+        "api_base": "https://hn.algolia.com/api/v1/search?tags=front_page",
+        "api_key_masked": "",
+        "scope_label": "AI｜社区资讯",
+        "content_role": "daily_editorial",
+        "notes": "Algolia **HN Search API**（GET，免 Key）：``tags=front_page`` 首页热门，按 points 取 Top10 逐条入库；snippet 含 objectID、链接、票数与评论数。",
+    },
 ]
 
 # 当前产品保留的内置数据源标识（与 MAINSTREAM_ADMIN_SOURCE_PRESETS 一致）；启动时用于删库中「多余」行。
@@ -69,7 +80,6 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "finnhub",
         "youtube_data",
         "mapbox",
-        "hacker_news",
         "stackoverflow",
         "openalex",
         "rss_arstechnica",
@@ -86,6 +96,7 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
 ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
+        "hacker_news",
     }
 )
 

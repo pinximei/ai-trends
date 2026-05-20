@@ -42,8 +42,10 @@ from ..software_package_service import (
 from ..article_ingest import create_published_articles_for_connector_targets
 from ..connector_heat_fetch import (
     github_trending_is_discovery_url,
+    hacker_news_algolia_is_search_url,
     huggingface_api_spaces_is_list_index,
     sync_github_trending_top_details,
+    sync_hacker_news_top_details,
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
@@ -420,6 +422,9 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
                 return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
             if source_key == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url):
                 code, text = sync_huggingface_spaces_top_details(url, headers)
+                return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            if source_key == "hacker_news" and hacker_news_algolia_is_search_url(url):
+                code, text = sync_hacker_news_top_details(url, headers)
                 return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
             r = client.request(method, url, headers=headers)
         text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]

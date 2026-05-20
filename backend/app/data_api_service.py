@@ -12,8 +12,10 @@ from .product_models import ProductConnector
 from .scope_labels_util import apply_scope_labels_to_row, get_scope_labels_from_source, normalize_scope_labels_from_payload
 from .connector_heat_fetch import (
     github_trending_is_discovery_url,
+    hacker_news_algolia_is_search_url,
     huggingface_api_spaces_is_list_index,
     sync_github_trending_top_details,
+    sync_hacker_news_top_details,
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
@@ -304,6 +306,13 @@ class DataApiService:
                         r = _Resp2()
                     else:
                         r = client.get(url, headers=headers)
+                elif sk == "hacker_news" and hacker_news_algolia_is_search_url(url):
+                    code, body_text = sync_hacker_news_top_details(url, headers)
+                    class _RespHn:
+                        status_code = code
+                        text = body_text
+
+                    r = _RespHn()
                 elif sk == "anthropic":
                     # Anthropic Messages 仅支持 POST；用最小消息体做真实可用性测试。
                     if "Authorization" not in headers:
@@ -328,6 +337,7 @@ class DataApiService:
                 if sk == "product_hunt"
                 or (sk == "github" and github_trending_is_discovery_url(url))
                 or (sk == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url))
+                or (sk == "hacker_news" and hacker_news_algolia_is_search_url(url))
                 else 600
             )
             snippet = (r.text or "")[:cap]

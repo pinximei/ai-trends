@@ -368,6 +368,92 @@ def _hf_list_pool_limit(url: str) -> tuple[str, int]:
     return u, lim
 
 
+HN_ALGOLIA_SEARCH_DEFAULT = "https://hn.algolia.com/api/v1/search?tags=front_page"
+
+
+def hacker_news_algolia_is_search_url(url: str) -> bool:
+    """Algolia HN Search API（列表发现）；非 ``firebaseio.com`` 单条 item API。"""
+    p = urlsplit((url or "").strip().lower())
+    return "hn.algolia.com" in (p.netloc or "") and "/api/" in (p.path or "")
+
+
+def _hn_normalize_hit(hit: dict[str, Any]) -> dict[str, Any]:
+    """单条 story → 入库 snippet 形状（含 objectID、points、链接与正文节选）。"""
+    link = (hit.get("url") or hit.get("story_url") or "").strip()
+    if not link and hit.get("objectID"):
+        link = f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
+    text = (hit.get("story_text") or hit.get("comment_text") or "").strip()
+    return {
+        "objectID": hit.get("objectID"),
+        "title": hit.get("title") or hit.get("story_title") or "",
+        "url": link,
+        "points": hit.get("points"),
+        "num_comments": hit.get("num_comments"),
+        "author": hit.get("author"),
+        "created_at": hit.get("created_at"),
+        "story_text": text[:8000] if text else "",
+    }
+
+
+def sync_hacker_news_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """Algolia HN API：首页热门（``tags=front_page``），按 points 取 Top N 逐条入库。"""
+    n = CONNECTOR_HEAT_TOP_N
+    raw_url = (url or "").strip() or HN_ALGOLIA_SEARCH_DEFAULT
+    parts = urlsplit(raw_url)
+    q = dict(parse_qsl(parts.query, keep_blank_values=True))
+    q.setdefault("tags", "front_page")
+    try:
+        lim = int(str(q.get("hitsPerPage") or "0").strip() or "0")
+    except ValueError:
+        lim = 0
+    q["hitsPerPage"] = str(max(n, lim, 30))
+    api_url = urlunsplit(
+        (
+            parts.scheme or "https",
+            parts.netloc or "hn.algolia.com",
+            parts.path or "/api/v1/search",
+            urlencode(q),
+            "",
+        )
+    )
+    h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-HN/1.0"}
+    try:
+        with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+            r = client.get(api_url, headers=h)
+            text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            if r.status_code < 200 or r.status_code >= 300:
+                return r.status_code, text
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError:
+                return r.status_code, text
+            if not isinstance(body, dict):
+                return r.status_code, json.dumps({"connector_sync_items_v1": [], "note": "not_object"}, ensure_ascii=False)
+            hits = body.get("hits")
+            if not isinstance(hits, list) or not hits:
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_hits"}, ensure_ascii=False)
+
+            def _score(item: dict[str, Any]) -> int:
+                try:
+                    return int(item.get("points") or 0)
+                except (TypeError, ValueError):
+                    return 0
+
+            ranked = sorted([x for x in hits if isinstance(x, dict)], key=_score, reverse=True)[:n]
+            payloads = [_hn_normalize_hit(x) for x in ranked if (x.get("title") or "").strip()]
+            if not payloads:
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_titled_hits"}, ensure_ascii=False)
+            pack = {
+                "connector_sync_items_v1": [
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
+                ],
+                "note": "hn_algolia_front_page",
+            }
+            return 200, _trim_pack_json(pack)
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
+
+
 def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
     """GET 列表 JSON，按 likes（次按 trendingScore）取前 N，再 GET 每条 ``/api/spaces/{id}`` 详情。"""
     n = CONNECTOR_HEAT_TOP_N
@@ -421,6 +507,92 @@ def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tu
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
                 ]
+            }
+            return 200, _trim_pack_json(pack)
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
+
+
+HN_ALGOLIA_SEARCH_DEFAULT = "https://hn.algolia.com/api/v1/search?tags=front_page"
+
+
+def hacker_news_algolia_is_search_url(url: str) -> bool:
+    """Algolia HN Search API（列表发现）；非 ``firebaseio.com`` 单条 item API。"""
+    p = urlsplit((url or "").strip().lower())
+    return "hn.algolia.com" in (p.netloc or "") and "/api/" in (p.path or "")
+
+
+def _hn_normalize_hit(hit: dict[str, Any]) -> dict[str, Any]:
+    """单条 story → 入库 snippet 形状（含 objectID、points、链接与正文节选）。"""
+    link = (hit.get("url") or hit.get("story_url") or "").strip()
+    if not link and hit.get("objectID"):
+        link = f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
+    text = (hit.get("story_text") or hit.get("comment_text") or "").strip()
+    return {
+        "objectID": hit.get("objectID"),
+        "title": hit.get("title") or hit.get("story_title") or "",
+        "url": link,
+        "points": hit.get("points"),
+        "num_comments": hit.get("num_comments"),
+        "author": hit.get("author"),
+        "created_at": hit.get("created_at"),
+        "story_text": text[:8000] if text else "",
+    }
+
+
+def sync_hacker_news_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """Algolia HN API：首页热门（``tags=front_page``），按 points 取 Top N 逐条入库。"""
+    n = CONNECTOR_HEAT_TOP_N
+    raw_url = (url or "").strip() or HN_ALGOLIA_SEARCH_DEFAULT
+    parts = urlsplit(raw_url)
+    q = dict(parse_qsl(parts.query, keep_blank_values=True))
+    q.setdefault("tags", "front_page")
+    try:
+        lim = int(str(q.get("hitsPerPage") or "0").strip() or "0")
+    except ValueError:
+        lim = 0
+    q["hitsPerPage"] = str(max(n, lim, 30))
+    api_url = urlunsplit(
+        (
+            parts.scheme or "https",
+            parts.netloc or "hn.algolia.com",
+            parts.path or "/api/v1/search",
+            urlencode(q),
+            "",
+        )
+    )
+    h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-HN/1.0"}
+    try:
+        with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+            r = client.get(api_url, headers=h)
+            text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            if r.status_code < 200 or r.status_code >= 300:
+                return r.status_code, text
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError:
+                return r.status_code, text
+            if not isinstance(body, dict):
+                return r.status_code, json.dumps({"connector_sync_items_v1": [], "note": "not_object"}, ensure_ascii=False)
+            hits = body.get("hits")
+            if not isinstance(hits, list) or not hits:
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_hits"}, ensure_ascii=False)
+
+            def _score(item: dict[str, Any]) -> int:
+                try:
+                    return int(item.get("points") or 0)
+                except (TypeError, ValueError):
+                    return 0
+
+            ranked = sorted([x for x in hits if isinstance(x, dict)], key=_score, reverse=True)[:n]
+            payloads = [_hn_normalize_hit(x) for x in ranked if (x.get("title") or "").strip()]
+            if not payloads:
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_titled_hits"}, ensure_ascii=False)
+            pack = {
+                "connector_sync_items_v1": [
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
+                ],
+                "note": "hn_algolia_front_page",
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

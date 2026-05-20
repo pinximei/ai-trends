@@ -131,6 +131,7 @@ const PROFILE_BY_SOURCE: Record<string, DetailProfileId> = {
   product_hunt: "product_launch",
   huggingface_spaces: "ai_space",
   github: "open_source",
+  hacker_news: "news_wire",
   newsapi: "news_wire",
   finnhub: "news_wire",
   youtube_data: "news_wire",
