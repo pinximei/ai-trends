@@ -156,6 +156,7 @@ export function Layout() {
         </main>
       </div>
 
+      {!isFeedHub ? (
       <footer className="border-t border-slate-200/80 bg-slate-50/90">
         <div
           className={`flex flex-col items-center gap-4 py-8 text-center text-[11px] text-slate-500 md:flex-row md:items-start md:justify-between md:text-left ${shell}`}
@@ -184,6 +185,7 @@ export function Layout() {
           </div>
         </div>
       </footer>
+      ) : null}
     </div>
   );
 }

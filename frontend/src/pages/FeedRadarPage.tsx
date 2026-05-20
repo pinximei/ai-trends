@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ScrollText, Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
 import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisual";
@@ -119,10 +119,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     const tm = window.setTimeout(() => setSearchQ(searchDraft.trim()), 350);
     return () => window.clearTimeout(tm);
   }, [searchDraft]);
-
-  const pageTitle = mode === "apps" ? t("resourcesFeedApps") : t("resourcesFeedNews");
-  /** 频道级装饰（非顶栏导航图标）：两页同一套外框样式，内用不同隐喻 */
-  const ModeGlyph = mode === "apps" ? Sparkles : ScrollText;
 
   const listByDate = useMemo((): [string, ArticleFeedCard[]][] => {
     const m = new Map<string, ArticleFeedCard[]>();
@@ -383,21 +379,25 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   const paginationBar = () =>
     listDisplayMode === "date" && !loading && pageMeta.total_pages > 0 ? (
-      <div className="ui-card flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
-        <div className="text-sm text-slate-600">
-          <span className="font-medium text-slate-900">{pageSummaryText}</span>
+      <div
+        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-slate-200/90 bg-slate-50/90 px-2 py-2 text-xs text-slate-600 sm:px-0"
+        role="navigation"
+        aria-label={pageSummaryText}
+      >
+        <p className="min-w-0 truncate">
+          <span className="font-medium text-slate-800">{pageSummaryText}</span>
           {pageMeta.day_utc ? (
-            <span className="ml-2 text-slate-500">
-              · 世界时 {formatFeedDayRange(pageMeta.day_utc, pageMeta.day_utc_end)}
+            <span className="ml-1.5 hidden text-slate-500 sm:inline">
+              · {formatFeedDayRange(pageMeta.day_utc, pageMeta.day_utc_end)}
             </span>
           ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             disabled={!pageMeta.has_prev || loading}
             onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-            className="rounded-full border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+            className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
           >
             {t("resourcesPagePrev")}
           </button>
@@ -405,11 +405,11 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             type="button"
             disabled={!pageMeta.has_next || loading}
             onClick={() => setFeedPage((p) => p + 1)}
-            className="rounded-full border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+            className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
           >
             {t("resourcesPageNext")}
           </button>
-          <label className="flex items-center gap-2 text-xs text-slate-500">
+          <label className="flex items-center gap-1 text-slate-500">
             <span className="sr-only">{t("resourcesPageJumpPlaceholder")}</span>
             <input
               type="number"
@@ -420,13 +420,13 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") onJump();
               }}
-              className="w-20 rounded-xl border border-slate-200 bg-white px-2 py-1.5 font-mono text-sm text-slate-800 shadow-inner"
+              className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-1 font-mono text-xs text-slate-800"
               aria-label={t("resourcesPageJumpPlaceholder")}
             />
             <button
               type="button"
               onClick={() => onJump()}
-              className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand-400"
+              className="rounded-md bg-brand-500 px-2 py-1 text-xs font-medium text-white hover:bg-brand-400"
             >
               {t("resourcesPageGo")}
             </button>
@@ -434,27 +434,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         </div>
       </div>
     ) : null;
-
-  /** 左栏：频道标题 + 图标，其下搜索 / 时间 / 类别 */
-  const feedLeftStrip = (
-    <div className="ui-card relative overflow-hidden p-4 sm:p-5">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-50/45 via-transparent to-slate-50/35" />
-      <div className="relative flex flex-row items-start gap-4">
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-brand-50 shadow-sm sm:h-14 sm:w-14"
-          aria-hidden
-        >
-          <ModeGlyph className="h-6 w-6 text-brand-600 sm:h-7 sm:w-7" strokeWidth={1.35} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-600/90">
-            {mode === "apps" ? t("navApps") : t("navNews")}
-          </p>
-          <h1 className="mt-1 text-lg font-bold leading-snug tracking-tight text-slate-900 sm:text-xl">{pageTitle}</h1>
-        </div>
-      </div>
-    </div>
-  );
 
   const leftFilters = (
     <div className="min-w-0 space-y-5">
@@ -766,8 +745,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
             "lg:border-r lg:border-slate-300/35 lg:bg-[#ecedf2]"
           }
         >
-          <div className="shrink-0 px-1.5 pb-2 pt-1 lg:px-2.5 lg:pt-3">{feedLeftStrip}</div>
-          <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 pb-2 lg:px-2.5 lg:pb-3">
+          <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 pb-2 pt-1 lg:px-2.5 lg:pb-3 lg:pt-3">
             {leftFilters}
           </div>
         </aside>
@@ -776,9 +754,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           ref={listScrollRef}
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
         >
-          <div className="space-y-4 px-1 pb-6 pt-1 sm:px-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
-            {listSection}
+          <div className="space-y-3 px-1 pb-6 pt-1 sm:px-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
             {paginationBar()}
+            {listSection}
           </div>
         </div>
       </div>
