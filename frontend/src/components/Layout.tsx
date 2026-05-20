@@ -144,48 +144,54 @@ export function Layout() {
         <main
           className={
             isHome
-              ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
+              ? "min-w-0 flex-1 py-6 pb-4 sm:py-8 sm:pb-5 xl:py-10"
               : isSplitScrollPage
                 ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 pt-2 pb-0 sm:pt-3 lg:bg-[#eef0f4] lg:pt-2"
                 : isHubTightTop
-                  ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
-                  : "min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8"
+                  ? "min-w-0 flex-1 pt-2 pb-4 sm:pt-3 lg:pt-4"
+                  : "min-w-0 flex-1 px-4 py-6 pb-4 sm:px-6 lg:px-8 lg:py-8"
           }
         >
           <Outlet />
         </main>
       </div>
 
-      {!isFeedHub ? (
-      <footer className="border-t border-slate-200/80 bg-slate-50/90">
+      <footer className="shrink-0 border-t border-slate-200/70 bg-white/95">
         <div
-          className={`flex flex-col items-center gap-4 py-8 text-center text-[11px] text-slate-500 md:flex-row md:items-start md:justify-between md:text-left ${shell}`}
+          className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 py-2 text-[10px] leading-snug text-slate-500 sm:py-2.5 ${shell}`}
         >
-          <div className="max-w-xl">
-            <p className="font-medium text-slate-600">{t("footer")}</p>
-            <p className="mt-1 text-[10px] text-slate-500">
-              <span className="font-semibold text-slate-600">UI 版本</span> {uiRelease}
-              {apiRelease ? ` · 接口 ${apiRelease}` : ""}
-            </p>
-            <p className="mt-1 text-[10px] text-slate-400">{t("footerIcpNote")}</p>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="font-medium text-slate-600">{t("footer")}</span>
+            <span className="hidden text-slate-300 sm:inline" aria-hidden>
+              ·
+            </span>
+            <span className="tabular-nums text-slate-400">
+              UI {uiRelease}
+              {apiRelease ? ` · API ${apiRelease}` : ""}
+            </span>
+            <span className="hidden min-w-0 truncate text-slate-400 md:inline" title={t("footerIcpNote")}>
+              · {t("footerIcpNote")}
+            </span>
           </div>
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-slate-600 md:justify-end">
-            <Link to="/about" className="hover:text-violet-600 hover:underline">
+          <nav
+            className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-slate-600"
+            aria-label={t("navAbout")}
+          >
+            <Link to="/about" className="hover:text-violet-600">
               {t("footerPrivacy")}
             </Link>
-            <Link to="/about" className="hover:text-violet-600 hover:underline">
+            <Link to="/about" className="hover:text-violet-600">
               {t("footerTerms")}
             </Link>
-            <Link to="/about" className="hover:text-violet-600 hover:underline">
+            <Link to="/about" className="hover:text-violet-600">
               {t("footerContact")}
             </Link>
-            <Link to="/about" className="hover:text-violet-600 hover:underline">
+            <Link to="/about" className="hover:text-violet-600">
               {t("navAbout")}
             </Link>
-          </div>
+          </nav>
         </div>
       </footer>
-      ) : null}
     </div>
   );
 }
