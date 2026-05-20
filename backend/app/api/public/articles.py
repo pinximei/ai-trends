@@ -22,6 +22,10 @@ def list_article_categories(
     ),
     published_within_days: int | None = Query(None, ge=1, le=3650),
     published_on_latest_day: bool = Query(False),
+    source: str | None = Query(
+        None,
+        description="admin_source_key（如 github、product_hunt）；与 articles/sources 返回的 key 一致。",
+    ),
     q: str | None = Query(
         None,
         description="Search title and summary (case-insensitive substring); max 80 chars.",
@@ -41,6 +45,49 @@ def list_article_categories(
             segment_ids=segment_ids_parsed,
             published_within_days=published_within_days,
             published_on_latest_day=published_on_latest_day,
+            source=source,
+            search=q,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return success(items)
+
+
+@router.get("/articles/sources")
+def list_article_sources(
+    feed: str = Query(..., pattern="^(news|apps)$"),
+    industry_slug: str = Query("ai"),
+    segment_id: int | None = None,
+    segment_ids: str | None = Query(
+        None,
+        description="Comma-separated segment ids; mutually exclusive with segment_id.",
+    ),
+    published_within_days: int | None = Query(None, ge=1, le=3650),
+    published_on_latest_day: bool = Query(False),
+    category: str | None = Query(
+        None,
+        description="与 articles/categories 返回的 label 完全一致时筛选；不传表示不限类别。",
+    ),
+    q: str | None = Query(
+        None,
+        description="Search title and summary (case-insensitive substring); max 80 chars.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """当前时间/板块下、该泳道文章按数据源聚合（供前台筛选）。"""
+    segment_ids_parsed = parse_segment_ids_csv(segment_ids)
+    if segment_id is not None and segment_ids_parsed is not None:
+        raise HTTPException(400, "segment_id and segment_ids are mutually exclusive")
+    try:
+        items = article_app.list_article_source_facets(
+            db,
+            feed=feed,
+            industry_slug=industry_slug,
+            segment_id=segment_id,
+            segment_ids=segment_ids_parsed,
+            published_within_days=published_within_days,
+            published_on_latest_day=published_on_latest_day,
+            category=category,
             search=q,
         )
     except ValueError as e:
@@ -99,6 +146,10 @@ def list_articles_feed(
         None,
         description="与 articles/categories 返回的 label 完全一致时筛选；不传表示不限类别。",
     ),
+    source: str | None = Query(
+        None,
+        description="admin_source_key（如 github、product_hunt）；与 articles/sources 返回的 key 一致。",
+    ),
     q: str | None = Query(
         None,
         description="Search title and summary (case-insensitive substring); max 80 chars.",
@@ -120,6 +171,7 @@ def list_articles_feed(
                 published_within_days=published_within_days,
                 published_on_latest_day=published_on_latest_day,
                 category=category,
+                source=source,
                 search=q,
                 days_per_page=days_per_page,
             )
@@ -133,6 +185,7 @@ def list_articles_feed(
                 published_within_days=published_within_days,
                 published_on_latest_day=published_on_latest_day,
                 category=category,
+                source=source,
                 search=q,
                 heat_offset=heat_offset,
                 heat_page_size=heat_page_size,
@@ -151,6 +204,7 @@ def list_articles_feed(
                 published_within_days=published_within_days,
                 published_on_latest_day=published_on_latest_day,
                 category=category,
+                source=source,
                 search=q,
             )
     except ValueError as e:

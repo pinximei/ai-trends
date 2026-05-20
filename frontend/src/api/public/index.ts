@@ -10,6 +10,7 @@ export const publicApi = {
     industry_slug?: string;
     published_within_days?: number;
     published_on_latest_day?: boolean;
+    source?: string | null;
     q?: string | null;
   }) => {
     const sp = new URLSearchParams();
@@ -17,8 +18,28 @@ export const publicApi = {
     if (opts.industry_slug) sp.set("industry_slug", opts.industry_slug);
     if (opts.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
     if (opts.published_on_latest_day) sp.set("published_on_latest_day", "true");
+    if (opts.source) sp.set("source", opts.source);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
     return publicGet<Array<{ label: string; count: number }>>(`/api/public/v1/articles/categories?${sp.toString()}`);
+  },
+  articleSources: (opts: {
+    feed: "news" | "apps";
+    industry_slug?: string;
+    published_within_days?: number;
+    published_on_latest_day?: boolean;
+    category?: string | null;
+    q?: string | null;
+  }) => {
+    const sp = new URLSearchParams();
+    sp.set("feed", opts.feed);
+    if (opts.industry_slug) sp.set("industry_slug", opts.industry_slug);
+    if (opts.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
+    if (opts.published_on_latest_day) sp.set("published_on_latest_day", "true");
+    if (opts.category) sp.set("category", opts.category);
+    if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
+    return publicGet<Array<{ key: string; label: string; count: number }>>(
+      `/api/public/v1/articles/sources?${sp.toString()}`,
+    );
   },
   articlesFeed: (opts: {
     feed: "news" | "apps";
@@ -35,6 +56,7 @@ export const publicApi = {
     published_within_days?: number;
     published_on_latest_day?: boolean;
     category?: string | null;
+    source?: string | null;
     q?: string | null;
   }) => {
     const sp = new URLSearchParams();
@@ -52,6 +74,7 @@ export const publicApi = {
     if (opts.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
     if (opts.published_on_latest_day) sp.set("published_on_latest_day", "true");
     if (opts.category) sp.set("category", opts.category);
+    if (opts.source) sp.set("source", opts.source);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
     return publicGet<ArticlesFeedResponse>(`/api/public/v1/articles/feed?${sp.toString()}`);
   },

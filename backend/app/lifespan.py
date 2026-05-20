@@ -132,6 +132,8 @@ def _job_connector_sync_gate() -> None:
     from .product_models import ProductConnector
     from .routers.admin_extended import run_connector_sync
     from .scheduler_settings_service import (
+        CONNECTOR_SCHEDULER_TZ,
+        connector_batch_due_now,
         ensure_scheduler_settings_row,
         get_scheduler_settings_merged,
         parse_last_batch_at,
@@ -149,8 +151,8 @@ def _job_connector_sync_gate() -> None:
 
         interval_h = max(1, min(168, int(settings.get("connector_sync_interval_hours") or 6)))
         last_dt = parse_last_batch_at(settings.get("last_connector_batch_at"))
-        now = datetime.utcnow()
-        if last_dt and (now - last_dt).total_seconds() < interval_h * 3600 - 30:
+        now_local = datetime.now(CONNECTOR_SCHEDULER_TZ)
+        if not connector_batch_due_now(interval_hours=interval_h, last_batch_at=last_dt, now=now_local):
             return
 
         if getattr(engine.dialect, "name", "") == "postgresql":
@@ -187,7 +189,7 @@ def _job_connector_sync_gate() -> None:
             logger.exception("taxonomy sync after connector batch failed")
 
         if ok > 0:
-            set_last_connector_batch_at(db, now)
+            set_last_connector_batch_at(db, datetime.utcnow())
             logger.info("scheduled connector batch finished: ok=%s fail=%s total=%s", ok, fail, len(rows))
         else:
             logger.warning(
@@ -252,7 +254,7 @@ def _start_scheduler() -> None:
         id="newsletter_daily_digest",
     )
     logger.info(
-        "connector sync gate every 15m; newsletter digest checks every 5m (fires in configured Asia/Shanghai window)",
+        "connector sync gate every 15m (calendar slots from Asia/Shanghai 00:00); newsletter digest every 5m",
     )
     _scheduler.start()
 

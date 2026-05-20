@@ -102,6 +102,8 @@ const STRINGS: Record<string, string> = {
   resourcesDays90: "近 90 天",
   resourcesCategoryFilter: "类别",
   resourcesCategoryAll: "全部分类",
+  resourcesSourceFilter: "数据源",
+  resourcesSourceAll: "全部数据源",
   resourcesLoading: "加载资源…",
   resourcesEmptyTopic: "当前筛选下暂无文章。",
   resourcesEmptySearch: "没有匹配该关键词的文章，可换个词或清空搜索。",

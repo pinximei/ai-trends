@@ -217,6 +217,47 @@ def test_public_articles_categories_accepts_search_q(client: TestClient) -> None
     assert isinstance(rows, list)
 
 
+def test_public_articles_sources_shape(client: TestClient) -> None:
+    r = client.get(
+        "/api/public/v1/articles/sources",
+        params={"feed": "news", "industry_slug": "ai", "published_within_days": "3650"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get("code") == 0
+    rows = j.get("data") or []
+    assert isinstance(rows, list)
+    for row in rows[:3]:
+        assert "key" in row and "label" in row and "count" in row
+
+
+def test_public_articles_feed_source_param(client: TestClient) -> None:
+    src_r = client.get(
+        "/api/public/v1/articles/sources",
+        params={"feed": "news", "industry_slug": "ai", "published_within_days": "3650"},
+    )
+    assert src_r.status_code == 200
+    sources = (src_r.json().get("data") or [])
+    if not sources:
+        pytest.skip("No news sources in database for source filter test.")
+    key = sources[0]["key"]
+    r = client.get(
+        "/api/public/v1/articles/feed",
+        params={
+            "feed": "news",
+            "industry_slug": "ai",
+            "paginate_by": "day",
+            "page": "1",
+            "published_within_days": "3650",
+            "source": key,
+        },
+    )
+    assert r.status_code == 200
+    items = (r.json().get("data") or {}).get("items") or []
+    for item in items[:5]:
+        assert (item.get("admin_source_key") or "") == key
+
+
 def test_clear_product_ingest_clears_domains_taxonomy(client: TestClient) -> None:
     from sqlalchemy import select
 

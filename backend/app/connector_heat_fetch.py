@@ -5,14 +5,18 @@ import base64
 import json
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from .domain.articles import CONNECTOR_HEAT_TOP_N, CONNECTOR_SNIPPET_MAX_CHARS
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
+# Product Hunt 日榜按旧金山日历日计；与官网 Daily / 邮件 Top10 对齐，勿用 order:RANKING（全局历史排名）。
+PH_LAUNCH_TZ = ZoneInfo("America/Los_Angeles")
 GITHUB_TRENDING_DEFAULT = "https://github.com/trending?since=daily"
 _GITHUB_TRENDING_HOSTS = frozenset({"github.com", "www.github.com"})
 _GITHUB_TRENDING_SKIP_SLUGS = frozenset(
@@ -243,29 +247,69 @@ def _post_ph_graphql(client: httpx.Client, headers: dict[str, str], query: str) 
     return r.status_code, body
 
 
-def sync_product_hunt_top_details(headers: dict[str, str]) -> tuple[int, str]:
-    """posts(order: RANKING) 取热度前 N，再对每个 slug 请求 ``post(slug:)`` 详情。"""
-    n = CONNECTOR_HEAT_TOP_N
-    list_q = (
-        f"{{ posts(first: {n}, order: RANKING) {{ edges {{ node {{ id slug name tagline votesCount }} }} }} }}"
+def _ph_day_start_utc_iso(*, days_ago: int = 0) -> str:
+    """Product Hunt 日榜起点：America/Los_Angeles 当日 00:00 转 UTC ISO。"""
+    now_pt = datetime.now(PH_LAUNCH_TZ)
+    day_pt = (now_pt - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return day_pt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _ph_posts_list_query(*, n: int, posted_after: str, posted_before: str | None = None) -> str:
+    before = f', postedBefore: "{posted_before}"' if posted_before else ""
+    return (
+        f'{{ posts(first: {n}, order: VOTES, featured: true, postedAfter: "{posted_after}"{before}) '
+        f"{{ edges {{ node {{ id slug name tagline votesCount featuredAt }} }} }} }}"
     )
+
+
+def _ph_parse_post_nodes(body: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not body or body.get("errors"):
+        return []
+    posts = (body.get("data") or {}).get("posts") or {}
+    nodes: list[dict[str, Any]] = []
+    for e in posts.get("edges") or []:
+        if isinstance(e, dict) and isinstance(e.get("node"), dict):
+            nodes.append(e["node"])
+    return nodes
+
+
+def _ph_fetch_daily_featured_posts(
+    client: httpx.Client, headers: dict[str, str], *, n: int
+) -> tuple[int, list[dict[str, Any]], str]:
+    """
+    对齐 PH 邮件/Leaderboard「昨日 Top launches」：PT 昨日 00:00–今日 00:00 窗口内精选按票数 Top N。
+    （须 postedBefore，否则会把今日 featured 产品混进昨日榜。）
+    返回 (http_code, nodes, note)。
+    """
+    posted_after = _ph_day_start_utc_iso(days_ago=1)
+    posted_before = _ph_day_start_utc_iso(days_ago=0)
+    code, body = _post_ph_graphql(
+        client,
+        headers,
+        _ph_posts_list_query(n=n, posted_after=posted_after, posted_before=posted_before),
+    )
+    nodes = _ph_parse_post_nodes(body)
+    if nodes:
+        return code or 200, nodes[:n], "ph_leaderboard_pt_yesterday_votes"
+    if body and body.get("errors"):
+        err = json.dumps(body, ensure_ascii=False)[:2000]
+        return code or 502, [], err
+    return 200, [], "no_posts"
+
+
+def sync_product_hunt_top_details(headers: dict[str, str]) -> tuple[int, str]:
+    """PT 日榜精选 + 按票数 Top N（对齐官网 Daily / 邮件），再对每个 slug 拉详情。"""
+    n = CONNECTOR_HEAT_TOP_N
     try:
         with httpx.Client(timeout=45.0) as client:
-            code, body = _post_ph_graphql(client, headers, list_q)
-            if not body or "errors" in body:
-                err = json.dumps(body or {"errors": "empty"}, ensure_ascii=False)[:2000]
-                return (code or 502, err)
-            data = body.get("data") or {}
-            posts = data.get("posts") or {}
-            nodes: list[dict[str, Any]] = []
-            for e in posts.get("edges") or []:
-                if isinstance(e, dict) and isinstance(e.get("node"), dict):
-                    nodes.append(e["node"])
+            code, nodes, list_note = _ph_fetch_daily_featured_posts(client, headers, n=n)
+            if list_note.startswith("{") and "errors" in list_note:
+                return (code or 502, list_note)
             if not nodes:
                 return code, json.dumps({"connector_sync_items_v1": [], "note": "no_posts"}, ensure_ascii=False)
 
             slugs: list[str] = []
-            for node in nodes[:n]:
+            for node in nodes:
                 if not isinstance(node, dict):
                     continue
                 slug = str(node.get("slug") or "").strip()
@@ -298,7 +342,8 @@ def sync_product_hunt_top_details(headers: dict[str, str]) -> tuple[int, str]:
             pack = {
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
-                ]
+                ],
+                "note": list_note,
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

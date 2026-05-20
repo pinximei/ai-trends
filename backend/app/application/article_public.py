@@ -42,15 +42,23 @@ def _article_title_summary_matches(a: Article, needle: str) -> bool:
     return n in hay
 
 
+def normalize_source_filter(raw: str | None) -> str | None:
+    s = (raw or "").strip().lower()
+    return s or None
+
+
 def _feed_row_matches_list_filters(
     a: Article,
     *,
     feed: str,
     cat_filter: str | None,
+    source_filter: str | None,
     search_n: str | None,
 ) -> bool:
-    """与公开列表一致的泳道 / 类别 / 搜索筛选。"""
+    """与公开列表一致的泳道 / 类别 / 数据源 / 搜索筛选。"""
     if _row_feed_lane(a) != feed:
+        return False
+    if source_filter and art.admin_source_key(a.third_party_source) != source_filter:
         return False
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     if cat_filter and cats_list and cats_list[0] != cat_filter:
@@ -66,6 +74,7 @@ def _build_feed_fingerprint_winner_ids(
     *,
     feed: str,
     cat_filter: str | None,
+    source_filter: str | None,
     search_n: str | None,
     max_scan_rows: int = 48_000,
     batch: int = 500,
@@ -88,7 +97,9 @@ def _build_feed_fingerprint_winner_ids(
             scanned += 1
             if scanned > max_scan_rows:
                 break
-            if not _feed_row_matches_list_filters(a, feed=feed, cat_filter=cat_filter, search_n=search_n):
+            if not _feed_row_matches_list_filters(
+                a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=search_n
+            ):
                 continue
             fp = art.display_fingerprint(a.title, a.summary or "")
             if fp not in winner_by_fp:
@@ -248,6 +259,7 @@ def _collect_ordered_days_for_feed(
     *,
     feed: str,
     cat_filter: str | None,
+    source_filter: str | None,
     search_n: str | None,
     winner_ids: frozenset[int],
     max_scan: int = 40000,
@@ -266,12 +278,9 @@ def _collect_ordered_days_for_feed(
             break
         for a in rows:
             scanned += 1
-            if _row_feed_lane(a) != feed:
-                continue
-            cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-            if cat_filter and cats_list and cats_list[0] != cat_filter:
-                continue
-            if search_n and not _article_title_summary_matches(a, search_n):
+            if not _feed_row_matches_list_filters(
+                a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=search_n
+            ):
                 continue
             if a.id not in winner_ids:
                 continue
@@ -303,11 +312,13 @@ def list_articles_feed_by_day_page(
     published_within_days: int | None,
     published_on_latest_day: bool,
     category: str | None = None,
+    source: str | None = None,
     search: str | None = None,
     days_per_page: int = DAYS_PER_PAGE_DEFAULT,
 ) -> dict:
     """按 UTC 自然日分页：每页连续 ``days_per_page`` 个有内容的日历日（默认 3），第 1 页为最新一段。"""
     cat_filter = (category or "").strip() or None
+    source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
 
     ind, q = _base_article_query_for_scope(
@@ -336,10 +347,18 @@ def list_articles_feed_by_day_page(
 
     label_by_key = _admin_source_label_by_key(db)
 
-    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
+    winner_ids = _build_feed_fingerprint_winner_ids(
+        db, q, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+    )
 
     ordered_days, truncated = _collect_ordered_days_for_feed(
-        db, q, feed=feed, cat_filter=cat_filter, search_n=n, winner_ids=winner_ids
+        db,
+        q,
+        feed=feed,
+        cat_filter=cat_filter,
+        source_filter=source_filter,
+        search_n=n,
+        winner_ids=winner_ids,
     )
     n_days = len(ordered_days)
     total_pages = (n_days + dpp - 1) // dpp if n_days else 0
@@ -374,12 +393,9 @@ def list_articles_feed_by_day_page(
     seen_fp: set[str] = set()
     out: list[dict] = []
     for a in rows:
-        if _row_feed_lane(a) != feed:
-            continue
-        cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-        if cat_filter and cats_list and cats_list[0] != cat_filter:
-            continue
-        if n and not _article_title_summary_matches(a, n):
+        if not _feed_row_matches_list_filters(
+            a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+        ):
             continue
         if a.id not in winner_ids:
             continue
@@ -413,6 +429,7 @@ def list_articles_feed_by_heat_top(
     published_within_days: int | None,
     published_on_latest_day: bool,
     category: str | None = None,
+    source: str | None = None,
     search: str | None = None,
     heat_offset: int = 0,
     heat_page_size: int = HEAT_PAGE_DEFAULT,
@@ -423,6 +440,7 @@ def list_articles_feed_by_heat_top(
     先截取至多 ``heat_max_ranked`` 条作为热度池，再按 ``heat_offset`` + ``heat_page_size`` 分页返回（供前端触底懒加载）。
     """
     cat_filter = (category or "").strip() or None
+    source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
     ps = max(1, min(int(heat_page_size or HEAT_PAGE_DEFAULT), HEAT_PAGE_MAX))
     off = max(0, int(heat_offset or 0))
@@ -449,7 +467,9 @@ def list_articles_feed_by_heat_top(
         return empty
 
     label_by_key = _admin_source_label_by_key(db)
-    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
+    winner_ids = _build_feed_fingerprint_winner_ids(
+        db, q, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+    )
     if not winner_ids:
         return empty
 
@@ -506,6 +526,7 @@ def list_article_category_facets(
     segment_ids: list[int] | None,
     published_within_days: int | None,
     published_on_latest_day: bool,
+    source: str | None = None,
     search: str | None = None,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，由 AI categories 聚合出的可选筛选项。"""
@@ -519,14 +540,17 @@ def list_article_category_facets(
     )
     if not ind:
         return []
+    source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
-    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=None, search_n=n)
+    winner_ids = _build_feed_fingerprint_winner_ids(
+        db, q, feed=feed, cat_filter=None, source_filter=source_filter, search_n=n
+    )
     rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
-        if _row_feed_lane(a) != feed:
-            continue
-        if n and not _article_title_summary_matches(a, n):
+        if not _feed_row_matches_list_filters(
+            a, feed=feed, cat_filter=None, source_filter=source_filter, search_n=n
+        ):
             continue
         if a.id not in winner_ids:
             continue
@@ -535,6 +559,55 @@ def list_article_category_facets(
         )
         ctr[primary] += 1
     return [{"label": lab, "count": int(ctr[lab])} for lab in art.FACET_DISPLAY_ORDER if ctr.get(lab, 0) > 0]
+
+
+def list_article_source_facets(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    segment_id: int | None,
+    segment_ids: list[int] | None,
+    published_within_days: int | None,
+    published_on_latest_day: bool,
+    category: str | None = None,
+    search: str | None = None,
+) -> list[dict]:
+    """当前时间/板块范围内、指定泳道下，按 admin_source_key 聚合的数据源筛选项。"""
+    ind, q = _base_article_query_for_scope(
+        db,
+        industry_slug=industry_slug,
+        segment_id=segment_id,
+        segment_ids=segment_ids,
+        published_within_days=published_within_days,
+        published_on_latest_day=published_on_latest_day,
+    )
+    if not ind:
+        return []
+    cat_filter = (category or "").strip() or None
+    n = normalize_feed_search(search)
+    label_by_key = _admin_source_label_by_key(db)
+    winner_ids = _build_feed_fingerprint_winner_ids(
+        db, q, feed=feed, cat_filter=cat_filter, source_filter=None, search_n=n
+    )
+    rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
+    ctr: Counter[str] = Counter()
+    for a in rows:
+        if not _feed_row_matches_list_filters(
+            a, feed=feed, cat_filter=cat_filter, source_filter=None, search_n=n
+        ):
+            continue
+        if a.id not in winner_ids:
+            continue
+        ak = art.admin_source_key(a.third_party_source)
+        if not ak or ak == "未绑定数据源":
+            continue
+        ctr[ak] += 1
+    out: list[dict] = []
+    for key, count in ctr.most_common():
+        label = label_by_key.get(key) or key.replace("_", " ").title()
+        out.append({"key": key, "label": label, "count": int(count)})
+    return out
 
 
 def list_articles_feed(
@@ -550,10 +623,12 @@ def list_articles_feed(
     published_within_days: int | None,
     published_on_latest_day: bool,
     category: str | None = None,
+    source: str | None = None,
     search: str | None = None,
 ) -> dict:
     scan_limit = 280
     cat_filter = (category or "").strip() or None
+    source_filter = normalize_source_filter(source)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -568,7 +643,9 @@ def list_articles_feed(
     n = normalize_feed_search(search)
     label_by_key = _admin_source_label_by_key(db)
 
-    winner_ids = _build_feed_fingerprint_winner_ids(db, q, feed=feed, cat_filter=cat_filter, search_n=n)
+    winner_ids = _build_feed_fingerprint_winner_ids(
+        db, q, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+    )
 
     exclude = art.parse_exclude_fingerprints(exclude_fp)
     seen_fp: set[str] = set(exclude)
@@ -585,13 +662,9 @@ def list_articles_feed(
         has_more = len(rows) >= scan_limit
         for a in rows:
             last_scanned = (a.published_at, a.id)
-            row_lane = _row_feed_lane(a)
-            if row_lane != feed:
-                continue
-            cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-            if cat_filter and cats_list and cats_list[0] != cat_filter:
-                continue
-            if n and not _article_title_summary_matches(a, n):
+            if not _feed_row_matches_list_filters(
+                a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+            ):
                 continue
             if a.id not in winner_ids:
                 continue

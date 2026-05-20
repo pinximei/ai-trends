@@ -97,6 +97,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [loading, setLoading] = useState(true);
   const [categoryKey, setCategoryKey] = useState<string | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ label: string; count: number }>>([]);
+  const [sourceKey, setSourceKey] = useState<string | null>(null);
+  const [sourceOptions, setSourceOptions] = useState<Array<{ key: string; label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
 
@@ -137,12 +139,18 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   useEffect(() => {
     setFeedPage(1);
-  }, [mode, timeKey, categoryKey, searchQ, listDisplayMode]);
+  }, [mode, timeKey, categoryKey, sourceKey, searchQ, listDisplayMode]);
 
   useEffect(() => {
     let cancelled = false;
     publicApi
-      .articleCategories({ feed: mode, industry_slug: INDUSTRY_SLUG, ...timeParams, q: searchQ || null })
+      .articleCategories({
+        feed: mode,
+        industry_slug: INDUSTRY_SLUG,
+        ...timeParams,
+        source: sourceKey,
+        q: searchQ || null,
+      })
       .then((rows) => {
         if (!cancelled) setCategoryOptions(rows);
       })
@@ -152,13 +160,40 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeParams, searchQ]);
+  }, [mode, timeParams, searchQ, sourceKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    publicApi
+      .articleSources({
+        feed: mode,
+        industry_slug: INDUSTRY_SLUG,
+        ...timeParams,
+        category: categoryKey,
+        q: searchQ || null,
+      })
+      .then((rows) => {
+        if (!cancelled) setSourceOptions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setSourceOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, timeParams, searchQ, categoryKey]);
 
   useEffect(() => {
     if (categoryKey && !categoryOptions.some((x) => x.label === categoryKey)) {
       setCategoryKey(null);
     }
   }, [categoryOptions, categoryKey]);
+
+  useEffect(() => {
+    if (sourceKey && !sourceOptions.some((x) => x.key === sourceKey)) {
+      setSourceKey(null);
+    }
+  }, [sourceOptions, sourceKey]);
 
   const heatFeedBase = useMemo(
     () => ({
@@ -169,9 +204,10 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       heat_max_ranked: 100,
       ...timeParams,
       category: categoryKey,
+      source: sourceKey,
       q: searchQ || null,
     }),
-    [mode, timeParams, categoryKey, searchQ],
+    [mode, timeParams, categoryKey, sourceKey, searchQ],
   );
 
   const loadMoreHeat = useCallback(async () => {
@@ -215,6 +251,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         days_per_page: DAYS_PER_PAGE,
         ...timeParams,
         category: categoryKey,
+        source: sourceKey,
         q: searchQ || null,
       })
       .then((d) => {
@@ -250,7 +287,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [listDisplayMode, mode, timeParams, categoryKey, searchQ, feedPage]);
+  }, [listDisplayMode, mode, timeParams, categoryKey, sourceKey, searchQ, feedPage]);
 
   useEffect(() => {
     if (listDisplayMode !== "heat") return;
@@ -318,8 +355,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   }, [listDisplayMode, heatHasMore, loading, loadMoreHeat, list.length]);
 
   const scrollKey = useMemo(
-    () => `${listDisplayMode}-${mode}-${timeKey}-${categoryKey ?? ""}-${searchQ}-${feedPage}`,
-    [listDisplayMode, mode, timeKey, categoryKey, searchQ, feedPage],
+    () => `${listDisplayMode}-${mode}-${timeKey}-${categoryKey ?? ""}-${sourceKey ?? ""}-${searchQ}-${feedPage}`,
+    [listDisplayMode, mode, timeKey, categoryKey, sourceKey, searchQ, feedPage],
   );
 
   useEffect(() => {
@@ -484,12 +521,41 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
               onClick={() => {
                 setTimeKey(f.key);
                 setCategoryKey(null);
+                setSourceKey(null);
               }}
               className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
                 timeKey === f.key ? "pill-active shadow-md" : "pill-idle"
               }`}
             >
               {t(f.labelKey)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ui-card p-4 sm:p-4">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesSourceFilter")}</span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSourceKey(null)}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              sourceKey == null ? "pill-active shadow-md" : "pill-idle"
+            }`}
+          >
+            {t("resourcesSourceAll")}
+          </button>
+          {sourceOptions.map((row) => (
+            <button
+              key={row.key}
+              type="button"
+              onClick={() => setSourceKey(row.key)}
+              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                sourceKey === row.key ? "pill-active shadow-md" : "pill-idle"
+              }`}
+            >
+              {row.label}
+              <span className="ml-1 font-mono text-[10px] text-slate-500/90">({row.count})</span>
             </button>
           ))}
         </div>

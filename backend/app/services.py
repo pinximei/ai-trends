@@ -51,7 +51,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜应用发现",
         "content_role": "app_launches",
-        "notes": "Product Hunt **GraphQL v2**（POST）。推荐：开发者后台生成 **Access Token**，仅填 API Key、勾选「Token 直连」并清空 APP Secret。亦可填 API Key（client_id）+ APP Secret 走 OAuth 换 token。",
+        "notes": "Product Hunt **GraphQL v2**（POST）。拉取规则：PT **昨日** 单日窗口内精选按票数 Top10（对齐邮件 Leaderboard「昨日 launches」；非今日榜、非 RANKING）。推荐 Access Token 直连。",
     },
 ]
 

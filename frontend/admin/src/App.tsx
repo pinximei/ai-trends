@@ -154,6 +154,8 @@ type SchedulerSettingsView = {
   connector_sync_interval_hours: number;
   last_connector_batch_at: string | null;
   gate_interval_minutes: number;
+  scheduler_timezone?: string;
+  daily_slot_times_local?: string;
 };
 
 type NewsletterSettingsView = {
@@ -2077,15 +2079,21 @@ export function App() {
                 定时同步与数据清理
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；若距上次<strong>整批成功</strong>已超过下方配置的间隔，则对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
-                <code className="inline-code">min_interval_seconds</code> 限制，避免定时任务被 429 静默跳过）。间隔与开关保存在库表{" "}
-                <code className="inline-code">product_settings_kv.scheduler</code>。整批跑完后会根据「数据源」中的领域主题刷新前台行业/板块结构。
+                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；在<strong>上海时区当日 00:00</strong>为起点划分的时段内，于各时段开头触发整批同步（与<strong>服务启动时间无关</strong>）。例如间隔 24 小时即每天 <strong>00:00</strong> 左右拉取；6 小时则为 0/6/12/18 点。对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
+                <code className="inline-code">min_interval_seconds</code> 限制）。配置保存在{" "}
+                <code className="inline-code">product_settings_kv.scheduler</code>。
               </p>
               {schedulerSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
                   上次整批成功时间：<strong style={{ color: "#312e81" }}>{schedulerSettings.last_connector_batch_at || "—（尚未成功跑过一批）"}</strong>
                   {" · "}
                   当前整批间隔：<strong>{schedulerSettings.connector_sync_interval_hours}</strong> 小时
+                  {schedulerSettings.daily_slot_times_local ? (
+                    <>
+                      {" · "}
+                      本日触发时刻（{schedulerSettings.scheduler_timezone ?? "Asia/Shanghai"}）：<strong>{schedulerSettings.daily_slot_times_local}</strong>
+                    </>
+                  ) : null}
                 </p>
               ) : null}
               {canOperate ? (
