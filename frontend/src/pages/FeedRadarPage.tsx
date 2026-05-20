@@ -378,7 +378,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       : "";
 
   const paginationBar = () =>
-    listDisplayMode === "date" && !loading && pageMeta.total_pages > 0 ? (
+    listDisplayMode === "date" && !loading && pageMeta.total_pages > 1 ? (
       <div
         className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-slate-200/90 bg-slate-50/90 px-2 py-2 text-xs text-slate-600 sm:px-0"
         role="navigation"
@@ -755,8 +755,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
         >
           <div className="space-y-3 px-1 pb-6 pt-1 sm:px-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
-            {paginationBar()}
             {listSection}
+            {paginationBar()}
           </div>
         </div>
       </div>
