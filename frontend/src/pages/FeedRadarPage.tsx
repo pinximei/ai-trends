@@ -43,7 +43,12 @@ function formatFeedDateLabel(isoDay: string): string {
   return d.toLocaleDateString("zh-CN", { dateStyle: "long", timeZone: "UTC" });
 }
 
-/** 列表排序/分组与卡片时间：优先更新时间（重复同步 star 后会刷新） */
+/** 按日分页列表的分组键：与后端 ``published_at`` 日历日一致，避免翻页后仍按 ``updated_at`` 顶到上一页日期 */
+function articleGroupDay(a: { published_at?: string | null }): string {
+  return (a.published_at || "").slice(0, 10) || "_";
+}
+
+/** 卡片角标时间：优先更新时间（重复同步 star 后会刷新） */
 function articleDisplayDay(a: { updated_at?: string | null; published_at?: string | null }): string {
   return (a.updated_at || a.published_at || "").slice(0, 10) || "_";
 }
@@ -85,6 +90,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const heatMoreLockRef = useRef(false);
   const heatNextOffsetRef = useRef(0);
+  const dayFeedFetchGenRef = useRef(0);
   const [jumpDraft, setJumpDraft] = useState("1");
   const [list, setList] = useState<ArticleFeedCard[]>([]);
   const [pageMeta, setPageMeta] = useState({
@@ -123,7 +129,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const listByDate = useMemo((): [string, ArticleFeedCard[]][] => {
     const m = new Map<string, ArticleFeedCard[]>();
     for (const a of list) {
-      const day = articleDisplayDay(a);
+      const day = articleGroupDay(a);
       if (!m.has(day)) m.set(day, []);
       m.get(day)!.push(a);
     }
@@ -236,8 +242,10 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   useEffect(() => {
     if (listDisplayMode !== "date") return;
+    const reqGen = ++dayFeedFetchGenRef.current;
     let cancelled = false;
     setLoading(true);
+    setList([]);
     setErr("");
 
     publicApi
@@ -253,7 +261,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         q: searchQ || null,
       })
       .then((d) => {
-        if (cancelled) return;
+        if (cancelled || reqGen !== dayFeedFetchGenRef.current) return;
         if (!isDayFeedResponse(d)) {
           setErr("Unexpected feed response");
           setLoading(false);
@@ -261,6 +269,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         }
         if (d.total_pages > 0 && feedPage > d.total_pages) {
           setFeedPage(d.total_pages);
+          setLoading(false);
           return;
         }
         setList(d.items);
@@ -276,10 +285,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         setLoading(false);
       })
       .catch((e) => {
-        if (!cancelled) {
-          setErr(String(e));
-          setLoading(false);
-        }
+        if (cancelled || reqGen !== dayFeedFetchGenRef.current) return;
+        setErr(String(e));
+        setLoading(false);
       });
 
     return () => {
@@ -361,7 +369,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   useEffect(() => {
     if (loading) return;
     const el = listScrollRef.current ?? feedColumnScrollRef.current;
-    el?.scrollTo({ top: 0, behavior: "smooth" });
+    el?.scrollTo({ top: 0, behavior: "auto" });
   }, [scrollKey, loading]);
 
   const onJump = () => {
