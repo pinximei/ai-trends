@@ -107,6 +107,8 @@ class Article(Base):
     # GitHub 等连接器重复同步时刷新：总 star、今日 star 增速（Trending 页解析）
     engagement_stars_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     engagement_stars_today: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Product Hunt thumbnail / HF Space cardData.thumbnail 等封面图（公开站列表与详情）
+    cover_image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)

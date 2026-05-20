@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from datetime import datetime
@@ -13,6 +14,7 @@ from .domain.articles import (
     CONNECTOR_SNIPPET_MAX_CHARS,
     VALUE_SCORE_MIN,
     display_fingerprint,
+    extract_cover_image_url,
     extract_github_engagement_from_snippet,
     extract_source_external_id_from_connector_snippet,
     feed_lane,
@@ -29,39 +31,40 @@ from .domain.articles import (
 from .product_models import Article
 
 
-def _snippet_to_markdown_appendix(snippet: str, *, max_len: int = 14000) -> str:
-    """原始连接器片段 → Markdown 附录（详情页保底可读）。"""
-    s = (snippet or "").strip()
+def _strip_raw_json_from_markdown(text: str) -> str:
+    s = (text or "").strip()
     if not s:
         return ""
-    s = s[:max_len]
-    intro = (
-        "> **原始摘录**：以下为连接器返回的片段节选（未经模型扩写），便于核对接口字段与原文。\n\n"
-    )
-    try:
-        payload = json.loads(s)
-        if isinstance(payload, (dict, list)):
-            pretty = json.dumps(payload, ensure_ascii=False, indent=2)
-            if len(pretty) > max_len:
-                pretty = pretty[:max_len] + "\n…"
-            return intro + "```json\n" + pretty + "\n```"
-    except Exception:
-        pass
-    return intro + "```text\n" + s + "\n```"
+    s = re.sub(r"```json\s*[\s\S]*?```", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"<details>[\s\S]*?</details>", "", s, flags=re.IGNORECASE)
+    s = re.sub(r">\s*\*\*原始摘录\*\*[\s\S]*?(?=\n##\s|\n#\s|$)", "", s, flags=re.IGNORECASE)
+    return re.sub(r"\n{4,}", "\n\n\n", s).strip()
 
 
-def _merge_raw_appendix_if_tabs_thin(tabs: list[dict], snippet: str, *, min_total: int = 1600) -> None:
-    """模型输出的 tab 正文过短时，在最后一个 tab 末尾附带原始片段，避免详情只有一两句概要。"""
-    if not tabs:
-        return
-    total = sum(len(str((t.get("body_md") or "")).strip()) for t in tabs if isinstance(t, dict))
-    if total >= min_total:
-        return
-    last = tabs[-1]
-    if not isinstance(last, dict):
-        return
-    extra = _snippet_to_markdown_appendix(snippet)
-    last["body_md"] = str(last.get("body_md") or "").rstrip() + "\n\n" + extra
+def _ensure_markdown_paragraphs(text: str) -> str:
+    s = _strip_raw_json_from_markdown(text)
+    if not s or "\n\n" in s:
+        return s
+    first = (s.split("\n", 1)[0] or "").strip()
+    if re.match(r"^[-*#|>]", first) or "|" in first:
+        return s
+    parts = [p.strip() for p in re.split(r"(?<=[。！？])\s+", s) if p.strip()]
+    if len(parts) <= 2:
+        return s
+    return "\n\n".join(parts)
+
+
+def _normalize_polish_tabs(tabs: list) -> None:
+    from .domain.articles import FEED_CARD_TAB_DATA, FEED_CARD_TAB_LEGACY_HIGHLIGHTS
+
+    for t in tabs:
+        if not isinstance(t, dict):
+            continue
+        lab = str(t.get("label") or "").strip()
+        if lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS:
+            t["label"] = FEED_CARD_TAB_DATA
+        t["body_md"] = _ensure_markdown_paragraphs(str(t.get("body_md") or ""))
+        t["summary"] = str(t.get("summary") or "").strip()
 
 
 def _render_readable_snapshot(snippet: str) -> tuple[str, str]:
@@ -149,12 +152,16 @@ def _apply_github_engagement_to_article(
         value_score=vs,
         sync_unix=float(now.timestamp()),
     )
-    if (admin_source_key or "").strip().lower() == "github":
+    ak = (admin_source_key or "").strip().lower()
+    if ak == "github":
         metrics = extract_github_engagement_from_snippet(safe)
         if metrics.get("stars_total") is not None:
             row.engagement_stars_total = metrics["stars_total"]
         if metrics.get("stars_today") is not None:
             row.engagement_stars_today = metrics["stars_today"]
+    cover = extract_cover_image_url(ak, safe)
+    if cover:
+        row.cover_image_url = cover
     row.updated_at = now
 
 
@@ -311,11 +318,12 @@ def _create_one_published_article_from_connector_targets(
         return 0
 
     tabs = polished.get("tabs") or []
-    _merge_raw_appendix_if_tabs_thin(tabs, safe)
+    if isinstance(tabs, list):
+        _normalize_polish_tabs(tabs)
 
     title = (polished.get("title") or "")[:500]
     summary = (polished.get("summary") or "")[:512]
-    body_main = (polished.get("body_md") or "").strip()
+    body_main = _ensure_markdown_paragraphs(str(polished.get("body_md") or ""))
     joined_tabs = "\n\n".join(
         f"## {t['label']}\n\n{t.get('body_md', '')}" for t in tabs if isinstance(t, dict) and t.get("label")
     )[:50000]
@@ -368,6 +376,7 @@ def _create_one_published_article_from_connector_targets(
             _diag("info", "skip_disp_fp", "跳过：展示指纹与近期文章重复")
             return 0
 
+    cover_image_url = extract_cover_image_url(src_tag, safe)
     art = Article(
         title=title,
         slug=slug,
@@ -386,6 +395,7 @@ def _create_one_published_article_from_connector_targets(
         ai_tabs_json=ai_tabs_json,
         feed_kind=stored_feed_kind,
         heat_score=heat,
+        cover_image_url=cover_image_url,
     )
     if src_tag.lower() == "github":
         metrics = extract_github_engagement_from_snippet(safe)

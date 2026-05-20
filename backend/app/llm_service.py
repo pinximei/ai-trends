@@ -98,6 +98,37 @@ def _extract_json_object(raw: str) -> dict | None:
         return None
 
 
+def _source_detail_structure_hint(admin_source_key: str) -> str:
+    """按连接器数据源约束详情 tab 写法，便于前台分版式展示。"""
+    k = (admin_source_key or "").strip().lower()
+    if k == "github":
+        return (
+            "【GitHub 仓库稿】「描述」按：项目定位 → 核心能力 → 适用人群；"
+            "「数据支撑」用中文表格，优先列：仓库名、Star 总数、今日 Star、主语言、许可证、主页链接（片段有则写）。"
+        )
+    if k == "product_hunt":
+        return (
+            "【Product Hunt 上架稿】「描述」按：产品是什么 → 解决什么问题 → 目标用户；"
+            "「数据支撑」表格列：产品名、投票/热度、话题标签、官网、发布日期等可核对字段。"
+        )
+    if k == "huggingface_spaces":
+        return (
+            "【Hugging Face Space 稿】「描述」按：Space 用途 → 交互方式 → 典型场景；"
+            "「数据支撑」列：Space 名、作者/组织、点赞、运行环境、外链等。"
+        )
+    if k in ("newsapi", "finnhub", "youtube_data", "mapbox"):
+        return (
+            "【资讯/API 快讯稿】「描述」按：谁 → 发生了什么 → 影响/结论；"
+            "「数据支撑」表格列：报道主体、时间、来源、关键数字、原文链接。"
+        )
+    if k in ("openai", "google_gemini", "mcp_skills"):
+        return (
+            "【平台/API 动态稿】「描述」按：能力更新 → 对谁有用 → 使用注意；"
+            "「数据支撑」列：产品/接口名、版本、配额或定价线索、文档链接。"
+        )
+    return ""
+
+
 def polish_connector_article(
     db: Session,
     *,
@@ -123,34 +154,54 @@ def polish_connector_article(
         fk = "news"
     # 指纹与解析在 article_ingest 使用完整片段；模型侧仅取前段以控制 token。
     snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
+    category_rule = (
+        "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列 **11** 个固定大类中选其一（禁止自造近义词）："
+        "大模型、开源工具、应用产品、数据算力、安全合规、政策市场、论文研究、平台API、Agent、多模态、其他。"
+        "选最能概括本条的那一个；不要输出多条。"
+    )
     if fk == "apps":
         stream_hint = (
-            "当前条目归类为 **AI 应用** 泳道：面向产品/可运行应用发布与能力更新；语气偏产品速递与开发者向。"
-            "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列 **11** 个固定大类中选其一（禁止自造近义词）："
-            "大模型、开源工具、应用产品、数据算力、安全合规、政策市场、论文研究、平台API、Agent、多模态、其他。"
-            "选最能概括本条的那一个；不要输出多条。"
+            "当前条目归类为 **AI 应用** 泳道：面向可运行产品、工具发布与能力更新；语气偏产品速递，让读者一眼知道「这是什么、能干什么」。"
+            f"{category_rule}"
+        )
+        structure_hint = (
+            "【应用稿结构】列表卡片只展示「描述」与「数据支撑」两段。"
+            "tabs **必须恰好 2 个**，label 按顺序只能是「描述」「数据支撑」（禁止其它 tab 名）。"
+            "「描述」：summary 写 5～7 句完整叙述（不少于 120 汉字）；body_md 写清背景与定位（不少于 180 汉字），"
+            "段落之间用空行分隔，禁止粘贴 ```json 代码块或英文字段名堆砌。"
+            "「数据支撑」：summary 宜短（1～2 句）；body_md 用 **中文表头** 的 Markdown 表格呈现可核对事实，"
+            "表头建议为 | 指标 | 数值/事实 | 说明 |，行内写 star 数、版本、链接、发布时间等（字段名可译成中文列名）；"
+            "若无表格数据则用 4～6 条中文列表。禁止输出英文 JSON 代码块。"
+            "列表卡片以「描述」tab 的 summary 为主；「数据支撑」tab 的 summary 供卡片短摘要。"
         )
     else:
         stream_hint = (
-            "当前条目归类为 **AI 资讯** 泳道：面向行业动态、论文、社区与技术新闻；语气偏信息摘要与要点。"
-            "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列 **11** 个固定大类中选其一（禁止自造近义词）："
-            "大模型、开源工具、应用产品、数据算力、安全合规、政策市场、论文研究、平台API、Agent、多模态、其他。"
-            "选最能概括本条的那一个；不要输出多条。"
+            "当前条目归类为 **AI 资讯** 泳道：面向行业动态、论文、社区与技术新闻；语气偏信息报道，让读者一眼知道「发生了什么事」。"
+            f"{category_rule}"
+        )
+        structure_hint = (
+            "【资讯稿结构】列表卡片只展示「描述」与「数据支撑」两段。"
+            "tabs **必须恰好 2 个**，label 按顺序只能是「描述」「数据支撑」。"
+            "「描述」：5～7 句讲清主体、事件与结论（summary 不少于 120 汉字）；body_md 分段叙述（空行分段），禁止 ```json。"
+            "「数据支撑」：summary 宜短；body_md 用中文表头 Markdown 表格或列表写关键数字、来源、时间线，禁止英文 JSON 块。"
+            "body_md 总览区不少于 400 汉字，与 tabs 互补勿整段复制。"
         )
     system = (
-        "你是 AI 行业「趋势雷达」编辑。只根据用户提供的原始 API 片段与占位标题写稿，禁止编造未出现的名称、数字与链接。"
+        "你是 AI 行业「趋势雷达」资深编辑。只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL。"
+        "若片段信息不足，用「原文未提供」说明缺口，但仍须把已有字段写全。"
         f"{stream_hint}"
+        f"{structure_hint}"
+        f"{_source_detail_structure_hint(admin_source_key)}"
         "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, tabs。"
-        "title 为单行中文标题；summary 为 1～2 句中文总摘要（列表卡片用）；"
-        "body_md 为 **必选** Markdown 总览：不少于约 400 汉字（或等价英文篇幅），"
-        "须分多段，可用二级标题与小标题，尽量概括片段中的实体、时间、数字、链接或字段含义（片段里有什么写什么，勿臆造）。"
-        "categories 为 **恰好含 1 个元素** 的字符串数组，且该元素必须是上述 11 字面值之一；"
-        'feed_kind 只能为 JSON 字符串 "news" 或 "apps"。'
-        "tabs 为数组，至少 2 个、至多 5 个对象；每个对象键 label（2～8 字 tab 标题）、"
-        "summary（1～2 句，展示在 tab 行上的概要）、body_md（该 tab 的详细正文，Markdown，可多段、列表、小标题）。"
-        "**每个 tabs[].body_md 合计应有实质信息量**：优先根据原始片段展开说明背景、要点、差异与可核对事实；"
-        "禁止仅用一两句话敷衍；若片段为 JSON/列表，应用叙述或表格化改写要点并保留关键字段名。"
-        "tabs 应覆盖原文信息要点，结构清晰，禁止空字段。"
+        "title：单行中文标题，含主体名，避免「同步资源·板块·连接器」类占位风格。"
+        "summary：列表卡片与详情页首屏用，信息密度高，不可与 title 重复同一句。"
+        "body_md：详情页「总览」区 Markdown，须含二级标题，与 tabs 内容互补（总览讲脉络，tabs 讲展开），勿整段复制 tabs。"
+        "categories 为恰好 1 个元素的字符串数组，元素必须是上述 11 字面值之一；"
+        'feed_kind 只能为 "news" 或 "apps"。'
+        "tabs：恰好 2 个；label 见上文结构要求；每项含 summary、body_md（Markdown）。"
+        "若片段为 JSON/数组，须翻译成中文叙述或表格/列表，保留 repo 名、版本号、star、链接等可核对信息；"
+        "禁止在 body_md 或 tabs 中输出 ```json 代码块或整段原始 API 响应。"
+        "禁止输出空洞 tab（仅重复 summary、无新信息）。"
     )
     user = (
         f"数据源规则推断的参考泳道 feed_hint={fk}（news=资讯 / apps=应用）。请阅读片段后在输出中给出 feed_kind，"

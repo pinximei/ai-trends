@@ -12,6 +12,13 @@ export function articleThumbGradientStyle(seed: string): CSSProperties {
 }
 
 /** 卡片主标识字：取标题首字符（每条不同） */
+export function formatStarCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
+
 export function articleCardInitial(title: string): string {
   const s = (title || "").trim();
   if (!s) return "?";

@@ -18,6 +18,8 @@ export type ArticleCard = {
   engagement_stars_total?: number | null;
   /** GitHub Trending：今日 star 增速 */
   engagement_stars_today?: number | null;
+  /** Product Hunt / HF Spaces 等封面图 */
+  cover_image_url?: string | null;
   categories?: string[];
 };
 
@@ -31,9 +33,22 @@ export type ArticleFeedCard = ArticleCard & {
   categories?: string[];
   /** 列表卡片：各 tab 概要（与详情 tabs 对应） */
   tab_summaries?: ArticleTabSummary[];
+  /** 列表卡片主文案：对应 tab「描述」或 summary */
+  card_description?: string;
+  /** 列表卡片：对应 tab「功能亮点」或资讯「要点」 */
+  card_highlights?: string;
 };
 
 export type ArticleTab = { label: string; summary: string; body_md: string };
+
+export type ArticleDetailProfile =
+  | "product_launch"
+  | "ai_space"
+  | "open_source"
+  | "news_wire"
+  | "platform_api"
+  | "news_article"
+  | "app_product";
 
 export type ArticleDetail = ArticleCard & {
   body: string;
@@ -42,6 +57,8 @@ export type ArticleDetail = ArticleCard & {
   admin_source_key?: string;
   /** 部分列表字段在详情接口一并返回 */
   platform_label?: string;
+  /** 按数据源推断的详情版式 id */
+  detail_profile?: ArticleDetailProfile;
   /** 分 tab：label + 概要 + Markdown 详情 */
   tabs?: ArticleTab[];
 };

@@ -225,8 +225,19 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
     plat = label_by_key.get(ak) or (ak.replace("_", " ").title() if ak else "")
     tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
     tab_summaries = (
-        [{"label": x["label"], "summary": (x["summary"] or "")[:280]} for x in tabs_parsed[:6]] if tabs_parsed else []
+        [{"label": x["label"], "summary": (x["summary"] or "")[:420]} for x in tabs_parsed[:6]] if tabs_parsed else []
     )
+    desc_label, hi_label = art.required_feed_card_tab_labels(row_lane)
+    card_description = (a.summary or "")[:960]
+    card_highlights = ""
+    if tabs_parsed:
+        for x in tabs_parsed:
+            lab = (x.get("label") or "").strip()
+            sm = (x.get("summary") or "").strip()
+            if lab == desc_label and sm:
+                card_description = sm[:960]
+            elif art.feed_card_highlights_tab_label(lab) and sm:
+                card_highlights = sm[:200]
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     fp = art.display_fingerprint(a.title, a.summary or "")
     return {
@@ -250,6 +261,9 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
         "feed_kind": row_lane,
         "categories": cats_list,
         "tab_summaries": tab_summaries,
+        "card_description": card_description,
+        "card_highlights": card_highlights,
+        "cover_image_url": (getattr(a, "cover_image_url", None) or "")[:2048] or None,
     }
 
 
@@ -691,6 +705,9 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
     if not a or a.status != "published":
         return None
     ak = art.admin_source_key(a.third_party_source)
+    lane = _row_feed_lane(a)
+    label_by_key = _admin_source_label_by_key(db)
+    plat = label_by_key.get(ak) or (ak.replace("_", " ").title() if ak else "")
     tabs = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
     if not tabs and (a.body or "").strip():
         tabs = [
@@ -717,7 +734,10 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "connector_sync_log_id": getattr(a, "connector_sync_log_id", None),
         "source_external_id": getattr(a, "source_external_id", None),
         "categories": art.display_categories_for_article(getattr(a, "ai_categories_json", None)),
-        "feed_kind": _row_feed_lane(a),
+        "feed_kind": lane,
         "admin_source_key": ak,
+        "platform_label": plat,
+        "detail_profile": art.article_detail_profile(ak, lane),
+        "cover_image_url": (getattr(a, "cover_image_url", None) or "")[:2048] or None,
         "tabs": tabs,
     }

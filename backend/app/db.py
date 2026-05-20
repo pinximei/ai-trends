@@ -148,6 +148,8 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN engagement_stars_total INTEGER"))
             if "engagement_stars_today" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN engagement_stars_today INTEGER"))
+            if "cover_image_url" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN cover_image_url VARCHAR(2048)"))
         if not _column_names(conn, "product_sync_diagnostic_logs"):
             conn.execute(
                 text(

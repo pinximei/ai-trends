@@ -143,6 +143,76 @@ def _extract_url_from_json_obj(obj: object) -> str | None:
     return None
 
 
+COVER_IMAGE_SOURCE_KEYS = frozenset({"product_hunt", "huggingface_spaces"})
+_COVER_URL_MAX = 2048
+
+
+def _normalize_http_cover_url(url: str) -> str | None:
+    u = (url or "").strip()
+    if not u.startswith(("http://", "https://")) or len(u) < 12:
+        return None
+    return u[:_COVER_URL_MAX]
+
+
+def _normalize_hf_space_thumbnail(raw: str, *, space_id: str) -> str | None:
+    th = (raw or "").strip()
+    if not th:
+        return None
+    if th.startswith(("http://", "https://")):
+        return _normalize_http_cover_url(th)
+    sid = (space_id or "").strip().strip("/")
+    if not sid:
+        return None
+    path = th.lstrip("/")
+    return _normalize_http_cover_url(f"https://huggingface.co/spaces/{sid}/resolve/main/{path}")
+
+
+def extract_cover_image_url(admin_source_key: str, snippet: str) -> str | None:
+    """
+    从连接器片段解析列表/详情封面图 URL。
+    - product_hunt: ``thumbnail.url``，否则 ``media`` 中首张 image
+    - huggingface_spaces: ``cardData.thumbnail``（相对路径转 resolve/main）
+    """
+    k = (admin_source_key or "").strip().lower()
+    if k not in COVER_IMAGE_SOURCE_KEYS:
+        return None
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    if not s:
+        return None
+    try:
+        payload = json.loads(s)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    if k == "product_hunt":
+        thumb = payload.get("thumbnail")
+        if isinstance(thumb, dict):
+            u = _normalize_http_cover_url(str(thumb.get("url") or ""))
+            if u:
+                return u
+        media = payload.get("media")
+        if isinstance(media, list):
+            for item in media:
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get("type") or "").strip().lower() == "image":
+                    u = _normalize_http_cover_url(str(item.get("url") or ""))
+                    if u:
+                        return u
+        return None
+
+    if k == "huggingface_spaces":
+        card = payload.get("cardData")
+        if isinstance(card, dict):
+            return _normalize_hf_space_thumbnail(
+                str(card.get("thumbnail") or ""),
+                space_id=str(payload.get("id") or ""),
+            )
+    return None
+
+
 def extract_source_original_url_from_connector_snippet(snippet: str) -> str | None:
     """
     从连接器片段中解析可点击 http(s) URL（单测与可选脚本用）。
@@ -803,11 +873,66 @@ def ui_shape_warnings_for_stored_article(
     return warns
 
 
+# —— 公开详情页版式（与 admin_source_key 对应，前台按 profile 分栏渲染）——
+
+DETAIL_PROFILE_PRODUCT_LAUNCH = "product_launch"
+DETAIL_PROFILE_AI_SPACE = "ai_space"
+DETAIL_PROFILE_OPEN_SOURCE = "open_source"
+DETAIL_PROFILE_NEWS_WIRE = "news_wire"
+DETAIL_PROFILE_PLATFORM_API = "platform_api"
+DETAIL_PROFILE_NEWS_ARTICLE = "news_article"
+DETAIL_PROFILE_APP_PRODUCT = "app_product"
+
+_DETAIL_PROFILE_BY_SOURCE: dict[str, str] = {
+    "product_hunt": DETAIL_PROFILE_PRODUCT_LAUNCH,
+    "huggingface_spaces": DETAIL_PROFILE_AI_SPACE,
+    "github": DETAIL_PROFILE_OPEN_SOURCE,
+    "newsapi": DETAIL_PROFILE_NEWS_WIRE,
+    "finnhub": DETAIL_PROFILE_NEWS_WIRE,
+    "youtube_data": DETAIL_PROFILE_NEWS_WIRE,
+    "mapbox": DETAIL_PROFILE_NEWS_WIRE,
+    "openai": DETAIL_PROFILE_PLATFORM_API,
+    "google_gemini": DETAIL_PROFILE_PLATFORM_API,
+    "mcp_skills": DETAIL_PROFILE_PLATFORM_API,
+}
+
+
+def article_detail_profile(admin_source_key: str, feed_kind: str) -> str:
+    """返回详情页结构 profile id（前端与 LLM 提示共用）。"""
+    k = (admin_source_key or "").strip().lower()
+    if k in _DETAIL_PROFILE_BY_SOURCE:
+        return _DETAIL_PROFILE_BY_SOURCE[k]
+    fk = (feed_kind or "news").strip().lower()
+    return DETAIL_PROFILE_APP_PRODUCT if fk == "apps" else DETAIL_PROFILE_NEWS_ARTICLE
+
+
+FEED_CARD_TAB_DESCRIPTION = "描述"
+FEED_CARD_TAB_DATA = "数据支撑"
+# 旧稿 tab 名，列表卡片与详情仍可读
+FEED_CARD_TAB_LEGACY_HIGHLIGHTS = frozenset({"功能亮点", "要点"})
+
+
+def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, str]:
+    del feed_kind  # 应用/资讯统一：描述 + 数据支撑
+    return (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_DATA)
+
+
+def feed_card_highlights_tab_label(raw_label: str) -> bool:
+    """是否对应列表卡片「亮点/要点」槽位（含旧 label）。"""
+    lab = (raw_label or "").strip()
+    return lab == FEED_CARD_TAB_DATA or lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS
+
+
 def validate_llm_polish_for_publish(data: dict) -> bool:
-    """连接器入库：必须含合格分类与分 tab 正文（全部由模型生成）。"""
+    """连接器入库：必须含合格分类、可读摘要与足够厚的总览/分 tab 正文。"""
     title = str(data.get("title") or "").strip()
     summary = str(data.get("summary") or "").strip()
+    body_md = str(data.get("body_md") or "").strip()
     if not title or not summary:
+        return False
+    if len(summary) < 36:
+        return False
+    if "同步资源" in title and "·" in title:
         return False
     cats = data.get("categories")
     if not isinstance(cats, list):
@@ -817,17 +942,35 @@ def validate_llm_polish_for_publish(data: dict) -> bool:
         return False
     if clean_cats[0] not in FACET_ALL_LABELS:
         return False
+    fk = str(data.get("feed_kind") or "news").strip().lower()
+    if fk not in ("news", "apps"):
+        fk = "news"
+    need_desc, need_hi = required_feed_card_tab_labels(fk)
     tabs = data.get("tabs")
-    if not isinstance(tabs, list) or len(tabs) < 2 or len(tabs) > 6:
+    if not isinstance(tabs, list) or len(tabs) != 2:
         return False
+    tab_body_total = 0
+    labels: list[str] = []
     for t in tabs:
         if not isinstance(t, dict):
             return False
         lab = str(t.get("label") or "").strip()
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
-        if len(lab) < 2 or len(summ) < 8 or len(body) < 16:
+        labels.append(lab)
+        min_summ = 72 if lab == need_desc else 12
+        min_body = 120 if lab == need_desc else 60
+        if len(lab) < 2 or len(summ) < min_summ or len(body) < min_body:
             return False
+        tab_body_total += len(body)
+    if labels != [need_desc, need_hi]:
+        legacy_ok = labels == [need_desc, "功能亮点"] if fk == "apps" else labels == [need_desc, "要点"]
+        if not legacy_ok:
+            return False
+    if tab_body_total < 280:
+        return False
+    if len(body_md) < 120 and tab_body_total < 500:
+        return False
     return True
 
 

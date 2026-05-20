@@ -5,18 +5,60 @@ import json
 
 from backend.app.domain import articles as art
 
+_VALID_SUMMARY = "OpenAI 发布新模型系列，面向多模态与代码场景；核心提升上下文与推理能力；适合开发者与产品团队跟进。"
+_VALID_BODY = "## 一句话看懂\n\n" + "背景与进展说明。" * 40
+
+
+def _valid_tabs_news() -> list[dict]:
+    return [
+        {
+            "label": "描述",
+            "summary": "描述 tab：用多句话说明事件主体、经过与结论，让读者不看标题也能懂发生了什么，字数足够长以满足校验。",
+            "body_md": "## 描述\n\n" + "事件背景与参与方说明。" * 28,
+        },
+        {
+            "label": "数据支撑",
+            "summary": "数据支撑 tab：概括关键事实与数字。",
+            "body_md": "## 数据支撑\n\n| 指标 | 数值 | 说明 |\n| --- | --- | --- |\n" + "| 示例 | 1 | 说明 |\n" * 12,
+        },
+    ]
+
+
+def _valid_tabs_apps() -> list[dict]:
+    return [
+        {
+            "label": "描述",
+            "summary": "描述 tab：说明产品是什么、面向谁、解决什么问题，共多句完整叙述以满足列表卡片主文案长度要求。",
+            "body_md": "## 描述\n\n" + "产品定位与使用场景说明。" * 28,
+        },
+        {
+            "label": "数据支撑",
+            "summary": "数据支撑 tab：概括核心能力与可核对指标。",
+            "body_md": "## 数据支撑\n\n| 指标 | 数值 | 说明 |\n| --- | --- | --- |\n" + "| 能力 | 支持 | 说明 |\n" * 12,
+        },
+    ]
+
 
 def test_validate_llm_polish_accepts_minimal_valid_payload() -> None:
     data = {
         "title": "测试标题",
-        "summary": "这是摘要句子，满足长度。",
-        "body_md": "## 总览\n\n正文。",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
         "categories": ["大模型"],
         "feed_kind": "news",
-        "tabs": [
-            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项" * 1},
-            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
-        ],
+        "tabs": _valid_tabs_news(),
+    }
+    assert art.validate_llm_polish_for_publish(data) is True
+
+
+def test_validate_llm_polish_accepts_apps_tabs() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "categories": ["应用产品"],
+        "feed_kind": "apps",
+        "tabs": _valid_tabs_apps(),
     }
     assert art.validate_llm_polish_for_publish(data) is True
 
@@ -24,14 +66,11 @@ def test_validate_llm_polish_accepts_minimal_valid_payload() -> None:
 def test_validate_llm_polish_accepts_other_bucket() -> None:
     data = {
         "title": "测试标题",
-        "summary": "这是摘要句子，满足长度。",
-        "body_md": "## 总览\n\n正文。",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
         "categories": ["其他"],
         "feed_kind": "news",
-        "tabs": [
-            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项"},
-            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
-        ],
+        "tabs": _valid_tabs_news(),
     }
     assert art.validate_llm_polish_for_publish(data) is True
 
@@ -39,14 +78,11 @@ def test_validate_llm_polish_accepts_other_bucket() -> None:
 def test_validate_llm_polish_rejects_two_categories() -> None:
     data = {
         "title": "测试标题",
-        "summary": "这是摘要句子，满足长度。",
-        "body_md": "## 总览\n\n正文。",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
         "categories": ["大模型", "开源工具"],
         "feed_kind": "news",
-        "tabs": [
-            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项"},
-            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
-        ],
+        "tabs": _valid_tabs_news(),
     }
     assert art.validate_llm_polish_for_publish(data) is False
 
@@ -54,13 +90,25 @@ def test_validate_llm_polish_rejects_two_categories() -> None:
 def test_validate_llm_polish_rejects_unknown_canonical() -> None:
     data = {
         "title": "测试标题",
-        "summary": "这是摘要句子，满足长度。",
-        "body_md": "## 总览\n\n正文。",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
         "categories": ["云计算专区"],
         "feed_kind": "news",
+        "tabs": _valid_tabs_news(),
+    }
+    assert art.validate_llm_polish_for_publish(data) is False
+
+
+def test_validate_llm_polish_rejects_wrong_tab_labels() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "categories": ["应用产品"],
+        "feed_kind": "apps",
         "tabs": [
-            {"label": "要点", "summary": "概要一句足够八字符以上", "body_md": "## A\n\n- 列表项\n- 第二项"},
-            {"label": "细节", "summary": "另一概要用于 tab 行展示", "body_md": "## B\n\n正文段落不少于十六字。"},
+            {"label": "产品概述", "summary": "x" * 50, "body_md": "## A\n\n" + "正文" * 40},
+            {"label": "技术细节", "summary": "x" * 20, "body_md": "## B\n\n" + "正文" * 40},
         ],
     }
     assert art.validate_llm_polish_for_publish(data) is False
@@ -68,12 +116,24 @@ def test_validate_llm_polish_rejects_unknown_canonical() -> None:
 
 def test_validate_llm_polish_rejects_single_tab() -> None:
     data = {
-        "title": "t",
-        "summary": "摘要摘要摘要摘要。",
-        "body_md": "x",
+        "title": "测试标题",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
         "categories": ["Agent"],
         "feed_kind": "news",
-        "tabs": [{"label": "唯一", "summary": "概要足够长度用于校验", "body_md": "body_md 必须足够十六字以上。"}],
+        "tabs": [{"label": "描述", "summary": "概要足够长度用于校验通过最低门槛要求", "body_md": "## 描述\n\n" + "正文" * 40}],
+    }
+    assert art.validate_llm_polish_for_publish(data) is False
+
+
+def test_validate_llm_polish_rejects_placeholder_title() -> None:
+    data = {
+        "title": "同步资源 · 板块 · GitHub",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "categories": ["开源工具"],
+        "feed_kind": "news",
+        "tabs": _valid_tabs_news(),
     }
     assert art.validate_llm_polish_for_publish(data) is False
 
@@ -216,16 +276,83 @@ def test_feed_lane_huggingface_spaces_defaults_to_apps_except_agent_primary() ->
     )
 
 
-def test_merge_raw_appendix_when_model_tabs_are_thin() -> None:
+def test_extract_cover_image_product_hunt_thumbnail() -> None:
+    payload = {
+        "thumbnail": {"url": "https://ph-files.imgix.net/abc.png?auto=format"},
+        "media": [{"type": "image", "url": "https://ph-files.imgix.net/other.png"}],
+    }
+    url = art.extract_cover_image_url("product_hunt", json.dumps(payload, ensure_ascii=False))
+    assert url == "https://ph-files.imgix.net/abc.png?auto=format"
+
+
+def test_extract_cover_image_product_hunt_media_fallback() -> None:
+    payload = {"media": [{"type": "image", "url": "https://ph-files.imgix.net/fallback.png"}]}
+    url = art.extract_cover_image_url("product_hunt", json.dumps(payload))
+    assert url == "https://ph-files.imgix.net/fallback.png"
+
+
+def test_extract_cover_image_hf_relative_thumbnail() -> None:
+    payload = {"id": "org/demo-space", "cardData": {"thumbnail": "assets/cover.png"}}
+    url = art.extract_cover_image_url("huggingface_spaces", json.dumps(payload))
+    assert url == "https://huggingface.co/spaces/org/demo-space/resolve/main/assets/cover.png"
+
+
+def test_extract_cover_image_hf_absolute_thumbnail() -> None:
+    payload = {
+        "id": "org/demo",
+        "cardData": {"thumbnail": "https://huggingface.co/spaces/org/demo/resolve/main/x.png"},
+    }
+    url = art.extract_cover_image_url("huggingface_spaces", json.dumps(payload))
+    assert url.endswith("/resolve/main/x.png")
+
+
+def test_extract_cover_image_ignores_github() -> None:
+    assert art.extract_cover_image_url("github", '{"thumbnail":{"url":"https://x.com/a.png"}}') is None
+
+
+def test_article_detail_profile_by_source() -> None:
+    assert art.article_detail_profile("github", "news") == art.DETAIL_PROFILE_OPEN_SOURCE
+    assert art.article_detail_profile("product_hunt", "apps") == art.DETAIL_PROFILE_PRODUCT_LAUNCH
+    assert art.article_detail_profile("unknown_src", "apps") == art.DETAIL_PROFILE_APP_PRODUCT
+    assert art.article_detail_profile("", "news") == art.DETAIL_PROFILE_NEWS_ARTICLE
+
+
+def test_normalize_polish_tabs_renames_legacy_and_strips_json() -> None:
     from backend.app import article_ingest as ing
 
     tabs = [
-        {"label": "要点", "summary": "概要一二三四五六七八九十个字说明放在这里", "body_md": "正文稍微短一点。"},
-        {"label": "细节", "summary": "第二栏概要同样要足够八个字以上长度", "body_md": "另一段也很短。"},
+        {
+            "label": "功能亮点",
+            "summary": "短摘要",
+            "body_md": "说明。\n\n```json\n{\"stars\": 42}\n```",
+        },
     ]
-    ing._merge_raw_appendix_if_tabs_thin(tabs, '{"repo":"demo","stars":42}', min_total=8000)
-    assert "原始摘录" in tabs[-1]["body_md"]
-    assert "stars" in tabs[-1]["body_md"]
+    ing._normalize_polish_tabs(tabs)
+    assert tabs[0]["label"] == "数据支撑"
+    assert "```json" not in tabs[0]["body_md"]
+
+
+def test_validate_llm_polish_accepts_legacy_news_tabs() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "categories": ["大模型"],
+        "feed_kind": "news",
+        "tabs": [
+            {
+                "label": "描述",
+                "summary": "描述 tab：用多句话说明事件主体、经过与结论，让读者不看标题也能懂发生了什么，字数足够长以满足校验。",
+                "body_md": "## 描述\n\n" + "事件背景与参与方说明。" * 28,
+            },
+            {
+                "label": "要点",
+                "summary": "要点 tab：概括关键事实与数字。",
+                "body_md": "## 要点\n\n" + "- 要点条目一\n- 要点条目二\n" * 18,
+            },
+        ],
+    }
+    assert art.validate_llm_polish_for_publish(data) is True
 
 
 def test_extract_source_original_url_json_html_url() -> None:

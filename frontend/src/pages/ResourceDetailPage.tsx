@@ -1,48 +1,30 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { Search } from "lucide-react";
-import { publicApi, type ArticleDetail, type ArticleFeedCard, type ArticleTab } from "@/api/public";
+import { publicApi, type ArticleDetail, type ArticleFeedCard } from "@/api/public";
+import { ArticleDetailHero } from "@/components/articleDetail/ArticleDetailHero";
+import { ArticleDetailMetrics } from "@/components/articleDetail/ArticleDetailMetrics";
+import { ArticleDetailSection } from "@/components/articleDetail/ArticleDetailSection";
+import { ArticleDetailSectionNav } from "@/components/articleDetail/ArticleDetailSectionNav";
 import { useI18n } from "@/i18n";
-import { parseMarkdownToc, prefixTocItemIds, type TocItem } from "@/lib/markdownToc";
+import {
+  ARTICLE_MD_PROSE_CLASS,
+  markdownComponentsForBody,
+  pickDetailTabs,
+  prepareDetailMarkdown,
+} from "@/lib/articleMarkdown";
+import {
+  getDetailLayout,
+  profileBadgeI18nKey,
+  type DetailSectionKind,
+} from "@/lib/articleDetailLayout";
 import { pushRecentArticle } from "@/lib/recentArticles";
 
 const INDUSTRY = "ai";
 
-/** 顶栏 sticky + 侧栏 sticky 与锚点 scroll-margin 对齐（约 5.75rem） */
-const SCROLL_MARGIN_TOP = "scroll-mt-[5.75rem]";
-
-function createArticleMarkdownComponents(toc: TocItem[]) {
-  const queue = [...toc];
-  return {
-    h2: ({ children, ...props }: ComponentProps<"h2">) => {
-      const t = queue[0]?.level === 2 ? queue.shift() : null;
-      const id = t?.id;
-      return (
-        <h2
-          {...props}
-          {...(id ? { id, "data-toc-heading": "" } : {})}
-          className={`mt-6 text-lg font-bold tracking-tight text-slate-900 ${SCROLL_MARGIN_TOP}`}
-        >
-          {children}
-        </h2>
-      );
-    },
-    h3: ({ children, ...props }: ComponentProps<"h3">) => {
-      const t = queue[0]?.level === 3 ? queue.shift() : null;
-      const id = t?.id;
-      return (
-        <h3
-          {...props}
-          {...(id ? { id, "data-toc-heading": "" } : {})}
-          className={`mt-4 text-base font-semibold text-slate-900 ${SCROLL_MARGIN_TOP}`}
-        >
-          {children}
-        </h3>
-      );
-    },
-  };
-}
+const DATA_TAB_LABELS = new Set(["数据支撑", "功能亮点", "要点"]);
+const DESC_TAB_LABEL = "描述";
 
 export function ResourceDetailPage() {
   const { t } = useI18n();
@@ -55,7 +37,6 @@ export function ResourceDetailPage() {
   const detailColumnScrollRef = useRef<HTMLDivElement>(null);
   const articleScrollRef = useRef<HTMLDivElement>(null);
 
-  /** 同页切换文章时路由 id 变但组件不卸载，须重置右侧（及小屏整列）滚动位置 */
   useLayoutEffect(() => {
     if (!id) return;
     const col = detailColumnScrollRef.current;
@@ -68,9 +49,7 @@ export function ResourceDetailPage() {
     if (!id) return;
     publicApi
       .article(Number(id))
-      .then((row) => {
-        setA(row);
-      })
+      .then((row) => setA(row))
       .catch((e) => setErr(String(e)));
   }, [id]);
 
@@ -110,36 +89,76 @@ export function ResourceDetailPage() {
     };
   }, [a]);
 
-  const tabs: ArticleTab[] = useMemo(
+  const layout = useMemo(() => (a ? getDetailLayout(a) : null), [a]);
+
+  const rawTabs = useMemo(
     () => (Array.isArray(a?.tabs) && a!.tabs!.length > 0 ? a!.tabs! : []),
     [a],
   );
+  const detailTabs = useMemo(() => pickDetailTabs(rawTabs), [rawTabs]);
 
-  const tabMdSections = useMemo(() => {
-    if (!a || tabs.length === 0) return [];
-    return tabs.map((tab, i) => {
-      const prefix = `t${i}`;
-      const tocItems = prefixTocItemIds(parseMarkdownToc(tab.body_md), prefix);
+  const descTab = useMemo(
+    () => detailTabs.find((tab) => tab.label === DESC_TAB_LABEL),
+    [detailTabs],
+  );
+  const dataTab = useMemo(
+    () => detailTabs.find((tab) => DATA_TAB_LABELS.has(tab.label)),
+    [detailTabs],
+  );
+
+  const tagline = useMemo(() => {
+    const fromDesc = (descTab?.summary || "").trim();
+    if (fromDesc.length >= 24) return fromDesc;
+    return (a?.summary || "").trim();
+  }, [a?.summary, descTab?.summary]);
+
+  const sectionContent = useMemo(() => {
+    type SectionBlock = {
+      title: string;
+      summary: string;
+      bodyMd: string;
+      components: ReturnType<typeof markdownComponentsForBody>;
+    };
+    if (!layout) {
+      return { description: null as SectionBlock | null, data: null as SectionBlock | null };
+    }
+    const build = (tab: typeof descTab, kind: DetailSectionKind): SectionBlock | null => {
+      if (!tab?.body_md?.trim()) return null;
+      const bodyMd = prepareDetailMarkdown(tab.body_md);
+      if (!bodyMd) return null;
+      const title =
+        kind === "description" ? t("detailSectionDescription") : t(layout.dataTitleKey);
       return {
-        key: `tab-${i}-${tab.label}`,
-        label: tab.label,
-        summary: tab.summary,
-        bodyMd: tab.body_md,
-        components: createArticleMarkdownComponents(tocItems),
+        title,
+        summary: kind === "description" ? "" : (tab.summary || "").trim(),
+        bodyMd,
+        components: markdownComponentsForBody(bodyMd, `detail-${kind}`),
       };
-    });
-  }, [a, tabs]);
+    };
+    return {
+      description: build(descTab, "description"),
+      data: build(dataTab, "data"),
+    };
+  }, [layout, descTab, dataTab, t]);
 
-  const mainToc = useMemo(() => parseMarkdownToc(a?.body || ""), [a?.body]);
-  const mainMdComponents = useMemo(() => createArticleMarkdownComponents(mainToc), [mainToc]);
+  const hasDescTab = Boolean(descTab);
+  const fallbackBodyMd = useMemo(
+    () => (a?.body ? prepareDetailMarkdown(a.body) : ""),
+    [a?.body],
+  );
+  const showFallbackBody = !hasDescTab && fallbackBodyMd.length > 60;
+  const fallbackMdComponents = useMemo(
+    () => markdownComponentsForBody(fallbackBodyMd, "body"),
+    [fallbackBodyMd],
+  );
 
   const markdownFingerprint = useMemo(() => {
-    if (tabs.length > 0) return tabMdSections.map((s) => s.bodyMd).join("\0");
-    return a?.body || "";
-  }, [tabs.length, tabMdSections, a?.body]);
+    const parts = [sectionContent.description?.bodyMd, sectionContent.data?.bodyMd].filter(Boolean);
+    if (parts.length) return parts.join("\0");
+    return fallbackBodyMd;
+  }, [sectionContent, fallbackBodyMd]);
 
   const sidebarFilterQ = sidebarQuery.trim().toLowerCase();
-
   const filteredSidebar = useMemo(() => {
     if (!sidebarFilterQ) return sidebar;
     return sidebar.filter((row) => {
@@ -169,27 +188,9 @@ export function ResourceDetailPage() {
     if (!raw || !articleScrollRef.current) return;
     const el = articleScrollRef.current.querySelector(`#${CSS.escape(raw)}`);
     if (!el) return;
-    const t = window.setTimeout(() => scrollToHeading(raw), 80);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => scrollToHeading(raw), 80);
+    return () => window.clearTimeout(timer);
   }, [location.hash, markdownFingerprint, scrollToHeading]);
-
-  const highlights = useMemo(() => {
-    if (!a) return [];
-    if (tabs.length > 0) {
-      return tabs.slice(0, 5).map((tab) => {
-        const line = `${tab.label}：${tab.summary || ""}`.trim();
-        return line.length > 140 ? `${line.slice(0, 138)}…` : line;
-      });
-    }
-    return (a.summary || "")
-      .split(/[。；\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 5);
-  }, [a, tabs]);
-
-  const mdBody =
-    "max-w-none w-full space-y-4 text-slate-600 leading-relaxed [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:underline [&_strong]:text-slate-900 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:marker:text-brand-300 [&_code]:rounded-md [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-slate-800 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-slate-200 [&_pre]:bg-slate-50 [&_pre]:p-4 [&_blockquote]:border-l-4 [&_blockquote]:border-brand-100 [&_blockquote]:pl-4 [&_blockquote]:text-slate-500";
 
   const backBtnClass =
     "inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200/90 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 sm:w-auto sm:justify-start " +
@@ -210,7 +211,8 @@ export function ResourceDetailPage() {
       </div>
     );
   }
-  if (!a) {
+
+  if (!a || !layout) {
     return (
       <div className="w-full px-2 sm:px-4">
         <div className="ui-card mx-auto max-w-lg py-12 text-center">
@@ -221,8 +223,8 @@ export function ResourceDetailPage() {
   }
 
   const feedKind: "news" | "apps" = a.feed_kind === "apps" ? "apps" : "news";
-  const isApp = feedKind === "apps";
-  const backTo = isApp ? "/apps" : "/news";
+  const backTo = feedKind === "apps" ? "/apps" : "/news";
+  const profileBadge = t(profileBadgeI18nKey(layout.profile));
 
   const categoryTagsEl =
     a.categories && a.categories.length > 0 ? (
@@ -241,6 +243,19 @@ export function ResourceDetailPage() {
       </div>
     ) : null;
 
+  const navSections = [
+    {
+      kind: "description" as const,
+      label: t("detailNavDescription"),
+      present: Boolean(sectionContent.description),
+    },
+    {
+      kind: "data" as const,
+      label: t("detailNavData"),
+      present: Boolean(sectionContent.data),
+    },
+  ];
+
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:px-0">
       <div className="sticky top-16 z-30 mb-3 shrink-0 lg:hidden">
@@ -249,7 +264,6 @@ export function ResourceDetailPage() {
         </Link>
       </div>
 
-      {/* 大屏：对齐 DeepSeek — 扁平分栏、左列冷灰底、右列白底双区独立滚动；小屏整列可滚 */}
       <div
         ref={detailColumnScrollRef}
         className={
@@ -301,7 +315,7 @@ export function ResourceDetailPage() {
               <nav className="flex flex-col gap-0.5 px-1 py-2" aria-label={t("detailSidebarRelatedTitle")}>
                 {filteredSidebar.length === 0 ? (
                   <p className="px-2 py-2 text-xs text-slate-500">
-                    {sidebarFilterQ ? t("detailSidebarNoMatch") : t("detailSidebarFeedEmpty")}
+                    {sidebarQuery.trim() ? t("detailSidebarNoMatch") : t("detailSidebarFeedEmpty")}
                   </p>
                 ) : (
                   filteredSidebar.map((row) => {
@@ -332,74 +346,52 @@ export function ResourceDetailPage() {
         <div
           ref={articleScrollRef}
           data-testid="resource-detail-article"
+          data-detail-profile={layout.profile}
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
         >
-          <article className="min-w-0 w-full max-w-none space-y-6 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
-            {isApp ? (
-              <div className="ui-card overflow-hidden p-6 sm:p-8">
-                <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-brand-500 text-2xl font-semibold text-white shadow-sm">
-                    {(a.title || "?").slice(0, 1)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-slate-500">{t("detailAppMeta")}</p>
-                    <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{a.title}</h1>
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
-                      {a.published_at ? (
-                        <span className="tabular-nums">{a.published_at.slice(0, 10)}</span>
-                      ) : null}
-                      {a.platform_label ? <span>{a.platform_label}</span> : null}
-                    </div>
-                    {a.summary ? <p className="mt-4 text-sm leading-relaxed text-slate-600">{a.summary}</p> : null}
-                  </div>
-                </div>
-                {categoryTagsEl}
-              </div>
-            ) : (
-              <div className="ui-card border-l-4 border-l-brand-500 bg-brand-50/40 px-6 py-8 sm:px-8">
-                <h1 className="text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{a.title}</h1>
-                {a.summary ? (
-                  <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{a.summary}</p>
-                ) : null}
-                {categoryTagsEl}
-              </div>
-            )}
+          <article className="min-w-0 w-full max-w-none space-y-5 px-1 pb-4 pt-1 sm:px-0 sm:pt-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
+            <ArticleDetailHero
+              article={a}
+              layout={layout}
+              tagline={tagline}
+              profileBadge={profileBadge}
+              categoryTags={categoryTagsEl}
+            />
 
-            {!isApp && highlights.length > 0 ? (
-              <div className="ui-card p-6 sm:p-7">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">{t("detailHighlights")}</h2>
-                <ul className="mt-4 space-y-2">
-                  {highlights.map((line, i) => (
-                    <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-700">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
+            <ArticleDetailMetrics
+              article={a}
+              layout={layout}
+              starsLabel={t("detailMetricStars")}
+              heatLabel={t("detailMetricHeat")}
+              starsTodayTemplate={(n) => t("feedStarsToday").replace("{n}", n)}
+            />
+
+            <ArticleDetailSectionNav layout={layout} sections={navSections} onJump={scrollToHeading} />
+
+            {layout.sectionOrder.map((kind) => {
+              const block = kind === "description" ? sectionContent.description : sectionContent.data;
+              if (!block) return null;
+              return (
+                <ArticleDetailSection
+                  key={kind}
+                  kind={kind}
+                  layout={layout}
+                  title={block.title}
+                  summary={block.summary}
+                  bodyMd={block.bodyMd}
+                  components={block.components}
+                />
+              );
+            })}
+
+            {showFallbackBody ? (
+              <div className="ui-card overflow-hidden p-5 sm:p-8">
+                <h2 className="text-base font-semibold text-slate-900">{t("detailOverview")}</h2>
+                <div className={`mt-4 ${ARTICLE_MD_PROSE_CLASS}`}>
+                  <ReactMarkdown components={fallbackMdComponents}>{fallbackBodyMd}</ReactMarkdown>
+                </div>
               </div>
             ) : null}
-
-            {tabs.length > 0 ? (
-              tabMdSections.map((sec) => (
-                <section key={sec.key} className="ui-card overflow-hidden" aria-labelledby={`${sec.key}-heading`}>
-                  <div className="border-b border-slate-100 bg-slate-50/90 px-5 py-4 sm:px-6">
-                    <h2 id={`${sec.key}-heading`} className="text-base font-semibold tracking-tight text-slate-900">
-                      {sec.label}
-                    </h2>
-                    {sec.summary ? <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{sec.summary}</p> : null}
-                  </div>
-                  <div className={`p-5 sm:p-8 ${mdBody}`}>
-                    <ReactMarkdown components={sec.components}>{sec.bodyMd}</ReactMarkdown>
-                  </div>
-                </section>
-              ))
-            ) : (
-              <div className="ui-card p-5 sm:p-8">
-                <div className={mdBody}>
-                  <ReactMarkdown components={mainMdComponents}>{a.body || ""}</ReactMarkdown>
-                </div>
-              </div>
-            )}
           </article>
         </div>
       </div>

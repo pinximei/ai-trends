@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
-import { articleCardInitial, articleThumbGradientStyle } from "@/articleCardVisual";
+import { formatStarCount } from "@/articleCardVisual";
+import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
 import { useI18n } from "@/i18n";
 
 const INDUSTRY_SLUG = "ai";
@@ -36,6 +37,25 @@ function summarize(text: string, max: number) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+/** 旧稿无 card_description 时，从 tab 概要兜底（不展示「产品概述」等标签名） */
+function feedCardDescriptionText(a: ArticleFeedCard): string {
+  if ((a.card_description || "").trim()) return a.card_description!.trim();
+  const tabs = a.tab_summaries ?? [];
+  const desc = tabs.find((t) => /描述|概述/.test(t.label)) ?? tabs[0];
+  return (desc?.summary || a.summary || "").trim();
+}
+
+function feedCardHighlightsText(a: ArticleFeedCard, _mode: "news" | "apps"): string {
+  if ((a.card_highlights || "").trim()) return a.card_highlights!.trim();
+  const tabs = a.tab_summaries ?? [];
+  const hi = tabs.find(
+    (t) =>
+      /数据支撑|亮点|要点/.test(t.label) &&
+      !/描述|概述|技术/.test(t.label),
+  );
+  return (hi?.summary || "").trim();
+}
+
 function formatFeedDateLabel(isoDay: string): string {
   if (!isoDay || isoDay === "_") return "—";
   const d = new Date(`${isoDay}T12:00:00Z`);
@@ -51,13 +71,6 @@ function articleGroupDay(a: { published_at?: string | null }): string {
 /** 卡片角标时间：优先更新时间（重复同步 star 后会刷新） */
 function articleDisplayDay(a: { updated_at?: string | null; published_at?: string | null }): string {
   return (a.updated_at || a.published_at || "").slice(0, 10) || "_";
-}
-
-function formatStarCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
-  return String(n);
 }
 
 function formatFeedDayRange(newest: string | null, oldest: string | null): string | null {
@@ -629,17 +642,17 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                         />
                         <div className="relative flex min-h-0 flex-1 flex-col sm:flex-row">
                           <div
-                            className="flex shrink-0 border-b border-slate-200/90 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-200/90"
+                            className="relative flex shrink-0 overflow-hidden border-b border-slate-200/90 sm:w-24 sm:border-b-0 sm:border-r sm:border-slate-200/90"
                             aria-hidden
                           >
-                            <div
-                              className="flex min-h-[4.5rem] w-full flex-1 items-center justify-center py-4 sm:min-h-[6.5rem] sm:py-0"
-                              style={articleThumbGradientStyle(`${a.id}:${a.title || ""}`)}
-                            >
-                              <span className="select-none text-2xl font-black tracking-tight text-white drop-shadow-[0_1px_3px_rgba(15,23,42,0.35)] sm:text-[1.65rem]">
-                                {articleCardInitial(a.title)}
-                              </span>
-                            </div>
+                            <ArticleCoverVisual
+                              coverUrl={a.cover_image_url}
+                              title={a.title || ""}
+                              seed={`${a.id}:${a.title || ""}`}
+                              fallbackClassName="flex min-h-[4.5rem] w-full flex-1 items-center justify-center py-4 sm:min-h-[6.5rem] sm:py-0"
+                              imgClassName="h-full w-full min-h-[4.5rem] object-cover sm:min-h-[6.5rem]"
+                              initialClassName="select-none text-2xl font-black tracking-tight text-white drop-shadow-[0_1px_3px_rgba(15,23,42,0.35)] sm:text-[1.65rem]"
+                            />
                           </div>
                           <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 pb-3">
@@ -682,22 +695,26 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                           <h2 className="mt-3 text-[1.05rem] font-semibold leading-snug tracking-tight text-slate-900 sm:text-lg sm:leading-snug group-hover:text-brand-600">
                             {a.title}
                           </h2>
-                          <p className="mt-2 line-clamp-4 flex-1 text-sm leading-relaxed text-slate-600">{summarize(a.summary, 168)}</p>
-
-                          {a.tab_summaries && a.tab_summaries.length > 0 ? (
-                            <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4">
-                              {a.tab_summaries.slice(0, 3).map((tab) => (
-                                <li
-                                  key={tab.label}
-                                  className="border-l-2 border-brand-200 pl-3 text-[12px] leading-snug text-slate-600"
-                                >
-                                  <span className="font-medium text-brand-700">{tab.label}</span>
-                                  <span className="text-slate-300"> · </span>
-                                  {summarize(tab.summary, 88)}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
+                          <div className="mt-3 flex-1 space-y-4 border-t border-slate-100 pt-4">
+                            <div>
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                {t("feedCardDescription")}
+                              </p>
+                              <p className="mt-2 line-clamp-[10] text-[15px] leading-relaxed text-slate-700 sm:line-clamp-[12] sm:text-base sm:leading-7">
+                                {summarize(feedCardDescriptionText(a), 720)}
+                              </p>
+                            </div>
+                            {feedCardHighlightsText(a, mode) ? (
+                              <div>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                  {mode === "apps" ? t("feedCardHighlights") : t("feedCardPoints")}
+                                </p>
+                                <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                                  {summarize(feedCardHighlightsText(a, mode), 140)}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
 
                           <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-brand-600">
                             <span>{t("listViewDetail")}</span>
