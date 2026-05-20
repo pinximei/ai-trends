@@ -11,24 +11,22 @@ const INDUSTRY_SLUG = "ai";
 const FEED_CARD_GRID_CLASS = "mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-7 lg:gap-8";
 const DAYS_PER_PAGE = 3;
 
-type TimeKey = "d3" | "latest_day" | "all" | "d7" | "d30" | "d90";
+type TimeKey = "d2" | "all" | "d7" | "d30" | "d90";
 
 const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
-  { key: "d3", labelKey: "resourcesDays3" },
-  { key: "latest_day", labelKey: "resourcesLatestDay" },
-  { key: "all", labelKey: "resourcesTimeAll" },
+  { key: "d2", labelKey: "resourcesDays2" },
   { key: "d7", labelKey: "resourcesDays7" },
   { key: "d30", labelKey: "resourcesDays30" },
   { key: "d90", labelKey: "resourcesDays90" },
+  { key: "all", labelKey: "resourcesTimeAll" },
 ];
 
 function timeKeyToArticleParams(timeKey: TimeKey): {
   published_within_days?: number;
   published_on_latest_day?: boolean;
 } {
-  if (timeKey === "latest_day") return { published_on_latest_day: true };
   if (timeKey === "all") return {};
-  const n = timeKey === "d3" ? 3 : timeKey === "d7" ? 7 : timeKey === "d30" ? 30 : 90;
+  const n = timeKey === "d2" ? 2 : timeKey === "d7" ? 7 : timeKey === "d30" ? 30 : 90;
   return { published_within_days: n };
 }
 
@@ -77,7 +75,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const [timeKey, setTimeKey] = useState<TimeKey>("d3");
+  const [timeKey, setTimeKey] = useState<TimeKey>("d2");
   const [feedPage, setFeedPage] = useState(1);
   const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>("date");
   const [heatHasMore, setHeatHasMore] = useState(false);
