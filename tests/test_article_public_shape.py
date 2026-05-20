@@ -7,13 +7,18 @@ from backend.app.domain import articles as art
 
 _VALID_SUMMARY = "OpenAI 发布新模型系列，面向多模态与代码场景；核心提升上下文与推理能力；适合开发者与产品团队跟进。"
 _VALID_BODY = "## 一句话看懂\n\n" + "背景与进展说明。" * 40
+# validate_llm_polish_for_publish：「描述」tab 的 summary 不少于 72 字
+_VALID_DESC_SUMMARY = (
+    "描述 tab：用多句话说明事件主体、经过与结论，让读者不看标题也能懂发生了什么；"
+    "此处为测试用长摘要，满足列表卡片与发布校验的最低字数门槛要求。。"
+)
 
 
 def _valid_tabs_news() -> list[dict]:
     return [
         {
             "label": "描述",
-            "summary": "描述 tab：用多句话说明事件主体、经过与结论，让读者不看标题也能懂发生了什么，字数足够长以满足校验。",
+            "summary": _VALID_DESC_SUMMARY,
             "body_md": "## 描述\n\n" + "事件背景与参与方说明。" * 28,
         },
         {
@@ -28,7 +33,7 @@ def _valid_tabs_apps() -> list[dict]:
     return [
         {
             "label": "描述",
-            "summary": "描述 tab：说明产品是什么、面向谁、解决什么问题，共多句完整叙述以满足列表卡片主文案长度要求。",
+            "summary": _VALID_DESC_SUMMARY,
             "body_md": "## 描述\n\n" + "产品定位与使用场景说明。" * 28,
         },
         {
@@ -342,12 +347,12 @@ def test_validate_llm_polish_accepts_legacy_news_tabs() -> None:
         "tabs": [
             {
                 "label": "描述",
-                "summary": "描述 tab：用多句话说明事件主体、经过与结论，让读者不看标题也能懂发生了什么，字数足够长以满足校验。",
+                "summary": _VALID_DESC_SUMMARY,
                 "body_md": "## 描述\n\n" + "事件背景与参与方说明。" * 28,
             },
             {
                 "label": "要点",
-                "summary": "要点 tab：概括关键事实与数字。",
+                "summary": "要点 tab：概括关键事实与数字，供兼容旧 label 的入库校验测试使用。",
                 "body_md": "## 要点\n\n" + "- 要点条目一\n- 要点条目二\n" * 18,
             },
         ],
