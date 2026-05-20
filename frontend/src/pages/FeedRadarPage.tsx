@@ -81,6 +81,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [heatHasMore, setHeatHasMore] = useState(false);
   const [heatLoadingMore, setHeatLoadingMore] = useState(false);
   const heatSentinelRef = useRef<HTMLDivElement | null>(null);
+  const feedColumnScrollRef = useRef<HTMLDivElement | null>(null);
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
   const heatMoreLockRef = useRef(false);
   const heatNextOffsetRef = useRef(0);
   const [jumpDraft, setJumpDraft] = useState("1");
@@ -342,13 +344,14 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     if (listDisplayMode !== "heat" || !heatHasMore || loading) return;
     const el = heatSentinelRef.current;
     if (!el) return;
+    const scrollRoot = listScrollRef.current ?? feedColumnScrollRef.current;
     const ob = new IntersectionObserver(
       (entries) => {
         const hit = entries.some((e) => e.isIntersecting);
         if (!hit) return;
         void loadMoreHeat();
       },
-      { root: null, rootMargin: "240px", threshold: 0 },
+      { root: scrollRoot, rootMargin: "240px", threshold: 0 },
     );
     ob.observe(el);
     return () => ob.disconnect();
@@ -361,7 +364,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   useEffect(() => {
     if (loading) return;
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const el = listScrollRef.current ?? feedColumnScrollRef.current;
+    el?.scrollTo({ top: 0, behavior: "smooth" });
   }, [scrollKey, loading]);
 
   const onJump = () => {
@@ -595,13 +599,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     </div>
   );
 
-  const leftRail = (
-    <div className="scrollbar-hide min-w-0 space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:self-start">
-      {feedLeftStrip}
-      {leftFilters}
-    </div>
-  );
-
   const listSection = (
     <>
       {err ? <p className="mt-1 text-sm font-medium text-rose-600 sm:mt-2">{err}</p> : null}
@@ -753,16 +750,36 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     </>
   );
 
-  const gridClass =
-    "grid gap-6 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,300px)_1fr]";
-
   return (
-    <div className="w-full px-2 sm:px-4">
-      <div className={gridClass}>
-        <aside className="min-w-0">{leftRail}</aside>
-        <div className="min-w-0 space-y-4">
-          {listSection}
-          {paginationBar()}
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-2 sm:px-4 lg:px-0">
+      <div
+        ref={feedColumnScrollRef}
+        className={
+          "flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-y-contain " +
+          "lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden"
+        }
+      >
+        <aside
+          className={
+            "flex w-full shrink-0 flex-col self-start overflow-hidden " +
+            "max-h-[min(58vh,34rem)] min-h-0 lg:max-h-none lg:min-h-0 lg:w-[min(280px,26vw)] lg:shrink-0 lg:self-stretch xl:w-[300px] " +
+            "lg:border-r lg:border-slate-300/35 lg:bg-[#ecedf2]"
+          }
+        >
+          <div className="shrink-0 px-1.5 pb-2 pt-1 lg:px-2.5 lg:pt-3">{feedLeftStrip}</div>
+          <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 pb-2 lg:px-2.5 lg:pb-3">
+            {leftFilters}
+          </div>
+        </aside>
+
+        <div
+          ref={listScrollRef}
+          className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain bg-white article-scrollbar lg:overflow-x-hidden"
+        >
+          <div className="space-y-4 px-1 pb-6 pt-1 sm:px-0 lg:px-6 lg:pb-8 lg:pt-4 xl:px-10">
+            {listSection}
+            {paginationBar()}
+          </div>
         </div>
       </div>
     </div>

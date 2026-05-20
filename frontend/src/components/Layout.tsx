@@ -36,6 +36,8 @@ export function Layout() {
   const isHome = path === "/";
   const isFeedHub = path === "/apps" || path === "/news";
   const isResourceDetail = /^\/resources\/[^/]+$/.test(path);
+  /** 资讯/应用 feed 与文章详情：整页高度锁定，左栏固定、右栏独立滚动 */
+  const isSplitScrollPage = isResourceDetail || isFeedHub;
   const isWideHub = isHome || isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
   const useWideShell = isWideHub;
   const hideSidebar = isWideHub;
@@ -58,7 +60,7 @@ export function Layout() {
   return (
     <div
       className={
-        isResourceDetail
+        isSplitScrollPage
           ? "flex h-svh max-h-svh min-h-0 flex-col overflow-hidden"
           : "flex min-h-screen flex-col"
       }
@@ -111,7 +113,7 @@ export function Layout() {
 
       <div
         className={
-          isResourceDetail
+          isSplitScrollPage
             ? "mx-auto flex min-h-0 min-w-0 w-full max-w-[min(1920px,100%)] flex-1 flex-row px-0"
             : `flex min-h-0 min-w-0 flex-1 flex-row ${shell} ${isWideHub ? "" : "gap-6 lg:gap-8"}`
         }
@@ -143,7 +145,7 @@ export function Layout() {
           className={
             isHome
               ? "min-w-0 flex-1 py-6 pb-28 sm:py-8 xl:py-10"
-              : isResourceDetail
+              : isSplitScrollPage
                 ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 pt-2 pb-0 sm:pt-3 lg:bg-[#eef0f4] lg:pt-2"
                 : isHubTightTop
                   ? "min-w-0 flex-1 pt-2 pb-28 sm:pt-3 sm:pb-28 lg:pt-4"
