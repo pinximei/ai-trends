@@ -596,7 +596,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   );
 
   const leftRail = (
-    <div className="min-w-0 space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:self-start">
+    <div className="scrollbar-hide min-w-0 space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:self-start">
       {feedLeftStrip}
       {leftFilters}
     </div>

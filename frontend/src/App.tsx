@@ -18,8 +18,8 @@ export default function App() {
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<HomePage />} />
-              <Route path="apps" element={<FeedRadarPage mode="apps" />} />
-              <Route path="news" element={<FeedRadarPage mode="news" />} />
+              <Route path="apps" element={<FeedRadarPage key="apps" mode="apps" />} />
+              <Route path="news" element={<FeedRadarPage key="news" mode="news" />} />
               <Route path="resources/:id" element={<ResourceDetailPage />} />
               <Route path="downloads" element={<SoftwareDownloadsPage />} />
               <Route path="about" element={<AboutSitePage />} />
