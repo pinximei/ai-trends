@@ -319,6 +319,7 @@ def test_article_detail_profile_by_source() -> None:
     assert art.article_detail_profile("github", "news") == art.DETAIL_PROFILE_OPEN_SOURCE
     assert art.article_detail_profile("product_hunt", "apps") == art.DETAIL_PROFILE_PRODUCT_LAUNCH
     assert art.article_detail_profile("hacker_news", "news") == art.DETAIL_PROFILE_NEWS_WIRE
+    assert art.article_detail_profile("arxiv", "news") == art.DETAIL_PROFILE_NEWS_ARTICLE
     assert art.article_detail_profile("unknown_src", "apps") == art.DETAIL_PROFILE_APP_PRODUCT
     assert art.article_detail_profile("", "news") == art.DETAIL_PROFILE_NEWS_ARTICLE
 

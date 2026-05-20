@@ -257,6 +257,7 @@ def _extract_external_id_from_dict(d: dict) -> str | None:
         "objectID",
         "object_id",
         "objectId",
+        "arxiv_id",
         "story_id",
         "uuid",
         "sha",
@@ -585,6 +586,8 @@ def unified_connector_heat(
             500.0 * _heat_log_norm(sig["hn_points"], cap=12_000.0)
             + 320.0 * _heat_log_norm(sig["comments"], cap=6_000.0)
         )
+    elif k == "arxiv":
+        eng = 380.0 * _heat_log_norm(sig["views"], cap=500_000.0)
     else:
         eng = 540.0 * max(
             _heat_log_norm(sig["stars"], cap=120_000.0),
@@ -640,6 +643,7 @@ FEED_NEWS_KEYS = frozenset(
         "mapbox",
         "github",
         "hacker_news",
+        "arxiv",
         "mcp_skills",
         "openai",
         "google_gemini",
@@ -901,6 +905,7 @@ _DETAIL_PROFILE_BY_SOURCE: dict[str, str] = {
     "google_gemini": DETAIL_PROFILE_PLATFORM_API,
     "mcp_skills": DETAIL_PROFILE_PLATFORM_API,
     "hacker_news": DETAIL_PROFILE_NEWS_WIRE,
+    "arxiv": DETAIL_PROFILE_NEWS_ARTICLE,
 }
 
 

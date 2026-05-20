@@ -132,6 +132,7 @@ const PROFILE_BY_SOURCE: Record<string, DetailProfileId> = {
   huggingface_spaces: "ai_space",
   github: "open_source",
   hacker_news: "news_wire",
+  arxiv: "news_article",
   newsapi: "news_wire",
   finnhub: "news_wire",
   youtube_data: "news_wire",

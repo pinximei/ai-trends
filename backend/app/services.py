@@ -64,6 +64,20 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "content_role": "daily_editorial",
         "notes": "Algolia **HN Search API**（GET，免 Key）：``tags=front_page`` 首页热门，按 points 取 Top10 逐条入库；snippet 含 objectID、链接、票数与评论数。",
     },
+    {
+        "source": "arxiv",
+        "preset_label": "arXiv",
+        "enabled": True,
+        "api_base": (
+            "http://export.arxiv.org/api/query?"
+            "search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&"
+            "sortBy=lastUpdatedDate&sortOrder=descending&max_results=80"
+        ),
+        "api_key_masked": "",
+        "scope_label": "AI｜论文预印本",
+        "content_role": "academic",
+        "notes": "arXiv **Atom API**（GET，免 Key）：cs.AI / cs.LG / cs.CL 最近更新 Top10；snippet 含 arxiv_id、标题、摘要、作者与 abs/pdf 链接。",
+    },
 ]
 
 # 当前产品保留的内置数据源标识（与 MAINSTREAM_ADMIN_SOURCE_PRESETS 一致）；启动时用于删库中「多余」行。
@@ -84,7 +98,6 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "openalex",
         "rss_arstechnica",
         "rss_theverge",
-        "arxiv",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
@@ -97,6 +110,7 @@ ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
         "hacker_news",
+        "arxiv",
     }
 )
 

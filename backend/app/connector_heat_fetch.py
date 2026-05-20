@@ -5,6 +5,7 @@ import base64
 import json
 import re
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -513,86 +514,136 @@ def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tu
         return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
 
 
-HN_ALGOLIA_SEARCH_DEFAULT = "https://hn.algolia.com/api/v1/search?tags=front_page"
+ARXIV_API_QUERY_DEFAULT = (
+    "http://export.arxiv.org/api/query?"
+    "search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&"
+    "sortBy=lastUpdatedDate&sortOrder=descending&max_results=80"
+)
+_ARXIV_ATOM_NS = {"a": "http://www.w3.org/2005/Atom"}
 
 
-def hacker_news_algolia_is_search_url(url: str) -> bool:
-    """Algolia HN Search API（列表发现）；非 ``firebaseio.com`` 单条 item API。"""
+def arxiv_api_is_query_url(url: str) -> bool:
+    """arXiv Atom API（``export.arxiv.org/api/query``）。"""
     p = urlsplit((url or "").strip().lower())
-    return "hn.algolia.com" in (p.netloc or "") and "/api/" in (p.path or "")
+    return "export.arxiv.org" in (p.netloc or "") and "/api/query" in (p.path or "")
 
 
-def _hn_normalize_hit(hit: dict[str, Any]) -> dict[str, Any]:
-    """单条 story → 入库 snippet 形状（含 objectID、points、链接与正文节选）。"""
-    link = (hit.get("url") or hit.get("story_url") or "").strip()
-    if not link and hit.get("objectID"):
-        link = f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
-    text = (hit.get("story_text") or hit.get("comment_text") or "").strip()
-    return {
-        "objectID": hit.get("objectID"),
-        "title": hit.get("title") or hit.get("story_title") or "",
-        "url": link,
-        "points": hit.get("points"),
-        "num_comments": hit.get("num_comments"),
-        "author": hit.get("author"),
-        "created_at": hit.get("created_at"),
-        "story_text": text[:8000] if text else "",
-    }
+def _arxiv_collapse_ws(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip())
 
 
-def sync_hacker_news_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
-    """Algolia HN API：首页热门（``tags=front_page``），按 points 取 Top N 逐条入库。"""
+def _arxiv_id_from_atom_id(id_text: str) -> str:
+    s = (id_text or "").strip()
+    if "/abs/" in s:
+        return s.split("/abs/", 1)[-1].strip("/").split("?")[0][:64]
+    return s[-64:] if s else ""
+
+
+def parse_arxiv_atom_entries(xml_text: str, *, limit: int = CONNECTOR_HEAT_TOP_N) -> list[dict[str, Any]]:
+    """解析 arXiv Atom feed → 逐条入库 JSON（含 arxiv_id、摘要、作者与链接）。"""
+    if not (xml_text or "").strip():
+        return []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    out: list[dict[str, Any]] = []
+    for entry in root.findall("a:entry", _ARXIV_ATOM_NS):
+        id_el = entry.find("a:id", _ARXIV_ATOM_NS)
+        arxiv_id = _arxiv_id_from_atom_id(id_el.text if id_el is not None else "")
+        title_el = entry.find("a:title", _ARXIV_ATOM_NS)
+        title = _arxiv_collapse_ws(title_el.text if title_el is not None else "")
+        if not title or not arxiv_id:
+            continue
+        summary_el = entry.find("a:summary", _ARXIV_ATOM_NS)
+        summary = _arxiv_collapse_ws(summary_el.text if summary_el is not None else "")[:12_000]
+        published_el = entry.find("a:published", _ARXIV_ATOM_NS)
+        updated_el = entry.find("a:updated", _ARXIV_ATOM_NS)
+        authors: list[str] = []
+        for author in entry.findall("a:author", _ARXIV_ATOM_NS):
+            name_el = author.find("a:name", _ARXIV_ATOM_NS)
+            if name_el is not None and (name_el.text or "").strip():
+                authors.append(_arxiv_collapse_ws(name_el.text or ""))
+        abs_url = ""
+        pdf_url = ""
+        for link in entry.findall("a:link", _ARXIV_ATOM_NS):
+            href = (link.get("href") or "").strip()
+            if not href:
+                continue
+            rel = (link.get("rel") or "").strip().lower()
+            typ = (link.get("type") or "").strip().lower()
+            if rel == "alternate" or (not pdf_url and "abs" in href):
+                abs_url = abs_url or href
+            if typ == "application/pdf" or href.endswith(".pdf"):
+                pdf_url = pdf_url or href
+        if not abs_url:
+            abs_url = f"https://arxiv.org/abs/{arxiv_id}"
+        cats: list[str] = []
+        for cat in entry.findall("a:category", _ARXIV_ATOM_NS):
+            term = (cat.get("term") or "").strip()
+            if term:
+                cats.append(term)
+        out.append(
+            {
+                "arxiv_id": arxiv_id,
+                "id": arxiv_id,
+                "title": title,
+                "summary": summary,
+                "authors": authors[:24],
+                "published": (published_el.text or "").strip() if published_el is not None else "",
+                "updated": (updated_el.text or "").strip() if updated_el is not None else "",
+                "abs_url": abs_url,
+                "pdf_url": pdf_url,
+                "categories": cats[:12],
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+def sync_arxiv_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """arXiv Atom API：cs.AI/LG/CL 最近更新，取前 N 篇打包入库。"""
     n = CONNECTOR_HEAT_TOP_N
-    raw_url = (url or "").strip() or HN_ALGOLIA_SEARCH_DEFAULT
+    raw_url = (url or "").strip() or ARXIV_API_QUERY_DEFAULT
     parts = urlsplit(raw_url)
     q = dict(parse_qsl(parts.query, keep_blank_values=True))
-    q.setdefault("tags", "front_page")
     try:
-        lim = int(str(q.get("hitsPerPage") or "0").strip() or "0")
+        lim = int(str(q.get("max_results") or "0").strip() or "0")
     except ValueError:
         lim = 0
-    q["hitsPerPage"] = str(max(n, lim, 30))
+    q["max_results"] = str(max(n, lim, 30))
     api_url = urlunsplit(
         (
-            parts.scheme or "https",
-            parts.netloc or "hn.algolia.com",
-            parts.path or "/api/v1/search",
+            parts.scheme or "http",
+            parts.netloc or "export.arxiv.org",
+            parts.path or "/api/query",
             urlencode(q),
             "",
         )
     )
-    h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-HN/1.0"}
+    h = {
+        **headers,
+        "Accept": "application/atom+xml,application/xml,text/xml",
+        "User-Agent": headers.get("User-Agent") or "AiTrends-Arxiv/1.0",
+    }
     try:
-        with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             r = client.get(api_url, headers=h)
+            if r.status_code == 429:
+                time.sleep(3.0)
+                r = client.get(api_url, headers=h)
             text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
             if r.status_code < 200 or r.status_code >= 300:
                 return r.status_code, text
-            try:
-                body = json.loads(text)
-            except json.JSONDecodeError:
-                return r.status_code, text
-            if not isinstance(body, dict):
-                return r.status_code, json.dumps({"connector_sync_items_v1": [], "note": "not_object"}, ensure_ascii=False)
-            hits = body.get("hits")
-            if not isinstance(hits, list) or not hits:
-                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_hits"}, ensure_ascii=False)
-
-            def _score(item: dict[str, Any]) -> int:
-                try:
-                    return int(item.get("points") or 0)
-                except (TypeError, ValueError):
-                    return 0
-
-            ranked = sorted([x for x in hits if isinstance(x, dict)], key=_score, reverse=True)[:n]
-            payloads = [_hn_normalize_hit(x) for x in ranked if (x.get("title") or "").strip()]
+            payloads = parse_arxiv_atom_entries(text, limit=n)
             if not payloads:
-                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_titled_hits"}, ensure_ascii=False)
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_entries"}, ensure_ascii=False)
             pack = {
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
                 ],
-                "note": "hn_algolia_front_page",
+                "note": "arxiv_atom_cs_ai_lg_cl",
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

@@ -6,6 +6,7 @@
   py -3.12 scripts/verify_source_local.py --source product_hunt
   py -3.12 scripts/verify_source_local.py --source huggingface_spaces
   py -3.12 scripts/verify_source_local.py --source hacker_news
+  py -3.12 scripts/verify_source_local.py --source arxiv
 
 通过 exit 0；失败 exit 1–3。
 """
@@ -20,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # 当前产品内置数据源；新增前须先扩此表并完成本地验收。
-VERIFIED_SOURCE_KEYS = frozenset({"github", "product_hunt", "huggingface_spaces", "hacker_news"})
+VERIFIED_SOURCE_KEYS = frozenset({"github", "product_hunt", "huggingface_spaces", "hacker_news", "arxiv"})
 
 SOURCE_META: dict[str, dict[str, str]] = {
     "github": {
@@ -42,6 +43,11 @@ SOURCE_META: dict[str, dict[str, str]] = {
         "feed": "news",
         "like": "%hacker_news%",
         "runner": "scripts/run_hacker_news_sync_local.py",
+    },
+    "arxiv": {
+        "feed": "news",
+        "like": "%arxiv%",
+        "runner": "scripts/run_arxiv_sync_local.py",
     },
 }
 

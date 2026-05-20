@@ -20,7 +20,7 @@ py -3.12 scripts/run_product_hunt_sync_local.py --sqlite
 
 ## 数据源逐个验收（必读）
 
-当前内置 **GitHub / Product Hunt / Hugging Face Spaces / Hacker News**。  
+当前内置 **GitHub / Product Hunt / Hugging Face Spaces / Hacker News / arXiv**。  
 **再增其它数据源前**，须先让现有源在本地通过门禁：
 
 ```powershell
@@ -31,6 +31,7 @@ py -3.12 scripts/verify_source_local.py --source github
 py -3.12 scripts/verify_source_local.py --source product_hunt
 py -3.12 scripts/verify_source_local.py --source huggingface_spaces
 py -3.12 scripts/verify_source_local.py --source hacker_news
+py -3.12 scripts/verify_source_local.py --source arxiv
 ```
 
 分步脚本：
@@ -41,5 +42,6 @@ py -3.12 scripts/verify_source_local.py --source hacker_news
 | Product Hunt | `py -3.12 scripts/run_product_hunt_sync_local.py --sqlite` |
 | HF Spaces | `py -3.12 scripts/run_huggingface_spaces_sync_local.py --sqlite` |
 | Hacker News | `py -3.12 scripts/run_hacker_news_sync_local.py --sqlite` |
+| arXiv | `py -3.12 scripts/run_arxiv_sync_local.py --sqlite` |
 
-流程与接入第 4 个源的代码清单见 [docs/DATA_SOURCE_ONBOARDING.md](../docs/DATA_SOURCE_ONBOARDING.md)。
+流程与接入新源的代码清单见 [docs/DATA_SOURCE_ONBOARDING.md](../docs/DATA_SOURCE_ONBOARDING.md)。

@@ -121,6 +121,11 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
             "【Hacker News 社区帖】「描述」按：帖子主题 → 讨论背景 → 对 AI/技术读者的意义；"
             "「数据支撑」表格列：标题、票数 points、评论数、作者、讨论链接（url 或 item?id=objectID）。"
         )
+    if k == "arxiv":
+        return (
+            "【arXiv 论文稿】「描述」按：研究问题 → 方法/贡献 → 对 AI 从业者的意义；"
+            "「数据支撑」表格列：论文标题、arXiv ID、作者、发表/更新日期、abs 链接、PDF 链接、学科分类。"
+        )
     if k in ("newsapi", "finnhub", "youtube_data", "mapbox"):
         return (
             "【资讯/API 快讯稿】「描述」按：谁 → 发生了什么 → 影响/结论；"

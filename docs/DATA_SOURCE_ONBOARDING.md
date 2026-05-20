@@ -1,6 +1,6 @@
 # 数据源逐个接入（本地验证门禁）
 
-产品当前**内置 4 个数据源**，其它历史预置已标记为 discontinued，不会自动写入库。
+产品当前**内置 5 个数据源**，其它历史预置已标记为 discontinued，不会自动写入库。
 
 | source_key | 名称 | 默认定时拉取 | 泳道 | 本地脚本 |
 |------------|------|--------------|------|----------|
@@ -8,6 +8,7 @@
 | `product_hunt` | Product Hunt | ✅ 启用 | 应用 `apps` | `scripts/run_product_hunt_sync_local.py` |
 | `huggingface_spaces` | Hugging Face Spaces | ❌ 需手动开连接器 | 应用 `apps` | `scripts/run_huggingface_spaces_sync_local.py` |
 | `hacker_news` | Hacker News | ❌ 需手动开连接器 | 资讯 `news` | `scripts/run_hacker_news_sync_local.py` |
+| `arxiv` | arXiv | ❌ 需手动开连接器 | 资讯 `news` | `scripts/run_arxiv_sync_local.py` |
 
 **原则：一次只接一个源；本地门禁通过后再接下一个；未通过不得加入 `MAINSTREAM_ADMIN_SOURCE_PRESETS` 或 `AUTO_ENABLE_PULL_SOURCE_KEYS`。**
 
@@ -47,6 +48,7 @@ py -3.12 scripts/verify_source_local.py --source github
 py -3.12 scripts/verify_source_local.py --source product_hunt
 py -3.12 scripts/verify_source_local.py --source huggingface_spaces
 py -3.12 scripts/verify_source_local.py --source hacker_news
+py -3.12 scripts/verify_source_local.py --source arxiv
 ```
 
 通过标准（脚本 exit 0）：
@@ -68,11 +70,11 @@ py -3.12 scripts/verify_source_local.py --source hacker_news
 2. **详情** `/resources/{id}`：版式符合数据源 profile；无大段英文 JSON；表格可读。
 3. **后台** 连接器日志：`rows_ingested` / 新建文章数合理，无持续 `skip_llm`。
 
-三项 OK 后，该源记为 **已验收**，才可讨论接入第 4 个源。
+三项 OK 后，该源记为 **已验收**，才可讨论接入下一个源。
 
 ---
 
-## 四、新增第 5 个源时的代码清单（勿跳步）
+## 四、新增第 6 个源时的代码清单（勿跳步）
 
 1. **拉取**：`backend/app/connector_heat_fetch.py` 实现 `sync_<source>_...`。
 2. **路由**：`data_api_service.py`、`admin_extended.py` 按 `admin_source_key` 分支调用。
@@ -83,7 +85,7 @@ py -3.12 scripts/verify_source_local.py --source hacker_news
 7. **预置**：仅当本地门禁 + UI 通过后，才在 `services.MAINSTREAM_ADMIN_SOURCE_PRESETS` 增加一行。
 8. **定时拉取**：确认稳定后再加入 `AUTO_ENABLE_PULL_SOURCE_KEYS`（避免多源同时暴量）。
 9. **脚本**：`scripts/run_<source>_sync_local.py` + `verify_source_local.py` 注册该 key。
-10. **文档**：更新本文「当前 3 个源」表格为 4 个，并写明验收日期。
+10. **文档**：更新本文「当前 N 个源」表格，并写明验收日期。
 
 ---
 
@@ -113,3 +115,4 @@ py -3.12 scripts/verify_source_local.py --source hacker_news
 | product_hunt | | | |
 | huggingface_spaces | | | |
 | hacker_news | | | |
+| arxiv | | | |

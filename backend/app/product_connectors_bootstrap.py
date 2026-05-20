@@ -14,6 +14,7 @@ from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRES
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
 # 启动时默认启用拉取（参与定时连接器批量同步）；HF Spaces 仍由运营手动开启以免与 GitHub/PH 同时暴量请求。
+# 扩容：每增加一个 key 前须本地 verify_source_local.py 通过，见 docs/DATA_SOURCE_ONBOARDING.md。
 AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = frozenset({"github", "product_hunt"})
 
 
