@@ -11,6 +11,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from .domain.articles import (
+    CONNECTOR_HEAT_TOP_N,
     CONNECTOR_SNIPPET_MAX_CHARS,
     VALUE_SCORE_MIN,
     display_fingerprint,
@@ -153,6 +154,8 @@ def _apply_github_engagement_to_article(
         snippet=safe,
         value_score=vs,
         sync_unix=float(now.timestamp()),
+        connector_rank=0,
+        connector_pool_size=CONNECTOR_HEAT_TOP_N,
     )
     ak = (admin_source_key or "").strip().lower()
     if ak == "github":
@@ -219,6 +222,8 @@ def _create_one_published_article_from_connector_targets(
     single_snippet: str,
     now: datetime,
     connector_sync_log_id: int | None = None,
+    connector_rank: int = 0,
+    connector_pool_size: int = CONNECTOR_HEAT_TOP_N,
 ) -> int:
     t0 = targets[0]
     industry_id = int(t0["industry_id"])
@@ -369,6 +374,8 @@ def _create_one_published_article_from_connector_targets(
         snippet=safe,
         value_score=vs,
         sync_unix=float(time.time()),
+        connector_rank=connector_rank,
+        connector_pool_size=max(1, int(connector_pool_size)),
     )
 
     recent = db.scalars(
@@ -458,8 +465,9 @@ def create_published_articles_for_connector_targets(
             )
         except Exception:
             pass
+        pool_n = len(parts)
         total = 0
-        for piece in parts:
+        for rank, piece in enumerate(parts):
             total += _create_one_published_article_from_connector_targets(
                 db,
                 connector_id=connector_id,
@@ -470,6 +478,8 @@ def create_published_articles_for_connector_targets(
                 single_snippet=piece,
                 now=now,
                 connector_sync_log_id=connector_sync_log_id,
+                connector_rank=rank,
+                connector_pool_size=pool_n,
             )
         return total
     return _create_one_published_article_from_connector_targets(

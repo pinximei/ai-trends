@@ -1,5 +1,5 @@
 import { publicGet, publicPost } from "./client";
-import type { ArticleDetail, ArticlesFeedResponse } from "./types";
+import type { ArticleDetail, ArticleFeedCard, ArticlesFeedResponse } from "./types";
 
 export { publicGet, publicPost } from "./client";
 export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse, ArticlesFeedHeatResponse } from "./types";
@@ -110,6 +110,26 @@ export const publicApi = {
   },
   newsletterSubscribe: (email: string) =>
     publicPost<{ subscribed: boolean }>("/api/public/v1/newsletter/subscribe", { email }),
+  homeEditorialPicks: (opts?: {
+    industry_slug?: string;
+    news_limit?: number;
+    apps_limit?: number;
+    published_within_days?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
+    if (opts?.news_limit != null) sp.set("news_limit", String(opts.news_limit));
+    if (opts?.apps_limit != null) sp.set("apps_limit", String(opts.apps_limit));
+    if (opts?.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
+    const qs = sp.toString();
+    return publicGet<{
+      news: ArticleFeedCard[];
+      apps: ArticleFeedCard[];
+      featured_news_id: number | null;
+      pick_window_days: number;
+      scoring_note: string;
+    }>(`/api/public/v1/home/editorial-picks${qs ? `?${qs}` : ""}`);
+  },
   homeTrendOverview: (opts?: { industry_slug?: string; sparkline_days?: number; period_days?: number }) => {
     const sp = new URLSearchParams();
     if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);

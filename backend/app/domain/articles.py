@@ -696,20 +696,71 @@ def extract_engagement_signals(snippet: str) -> dict[str, float]:
     return out
 
 
+def _recency_boost_from_snippet(snippet: str, *, admin_source_key: str) -> float:
+    """从片段中的 ISO 时间字段估计「多新」，弥补 arXiv 等无互动计数源（0–90 分）。"""
+    k = (admin_source_key or "").strip().lower()
+    if k not in ("arxiv", "newsapi", "finnhub", "youtube_data", "mapbox"):
+        return 0.0
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    try:
+        root = json.loads(s)
+    except Exception:
+        return 0.0
+    if not isinstance(root, dict):
+        return 0.0
+    raw_ts = (root.get("updated") or root.get("published") or root.get("created_at") or "").strip()
+    if not raw_ts:
+        return 0.0
+    try:
+        ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+    except ValueError:
+        return 0.0
+    if ts.tzinfo is not None:
+        ts = ts.replace(tzinfo=None)
+    age_h = max(0.0, (datetime.utcnow() - ts).total_seconds() / 3600.0)
+    if age_h <= 24:
+        return 90.0
+    if age_h <= 72:
+        return 65.0
+    if age_h <= 168:
+        return 40.0
+    if age_h <= 720:
+        return 18.0
+    return 0.0
+
+
+def _connector_rank_boost(*, rank: int, pool_size: int) -> float:
+    """连接器当次 TopN 内的榜内名次（#1 最高），与上游 API 排序一致。"""
+    n = max(1, int(pool_size or CONNECTOR_HEAT_TOP_N))
+    r = max(0, min(int(rank), n - 1))
+    return 160.0 * float(n - r) / float(n)
+
+
 def unified_connector_heat(
     *,
     admin_source_key: str,
     snippet: str,
     value_score: float,
     sync_unix: float,
+    connector_rank: int = 0,
+    connector_pool_size: int = CONNECTOR_HEAT_TOP_N,
 ) -> float:
     """
-    连接器入库用的统一热度：不同平台原始计数经 log 归一后，按数据源加权合成 ~0–800+，
-    再叠加入库质量分（rule_value_score）与极小时间项，保证同量纲可排序、可再被运营 PATCH 覆盖。
+    连接器入库用的统一热度（heat_score），量纲约 0–900+，便于跨源排序：
+
+    1. **平台互动**（主）：各源 votes/stars/points/likes 等 log 归一后加权（见分支权重）。
+    2. **榜内名次**：当次同步 TopN 内排名（#1 高于 #10），与 Product Hunt/HN/GitHub 拉取顺序一致。
+    3. **时效**：论文/快讯类用片段内 published/updated 时间加分。
+    4. **信息完整度**：rule_value_score（片段长度等）仅作弱信号，避免「长 JSON 压过真热门」。
+    5. **微小时序**：同分略新者优先（极小 tie）。
+
+    运营可在后台 PATCH heat_score 覆盖。
     """
     sig = extract_engagement_signals(snippet)
     k = (admin_source_key or "").strip().lower()
     vs = max(0.0, min(100.0, float(value_score or 0.0)))
+    rank_boost = _connector_rank_boost(rank=connector_rank, pool_size=connector_pool_size)
+    recency = _recency_boost_from_snippet(snippet, admin_source_key=k)
     if k == "github":
         eng = (
             420.0 * _heat_log_norm(sig["stars"], cap=80_000.0)
@@ -749,7 +800,7 @@ def unified_connector_heat(
             _heat_log_norm(sig["downloads"], cap=8_000_000.0),
         )
     tie = (float(sync_unix) % 86_400_000.0) * 1e-7
-    return float(max(0.0, eng + 0.32 * vs + tie))
+    return float(max(0.0, eng + rank_boost + recency + 0.12 * vs + tie))
 
 
 def unified_editorial_heat(*, sync_unix: float, quality_hint: float = 58.0) -> float:

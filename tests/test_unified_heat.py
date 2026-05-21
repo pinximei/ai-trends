@@ -81,3 +81,24 @@ def test_unified_value_score_adds_on_top_of_signals() -> None:
 def test_unified_editorial_heat_mid_band() -> None:
     u = art.unified_editorial_heat(sync_unix=1_700_000_000.0)
     assert 90.0 < u < 130.0
+
+
+def test_connector_rank_boost_prefers_top_of_pack() -> None:
+    snippet = json.dumps({"votesCount": 500, "commentsCount": 50})
+    top = art.unified_connector_heat(
+        admin_source_key="product_hunt",
+        snippet=snippet,
+        value_score=60.0,
+        sync_unix=1.0,
+        connector_rank=0,
+        connector_pool_size=10,
+    )
+    tail = art.unified_connector_heat(
+        admin_source_key="product_hunt",
+        snippet=snippet,
+        value_score=60.0,
+        sync_unix=1.0,
+        connector_rank=9,
+        connector_pool_size=10,
+    )
+    assert top > tail

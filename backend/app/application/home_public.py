@@ -114,6 +114,74 @@ def get_home_trend_overview(
     }
 
 
+HOME_PICKS_MIN_TITLE_LEN = 6
+HOME_PICKS_MIN_SUMMARY_LEN = 36
+HOME_PICKS_MIN_HEAT = 72.0
+
+
+def _home_pick_quality_ok(item: dict) -> bool:
+    title = str(item.get("title") or "").strip()
+    summary = str(item.get("card_description") or item.get("summary") or "").strip()
+    heat = float(item.get("heat_score") or 0.0)
+    if len(title) < HOME_PICKS_MIN_TITLE_LEN:
+        return False
+    if len(summary) < HOME_PICKS_MIN_SUMMARY_LEN:
+        return False
+    if heat < HOME_PICKS_MIN_HEAT:
+        return False
+    return True
+
+
+def get_home_editorial_picks(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    news_limit: int = 8,
+    apps_limit: int = 6,
+    published_within_days: int = 30,
+) -> dict:
+    """
+    首页编辑推荐：按统一 heat_score 取资讯/应用热门，而非「最新发布时间」。
+
+    列表页默认仍可按日浏览；首页焦点位应对齐各平台真实热度 + 榜内名次。
+    """
+    from .article_public import list_articles_feed_by_heat_top
+
+    nl = max(1, min(int(news_limit), 20))
+    al = max(1, min(int(apps_limit), 20))
+    days = max(1, min(int(published_within_days), 120))
+
+    news_raw = list_articles_feed_by_heat_top(
+        db,
+        feed="news",
+        industry_slug=industry_slug,
+        published_within_days=days,
+        published_on_latest_day=False,
+        heat_offset=0,
+        heat_page_size=nl * 2,
+        heat_max_ranked=min(100, nl * 4),
+    )
+    apps_raw = list_articles_feed_by_heat_top(
+        db,
+        feed="apps",
+        industry_slug=industry_slug,
+        published_within_days=days,
+        published_on_latest_day=False,
+        heat_offset=0,
+        heat_page_size=al * 2,
+        heat_max_ranked=min(100, al * 4),
+    )
+    news_items = [x for x in (news_raw.get("items") or []) if _home_pick_quality_ok(x)][:nl]
+    apps_items = [x for x in (apps_raw.get("items") or []) if _home_pick_quality_ok(x)][:al]
+    return {
+        "news": news_items,
+        "apps": apps_items,
+        "featured_news_id": news_items[0]["id"] if news_items else None,
+        "pick_window_days": days,
+        "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
+    }
+
+
 def _day_range_utc(n_days: int, *, end: datetime | None = None) -> list[str]:
     end_dt = (end or datetime.utcnow()).replace(hour=0, minute=0, second=0, microsecond=0)
     out: list[str] = []

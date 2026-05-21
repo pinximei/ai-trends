@@ -301,24 +301,17 @@ export function HomePage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      publicApi.articlesFeed({
-        feed: "news",
+    publicApi
+      .homeEditorialPicks({
         industry_slug: INDUSTRY,
-        page_size: 8,
+        news_limit: 8,
+        apps_limit: 10,
         published_within_days: 30,
-      }),
-      publicApi.articlesFeed({
-        feed: "apps",
-        industry_slug: INDUSTRY,
-        page_size: 10,
-        published_within_days: 30,
-      }),
-    ])
-      .then(([n, a]) => {
+      })
+      .then((data) => {
         if (cancelled) return;
-        setNews(n.items ?? []);
-        setApps(a.items ?? []);
+        setNews(data.news ?? []);
+        setApps(data.apps ?? []);
       })
       .catch(() => {
         if (!cancelled) {
