@@ -13,9 +13,9 @@ from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRES
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
-# 启动时默认启用拉取（参与定时连接器批量同步）；HF Spaces 仍由运营手动开启以免与 GitHub/PH 同时暴量请求。
+# 启动时默认启用拉取（参与定时连接器批量同步）；与 MAINSTREAM 内置源一致（5 路）。
 # 扩容：每增加一个 key 前须本地 verify_source_local.py 通过，见 docs/DATA_SOURCE_ONBOARDING.md。
-AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = frozenset({"github", "product_hunt"})
+AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = MAINSTREAM_ADMIN_SOURCE_KEYS
 
 
 def repair_github_admin_source_if_still_zen(db: Session) -> None:
@@ -101,7 +101,7 @@ def ensure_core_admin_connectors(db: Session) -> None:
 
 
 def enable_auto_pull_admin_sources_and_connectors(db: Session) -> dict[str, int]:
-    """将 GitHub、Product Hunt 数据源与绑定连接器设为启用（新建与已有库均生效）。"""
+    """将内置主流数据源与绑定连接器设为启用（新建与已有库均生效）。"""
     import logging
 
     log = logging.getLogger(__name__)

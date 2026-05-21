@@ -4,11 +4,11 @@
 
 | source_key | 名称 | 默认定时拉取 | 泳道 | 本地脚本 |
 |------------|------|--------------|------|----------|
-| `github` | GitHub Trending | ✅ 启用 | 资讯 `news` | `scripts/run_github_sync_local.py` |
-| `product_hunt` | Product Hunt | ✅ 启用 | 应用 `apps` | `scripts/run_product_hunt_sync_local.py` |
-| `huggingface_spaces` | Hugging Face Spaces | ❌ 需手动开连接器 | 应用 `apps` | `scripts/run_huggingface_spaces_sync_local.py` |
-| `hacker_news` | Hacker News | ❌ 需手动开连接器 | 资讯 `news` | `scripts/run_hacker_news_sync_local.py` |
-| `arxiv` | arXiv | ❌ 需手动开连接器 | 资讯 `news` | `scripts/run_arxiv_sync_local.py` |
+| `github` | GitHub Trending | ✅ 定时拉取 | 资讯 `news` | `scripts/run_github_sync_local.py` |
+| `product_hunt` | Product Hunt | ✅ 定时拉取 | 应用 `apps` | `scripts/run_product_hunt_sync_local.py` |
+| `huggingface_spaces` | Hugging Face Spaces | ✅ 定时拉取 | 应用 `apps` | `scripts/run_huggingface_spaces_sync_local.py` |
+| `hacker_news` | Hacker News | ✅ 定时拉取 | 资讯 `news` | `scripts/run_hacker_news_sync_local.py` |
+| `arxiv` | arXiv | ✅ 定时拉取 | 资讯 `news` | `scripts/run_arxiv_sync_local.py` |
 
 **原则：一次只接一个源；本地门禁通过后再接下一个；未通过不得加入 `MAINSTREAM_ADMIN_SOURCE_PRESETS` 或 `AUTO_ENABLE_PULL_SOURCE_KEYS`。**
 

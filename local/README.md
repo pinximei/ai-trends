@@ -20,7 +20,7 @@ py -3.12 scripts/run_product_hunt_sync_local.py --sqlite
 
 ## 数据源逐个验收（必读）
 
-当前内置 **GitHub / Product Hunt / Hugging Face Spaces / Hacker News / arXiv**。  
+当前内置 **5 路**：GitHub / Product Hunt / Hugging Face Spaces / Hacker News / arXiv（启动后连接器默认启用定时拉取）。  
 **再增其它数据源前**，须先让现有源在本地通过门禁：
 
 ```powershell

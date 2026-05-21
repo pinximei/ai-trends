@@ -21,7 +21,7 @@ CONTENT_ROLE_LABEL_ZH: dict[str, str] = {
 
 
 # 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
-# 下列为 **AI 向** 内置预置：GitHub 协作、HF Spaces、Product Hunt；Product Hunt 须 OAuth Bearer。
+# 下列为 **AI 向** 内置预置（5 路）：GitHub、HF Spaces、Product Hunt、Hacker News、arXiv；Product Hunt 须 OAuth Bearer。
 # 新增数据源：须先通过 scripts/verify_source_local.py 与 docs/DATA_SOURCE_ONBOARDING.md 门禁，再改本列表。
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {

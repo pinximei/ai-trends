@@ -44,6 +44,7 @@ def _startup_sync() -> None:
             prune_admin_sources_outside_mainstream,
             prune_disabled_admin_sources,
             prune_discontinued_bootstrap_admin_sources,
+            repair_connector_urls_from_admin_sources,
             repair_github_admin_source_if_still_zen,
             repair_short_probe_admin_sources,
         )
@@ -56,6 +57,7 @@ def _startup_sync() -> None:
         repair_github_admin_source_if_still_zen(db)
         repair_short_probe_admin_sources(db)
         ensure_core_admin_connectors(db)
+        repair_connector_urls_from_admin_sources(db)
         enable_auto_pull_admin_sources_and_connectors(db)
         if demo_seed_enabled_effective():
             seed_if_empty(db)
