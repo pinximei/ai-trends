@@ -63,14 +63,13 @@ function formatFeedDateLabel(isoDay: string): string {
   return d.toLocaleDateString("zh-CN", { dateStyle: "long", timeZone: "UTC" });
 }
 
-/** 按日分页列表的分组键：与后端 ``published_at`` 日历日一致，避免翻页后仍按 ``updated_at`` 顶到上一页日期 */
+/** 列表分组与卡片角标均用 ``published_at`` 的 UTC 日历日，与后端按日分页一致。 */
 function articleGroupDay(a: { published_at?: string | null }): string {
   return (a.published_at || "").slice(0, 10) || "_";
 }
 
-/** 卡片角标时间：优先更新时间（重复同步 star 后会刷新） */
-function articleDisplayDay(a: { updated_at?: string | null; published_at?: string | null }): string {
-  return (a.updated_at || a.published_at || "").slice(0, 10) || "_";
+function articleDisplayDay(a: { published_at?: string | null }): string {
+  return articleGroupDay(a);
 }
 
 function formatFeedDayRange(newest: string | null, oldest: string | null): string | null {
@@ -627,7 +626,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 >
                   {rows.map((a) => {
                     const displayDay = articleDisplayDay(a);
-                    const displayIso = a.updated_at || a.published_at;
+                    const displayIso = a.published_at;
                     const starsTotal = a.engagement_stars_total;
                     const starsToday = a.engagement_stars_today;
                     return (
@@ -665,7 +664,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                                   className="text-[11px] font-medium tabular-nums text-slate-400"
                                   dateTime={displayIso || undefined}
                                 >
-                                  {displayDay}
+                                  {listDisplayMode === "heat"
+                                    ? displayDay
+                                    : formatFeedDateLabel(displayDay)}
                                 </time>
                               ) : null}
                               {starsTotal != null ? (
