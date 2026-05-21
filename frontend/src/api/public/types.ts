@@ -10,6 +10,8 @@ export type ArticleCard = {
   connector_sync_log_id?: number | null;
   /** 上游 API 条目的稳定 id（如 HN objectID、GitHub node_id） */
   source_external_id?: string | null;
+  /** 连接器解析的主链接（GitHub 仓库页、HN 讨论帖等） */
+  source_original_url?: string | null;
   published_at: string | null;
   /** 可更新热度；应用泳道按日列表内优先于发布时间排序 */
   heat_score?: number;

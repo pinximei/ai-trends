@@ -310,6 +310,155 @@ def extract_github_engagement_from_snippet(snippet: str) -> dict[str, int | None
     return out
 
 
+def _github_repo_page_url_from_payload(payload: dict) -> str | None:
+    """GitHub 仓库页（非 issues/releases 子路径）。"""
+    fn = str(payload.get("full_name") or "").strip().strip("/")
+    if fn and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", fn):
+        return f"https://github.com/{fn}"[:2048]
+    html = str(payload.get("html_url") or "").strip()
+    if html.startswith(("http://", "https://")) and "github.com/" in html.lower():
+        m = re.match(r"^(https?://github\.com/[^/]+/[^/]+)", html, re.I)
+        if m:
+            return m.group(1)[:2048]
+    return None
+
+
+def extract_connector_detail_link_rows(admin_source_key: str, snippet: str) -> list[tuple[str, str]]:
+    """从连接器片段提取详情「数据支撑」应展示的 (标签, URL) 列表。"""
+    k = (admin_source_key or "").strip().lower()
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    if not s:
+        return []
+    try:
+        payload = json.loads(s)
+    except Exception:
+        return []
+    if not isinstance(payload, dict):
+        return []
+
+    rows: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def add(label: str, url: str) -> None:
+        u = (url or "").strip()
+        if not u.startswith(("http://", "https://")) or len(u) < 12:
+            return
+        u = u[:2048]
+        if u in seen:
+            return
+        seen.add(u)
+        rows.append((label, u))
+
+    if k == "github":
+        repo = _github_repo_page_url_from_payload(payload)
+        if repo:
+            add("GitHub 仓库", repo)
+        hp = str(payload.get("homepage") or "").strip()
+        if hp.startswith(("http://", "https://")):
+            add("项目主页", hp)
+        return rows
+
+    if k == "hacker_news":
+        link = (payload.get("url") or "").strip()
+        if not link and payload.get("objectID"):
+            link = f"https://news.ycombinator.com/item?id={payload.get('objectID')}"
+        if link:
+            add("讨论链接", link)
+        return rows
+
+    if k == "arxiv":
+        abs_u = str(payload.get("abs_url") or "").strip()
+        if not abs_u and payload.get("arxiv_id"):
+            abs_u = f"https://arxiv.org/abs/{str(payload.get('arxiv_id')).strip()}"
+        pdf_u = str(payload.get("pdf_url") or "").strip()
+        if abs_u:
+            add("arXiv 摘要页", abs_u)
+        if pdf_u:
+            add("PDF", pdf_u)
+        return rows
+
+    if k == "product_hunt":
+        for label, key in (("官网", "website"), ("Product Hunt", "url")):
+            u = str(payload.get(key) or "").strip()
+            if u.startswith(("http://", "https://")):
+                add(label, u)
+        return rows
+
+    if k == "huggingface_spaces":
+        sid = str(payload.get("id") or "").strip().strip("/")
+        if sid:
+            add("Space", f"https://huggingface.co/spaces/{sid}")
+        return rows
+
+    u = extract_source_original_url_from_connector_snippet(s)
+    if u:
+        add("原文链接", u)
+    return rows
+
+
+def extract_connector_primary_url(admin_source_key: str, snippet: str) -> str | None:
+    """连接器条目主链接（写入 source_original_url、详情页顶栏）。"""
+    rows = extract_connector_detail_link_rows(admin_source_key, snippet)
+    return rows[0][1] if rows else None
+
+
+def _markdown_links_block(rows: list[tuple[str, str]]) -> str:
+    if not rows:
+        return ""
+    lines = ["", "**相关链接**", ""]
+    for label, url in rows:
+        lines.append(f"- [{label}]({url})")
+    return "\n".join(lines)
+
+
+def ensure_connector_links_in_polish_tabs(
+    admin_source_key: str,
+    snippet: str,
+    tabs: list,
+) -> None:
+    """保证「数据支撑」tab 含可点击 Markdown 链接（不依赖 LLM 是否写出）。"""
+    rows = extract_connector_detail_link_rows(admin_source_key, snippet)
+    if not rows:
+        return
+    data_tab: dict | None = None
+    for t in tabs:
+        if isinstance(t, dict) and str(t.get("label") or "").strip() == FEED_CARD_TAB_DATA:
+            data_tab = t
+            break
+    if not data_tab:
+        return
+    body = str(data_tab.get("body_md") or "").strip()
+    missing = [(lab, u) for lab, u in rows if u not in body]
+    if not missing:
+        return
+    block = _markdown_links_block(missing)
+    data_tab["body_md"] = (body + block).strip() if body else block.strip()
+
+
+def enrich_published_tabs_with_source_url(
+    tabs: list[dict[str, str]],
+    *,
+    source_original_url: str | None,
+    admin_source_key: str,
+) -> list[dict[str, str]]:
+    """已发布文章读详情时：若 tab 内缺链接但库里有 source_original_url，补一段链接块。"""
+    url = (source_original_url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        return tabs
+    ak = (admin_source_key or "").strip().lower()
+    label = "GitHub 仓库" if ak == "github" else "原文链接"
+    out: list[dict[str, str]] = []
+    for t in tabs:
+        row = dict(t)
+        if str(row.get("label") or "").strip() == FEED_CARD_TAB_DATA:
+            body = str(row.get("body_md") or "").strip()
+            if url not in body:
+                block = _markdown_links_block([(label, url)])
+                row["body_md"] = (body + block).strip() if body else block.strip()
+        out.append(row)
+    return out
+
+
 def extract_source_external_id_from_connector_snippet(snippet: str) -> str | None:
     """
     从连接器 JSON 中解析上游「原始条目」的稳定标识（如 HN Algolia 的 objectID、GitHub 的 node_id 或数字 id）。

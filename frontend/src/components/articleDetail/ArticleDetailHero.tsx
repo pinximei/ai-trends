@@ -41,6 +41,20 @@ export function ArticleDetailHero({ article, layout, tagline, profileBadge, cate
   const seed = `${article.id}:${article.title || ""}`;
   const cover = article.cover_image_url;
   const title = article.title || "";
+  const sourceUrl = (article.source_original_url || "").trim();
+
+  const sourceLinkEl =
+    sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://") ? (
+      <a
+        href={sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-600 shadow-sm hover:border-brand-300 hover:bg-brand-50"
+      >
+        {layout.heroVariant === "repo" ? "打开 GitHub 仓库" : "查看原文"}
+        <span aria-hidden>↗</span>
+      </a>
+    ) : null;
 
   if (layout.heroVariant === "repo") {
     return (
@@ -58,6 +72,7 @@ export function ArticleDetailHero({ article, layout, tagline, profileBadge, cate
             </div>
             <h1 className="mt-3 font-mono text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
             {tagline ? <p className="mt-3 text-sm leading-relaxed text-slate-600">{tagline}</p> : null}
+            {sourceLinkEl}
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
               {dateStr ? <span className="tabular-nums">{dateStr}</span> : null}
             </div>
@@ -87,6 +102,7 @@ export function ArticleDetailHero({ article, layout, tagline, profileBadge, cate
             </div>
             <h1 className="mt-4 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{title}</h1>
             {tagline ? <p className="mt-4 text-sm leading-relaxed text-slate-600 sm:text-base">{tagline}</p> : null}
+            {sourceLinkEl}
             {categoryTags}
           </div>
         </div>
@@ -107,6 +123,7 @@ export function ArticleDetailHero({ article, layout, tagline, profileBadge, cate
             </div>
             <h1 className="mt-3 text-2xl font-semibold leading-snug text-slate-900 sm:text-[1.65rem]">{title}</h1>
             {tagline ? <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600">{tagline}</p> : null}
+            {sourceLinkEl}
             {categoryTags}
           </div>
         </div>
@@ -127,6 +144,7 @@ export function ArticleDetailHero({ article, layout, tagline, profileBadge, cate
               <p className="text-sm font-medium text-slate-500">{platform}</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
               {tagline ? <p className="mt-3 text-sm leading-relaxed text-slate-600">{tagline}</p> : null}
+              {sourceLinkEl}
               <div className="mt-3 text-xs text-slate-500">{dateStr ? <time className="tabular-nums">{dateStr}</time> : null}</div>
               {categoryTags}
             </div>
@@ -157,6 +175,7 @@ export function ArticleDetailHero({ article, layout, tagline, profileBadge, cate
           </div>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
           {tagline ? <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{tagline}</p> : null}
+          {sourceLinkEl}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
             {dateStr ? <time className="tabular-nums">{dateStr}</time> : null}
           </div>

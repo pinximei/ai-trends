@@ -709,6 +709,13 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
     label_by_key = _admin_source_label_by_key(db)
     plat = label_by_key.get(ak) or (ak.replace("_", " ").title() if ak else "")
     tabs = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
+    src_url = (getattr(a, "source_original_url", None) or "")[:2048] or None
+    if tabs and src_url:
+        tabs = art.enrich_published_tabs_with_source_url(
+            tabs,
+            source_original_url=src_url,
+            admin_source_key=ak,
+        )
     if not tabs and (a.body or "").strip():
         tabs = [
             {
@@ -733,6 +740,7 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "heat_score": float(getattr(a, "heat_score", 0.0) or 0.0),
         "connector_sync_log_id": getattr(a, "connector_sync_log_id", None),
         "source_external_id": getattr(a, "source_external_id", None),
+        "source_original_url": src_url,
         "categories": art.display_categories_for_article(getattr(a, "ai_categories_json", None)),
         "feed_kind": lane,
         "admin_source_key": ak,

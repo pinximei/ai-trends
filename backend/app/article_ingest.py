@@ -15,6 +15,8 @@ from .domain.articles import (
     VALUE_SCORE_MIN,
     display_fingerprint,
     extract_cover_image_url,
+    extract_connector_primary_url,
+    ensure_connector_links_in_polish_tabs,
     extract_github_engagement_from_snippet,
     extract_source_external_id_from_connector_snippet,
     feed_lane,
@@ -162,6 +164,9 @@ def _apply_github_engagement_to_article(
     cover = extract_cover_image_url(ak, safe)
     if cover:
         row.cover_image_url = cover
+    primary_url = extract_connector_primary_url(admin_source_key, safe)
+    if primary_url:
+        row.source_original_url = primary_url[:2048]
     row.updated_at = now
 
 
@@ -320,6 +325,7 @@ def _create_one_published_article_from_connector_targets(
     tabs = polished.get("tabs") or []
     if isinstance(tabs, list):
         _normalize_polish_tabs(tabs)
+        ensure_connector_links_in_polish_tabs(src_tag, safe, tabs)
 
     title = (polished.get("title") or "")[:500]
     summary = (polished.get("summary") or "")[:512]
@@ -377,6 +383,7 @@ def _create_one_published_article_from_connector_targets(
             return 0
 
     cover_image_url = extract_cover_image_url(src_tag, safe)
+    source_original_url = extract_connector_primary_url(src_tag, safe)
     art = Article(
         title=title,
         slug=slug,
@@ -388,6 +395,7 @@ def _create_one_published_article_from_connector_targets(
         third_party_source=f"{src_tag} / {connector_name}"[:512],
         connector_sync_log_id=connector_sync_log_id,
         source_external_id=(source_external_id[:512] if source_external_id else None),
+        source_original_url=(source_original_url[:2048] if source_original_url else None),
         status="published",
         published_at=now,
         ingest_fingerprint=ing_fp,

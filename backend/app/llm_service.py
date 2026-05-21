@@ -104,7 +104,8 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
     if k == "github":
         return (
             "【GitHub 仓库稿】「描述」按：项目定位 → 核心能力 → 适用人群；"
-            "「数据支撑」用中文表格，优先列：仓库名、Star 总数、今日 Star、主语言、许可证、主页链接（片段有则写）。"
+            "「数据支撑」用中文表格，优先列：仓库名、Star 总数、今日 Star、主语言、许可证；"
+            "凡片段含 html_url、homepage、full_name，必须在表内或文末用 Markdown 链接写出，例如 [GitHub 仓库](https://github.com/owner/repo)。"
         )
     if k == "product_hunt":
         return (
