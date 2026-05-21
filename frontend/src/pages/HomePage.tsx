@@ -5,10 +5,16 @@ import {
   Brain,
   ChevronRight,
   Download,
+  Flame,
+  LayoutGrid,
   Mail,
+  Newspaper,
+  Radar,
   Wrench,
 } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
+import { HomeArticleTile } from "@/components/home/HomeArticleTile";
+import { mergeSourceLanes, platformAccent, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
 
@@ -38,42 +44,6 @@ function usePrefersReducedMotion(): boolean {
     return () => mq.removeEventListener("change", onChange);
   }, []);
   return reduce;
-}
-
-function summarize(text: string, max: number) {
-  const s = (text || "").trim();
-  if (!s) return "—";
-  return s.length > max ? `${s.slice(0, max)}…` : s;
-}
-
-function thumbSurface(seed: string): CSSProperties {
-  let n = 0;
-  for (let i = 0; i < seed.length; i++) n += seed.charCodeAt(i);
-  const hue = (n * 47) % 360;
-  const hue2 = (hue + 38) % 360;
-  return {
-    background: `linear-gradient(135deg, hsl(${hue} 72% 52%) 0%, hsl(${hue2} 65% 42%) 100%)`,
-  };
-}
-
-function timeAgo(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const diff = Date.now() - d.getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const days = Math.floor(h / 24);
-  return `${days} 天前`;
-}
-
-function toolRating(seed: string): string {
-  let n = 0;
-  for (let i = 0; i < seed.length; i++) n += seed.charCodeAt(i);
-  return (9 + (n % 8) / 10).toFixed(1);
 }
 
 /** 星环平面内：圆轨道 + 逆旋保持图标正向（CSS 动画） */
@@ -270,6 +240,12 @@ export function HomePage() {
   const { t } = useI18n();
   const [news, setNews] = useState<ArticleFeedCard[]>([]);
   const [apps, setApps] = useState<ArticleFeedCard[]>([]);
+  const [newsLanes, setNewsLanes] = useState<SourceLane[]>([]);
+  const [appsLanes, setAppsLanes] = useState<SourceLane[]>([]);
+  const [sourceFacets, setSourceFacets] = useState<
+    Array<{ key: string; label: string; news_count: number; apps_count: number }>
+  >([]);
+  const [topCategories, setTopCategories] = useState<Array<{ label: string; count: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -282,27 +258,28 @@ export function HomePage() {
     apps_growth_pct: number | null;
     news_growth_pct: number | null;
   } | null>(null);
-  const [trendLoading, setTrendLoading] = useState(true);
 
   const sparklineValues = useMemo(
     () => trendOverview?.sparkline.map((p) => p.count) ?? [],
     [trendOverview],
   );
 
-  const popularCats = useMemo(
+  const mergedLanes = useMemo(() => mergeSourceLanes(newsLanes, appsLanes), [newsLanes, appsLanes]);
+
+  const quickNav = useMemo(
     () => [
-      { to: "/news", titleKey: "homePopularCat1Title", subKey: "homePopularCat1Sub", Icon: Brain, grad: "from-violet-500 to-indigo-600" },
-      { to: "/apps", titleKey: "homePopularCat2Title", subKey: "homePopularCat2Sub", Icon: Wrench, grad: "from-sky-500 to-blue-600" },
-      { to: "/downloads", titleKey: "homePopularCat5Title", subKey: "homePopularCat5Sub", Icon: Download, grad: "from-emerald-500 to-teal-600" },
+      { to: "/news", label: t("homeGoNewsRadar"), Icon: Newspaper, grad: "from-violet-600 to-indigo-600" },
+      { to: "/apps", label: t("homeGoAppsRadar"), Icon: LayoutGrid, grad: "from-sky-500 to-blue-600" },
+      { to: "/downloads", label: t("homePopularCat5Title"), Icon: Download, grad: "from-emerald-500 to-teal-600" },
     ],
-    [],
+    [t],
   );
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     publicApi
-      .homeEditorialPicks({
+      .homeDashboard({
         industry_slug: INDUSTRY,
         news_limit: 8,
         apps_limit: 10,
@@ -312,11 +289,21 @@ export function HomePage() {
         if (cancelled) return;
         setNews(data.news ?? []);
         setApps(data.apps ?? []);
+        setNewsLanes(data.news_source_lanes ?? []);
+        setAppsLanes(data.apps_source_lanes ?? []);
+        setSourceFacets(data.source_facets ?? []);
+        setTopCategories(data.top_categories ?? []);
+        setTrendOverview(data.trend ?? null);
       })
       .catch(() => {
         if (!cancelled) {
           setNews([]);
           setApps([]);
+          setNewsLanes([]);
+          setAppsLanes([]);
+          setSourceFacets([]);
+          setTopCategories([]);
+          setTrendOverview(null);
         }
       })
       .finally(() => {
@@ -327,28 +314,10 @@ export function HomePage() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    setTrendLoading(true);
-    publicApi
-      .homeTrendOverview({ industry_slug: INDUSTRY, sparkline_days: 14, period_days: 30 })
-      .then((data) => {
-        if (!cancelled) setTrendOverview(data);
-      })
-      .catch(() => {
-        if (!cancelled) setTrendOverview(null);
-      })
-      .finally(() => {
-        if (!cancelled) setTrendLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const featured = news[0];
-  const sideNews = news.slice(1, 4);
-  const toolList = apps.slice(0, 5);
+  const newsWall = news.slice(0, 6);
+  const appLeaderboard = apps.slice(0, 8);
+  const totalInWindow = (trendOverview?.news_count ?? 0) + (trendOverview?.apps_count ?? 0);
 
   const onSubscribe = async (e: FormEvent) => {
     e.preventDefault();
@@ -372,220 +341,250 @@ export function HomePage() {
   };
 
   return (
-    <div className="w-full space-y-6 lg:space-y-8">
-      {/* lg+：左主列 | 右栏（热门工具 + AI 趋势），大屏铺满 */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,20rem)] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] xl:gap-x-16 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] 2xl:gap-x-20">
-        <div className="min-w-0 space-y-6 pr-0 lg:space-y-8 lg:pr-2">
-          <section className="flex flex-col items-center gap-3 overflow-visible text-center sm:gap-4 lg:flex-row lg:items-center lg:gap-5 lg:text-left xl:gap-6">
-            <div className="min-w-0 w-full shrink-0 lg:w-auto lg:max-w-lg lg:flex-none xl:max-w-xl">
-              <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
-                {t("homeMainHeroTitle")}
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
-                {t("homeMainHeroDesc")}
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
-                <Link
-                  to="/news"
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
-                >
-                  {t("homeMainHeroCta1")}
-                  <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
-                </Link>
-                <Link
-                  to="/apps"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-7 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700 sm:text-[15px]"
-                >
-                  {t("homeMainHeroCta2")}
-                </Link>
-              </div>
-            </div>
-            <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-0 lg:min-h-0 lg:min-w-[340px] lg:flex-1 lg:justify-center">
-              <div className="flex w-full min-w-0 max-w-full shrink-0 justify-center overflow-visible lg:w-full">
-                <HeroGraphic />
-              </div>
-            </div>
-          </section>
+    <div className="w-full space-y-8 lg:space-y-10">
+      <section className="flex flex-col items-center gap-3 overflow-visible text-center sm:gap-4 lg:flex-row lg:items-center lg:gap-5 lg:text-left xl:gap-6">
+        <div className="min-w-0 w-full shrink-0 lg:w-auto lg:max-w-lg lg:flex-none xl:max-w-xl">
+          <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
+            {t("homeMainHeroTitle")}
+          </h1>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:text-base">
+            {t("homeMainHeroDesc")}
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
+            <Link
+              to="/news"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
+            >
+              {t("homeMainHeroCta1")}
+              <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
+            </Link>
+            <Link
+              to="/apps"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-7 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700 sm:text-[15px]"
+            >
+              {t("homeMainHeroCta2")}
+            </Link>
+          </div>
+        </div>
+        <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-visible py-0 lg:min-h-0 lg:min-w-[340px] lg:flex-1 lg:justify-center">
+          <div className="flex w-full min-w-0 max-w-full shrink-0 justify-center overflow-visible lg:w-full">
+            <HeroGraphic />
+          </div>
+        </div>
+      </section>
 
-          <section>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold tracking-tight text-slate-900 lg:text-xl">{t("homeTodayFocus")}</h2>
-            </div>
-            {loading ? (
-              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-            ) : news.length === 0 ? (
-              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
-                {featured ? (
-                  <Link
-                    to={`/resources/${featured.id}`}
-                    className="ui-card group overflow-hidden transition hover:shadow-lg lg:col-span-7"
-                  >
-                    <div className="grid gap-0 lg:grid-cols-2">
-                      <div
-                        className="relative h-36 w-full sm:h-40 lg:h-44"
-                        style={thumbSurface(`${featured.id}-feat`)}
-                      >
-                        <span className="absolute left-3 top-3 rounded-lg bg-white/90 px-2 py-1 text-[11px] font-semibold text-violet-700 shadow-sm ring-1 ring-white/60">
-                          {t("homeImportantTag")}
-                        </span>
-                        <span className="absolute inset-0 flex items-center justify-center text-4xl font-black text-white/30 sm:text-5xl">
-                          {(featured.title || "?").slice(0, 1)}
-                        </span>
-                      </div>
-                      <div className="flex flex-col justify-center p-4 sm:p-5">
-                        <p className="line-clamp-2 text-lg font-bold leading-snug text-slate-900 group-hover:text-violet-700 sm:text-xl">
-                          {featured.title}
-                        </p>
-                        <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600">
-                          {summarize(featured.summary, 160)}
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
-                          <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
-                            {featured.categories?.[0] ?? featured.platform_label ?? t("source")}
-                          </span>
-                          <span className="tabular-nums">{timeAgo(featured.published_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ) : null}
-                <div className="flex min-h-0 flex-col gap-3 lg:col-span-5">
-                  {sideNews.map((item) => (
-                    <Link
-                      key={item.id}
-                      to={`/resources/${item.id}`}
-                      className="ui-card flex gap-3 p-3 transition hover:border-violet-200 hover:shadow-md sm:p-3.5"
-                    >
-                      <div
-                        className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg ring-1 ring-black/5 sm:h-[4.5rem] sm:w-24"
-                        style={thumbSurface(`${item.id}-side`)}
-                      >
-                        <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white/90 sm:text-xl">
-                          {(item.title || "?").slice(0, 1)}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1 py-0.5">
-                        <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900 sm:text-[15px]">{item.title}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span className="font-medium text-violet-600">{item.platform_label || t("source")}</span>
-                          <span>·</span>
-                          <span className="tabular-nums">{timeAgo(item.published_at)}</span>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+      {!loading && trendOverview ? (
+        <section className="ui-card grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4 lg:gap-5">
+          <p className="col-span-full text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
+          <div className="rounded-xl bg-violet-50/80 px-4 py-3 ring-1 ring-violet-100">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80">{t("homeStatNewArticles")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.news_count)}</p>
+            <p className="text-xs text-slate-500">
+              {formatGrowth(trendOverview.news_growth_pct) ? (
+                <span className="font-semibold text-emerald-600">
+                  {formatGrowth(trendOverview.news_growth_pct)} {t("homeStatGrowth")}
+                </span>
+              ) : (
+                t("homeStatNoCompare")
+              )}
+            </p>
+          </div>
+          <div className="rounded-xl bg-sky-50/80 px-4 py-3 ring-1 ring-sky-100">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800/80">{t("homeStatActiveTools")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.apps_count)}</p>
+            <p className="text-xs text-slate-500">
+              {formatGrowth(trendOverview.apps_growth_pct) ? (
+                <span className="font-semibold text-emerald-600">
+                  {formatGrowth(trendOverview.apps_growth_pct)} {t("homeStatGrowth")}
+                </span>
+              ) : (
+                t("homeStatNoCompare")
+              )}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t("homeStatTotalItems")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(totalInWindow)}</p>
+          </div>
+          <div className="rounded-xl bg-indigo-50/80 px-4 py-3 ring-1 ring-indigo-100">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{sourceFacets.length}</p>
+          </div>
+        </section>
+      ) : null}
 
-          <section>
-            <h2 className="mb-4 text-lg font-bold tracking-tight text-slate-900 lg:text-xl">{t("homePopularCategories")}</h2>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:gap-8">
-              {popularCats.map(({ to, titleKey, subKey, Icon, grad }) => (
-                <Link
-                  key={titleKey}
-                  to={to}
-                  className="ui-card group flex min-h-[160px] flex-col items-center justify-center gap-4 rounded-2xl p-8 text-center shadow-sm transition hover:border-violet-300/80 hover:shadow-lg sm:min-h-[180px] sm:p-10"
-                >
-                  <span
-                    className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-lg ring-2 ring-white/30 transition group-hover:scale-[1.04] sm:h-20 sm:w-20`}
-                  >
-                    <Icon className="h-9 w-9 sm:h-10 sm:w-10" strokeWidth={1.75} />
-                  </span>
-                  <p className="text-lg font-bold text-slate-900 sm:text-xl">{t(titleKey)}</p>
-                  <p className="max-w-xs text-sm leading-relaxed text-slate-500">{t(subKey)}</p>
-                </Link>
+      <section>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 lg:text-xl">
+              <Radar className="h-5 w-5 text-violet-600" strokeWidth={2} />
+              {t("homeSourceRadar")}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeSourceRadarSub")}</p>
+          </div>
+        </div>
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : mergedLanes.length === 0 ? (
+          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {mergedLanes.map((lane) => {
+              const item = lane.items[0];
+              if (!item) return null;
+              const accent = platformAccent(lane.source_key);
+              const facet = sourceFacets.find((f) => f.key === lane.source_key);
+              return (
+                <article key={lane.source_key} className={`ui-card p-3 sm:p-4 ring-1 ${accent.ring}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
+                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
+                      {lane.source_label}
+                    </span>
+                    {facet ? (
+                      <span className="ml-auto text-[10px] tabular-nums text-slate-400">
+                        {facet.news_count + facet.apps_count}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">
+                    {(item.card_highlights || item.card_description || item.summary || "").slice(0, 88)}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 lg:text-xl">
+            <Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />
+            {t("homeTodayFocus")}
+          </h2>
+          {featured ? (
+            <Link
+              to={`/resources/${featured.id}`}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:underline"
+            >
+              {t("homeFeaturedCta")}
+              <ChevronRight className="h-4 w-4" strokeWidth={2} />
+            </Link>
+          ) : null}
+        </div>
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : !featured ? (
+          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+        ) : (
+          <HomeArticleTile item={featured} variant="spotlight" detailLink />
+        )}
+      </section>
+
+      <section>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 lg:text-xl">{t("homeNewsWall")}</h2>
+            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeNewsWallSub")}</p>
+          </div>
+          <Link to="/news" className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:underline">
+            {t("homeGoNewsRadar")}
+            <ChevronRight className="h-4 w-4" strokeWidth={2} />
+          </Link>
+        </div>
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : newsWall.length === 0 ? (
+          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {newsWall.map((item) => (
+              <HomeArticleTile key={item.id} item={item} variant="tile" />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
+        <section>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 lg:text-xl">
+                <Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />
+                {t("homeAppsLeaderboard")}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeAppsLeaderboardSub")}</p>
+            </div>
+            <Link to="/apps" className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:underline">
+              {t("homeGoAppsRadar")}
+              <ChevronRight className="h-4 w-4" strokeWidth={2} />
+            </Link>
+          </div>
+          {loading ? (
+            <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+          ) : appLeaderboard.length === 0 ? (
+            <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+          ) : (
+            <div className="ui-card divide-y divide-slate-100 overflow-hidden">
+              {appLeaderboard.map((item, idx) => (
+                <HomeArticleTile key={item.id} item={item} variant="rank" rank={idx + 1} />
               ))}
             </div>
-          </section>
-        </div>
+          )}
+        </section>
 
-        <aside className="min-w-0 space-y-6 lg:sticky lg:top-24 2xl:top-28">
-          <div className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
-            <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">{t("homePopularTools")}</h3>
-              <Link to="/apps" className="text-xs font-semibold text-violet-600 hover:underline sm:text-sm">
-                {t("homeViewAll")}
-              </Link>
-            </div>
-            {!loading && toolList.length === 0 ? (
-              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+        <section className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
+          <h3 className="text-base font-bold text-slate-900">{t("homeAiTrend")}</h3>
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeTrendChartTitle")}</p>
+          <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
+          <div className="mt-4 rounded-xl bg-slate-50/90 px-2 py-3 ring-1 ring-slate-100">
+            {loading ? (
+              <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">{t("homeLoading")}</div>
             ) : (
-              <ol className="space-y-1">
-                {toolList.map((item, idx) => (
-                  <li key={item.id}>
-                    <Link
-                      to={`/resources/${item.id}`}
-                      className="flex gap-4 rounded-xl p-2 transition hover:bg-slate-50 sm:p-3"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-sm font-bold text-violet-700 ring-1 ring-violet-100">
-                        {idx + 1}
-                      </span>
-                      <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white shadow-md ring-1 ring-white/20"
-                        style={thumbSurface(`tool-${item.id}`)}
-                      >
-                        {(item.title || "?").slice(0, 1)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900 sm:text-[15px]">{item.title}</p>
-                        <p className="mt-1 line-clamp-2 text-xs leading-snug text-slate-500 sm:text-[13px]">
-                          {summarize(item.summary, 64)}
-                        </p>
-                        <p className="mt-2 text-sm font-bold tabular-nums text-amber-600">{toolRating(item.title)}</p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ol>
+              <TrendSparkline values={sparklineValues} />
             )}
           </div>
-
-          <div className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
-            <h3 className="text-base font-bold text-slate-900">{t("homeAiTrend")}</h3>
-            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeTrendChartTitle")}</p>
-            <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
-            <div className="mt-4 rounded-xl bg-slate-50/90 px-2 py-3 ring-1 ring-slate-100">
-              {trendLoading ? (
-                <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">{t("homeLoading")}</div>
-              ) : (
-                <TrendSparkline values={sparklineValues} />
-              )}
-            </div>
-            <div className="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 text-center">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeStatActiveTools")}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
-                  {trendLoading ? "—" : formatCount(trendOverview?.apps_count ?? 0)}
-                </p>
-                {formatGrowth(trendOverview?.apps_growth_pct) ? (
-                  <p className="text-xs font-semibold text-emerald-600 sm:text-sm">
-                    {formatGrowth(trendOverview?.apps_growth_pct)} {t("homeStatGrowth")}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-400 sm:text-sm">{t("homeStatNoCompare")}</p>
-                )}
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeStatNewArticles")}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
-                  {trendLoading ? "—" : formatCount(trendOverview?.news_count ?? 0)}
-                </p>
-                {formatGrowth(trendOverview?.news_growth_pct) ? (
-                  <p className="text-xs font-semibold text-emerald-600 sm:text-sm">
-                    {formatGrowth(trendOverview?.news_growth_pct)} {t("homeStatGrowth")}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-400 sm:text-sm">{t("homeStatNoCompare")}</p>
-                )}
+          {topCategories.length > 0 ? (
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {topCategories.map((c) => (
+                  <span
+                    key={c.label}
+                    className="rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1 text-xs font-medium text-violet-900"
+                  >
+                    {c.label}
+                    <span className="ml-1 tabular-nums text-violet-600/80">{c.count}</span>
+                  </span>
+                ))}
               </div>
             </div>
-          </div>
-        </aside>
+          ) : null}
+        </section>
       </div>
+
+      <section>
+        <h2 className="mb-4 text-lg font-bold text-slate-900 lg:text-xl">{t("homeQuickNav")}</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {quickNav.map(({ to, label, Icon, grad }) => (
+            <Link
+              key={to}
+              to={to}
+              className="ui-card group flex items-center gap-4 rounded-2xl p-5 transition hover:border-violet-300 hover:shadow-lg"
+            >
+              <span
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-md`}
+              >
+                <Icon className="h-7 w-7" strokeWidth={1.75} />
+              </span>
+              <span className="text-base font-bold text-slate-900 group-hover:text-violet-700">{label}</span>
+              <ChevronRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-violet-500" strokeWidth={2} />
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {HOME_NEWSLETTER_VISIBLE ? (
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">

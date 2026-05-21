@@ -13,6 +13,19 @@ def client():
         yield c
 
 
+def test_home_dashboard_shape(client: TestClient) -> None:
+    r = client.get("/api/public/v1/home/dashboard?news_limit=4&apps_limit=4&published_within_days=30")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("code") == 0
+    data = body["data"]
+    assert "news" in data and "apps" in data
+    assert "trend" in data and len(data["trend"]["sparkline"]) >= 2
+    assert isinstance(data["news_source_lanes"], list)
+    assert isinstance(data["source_facets"], list)
+    assert isinstance(data["top_categories"], list)
+
+
 def test_home_trend_overview_shape(client: TestClient) -> None:
     r = client.get("/api/public/v1/home/trend-overview?sparkline_days=10&period_days=7")
     assert r.status_code == 200

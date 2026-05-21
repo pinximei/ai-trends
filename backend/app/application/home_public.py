@@ -118,6 +118,14 @@ HOME_PICKS_MIN_TITLE_LEN = 6
 HOME_PICKS_MIN_SUMMARY_LEN = 36
 HOME_PICKS_MIN_HEAT = 72.0
 
+HOME_MAIN_SOURCE_KEYS: tuple[str, ...] = (
+    "github",
+    "product_hunt",
+    "huggingface_spaces",
+    "hacker_news",
+    "arxiv",
+)
+
 
 def _home_pick_quality_ok(item: dict) -> bool:
     title = str(item.get("title") or "").strip()
@@ -179,6 +187,138 @@ def get_home_editorial_picks(
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
         "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
+    }
+
+
+def _group_source_lanes(items: list[dict], *, per_source: int = 1) -> list[dict]:
+    """按五路主数据源各取热度最高的一条，供首页「多源雷达」展示。"""
+    buckets: dict[str, list[dict]] = {k: [] for k in HOME_MAIN_SOURCE_KEYS}
+    for it in items:
+        k = (it.get("admin_source_key") or "").strip().lower()
+        if k not in buckets or len(buckets[k]) >= per_source:
+            continue
+        buckets[k].append(it)
+    lanes: list[dict] = []
+    for k in HOME_MAIN_SOURCE_KEYS:
+        picked = buckets[k]
+        if not picked:
+            continue
+        lanes.append(
+            {
+                "source_key": k,
+                "source_label": picked[0].get("platform_label") or k.replace("_", " ").title(),
+                "items": picked,
+            }
+        )
+    return lanes
+
+
+def _merge_source_facets(news_facets: list[dict], apps_facets: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for row in news_facets:
+        k = (row.get("key") or "").strip()
+        if not k:
+            continue
+        merged[k] = {
+            "key": k,
+            "label": row.get("label") or k,
+            "news_count": int(row.get("count") or 0),
+            "apps_count": 0,
+        }
+    for row in apps_facets:
+        k = (row.get("key") or "").strip()
+        if not k:
+            continue
+        if k in merged:
+            merged[k]["apps_count"] = int(row.get("count") or 0)
+        else:
+            merged[k] = {
+                "key": k,
+                "label": row.get("label") or k,
+                "news_count": 0,
+                "apps_count": int(row.get("count") or 0),
+            }
+    out = list(merged.values())
+    out.sort(key=lambda x: x["news_count"] + x["apps_count"], reverse=True)
+    return out
+
+
+def get_home_dashboard(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    news_limit: int = 8,
+    apps_limit: int = 10,
+    published_within_days: int = 30,
+) -> dict:
+    """
+    首页一站式数据：热度精选、趋势、五源雷达、来源/话题统计。
+
+    比多次请求 editorial-picks + trend-overview 更省往返，并附带跨源聚合。
+    """
+    from .article_public import (
+        list_article_category_facets,
+        list_article_source_facets,
+        list_articles_feed_by_heat_top,
+    )
+
+    days = max(1, min(int(published_within_days), 120))
+    nl = max(1, min(int(news_limit), 20))
+    al = max(1, min(int(apps_limit), 20))
+
+    trend = get_home_trend_overview(
+        db, industry_slug=industry_slug, sparkline_days=14, period_days=days
+    )
+
+    news_raw = list_articles_feed_by_heat_top(
+        db,
+        feed="news",
+        industry_slug=industry_slug,
+        published_within_days=days,
+        published_on_latest_day=False,
+        heat_offset=0,
+        heat_page_size=48,
+        heat_max_ranked=96,
+    )
+    apps_raw = list_articles_feed_by_heat_top(
+        db,
+        feed="apps",
+        industry_slug=industry_slug,
+        published_within_days=days,
+        published_on_latest_day=False,
+        heat_offset=0,
+        heat_page_size=48,
+        heat_max_ranked=96,
+    )
+
+    news_pool = [x for x in (news_raw.get("items") or []) if _home_pick_quality_ok(x)]
+    apps_pool = [x for x in (apps_raw.get("items") or []) if _home_pick_quality_ok(x)]
+    news_items = news_pool[:nl]
+    apps_items = apps_pool[:al]
+
+    facet_kw = dict(
+        industry_slug=industry_slug,
+        segment_id=None,
+        segment_ids=None,
+        published_within_days=days,
+        published_on_latest_day=False,
+    )
+    news_sources = list_article_source_facets(db, feed="news", **facet_kw)
+    apps_sources = list_article_source_facets(db, feed="apps", **facet_kw)
+    top_categories = list_article_category_facets(db, feed="news", **facet_kw)[:10]
+
+    return {
+        "news": news_items,
+        "apps": apps_items,
+        "featured_news_id": news_items[0]["id"] if news_items else None,
+        "pick_window_days": days,
+        "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
+        "trend": trend,
+        "news_source_lanes": _group_source_lanes(news_pool),
+        "apps_source_lanes": _group_source_lanes(apps_pool),
+        "source_facets": _merge_source_facets(news_sources, apps_sources),
+        "top_categories": top_categories,
+        "active_source_count": len(_merge_source_facets(news_sources, apps_sources)),
     }
 
 

@@ -110,6 +110,38 @@ export const publicApi = {
   },
   newsletterSubscribe: (email: string) =>
     publicPost<{ subscribed: boolean }>("/api/public/v1/newsletter/subscribe", { email }),
+  homeDashboard: (opts?: {
+    industry_slug?: string;
+    news_limit?: number;
+    apps_limit?: number;
+    published_within_days?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
+    if (opts?.news_limit != null) sp.set("news_limit", String(opts.news_limit));
+    if (opts?.apps_limit != null) sp.set("apps_limit", String(opts.apps_limit));
+    if (opts?.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
+    const qs = sp.toString();
+    return publicGet<{
+      news: ArticleFeedCard[];
+      apps: ArticleFeedCard[];
+      featured_news_id: number | null;
+      pick_window_days: number;
+      scoring_note: string;
+      trend: {
+        sparkline: Array<{ day: string; count: number }>;
+        apps_count: number;
+        news_count: number;
+        apps_growth_pct: number | null;
+        news_growth_pct: number | null;
+      };
+      news_source_lanes: Array<{ source_key: string; source_label: string; items: ArticleFeedCard[] }>;
+      apps_source_lanes: Array<{ source_key: string; source_label: string; items: ArticleFeedCard[] }>;
+      source_facets: Array<{ key: string; label: string; news_count: number; apps_count: number }>;
+      top_categories: Array<{ label: string; count: number }>;
+      active_source_count: number;
+    }>(`/api/public/v1/home/dashboard${qs ? `?${qs}` : ""}`);
+  },
   homeEditorialPicks: (opts?: {
     industry_slug?: string;
     news_limit?: number;
