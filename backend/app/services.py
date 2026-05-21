@@ -38,11 +38,11 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "source": "huggingface_spaces",
         "preset_label": "Hugging Face Spaces",
         "enabled": True,
-        "api_base": "https://huggingface.co/api/spaces?limit=80",
+        "api_base": "https://huggingface.co/api/spaces?trending=true&limit=80",
         "api_key_masked": "",
         "scope_label": "AI｜Spaces·应用",
         "content_role": "runnable_apps",
-        "notes": "Spaces 公开列表 JSON：用于 **应用/可运行演示** 发现（免 Key）；私有 Space 请填 HF_TOKEN。后台请 **启用** 对应连接器并配置 LLM，稿件才会进「应用」泳道。",
+        "notes": "Spaces 公开列表 JSON（``trending=true``）：按 **trendingScore** 取 Top10，对齐官网/邮件「本周热门」；非历史总点赞榜。免 Key；私有 Space 请填 HF_TOKEN。",
     },
     {
         "source": "product_hunt",

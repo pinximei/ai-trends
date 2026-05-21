@@ -114,7 +114,7 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
     if k == "huggingface_spaces":
         return (
             "【Hugging Face Space 稿】「描述」按：Space 用途 → 交互方式 → 典型场景；"
-            "「数据支撑」列：Space 名、作者/组织、点赞、运行环境、外链等。"
+            "「数据支撑」列：Space 名、作者/组织、trendingScore、点赞、运行环境、外链等。"
         )
     if k == "hacker_news":
         return (

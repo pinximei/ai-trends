@@ -352,9 +352,10 @@ def sync_product_hunt_top_details(headers: dict[str, str]) -> tuple[int, str]:
 
 
 def _hf_list_pool_limit(url: str) -> tuple[str, int]:
-    """返回用于发现排序的列表 URL，并保证 limit 足够大以便客户端按 likes 截前 N。"""
-    parts = urlsplit(url.strip() or "https://huggingface.co/api/spaces")
+    """返回用于发现排序的列表 URL，并保证 limit 足够大以便按 trendingScore 截前 N。"""
+    parts = urlsplit(url.strip() or "https://huggingface.co/api/spaces?trending=true")
     q = dict(parse_qsl(parts.query, keep_blank_values=True))
+    q.setdefault("trending", "true")
     try:
         lim = int(str(q.get("limit") or "80").strip() or "80")
     except ValueError:
@@ -456,7 +457,10 @@ def sync_hacker_news_top_details(url: str, headers: dict[str, str]) -> tuple[int
 
 
 def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
-    """GET 列表 JSON，按 likes（次按 trendingScore）取前 N，再 GET 每条 ``/api/spaces/{id}`` 详情。"""
+    """GET 列表 JSON，按 trendingScore（次按 likes）取前 N，再 GET 每条 ``/api/spaces/{id}`` 详情。
+
+    与 HF 邮件/官网「本周热门」一致：优先近期热度，而非历史累计点赞榜。
+    """
     n = CONNECTOR_HEAT_TOP_N
     list_url, _ = _hf_list_pool_limit(url)
     try:
@@ -474,14 +478,14 @@ def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tu
 
             def score(it: dict[str, Any]) -> tuple[int, int]:
                 try:
-                    likes = int(it.get("likes") or 0)
-                except (TypeError, ValueError):
-                    likes = 0
-                try:
                     ts = int(it.get("trendingScore") or 0)
                 except (TypeError, ValueError):
                     ts = 0
-                return (likes, ts)
+                try:
+                    likes = int(it.get("likes") or 0)
+                except (TypeError, ValueError):
+                    likes = 0
+                return (ts, likes)
 
             ranked = sorted([x for x in arr if isinstance(x, dict)], key=score, reverse=True)[:n]
             base = f"{urlsplit(list_url).scheme}://{urlsplit(list_url).netloc}".rstrip("/")
@@ -507,7 +511,8 @@ def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tu
             pack = {
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
-                ]
+                ],
+                "note": "hf_trending_score_top",
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:
