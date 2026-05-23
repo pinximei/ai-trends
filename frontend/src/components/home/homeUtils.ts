@@ -19,15 +19,19 @@ export function heatTier(heat: number | undefined): HeatTier | null {
   return null;
 }
 
-export function platformAccent(key: string): { ring: string; badge: string; dot: string } {
+export function platformAccent(key: string): { ring: string; badge: string; dot: string; border: string } {
   const k = (key || "").toLowerCase();
-  if (k === "github") return { ring: "ring-slate-700/20", badge: "bg-slate-800 text-white", dot: "bg-slate-700" };
-  if (k === "product_hunt") return { ring: "ring-orange-300/50", badge: "bg-orange-500 text-white", dot: "bg-orange-500" };
+  if (k === "github")
+    return { ring: "ring-slate-700/20", badge: "bg-slate-800 text-white", dot: "bg-slate-700", border: "border-l-slate-700" };
+  if (k === "product_hunt")
+    return { ring: "ring-orange-300/50", badge: "bg-orange-500 text-white", dot: "bg-orange-500", border: "border-l-orange-500" };
   if (k === "huggingface_spaces")
-    return { ring: "ring-amber-300/50", badge: "bg-amber-500 text-white", dot: "bg-amber-500" };
-  if (k === "hacker_news") return { ring: "ring-orange-400/40", badge: "bg-orange-600 text-white", dot: "bg-orange-600" };
-  if (k === "arxiv") return { ring: "ring-red-300/40", badge: "bg-red-600 text-white", dot: "bg-red-600" };
-  return { ring: "ring-violet-300/40", badge: "bg-violet-600 text-white", dot: "bg-violet-500" };
+    return { ring: "ring-amber-300/50", badge: "bg-amber-500 text-white", dot: "bg-amber-500", border: "border-l-amber-500" };
+  if (k === "hacker_news")
+    return { ring: "ring-orange-400/40", badge: "bg-orange-600 text-white", dot: "bg-orange-600", border: "border-l-orange-600" };
+  if (k === "arxiv")
+    return { ring: "ring-red-300/40", badge: "bg-red-600 text-white", dot: "bg-red-600", border: "border-l-red-600" };
+  return { ring: "ring-violet-300/40", badge: "bg-violet-600 text-white", dot: "bg-violet-500", border: "border-l-violet-500" };
 }
 
 export function itemBlurb(item: ArticleFeedCard, max = 140): string {

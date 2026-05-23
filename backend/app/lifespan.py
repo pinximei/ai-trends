@@ -46,6 +46,7 @@ def _startup_sync() -> None:
             prune_discontinued_bootstrap_admin_sources,
             repair_connector_urls_from_admin_sources,
             repair_github_admin_source_if_still_zen,
+            repair_mainstream_heat_fetch_admin_sources,
             repair_short_probe_admin_sources,
         )
 
@@ -55,6 +56,7 @@ def _startup_sync() -> None:
         ensure_mainstream_admin_sources(db)
         sync_catalog_preset_metadata(db)
         repair_github_admin_source_if_still_zen(db)
+        repair_mainstream_heat_fetch_admin_sources(db)
         repair_short_probe_admin_sources(db)
         ensure_core_admin_connectors(db)
         repair_connector_urls_from_admin_sources(db)

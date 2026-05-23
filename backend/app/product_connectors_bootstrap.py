@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 
 from .models import AdminSourceConfig
 from .product_models import ProductConnector
-from .connector_heat_fetch import GITHUB_TRENDING_DEFAULT
+from .connector_heat_fetch import (
+    ARXIV_API_QUERY_DEFAULT,
+    GITHUB_TRENDING_DEFAULT,
+    HN_ALGOLIA_SEARCH_DEFAULT,
+    arxiv_api_is_query_url,
+    hacker_news_algolia_is_search_url,
+)
+from .scope_labels_util import get_scope_labels_from_source
 from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
@@ -28,6 +35,46 @@ def repair_github_admin_source_if_still_zen(db: Session) -> None:
         row.api_base = GITHUB_TRENDING_DEFAULT
         row.updated_at = datetime.utcnow()
         db.commit()
+
+
+def _preset_by_source(source: str) -> dict | None:
+    key = (source or "").strip().lower()
+    for row in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+        if row["source"] == key:
+            return row
+    return None
+
+
+def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
+    """旧库中 HN/arXiv 若仍为 firebase/单条 abs 等地址，热榜打包不会走 TopN 入库；并补齐空的 scope_label。"""
+    changed = 0
+    for row in db.scalars(select(AdminSourceConfig)).all():
+        preset = _preset_by_source(row.source)
+        if not preset:
+            continue
+        src = (row.source or "").strip().lower()
+        default_base = (preset.get("api_base") or "").strip()
+        if not default_base:
+            continue
+        u = (row.api_base or "").strip()
+        need_url = False
+        if src == "hacker_news" and not hacker_news_algolia_is_search_url(u):
+            need_url = True
+        elif src == "arxiv" and not arxiv_api_is_query_url(u):
+            need_url = True
+        if need_url:
+            row.api_base = default_base
+            changed += 1
+        sl = (preset.get("scope_label") or "").strip()
+        if sl and not get_scope_labels_from_source(row):
+            from .scope_labels_util import apply_scope_labels_to_row
+
+            apply_scope_labels_to_row(row, [sl])
+            changed += 1
+        row.updated_at = datetime.utcnow()
+    if changed:
+        db.commit()
+    return changed
 
 
 def repair_short_probe_admin_sources(db: Session) -> None:

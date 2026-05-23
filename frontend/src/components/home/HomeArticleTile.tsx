@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { ArticleFeedCard } from "@/api/public";
 import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
@@ -25,128 +26,138 @@ type Props = {
   detailLink?: boolean;
 };
 
-export function HomeArticleTile({ item, variant, rank, detailLink = false }: Props) {
+function CoverFrame({
+  item,
+  seed,
+  className,
+  aspectClass,
+}: {
+  item: ArticleFeedCard;
+  seed: string;
+  className: string;
+  aspectClass: string;
+}) {
+  return (
+    <div className={`relative overflow-hidden ${aspectClass} ${className}`}>
+      <ArticleCoverVisual
+        coverUrl={item.cover_image_url}
+        title={item.title || ""}
+        seed={seed}
+        fallbackMode="pattern"
+        fallbackClassName="absolute inset-0"
+        imgClassName="absolute inset-0 h-full w-full object-cover"
+      />
+    </div>
+  );
+}
+
+function MetaRow({ item }: { item: ArticleFeedCard }) {
   const { t } = useI18n();
   const accent = platformAccent(item.admin_source_key || "");
   const engagement = itemEngagementLine(item);
-  const highlights = (item.card_highlights || "").trim();
-  const categories = item.categories?.slice(0, 2) ?? [];
-
-  const metaRow = (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
       <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${accent.badge}`}>
         {item.platform_label || t("source")}
       </span>
       <HomeHeatBadge heat={item.heat_score} />
       {engagement ? <span className="font-semibold tabular-nums text-amber-700">{engagement}</span> : null}
-      <span className="tabular-nums">{timeAgo(item.published_at)}</span>
+      <span className="tabular-nums text-slate-400">{timeAgo(item.published_at)}</span>
     </div>
   );
+}
 
-  const body = (
-    <>
-      {variant === "spotlight" ? (
-        <div className={`relative overflow-hidden rounded-xl ring-1 ${accent.ring}`}>
-          <ArticleCoverVisual
-            coverUrl={item.cover_image_url}
-            title={item.title || ""}
-            seed={`spot-${item.id}`}
-            fallbackClassName="flex h-44 w-full items-center justify-center sm:h-52"
-            imgClassName="h-44 w-full object-cover sm:h-52"
-            initialClassName="text-5xl font-black text-white/90"
-          />
+export function HomeArticleTile({ item, variant, rank, detailLink = false }: Props) {
+  const { t } = useI18n();
+  const highlights = (item.card_highlights || "").trim();
+  const categories = item.categories?.slice(0, 2) ?? [];
+
+  let inner: ReactNode;
+
+  if (variant === "spotlight") {
+    inner = (
+      <div className="grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        <CoverFrame
+          item={item}
+          seed={`spot-${item.id}`}
+          className="ring-0 lg:min-h-[240px]"
+          aspectClass="aspect-[16/9] w-full lg:aspect-auto lg:h-full lg:min-h-[240px]"
+        />
+        <div className="flex flex-col justify-center gap-3 p-4 sm:p-5 lg:border-l lg:border-slate-100">
+          <MetaRow item={item} />
+          <h3 className="line-clamp-3 text-xl font-bold leading-snug text-slate-900 sm:text-2xl">{item.title}</h3>
+          <p className="line-clamp-4 text-sm leading-relaxed text-slate-600">{itemBlurb(item, 220)}</p>
+          {highlights ? (
+            <p className="line-clamp-2 rounded-lg bg-violet-50/80 px-3 py-2 text-xs leading-relaxed text-violet-900/90">
+              <span className="font-semibold text-violet-700">{t("homeHighlightsLabel")}: </span>
+              {highlights}
+            </p>
+          ) : null}
         </div>
-      ) : null}
-
-      {variant === "tile" ? (
-        <div className={`relative h-28 overflow-hidden rounded-lg ring-1 ${accent.ring}`}>
-          <ArticleCoverVisual
-            coverUrl={item.cover_image_url}
-            title={item.title || ""}
-            seed={`tile-${item.id}`}
-            fallbackClassName="flex h-full w-full items-center justify-center"
-            imgClassName="h-full w-full object-cover"
-            initialClassName="text-3xl font-black text-white/90"
-          />
-        </div>
-      ) : null}
-
-      {variant === "rank" && rank != null ? (
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-sm font-bold text-violet-700 ring-1 ring-violet-100">
-          {rank}
-        </span>
-      ) : null}
-
-      {variant === "rank" ? (
-        <div className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-xl ring-1 ${accent.ring}`}>
-          <ArticleCoverVisual
-            coverUrl={item.cover_image_url}
-            title={item.title || ""}
-            seed={`rank-${item.id}`}
-            fallbackClassName="flex h-full w-full items-center justify-center"
-            imgClassName="h-full w-full object-cover"
-            initialClassName="text-lg font-bold text-white/90"
-          />
-        </div>
-      ) : null}
-
-      <div className={variant === "rank" ? "min-w-0 flex-1" : ""}>
-        {metaRow}
-        <h3
-          className={
-            variant === "spotlight"
-              ? "mt-3 line-clamp-2 text-xl font-bold leading-snug text-slate-900 sm:text-2xl"
-              : variant === "tile"
-                ? "mt-3 line-clamp-2 text-sm font-bold leading-snug text-slate-900"
-                : "mt-1 line-clamp-1 text-sm font-semibold text-slate-900 sm:text-[15px]"
-          }
-        >
-          {item.title}
-        </h3>
-        <p
-          className={
-            variant === "spotlight"
-              ? "mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600 sm:text-[15px]"
-              : variant === "tile"
-                ? "mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600"
-                : "mt-1 line-clamp-2 text-xs leading-snug text-slate-500"
-          }
-        >
-          {itemBlurb(item, variant === "spotlight" ? 200 : variant === "tile" ? 100 : 72)}
-        </p>
-        {highlights && variant !== "rank" ? (
-          <p className="mt-2 line-clamp-2 text-xs font-medium leading-snug text-violet-800/90">
-            <span className="text-violet-600">{t("homeHighlightsLabel")}: </span>
-            {highlights}
-          </p>
-        ) : null}
-        {categories.length > 0 && variant === "tile" ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {categories.map((c) => (
-              <span key={c} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-600">
-                {c}
-              </span>
-            ))}
-          </div>
-        ) : null}
       </div>
-    </>
-  );
+    );
+  } else if (variant === "tile") {
+    inner = (
+      <div className="flex h-full flex-col overflow-hidden sm:flex-row">
+        <CoverFrame
+          item={item}
+          seed={`tile-${item.id}`}
+          className="shrink-0 ring-0 sm:w-32 md:w-36"
+          aspectClass="aspect-[16/10] w-full sm:aspect-auto sm:h-auto sm:min-h-[6.5rem] sm:self-stretch"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-2 p-3.5 sm:p-4">
+          <MetaRow item={item} />
+          <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">{item.title}</h3>
+          <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-slate-600">{itemBlurb(item, 120)}</p>
+          {categories.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {categories.map((c) => (
+                <span key={c} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-600">
+                  {c}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  } else {
+    inner = (
+      <div className="flex items-center gap-3 p-3 sm:gap-4 sm:p-3.5">
+        {rank != null ? (
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-sm font-bold text-violet-700 ring-1 ring-violet-100">
+            {rank}
+          </span>
+        ) : null}
+        <CoverFrame
+          item={item}
+          seed={`rank-${item.id}`}
+          className="h-14 w-14 shrink-0 rounded-xl ring-1 ring-slate-200/80"
+          aspectClass="h-14 w-14"
+        />
+        <div className="min-w-0 flex-1">
+          <MetaRow item={item} />
+          <h3 className="mt-1 line-clamp-1 text-sm font-semibold text-slate-900">{item.title}</h3>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{itemBlurb(item, 80)}</p>
+        </div>
+      </div>
+    );
+  }
 
   const className =
     variant === "spotlight"
-      ? "ui-card overflow-hidden p-4 sm:p-5"
+      ? "ui-card overflow-hidden transition hover:shadow-md"
       : variant === "tile"
-        ? "ui-card flex h-full flex-col p-3 sm:p-4"
-        : "flex gap-3 rounded-xl border border-transparent p-2 sm:p-3";
+        ? "ui-card h-full overflow-hidden transition hover:border-violet-200/80 hover:shadow-sm"
+        : "transition hover:bg-slate-50/80";
 
   if (detailLink) {
     return (
-      <Link to={`/resources/${item.id}`} className={`group block transition hover:shadow-lg ${className}`}>
-        {body}
+      <Link to={`/resources/${item.id}`} className={`group block ${className}`}>
+        {inner}
       </Link>
     );
   }
 
-  return <article className={className}>{body}</article>;
+  return <article className={className}>{inner}</article>;
 }

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
+import { HomeSection } from "@/components/home/HomeSection";
 import { mergeSourceLanes, platformAccent, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
@@ -315,8 +316,8 @@ export function HomePage() {
   }, []);
 
   const featured = news[0];
-  const newsWall = news.slice(0, 6);
-  const appLeaderboard = apps.slice(0, 8);
+  const newsWall = news.slice(0, 4);
+  const appLeaderboard = apps.slice(0, 6);
   const totalInWindow = (trendOverview?.news_count ?? 0) + (trendOverview?.apps_count ?? 0);
 
   const onSubscribe = async (e: FormEvent) => {
@@ -341,8 +342,8 @@ export function HomePage() {
   };
 
   return (
-    <div className="w-full space-y-8 lg:space-y-10">
-      <section className="flex flex-col items-center gap-3 overflow-visible text-center sm:gap-4 lg:flex-row lg:items-center lg:gap-5 lg:text-left xl:gap-6">
+    <div className="w-full space-y-8 lg:space-y-12">
+      <section className="flex flex-col items-center gap-4 overflow-visible text-center lg:flex-row lg:items-center lg:gap-8 lg:text-left">
         <div className="min-w-0 w-full shrink-0 lg:w-auto lg:max-w-lg lg:flex-none xl:max-w-xl">
           <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
             {t("homeMainHeroTitle")}
@@ -374,14 +375,18 @@ export function HomePage() {
       </section>
 
       {!loading && trendOverview ? (
-        <section className="ui-card grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4 lg:gap-5">
-          <p className="col-span-full text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
-          <div className="rounded-xl bg-violet-50/80 px-4 py-3 ring-1 ring-violet-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80">{t("homeStatNewArticles")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.news_count)}</p>
+        <div className="ui-card flex flex-wrap items-stretch divide-y divide-slate-100 sm:divide-x sm:divide-y-0">
+          <div className="min-w-[50%] flex-1 px-4 py-3 sm:px-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t("homeLiveStats")}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(totalInWindow)}</p>
+            <p className="text-xs text-slate-500">{t("homeStatTotalItems")}</p>
+          </div>
+          <div className="min-w-[50%] flex-1 px-4 py-3 sm:px-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">{t("homeStatNewArticles")}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.news_count)}</p>
             <p className="text-xs text-slate-500">
               {formatGrowth(trendOverview.news_growth_pct) ? (
-                <span className="font-semibold text-emerald-600">
+                <span className="text-emerald-600">
                   {formatGrowth(trendOverview.news_growth_pct)} {t("homeStatGrowth")}
                 </span>
               ) : (
@@ -389,12 +394,12 @@ export function HomePage() {
               )}
             </p>
           </div>
-          <div className="rounded-xl bg-sky-50/80 px-4 py-3 ring-1 ring-sky-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800/80">{t("homeStatActiveTools")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.apps_count)}</p>
+          <div className="min-w-[50%] flex-1 px-4 py-3 sm:px-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-600">{t("homeStatActiveTools")}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.apps_count)}</p>
             <p className="text-xs text-slate-500">
               {formatGrowth(trendOverview.apps_growth_pct) ? (
-                <span className="font-semibold text-emerald-600">
+                <span className="text-emerald-600">
                   {formatGrowth(trendOverview.apps_growth_pct)} {t("homeStatGrowth")}
                 </span>
               ) : (
@@ -402,143 +407,111 @@ export function HomePage() {
               )}
             </p>
           </div>
-          <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t("homeStatTotalItems")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(totalInWindow)}</p>
+          <div className="min-w-[50%] flex-1 px-4 py-3 sm:px-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-600">{t("homeStatSources")}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{sourceFacets.length}</p>
           </div>
-          <div className="rounded-xl bg-indigo-50/80 px-4 py-3 ring-1 ring-indigo-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{sourceFacets.length}</p>
-          </div>
-        </section>
+        </div>
       ) : null}
 
-      <section>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 lg:text-xl">
-              <Radar className="h-5 w-5 text-violet-600" strokeWidth={2} />
-              {t("homeSourceRadar")}
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeSourceRadarSub")}</p>
-          </div>
+      <div className="grid gap-8 lg:grid-cols-12 lg:gap-10">
+        <div className="space-y-8 lg:col-span-8 lg:space-y-10">
+          <HomeSection
+            title={t("homeTodayFocus")}
+            subtitle={t("homeNewsWallSub")}
+            icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}
+            action={featured ? { label: t("homeFeaturedCta"), to: `/resources/${featured.id}` } : undefined}
+          >
+            {loading ? (
+              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+            ) : !featured ? (
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+            ) : (
+              <HomeArticleTile item={featured} variant="spotlight" detailLink />
+            )}
+          </HomeSection>
+
+          <HomeSection
+            title={t("homeNewsWall")}
+            action={{ label: t("homeGoNewsRadar"), to: "/news" }}
+          >
+            {loading ? (
+              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+            ) : newsWall.length === 0 ? (
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {newsWall.map((item) => (
+                  <HomeArticleTile key={item.id} item={item} variant="tile" />
+                ))}
+              </div>
+            )}
+          </HomeSection>
         </div>
-        {loading ? (
-          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : mergedLanes.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {mergedLanes.map((lane) => {
-              const item = lane.items[0];
-              if (!item) return null;
-              const accent = platformAccent(lane.source_key);
-              const facet = sourceFacets.find((f) => f.key === lane.source_key);
-              return (
-                <article key={lane.source_key} className={`ui-card p-3 sm:p-4 ring-1 ${accent.ring}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
-                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
-                      {lane.source_label}
-                    </span>
-                    {facet ? (
-                      <span className="ml-auto text-[10px] tabular-nums text-slate-400">
-                        {facet.news_count + facet.apps_count}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-3 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</p>
-                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">
-                    {(item.card_highlights || item.card_description || item.summary || "").slice(0, 88)}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
-      <section>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 lg:text-xl">
-            <Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />
-            {t("homeTodayFocus")}
-          </h2>
-          {featured ? (
-            <Link
-              to={`/resources/${featured.id}`}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:underline"
-            >
-              {t("homeFeaturedCta")}
-              <ChevronRight className="h-4 w-4" strokeWidth={2} />
-            </Link>
-          ) : null}
-        </div>
-        {loading ? (
-          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : !featured ? (
-          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-        ) : (
-          <HomeArticleTile item={featured} variant="spotlight" detailLink />
-        )}
-      </section>
+        <aside className="space-y-8 lg:col-span-4 lg:space-y-8">
+          <HomeSection
+            title={t("homeSourceRadar")}
+            subtitle={t("homeSourceRadarSub")}
+            icon={<Radar className="h-5 w-5" strokeWidth={2} />}
+          >
+            {loading ? (
+              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+            ) : mergedLanes.length === 0 ? (
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+            ) : (
+              <ul className="ui-card divide-y divide-slate-100 overflow-hidden">
+                {mergedLanes.map((lane) => {
+                  const item = lane.items[0];
+                  if (!item) return null;
+                  const accent = platformAccent(lane.source_key);
+                  const facet = sourceFacets.find((f) => f.key === lane.source_key);
+                  return (
+                    <li key={lane.source_key} className={`border-l-[3px] ${accent.border}`}>
+                      <div className="px-3.5 py-3 sm:px-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
+                            {lane.source_label}
+                          </span>
+                          {facet ? (
+                            <span className="ml-auto text-[10px] tabular-nums text-slate-400">
+                              {facet.news_count + facet.apps_count}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </HomeSection>
 
-      <section>
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 lg:text-xl">{t("homeNewsWall")}</h2>
-            <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeNewsWallSub")}</p>
-          </div>
-          <Link to="/news" className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:underline">
-            {t("homeGoNewsRadar")}
-            <ChevronRight className="h-4 w-4" strokeWidth={2} />
-          </Link>
-        </div>
-        {loading ? (
-          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : newsWall.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {newsWall.map((item) => (
-              <HomeArticleTile key={item.id} item={item} variant="tile" />
-            ))}
-          </div>
-        )}
-      </section>
+          <HomeSection
+            title={t("homePopularTools")}
+            subtitle={t("homeAppsLeaderboardSub")}
+            icon={<Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />}
+            action={{ label: t("homeGoAppsRadar"), to: "/apps" }}
+          >
+            {loading ? (
+              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+            ) : appLeaderboard.length === 0 ? (
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+            ) : (
+              <div className="ui-card divide-y divide-slate-100 overflow-hidden">
+                {appLeaderboard.map((item, idx) => (
+                  <HomeArticleTile key={item.id} item={item} variant="rank" rank={idx + 1} />
+                ))}
+              </div>
+            )}
+          </HomeSection>
+        </aside>
+      </div>
 
-      <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
-        <section>
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 lg:text-xl">
-                <Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />
-                {t("homeAppsLeaderboard")}
-              </h2>
-              <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeAppsLeaderboardSub")}</p>
-            </div>
-            <Link to="/apps" className="inline-flex items-center gap-1 text-sm font-semibold text-violet-600 hover:underline">
-              {t("homeGoAppsRadar")}
-              <ChevronRight className="h-4 w-4" strokeWidth={2} />
-            </Link>
-          </div>
-          {loading ? (
-            <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-          ) : appLeaderboard.length === 0 ? (
-            <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-          ) : (
-            <div className="ui-card divide-y divide-slate-100 overflow-hidden">
-              {appLeaderboard.map((item, idx) => (
-                <HomeArticleTile key={item.id} item={item} variant="rank" rank={idx + 1} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="ui-card overflow-hidden rounded-2xl p-5 shadow-md sm:p-6">
-          <h3 className="text-base font-bold text-slate-900">{t("homeAiTrend")}</h3>
-          <p className="mt-1 text-xs text-slate-500 sm:text-sm">{t("homeTrendChartTitle")}</p>
-          <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
+      <HomeSection title={t("homeAiTrend")} subtitle={t("homeTrendDataNote")}>
+        <div className="ui-card p-4 sm:p-6">
+          <p className="text-xs text-slate-500">{t("homeTrendChartTitle")}</p>
           <div className="mt-4 rounded-xl bg-slate-50/90 px-2 py-3 ring-1 ring-slate-100">
             {loading ? (
               <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">{t("homeLoading")}</div>
@@ -562,29 +535,27 @@ export function HomePage() {
               </div>
             </div>
           ) : null}
-        </section>
-      </div>
+        </div>
+      </HomeSection>
 
-      <section>
-        <h2 className="mb-4 text-lg font-bold text-slate-900 lg:text-xl">{t("homeQuickNav")}</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <HomeSection title={t("homeQuickNav")}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {quickNav.map(({ to, label, Icon, grad }) => (
             <Link
               key={to}
               to={to}
-              className="ui-card group flex items-center gap-4 rounded-2xl p-5 transition hover:border-violet-300 hover:shadow-lg"
+              className="ui-card group flex items-center gap-3 rounded-xl p-4 transition hover:border-violet-300 hover:shadow-md"
             >
               <span
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-md`}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${grad} text-white shadow-sm`}
               >
-                <Icon className="h-7 w-7" strokeWidth={1.75} />
+                <Icon className="h-5 w-5" strokeWidth={1.75} />
               </span>
-              <span className="text-base font-bold text-slate-900 group-hover:text-violet-700">{label}</span>
-              <ChevronRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-violet-500" strokeWidth={2} />
+              <span className="text-sm font-bold text-slate-900 group-hover:text-violet-700">{label}</span>
             </Link>
           ))}
         </div>
-      </section>
+      </HomeSection>
 
       {HOME_NEWSLETTER_VISIBLE ? (
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">

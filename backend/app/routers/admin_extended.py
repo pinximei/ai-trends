@@ -658,6 +658,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
     from ..llm_service import resolve_llm_http_config
     from ..product_connectors_bootstrap import (
         repair_connector_urls_from_admin_sources,
+        repair_mainstream_heat_fetch_admin_sources,
         repair_short_probe_admin_sources,
     )
     from ..sync_diagnostic_log import begin_run, commit_diagnostics, end_run, write as diag_write
@@ -665,6 +666,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
 
     log = logging.getLogger(__name__)
     repair_short_probe_admin_sources(db)
+    repair_mainstream_heat_fetch_admin_sources(db)
     n_url = repair_connector_urls_from_admin_sources(db)
     run_id = begin_run(db, actor=actor)
     commit_diagnostics(db)

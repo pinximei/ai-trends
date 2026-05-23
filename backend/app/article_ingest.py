@@ -306,7 +306,18 @@ def _create_one_published_article_from_connector_targets(
         "\n</details>\n"
     )
 
+    from .llm_settings_service import resolve_llm_http_config
     from .llm_service import polish_connector_article
+
+    _base, _llm_key, _llm_model = resolve_llm_http_config(db)
+    if not (_llm_key or "").strip():
+        _diag(
+            "error",
+            "skip_llm_no_key",
+            "跳过：库内未配置 LLM API Key（所有数据源共用）。请在管理端「AI 资讯与数据」保存 Key，"
+            "或设置 AITRENDS_LLM_API_KEY 后重启以迁入库表 product_settings_kv.llm",
+        )
+        return 0
 
     polished = polish_connector_article(
         db,
@@ -321,10 +332,20 @@ def _create_one_published_article_from_connector_targets(
         feed_kind=fk,
     )
     if not polished:
-        _diag("error", "skip_llm", "跳过：LLM 未返回内容（未配置 Key、调用失败或超时）")
+        _diag(
+            "error",
+            "skip_llm_polish",
+            "跳过：LLM 润色失败（DeepSeek 调用异常、返回非 JSON、标题/摘要为空，或 tabs 缺字段）。"
+            " 与 GitHub/PH 等同一把 Key；请查看同步诊断里的 llm_config 是否为「已配置」，并查 LlmUsageLog 是否 article_ingest_polish 报错",
+        )
         return 0
     if not validate_llm_polish_for_publish(polished):
-        _diag("warn", "skip_llm_shape", "跳过：LLM 输出未通过发布校验（tabs/分类/长度等）")
+        _diag(
+            "warn",
+            "skip_llm_shape",
+            "跳过：LLM 输出未通过发布校验（须恰好 2 个 tab「描述」「数据支撑」；「描述」summary≥72 字、body≥120 字）。"
+            " 新源 HN/arXiv 常因模型写得太短触发，可重试同步或略调提示词",
+        )
         return 0
 
     tabs = polished.get("tabs") or []
