@@ -214,7 +214,7 @@ function TrendSparkline({ values }: { values: number[] }) {
     );
   }
   return (
-    <svg viewBox="0 0 280 100" className="h-36 w-full text-violet-500 sm:h-40" aria-hidden>
+    <svg viewBox="0 0 280 100" className="h-28 w-full text-violet-500 sm:h-32" aria-hidden>
       <defs>
         <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity="0.35" />
@@ -417,48 +417,91 @@ export function HomePage() {
         </div>
       </section>
 
-      {!loading && trendOverview ? (
-        <section className="ui-card grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4 lg:gap-4">
-          <p className="col-span-full text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
-          <div className="rounded-xl bg-violet-50/80 px-4 py-3 ring-1 ring-violet-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80">{t("homeStatNewArticles")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.news_count)}</p>
-            <p className="text-xs text-slate-500">
-              {formatGrowth(trendOverview.news_growth_pct) ? (
-                <span className="font-semibold text-emerald-600">
-                  {formatGrowth(trendOverview.news_growth_pct)} {t("homeStatGrowth")}
-                </span>
+      <section className="ui-card overflow-hidden p-4 sm:p-5">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-stretch xl:grid-cols-[minmax(0,1.15fr)_minmax(0,22rem)]">
+          {!loading && trendOverview ? (
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-violet-50/80 px-3 py-2.5 ring-1 ring-violet-100 sm:px-4 sm:py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80">{t("homeStatNewArticles")}</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                    {formatCount(trendOverview.news_count)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {formatGrowth(trendOverview.news_growth_pct) ? (
+                      <span className="font-semibold text-emerald-600">
+                        {formatGrowth(trendOverview.news_growth_pct)} {t("homeStatGrowth")}
+                      </span>
+                    ) : (
+                      t("homeStatNoCompare")
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-sky-50/80 px-3 py-2.5 ring-1 ring-sky-100 sm:px-4 sm:py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800/80">{t("homeStatActiveTools")}</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                    {formatCount(trendOverview.apps_count)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {formatGrowth(trendOverview.apps_growth_pct) ? (
+                      <span className="font-semibold text-emerald-600">
+                        {formatGrowth(trendOverview.apps_growth_pct)} {t("homeStatGrowth")}
+                      </span>
+                    ) : (
+                      t("homeStatNoCompare")
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200 sm:px-4 sm:py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t("homeStatTotalItems")}</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{formatCount(totalInWindow)}</p>
+                </div>
+                <div className="rounded-xl bg-indigo-50/80 px-3 py-2.5 ring-1 ring-indigo-100 sm:px-4 sm:py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                    {sourceFacets.length}
+                    <span className="text-sm font-semibold text-slate-400">/5</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : loading ? (
+            <div className="flex min-h-[8rem] items-center justify-center text-sm text-slate-500">{t("homeLoading")}</div>
+          ) : null}
+
+          <div
+            className={`min-w-0 ${!loading && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0" : ""}`}
+          >
+            <p className="text-xs font-bold text-slate-900">{t("homeAiTrend")}</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendChartTitle")}</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
+            <div className="mt-3 rounded-xl bg-slate-50/90 px-2 py-2 ring-1 ring-slate-100">
+              {loading ? (
+                <div className="flex h-28 items-center justify-center text-xs text-slate-400 sm:h-32">{t("homeLoading")}</div>
               ) : (
-                t("homeStatNoCompare")
+                <TrendSparkline values={sparklineValues} />
               )}
-            </p>
+            </div>
+            {topCategories.length > 0 ? (
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {topCategories.slice(0, 6).map((c) => (
+                    <span
+                      key={c.label}
+                      className="rounded-full border border-violet-200 bg-violet-50/80 px-2.5 py-0.5 text-[10px] font-medium text-violet-900"
+                    >
+                      {c.label}
+                      <span className="ml-0.5 tabular-nums text-violet-600/80">{c.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-          <div className="rounded-xl bg-sky-50/80 px-4 py-3 ring-1 ring-sky-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800/80">{t("homeStatActiveTools")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(trendOverview.apps_count)}</p>
-            <p className="text-xs text-slate-500">
-              {formatGrowth(trendOverview.apps_growth_pct) ? (
-                <span className="font-semibold text-emerald-600">
-                  {formatGrowth(trendOverview.apps_growth_pct)} {t("homeStatGrowth")}
-                </span>
-              ) : (
-                t("homeStatNoCompare")
-              )}
-            </p>
-          </div>
-          <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t("homeStatTotalItems")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatCount(totalInWindow)}</p>
-          </div>
-          <div className="rounded-xl bg-indigo-50/80 px-4 py-3 ring-1 ring-indigo-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
-              {sourceFacets.length}
-              <span className="text-sm font-semibold text-slate-400">/5</span>
-            </p>
-          </div>
-        </section>
-      ) : null}
+        </div>
+      </section>
 
       <HomeSection
         title={t("homeSourceRadar")}
@@ -570,35 +613,6 @@ export function HomePage() {
           </HomeSection>
         </aside>
       </div>
-
-      <HomeSection title={t("homeAiTrend")} subtitle={t("homeTrendDataNote")}>
-        <div className="ui-card p-4 sm:p-6">
-          <p className="text-xs text-slate-500">{t("homeTrendChartTitle")}</p>
-          <div className="mt-4 rounded-xl bg-slate-50/90 px-2 py-3 ring-1 ring-slate-100">
-            {loading ? (
-              <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">{t("homeLoading")}</div>
-            ) : (
-              <TrendSparkline values={sparklineValues} />
-            )}
-          </div>
-          {topCategories.length > 0 ? (
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {topCategories.map((c) => (
-                  <span
-                    key={c.label}
-                    className="rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1 text-xs font-medium text-violet-900"
-                  >
-                    {c.label}
-                    <span className="ml-1 tabular-nums text-violet-600/80">{c.count}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </HomeSection>
 
       <HomeSection title={t("homeQuickNav")}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
