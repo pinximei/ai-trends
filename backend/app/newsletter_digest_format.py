@@ -154,7 +154,10 @@ def build_digest_body_from_articles(
     highlight_news: int = 3,
 ) -> str:
     """正文：亮点条目单独介绍，其余简明列表（均用站内已发布摘要，不二次 LLM）。"""
-    parts: list[str] = []
+    parts: list[str] = [
+        "> 收录范围：美东（America/New_York）摘要日当天已发布内容；数据源在当日 23:00 后整批拉取入库。",
+        "",
+    ]
     parts.extend(
         _lane_body(
             apps,

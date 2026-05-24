@@ -10,8 +10,6 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
-from zoneinfo import ZoneInfo
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,24 +27,18 @@ from ..newsletter_digest_format import (
 )
 from ..newsletter_settings_service import get_newsletter_settings_merged
 from ..product_models import Article, Industry
+from ..us_content_calendar import US_TIMEZONE_LABEL, us_calendar_today, utc_naive_bounds_for_us_date
 
 logger = logging.getLogger(__name__)
 
-_SH_TZ = ZoneInfo("Asia/Shanghai")
-
 
 def shanghai_calendar_today() -> date:
-    return datetime.now(_SH_TZ).date()
+    """兼容旧名：摘要日与摘要素材均按美东日历「当天」。"""
+    return us_calendar_today()
 
 
 def utc_naive_bounds_for_shanghai_date(d: date) -> tuple[datetime, datetime]:
-    """与库内 naive UTC `published_at` 对齐的区间 [start, end)。"""
-    start_local = datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=_SH_TZ)
-    end_local = start_local + timedelta(days=1)
-    return (
-        start_local.astimezone(timezone.utc).replace(tzinfo=None),
-        end_local.astimezone(timezone.utc).replace(tzinfo=None),
-    )
+    return utc_naive_bounds_for_us_date(d)
 
 
 def _ai_industry_ids(db: Session) -> list[int]:
@@ -64,7 +56,7 @@ def _fetch_articles_for_day_lane(
     limit: int,
     industry_ids: list[int],
 ) -> list[Article]:
-    start_utc, end_utc = utc_naive_bounds_for_shanghai_date(d)
+    start_utc, end_utc = utc_naive_bounds_for_us_date(d)
     if not industry_ids:
         return []
     lim = max(1, min(40, int(limit)))
@@ -105,6 +97,7 @@ def fetch_articles_for_shanghai_day_split(
     apps_limit: int,
     news_limit: int,
 ) -> tuple[list[Article], list[Article]]:
+    """美东日历「当天」已发布文章，按热度各取 Top N。"""
     ids_ = _ai_industry_ids(db)
     apps = _fetch_articles_for_day_lane(db, d, feed_kind="apps", limit=apps_limit, industry_ids=ids_)
     news = _fetch_articles_for_day_lane(db, d, feed_kind="news", limit=news_limit, industry_ids=ids_)
@@ -539,7 +532,10 @@ def run_daily_newsletter_digest_job(
         if out["reused_existing"]:
             out["message"] = f"沿用库内今日摘要（{apps_count} 应用 / {news_count} 资讯），未重复生成。"
         elif content_generated:
-            out["message"] = f"已生成并落库今日摘要（{apps_count} 应用 / {news_count} 资讯，来自当日已发布内容）。"
+            out["message"] = (
+                f"已生成并落库今日摘要（{apps_count} 应用 / {news_count} 资讯，"
+                f"美东 {digest_key} 当天已发布内容）。"
+            )
 
         if settings.get("send_enabled", True) and _smtp_config_from_settings(settings):
             if row.sent_at is None:

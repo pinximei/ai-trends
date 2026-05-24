@@ -19,6 +19,7 @@ from .domain.articles import (
     extract_cover_image_url,
     extract_connector_primary_url,
     ensure_connector_links_in_polish_tabs,
+    connector_snippet_published_at_utc,
     extract_github_engagement_from_snippet,
     extract_source_external_id_from_connector_snippet,
     feed_lane,
@@ -390,6 +391,7 @@ def _create_one_published_article_from_connector_targets(
 
     cover_image_url = extract_cover_image_url(src_tag, safe)
     source_original_url = extract_connector_primary_url(src_tag, safe)
+    published_at = connector_snippet_published_at_utc(safe) or now
     art = Article(
         title=title,
         slug=slug,
@@ -403,7 +405,7 @@ def _create_one_published_article_from_connector_targets(
         source_external_id=(source_external_id[:512] if source_external_id else None),
         source_original_url=(source_original_url[:2048] if source_original_url else None),
         status="published",
-        published_at=now,
+        published_at=published_at,
         ingest_fingerprint=ing_fp,
         ai_categories_json=ai_categories_json,
         ai_tabs_json=ai_tabs_json,

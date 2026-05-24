@@ -2254,7 +2254,7 @@ export function App() {
                 定时同步与数据清理
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；在<strong>上海时区当日 00:00</strong>为起点划分的时段内，于各时段开头触发整批同步（与<strong>服务启动时间无关</strong>）。例如间隔 24 小时即每天 <strong>00:00</strong> 左右拉取；6 小时则为 0/6/12/18 点。对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
+                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；仅在<strong>美东当日 23:00–24:00</strong>触发整批同步（与 NewsAPI 等按美国日切分的数据源对齐，每日最多一次）。对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
                 <code className="inline-code">min_interval_seconds</code> 限制）。配置保存在{" "}
                 <code className="inline-code">product_settings_kv.scheduler</code>。
               </p>
@@ -2266,7 +2266,7 @@ export function App() {
                   {schedulerSettings.daily_slot_times_local ? (
                     <>
                       {" · "}
-                      本日触发时刻（{schedulerSettings.scheduler_timezone ?? "Asia/Shanghai"}）：<strong>{schedulerSettings.daily_slot_times_local}</strong>
+                      拉取窗口（{schedulerSettings.scheduler_timezone ?? "America/New_York"}）：<strong>{schedulerSettings.daily_slot_times_local}</strong>
                     </>
                   ) : null}
                 </p>
@@ -2357,9 +2357,10 @@ export function App() {
                 订阅推送 · 邮件 / 飞书
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                按<strong>上海日历日</strong>从站内<strong>当日已发布</strong>的应用/资讯拼一篇摘要，写入{" "}
-                <code className="inline-code">newsletter_daily_digests</code>（每天一篇，非连接器「新建文章」）。
-                库中已有今日摘要时，「立即推送」只发邮件/飞书、不重复生成；需重写内容请点「重新生成并推送」。定时默认 09:00 起 5 分钟内执行。
+                按<strong>美东（America/New_York）当天</strong>已发布应用/资讯拼一篇摘要，写入{" "}
+                <code className="inline-code">newsletter_daily_digests</code>（每天一篇）。
+                连接器在<strong>美东当日 23:00–24:00</strong>整批拉取（便于对齐 NewsAPI 等按 US 日切分的数据）；摘要默认定时{" "}
+                <strong>23:50</strong> 美东（可在配置中改）。库中已有今日摘要时「立即推送」只发不重生成。
               </p>
               {canOperate ? (
                 <form className="newsletter-push-form" onSubmit={onSaveNewsletter}>
@@ -2561,7 +2562,7 @@ export function App() {
                         {Array.isArray((digestPreview.digest.article_ids as { news?: unknown }).news)
                           ? (digestPreview.digest.article_ids as { news: unknown[] }).news.length
                           : 0}{" "}
-                        资讯（当日已发布）
+                        资讯（美东当天）
                       </>
                     ) : null}
                     {digestPreview.digest?.sent_at ? " · 邮件已发" : ""}

@@ -228,17 +228,16 @@ def _job_connector_sync_gate() -> None:
 def _job_newsletter_daily() -> None:
     db = SessionLocal()
     try:
-        from zoneinfo import ZoneInfo
-
         from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
         from .newsletter_settings_service import get_newsletter_settings_merged
+        from .us_content_calendar import US_CONTENT_TZ
 
         s = get_newsletter_settings_merged(db)
         if not s.get("daily_digest_job_enabled", True):
             return
         if not s.get("cron_enabled", True):
             return
-        now = datetime.now(ZoneInfo("Asia/Shanghai"))
+        now = datetime.now(US_CONTENT_TZ)
         h = int(s.get("daily_hour", 9))
         m = int(s.get("daily_minute", 0))
         slot_start = now.replace(hour=h, minute=m, second=0, microsecond=0)
@@ -257,7 +256,7 @@ def _start_scheduler() -> None:
     if _scheduler is not None:
         return
 
-    _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
+    _scheduler = BackgroundScheduler(timezone="America/New_York")
     _scheduler.add_job(_job_scheduled_hot, IntervalTrigger(days=3), id="hot_snapshot_3d")
     _scheduler.add_job(_job_anomaly, "interval", hours=1, id="hourly_anomaly")
     _scheduler.add_job(

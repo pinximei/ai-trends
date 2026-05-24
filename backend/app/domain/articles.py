@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterator
 from urllib.parse import urlparse
 
@@ -26,6 +26,75 @@ CONNECTOR_LLM_SNIPPET_MAX_CHARS = 32_768
 CONNECTOR_HEAT_TOP_N = 10
 
 CONNECTOR_SYNC_ITEMS_V1_KEY = "connector_sync_items_v1"
+
+_PUBLISH_TIME_KEYS = ("publishedAt", "published_at", "created_at", "updated_at", "pubDate")
+
+
+def _parse_iso_to_naive_utc(raw: object) -> datetime | None:
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        ts = float(raw)
+        if ts > 1e12:
+            ts /= 1000.0
+        try:
+            return datetime.utcfromtimestamp(ts)
+        except (OSError, ValueError, OverflowError):
+            return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _published_at_from_item_dict(data: dict) -> datetime | None:
+    for key in _PUBLISH_TIME_KEYS:
+        if key in data:
+            parsed = _parse_iso_to_naive_utc(data.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def connector_snippet_published_at_utc(snippet: str) -> datetime | None:
+    """从连接器单条 JSON 片段解析源站发布时间；失败则返回 None（入库用同步时刻）。"""
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    if not s:
+        return None
+    try:
+        data = json.loads(s)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    found = _published_at_from_item_dict(data)
+    if found is not None:
+        return found
+    items = data.get(CONNECTOR_SYNC_ITEMS_V1_KEY)
+    if isinstance(items, list):
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            inner_s = (row.get("snippet") or "").strip()
+            if not inner_s:
+                continue
+            try:
+                inner = json.loads(inner_s)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(inner, dict):
+                found = _published_at_from_item_dict(inner)
+                if found is not None:
+                    return found
+    return None
 
 
 def parse_connector_sync_item_snippets(snippet: str) -> list[str] | None:

@@ -1,16 +1,21 @@
 """连接器批量调度：间隔与开关存 product_settings_kv.scheduler（后台可改）；新建行默认 6 小时。"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from .product_models import ProductSetting
+from .us_content_calendar import (
+    US_CONTENT_TZ,
+    US_END_OF_DAY_PULL_HOUR,
+    US_TIMEZONE_LABEL,
+    us_end_of_day_pull_start_local,
+)
 
 SCHEDULER_KEY = "scheduler"
-CONNECTOR_SCHEDULER_TZ = ZoneInfo("Asia/Shanghai")
+CONNECTOR_SCHEDULER_TZ = US_CONTENT_TZ
 CONNECTOR_GATE_CHECK_MINUTES = 15
 
 
@@ -49,33 +54,16 @@ def get_scheduler_settings_public(db: Session) -> dict[str, Any]:
         "connector_sync_interval_hours": interval_h,
         "last_connector_batch_at": m.get("last_connector_batch_at"),
         "gate_interval_minutes": CONNECTOR_GATE_CHECK_MINUTES,
-        "scheduler_timezone": "Asia/Shanghai",
-        "sync_anchor": "calendar_midnight",
+        "scheduler_timezone": US_TIMEZONE_LABEL,
+        "sync_anchor": "us_eod_last_hour",
         "daily_slot_times_local": _connector_slot_times_label(interval_h),
     }
 
 
 def _connector_slot_times_label(interval_h: int) -> str:
-    """本日内在上海时区按整点划分的拉取时刻（每段窗口前 15 分钟触发）。"""
-    h = max(1, min(168, int(interval_h)))
-    if 24 % h == 0:
-        return ", ".join(f"{x:02d}:00" for x in range(0, 24, h))
-    return f"自每日 00:00 起每 {h} 小时一段（当日 00:00 为起点）"
-
-
-def connector_batch_slot_start_local(now: datetime | None = None, *, interval_hours: int) -> datetime:
-    """当前时间所属调度段的起点（Asia/Shanghai，对齐当日 00:00）。"""
-    h = max(1, min(168, int(interval_hours)))
-    ref = now or datetime.now(CONNECTOR_SCHEDULER_TZ)
-    if ref.tzinfo is None:
-        ref = ref.replace(tzinfo=timezone.utc).astimezone(CONNECTOR_SCHEDULER_TZ)
-    else:
-        ref = ref.astimezone(CONNECTOR_SCHEDULER_TZ)
-    day_start = ref.replace(hour=0, minute=0, second=0, microsecond=0)
-    minute_of_day = ref.hour * 60 + ref.minute
-    slot_len_min = h * 60
-    slot_index = min(minute_of_day // slot_len_min, (24 * 60 - 1) // slot_len_min)
-    return day_start + timedelta(minutes=slot_index * slot_len_min)
+    """美东当日最后一小时（23:00–24:00）整批拉取；间隔小时数仅作展示保留。"""
+    _ = interval_h
+    return f"每日 {US_END_OF_DAY_PULL_HOUR:02d}:00–24:00（{US_TIMEZONE_LABEL}，gate 每 {CONNECTOR_GATE_CHECK_MINUTES} 分钟检查）"
 
 
 def connector_batch_due_now(
@@ -88,23 +76,21 @@ def connector_batch_due_now(
     """
     是否应在当前 gate 周期触发整批拉取。
 
-    - 以 **Asia/Shanghai 当日 00:00** 为起点切分时段（24h → 每天 00:00 一段；6h → 0/6/12/18 点）。
-    - 每段仅在开头 ``gate_window_minutes`` 分钟内触发一次（与进程内 15 分钟 gate 对齐）。
-    - 与「服务启动后每隔 N 小时」无关；重启不会把锚点挪到启动时刻。
+    仅在 **美东当日 23:00–23:59** 触发（最后一小时拉取，便于对齐 US 日切数据源）。
+    每个美东日历日最多成功触发一次（``last_batch_at`` 早于当日 23:00 美东）。
+    ``interval_hours`` 保留配置项，不再用于切分拉取时段。
     """
-    h = max(1, min(168, int(interval_hours)))
+    _ = interval_hours, gate_window_minutes
     ref = now or datetime.now(CONNECTOR_SCHEDULER_TZ)
     if ref.tzinfo is None:
         ref = ref.replace(tzinfo=timezone.utc).astimezone(CONNECTOR_SCHEDULER_TZ)
     else:
         ref = ref.astimezone(CONNECTOR_SCHEDULER_TZ)
 
-    slot_start = connector_batch_slot_start_local(ref, interval_hours=h)
-    slot_start_min = slot_start.hour * 60 + slot_start.minute
-    minute_of_day = ref.hour * 60 + ref.minute
-    if minute_of_day - slot_start_min >= max(1, int(gate_window_minutes)):
+    if ref.hour != US_END_OF_DAY_PULL_HOUR:
         return False
 
+    slot_start = us_end_of_day_pull_start_local(ref)
     if last_batch_at is None:
         return True
 
