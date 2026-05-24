@@ -24,10 +24,8 @@ def default_scheduler_json() -> dict[str, Any]:
         "connector_scheduler_enabled": True,
         "connector_sync_interval_hours": 6,
         "last_connector_batch_at": None,
-        # TheNewsAPI 等低产出源：单独微批，默认每 2 小时拉一次（API 单次约 3 条）
-        "low_yield_sync_enabled": True,
-        "thenewsapi_sync_interval_hours": 2,
-        "last_low_yield_batch_at": {},
+        # 启用「单独同步」的数据源上次成功时间 { source_key: iso }
+        "last_custom_source_batch_at": {},
     }
 
 
@@ -46,21 +44,8 @@ def get_scheduler_settings_merged(db: Session) -> dict[str, Any]:
     h = int(base.get("connector_sync_interval_hours") or 6)
     base["connector_sync_interval_hours"] = max(1, min(168, h))
     base["connector_scheduler_enabled"] = bool(base.get("connector_scheduler_enabled", True))
-    base["low_yield_sync_enabled"] = bool(base.get("low_yield_sync_enabled", True))
-    try:
-        th = int(base.get("thenewsapi_sync_interval_hours") or 2)
-    except (TypeError, ValueError):
-        th = 2
-    from .connector_sync_policy import (
-        THENEWSAPI_SYNC_INTERVAL_HOURS_MAX,
-        THENEWSAPI_SYNC_INTERVAL_HOURS_MIN,
-    )
-
-    base["thenewsapi_sync_interval_hours"] = max(
-        THENEWSAPI_SYNC_INTERVAL_HOURS_MIN, min(THENEWSAPI_SYNC_INTERVAL_HOURS_MAX, th)
-    )
-    raw_map = base.get("last_low_yield_batch_at")
-    base["last_low_yield_batch_at"] = raw_map if isinstance(raw_map, dict) else {}
+    raw_map = base.get("last_custom_source_batch_at") or base.get("last_low_yield_batch_at")
+    base["last_custom_source_batch_at"] = raw_map if isinstance(raw_map, dict) else {}
     return base
 
 
@@ -68,9 +53,7 @@ def get_scheduler_settings_public(db: Session) -> dict[str, Any]:
     ensure_scheduler_settings_row(db)
     m = get_scheduler_settings_merged(db)
     interval_h = int(m["connector_sync_interval_hours"])
-    from .connector_sync_policy import THENEWSAPI_API_MAX_ROWS
-
-    ly_map = m.get("last_low_yield_batch_at") or {}
+    ly_map = m.get("last_custom_source_batch_at") or {}
     return {
         "connector_scheduler_enabled": m["connector_scheduler_enabled"],
         "connector_sync_interval_hours": interval_h,
@@ -79,11 +62,8 @@ def get_scheduler_settings_public(db: Session) -> dict[str, Any]:
         "scheduler_timezone": US_TIMEZONE_LABEL,
         "sync_anchor": "us_eod_last_hour",
         "daily_slot_times_local": _connector_slot_times_label(interval_h),
-        "low_yield_sync_enabled": m.get("low_yield_sync_enabled", True),
-        "thenewsapi_sync_interval_hours": m.get("thenewsapi_sync_interval_hours", 2),
-        "last_thenewsapi_batch_at": ly_map.get("thenewsapi"),
-        "thenewsapi_api_max_rows": THENEWSAPI_API_MAX_ROWS,
-        "low_yield_sources": ["thenewsapi"],
+        "last_custom_source_batch_at": ly_map,
+        "custom_sync_note": "单独同步频率在「数据源」卡片配置；开启后不参与上方整批。",
     }
 
 
@@ -141,21 +121,6 @@ def save_scheduler_settings_patch(db: Session, patch: dict[str, Any]) -> dict[st
             cur["connector_sync_interval_hours"] = max(1, min(168, h))
         except (TypeError, ValueError):
             pass
-    if "low_yield_sync_enabled" in patch and patch["low_yield_sync_enabled"] is not None:
-        cur["low_yield_sync_enabled"] = bool(patch["low_yield_sync_enabled"])
-    if "thenewsapi_sync_interval_hours" in patch and patch["thenewsapi_sync_interval_hours"] is not None:
-        from .connector_sync_policy import (
-            THENEWSAPI_SYNC_INTERVAL_HOURS_MAX,
-            THENEWSAPI_SYNC_INTERVAL_HOURS_MIN,
-        )
-
-        try:
-            th = int(patch["thenewsapi_sync_interval_hours"])
-            cur["thenewsapi_sync_interval_hours"] = max(
-                THENEWSAPI_SYNC_INTERVAL_HOURS_MIN, min(THENEWSAPI_SYNC_INTERVAL_HOURS_MAX, th)
-            )
-        except (TypeError, ValueError):
-            pass
     row.value_json = cur
     row.updated_at = datetime.utcnow()
     db.commit()
@@ -188,15 +153,15 @@ def set_last_connector_batch_at(db: Session, when: datetime) -> None:
     db.commit()
 
 
-def get_last_low_yield_batch_at(settings: dict[str, Any], source_key: str) -> datetime | None:
+def get_last_custom_source_batch_at(settings: dict[str, Any], source_key: str) -> datetime | None:
     sk = (source_key or "").strip().lower()
-    raw_map = settings.get("last_low_yield_batch_at")
+    raw_map = settings.get("last_custom_source_batch_at") or settings.get("last_low_yield_batch_at")
     if not isinstance(raw_map, dict):
         return None
     return parse_last_batch_at(raw_map.get(sk))
 
 
-def set_last_low_yield_batch_at(db: Session, source_key: str, when: datetime) -> None:
+def set_last_custom_source_batch_at(db: Session, source_key: str, when: datetime) -> None:
     sk = (source_key or "").strip().lower()
     if not sk:
         return
@@ -204,9 +169,9 @@ def set_last_low_yield_batch_at(db: Session, source_key: str, when: datetime) ->
     row = db.get(ProductSetting, SCHEDULER_KEY)
     assert row is not None
     v = dict(row.value_json or {})
-    ly = dict(v.get("last_low_yield_batch_at") or {})
+    ly = dict(v.get("last_custom_source_batch_at") or v.get("last_low_yield_batch_at") or {})
     ly[sk] = when.replace(tzinfo=None).isoformat() + "Z"
-    v["last_low_yield_batch_at"] = ly
+    v["last_custom_source_batch_at"] = ly
     row.value_json = v
     row.updated_at = datetime.utcnow()
     db.commit()

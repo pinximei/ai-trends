@@ -18,6 +18,9 @@ class AdminSourceConfigUpsert(BaseModel):
     scope_labels: list[str] = Field(default_factory=list)
     # 单次同步拉取条数（1～80）；Product Hunt 建议 ≤30。
     fetch_limit: int | None = Field(None, ge=1, le=80)
+    # 为 true 时不参与整批同步，改按 custom_sync_interval_hours 单独拉取（默认 false）。
+    custom_sync_enabled: bool | None = None
+    custom_sync_interval_hours: int | None = Field(None, ge=1, le=168)
 
 
 class AdminSourceTestRequest(BaseModel):

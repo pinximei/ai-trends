@@ -76,7 +76,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜新闻聚合",
         "content_role": "daily_editorial",
-        "notes": "TheNewsAPI：上游单次约 3 条，由系统每 2 小时微批同步（可在调度设置改间隔）；不参与美东 23:00 整批。",
+        "notes": "TheNewsAPI：上游单次约 3 条；建议在卡片开启「单独设置同步频率」（如每 2 小时），否则仅随整批每日拉一次。",
         "fetch_limit": PRESET_FETCH_LIMIT["thenewsapi"],
     },
 ]

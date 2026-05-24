@@ -78,6 +78,9 @@ class AdminSourceConfig(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     # 单次同步拉取条数（热度 Top N）；各内置源默认见 admin_source_fetch.PRESET_FETCH_LIMIT。
     fetch_limit: Mapped[int] = mapped_column(Integer, default=10)
+    # 为 true 时不参与整批 EOD 同步，改按 custom_sync_interval_hours 单独调度（默认 false）。
+    custom_sync_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    custom_sync_interval_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 后台「预设模板」展示名与内容角色；运行时 GET /sources/presets 仅从数据库读取。
     preset_label: Mapped[str] = mapped_column(String(128), default="")
     content_role: Mapped[str] = mapped_column(String(32), default="")

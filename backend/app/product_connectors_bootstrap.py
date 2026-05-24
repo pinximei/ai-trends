@@ -21,10 +21,7 @@ from .connector_heat_fetch import (
     thenewsapi_is_news_url,
 )
 from .scope_labels_util import get_scope_labels_from_source
-from .connector_sync_policy import (
-    LOW_YIELD_MICRO_BATCH_SOURCES,
-    min_interval_seconds_for_source,
-)
+from .connector_sync_policy import CUSTOM_SYNC_MIN_INTERVAL_SECONDS
 from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
@@ -88,20 +85,51 @@ def _news_wire_url_needs_repair(src: str, url: str) -> bool:
     return False
 
 
-def repair_low_yield_connector_intervals(db: Session) -> int:
-    """低产出源连接器：缩短 min_interval，便于运营手动补拉；定时走微批调度。"""
+def migrate_legacy_thenewsapi_scheduler_to_source(db: Session) -> int:
+    """旧版调度页上的 TheNewsAPI 微批开关 → 数据源卡片「单独同步」（仅迁移一次）。"""
+    from .product_models import ProductSetting
+    from .scheduler_settings_service import SCHEDULER_KEY, get_scheduler_settings_merged
+
+    if not db.get(ProductSetting, SCHEDULER_KEY):
+        return 0
+    settings = get_scheduler_settings_merged(db)
+    if not settings.get("low_yield_sync_enabled", True):
+        return 0
+    row = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == "thenewsapi"))
+    if not row or row.custom_sync_enabled:
+        return 0
+    try:
+        th = int(settings.get("thenewsapi_sync_interval_hours") or 2)
+    except (TypeError, ValueError):
+        th = 2
+    from .connector_sync_policy import clamp_custom_sync_interval_hours
+
+    row.custom_sync_enabled = True
+    row.custom_sync_interval_hours = clamp_custom_sync_interval_hours(th)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return 1
+
+
+def repair_custom_sync_connector_intervals(db: Session) -> int:
+    """启用单独同步的源：连接器 min_interval 对齐为 30 分钟。"""
+    custom_sources = {
+        (r.source or "").strip().lower()
+        for r in db.scalars(
+            select(AdminSourceConfig).where(AdminSourceConfig.custom_sync_enabled.is_(True))
+        ).all()
+    }
+    if not custom_sources:
+        return 0
     changed = 0
     for c in db.scalars(
         select(ProductConnector).where(ProductConnector.admin_source_key.isnot(None))
     ).all():
         sk = (c.admin_source_key or "").strip().lower()
-        if sk not in LOW_YIELD_MICRO_BATCH_SOURCES:
+        if sk not in custom_sources:
             continue
-        want = min_interval_seconds_for_source(sk)
-        if want is None:
-            continue
-        if int(c.min_interval_seconds or 0) != want:
-            c.min_interval_seconds = want
+        if int(c.min_interval_seconds or 0) != CUSTOM_SYNC_MIN_INTERVAL_SECONDS:
+            c.min_interval_seconds = CUSTOM_SYNC_MIN_INTERVAL_SECONDS
             changed += 1
     if changed:
         db.commit()
@@ -243,15 +271,14 @@ def ensure_core_admin_connectors(db: Session) -> None:
         if exists:
             continue
         label = ((src.preset_label or "").strip() or key.replace("_", " ").title())
-        min_iv = min_interval_seconds_for_source(key) or 3600
         db.add(
             ProductConnector(
-                name=f"{label} 拉取" + ("（微批）" if key in LOW_YIELD_MICRO_BATCH_SOURCES else ""),
+                name=f"{label} 拉取",
                 provider_name=key,
                 type="api",
                 config_json={"method": "GET"},
                 enabled=key in AUTO_ENABLE_PULL_SOURCE_KEYS,
-                min_interval_seconds=min_iv,
+                min_interval_seconds=3600,
                 admin_source_key=key,
             )
         )

@@ -391,11 +391,8 @@ export const adminApi = {
       connector_sync_interval_hours: number;
       last_connector_batch_at: string | null;
       gate_interval_minutes: number;
-      low_yield_sync_enabled?: boolean;
-      thenewsapi_sync_interval_hours?: number;
-      last_thenewsapi_batch_at?: string | null;
-      thenewsapi_api_max_rows?: number;
-      low_yield_sources?: string[];
+      last_custom_source_batch_at?: Record<string, string | null>;
+      custom_sync_note?: string;
     }>("/api/admin/v1/product/settings/scheduler"),
   getRuntimeSettings: () =>
     request<{
@@ -436,18 +433,14 @@ export const adminApi = {
   saveSchedulerSettings: (payload: {
     connector_scheduler_enabled?: boolean;
     connector_sync_interval_hours?: number;
-    low_yield_sync_enabled?: boolean;
-    thenewsapi_sync_interval_hours?: number;
   }) =>
     request<{
       connector_scheduler_enabled: boolean;
       connector_sync_interval_hours: number;
       last_connector_batch_at: string | null;
       gate_interval_minutes: number;
-      low_yield_sync_enabled?: boolean;
-      thenewsapi_sync_interval_hours?: number;
-      last_thenewsapi_batch_at?: string | null;
-      thenewsapi_api_max_rows?: number;
+      last_custom_source_batch_at?: Record<string, string | null>;
+      custom_sync_note?: string;
     }>("/api/admin/v1/product/settings/scheduler", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

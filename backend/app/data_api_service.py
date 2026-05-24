@@ -67,6 +67,8 @@ class DataApiService:
                     "show_api_key_field": show_api_key_field,
                     "show_app_secret_field": show_app_secret_field,
                     "fetch_limit": normalize_fetch_limit(getattr(i, "fetch_limit", None), source=i.source),
+                    "custom_sync_enabled": bool(getattr(i, "custom_sync_enabled", False)),
+                    "custom_sync_interval_hours": getattr(i, "custom_sync_interval_hours", None),
                 }
             )
         return items
@@ -116,6 +118,8 @@ class DataApiService:
                     "scope_labels": get_scope_labels_from_source(i),
                     "notes": i.notes,
                     "fetch_limit": normalize_fetch_limit(getattr(i, "fetch_limit", None), source=i.source),
+                    "custom_sync_enabled": bool(getattr(i, "custom_sync_enabled", False)),
+                    "custom_sync_interval_hours": getattr(i, "custom_sync_interval_hours", None),
                     "updated_at": i.updated_at.isoformat(),
                 }
             )
@@ -177,6 +181,20 @@ class DataApiService:
             item.fetch_limit = normalize_fetch_limit(None, source=source)
         labels = normalize_scope_labels_from_payload(payload)
         apply_scope_labels_to_row(item, labels)
+        if "custom_sync_enabled" in payload and payload.get("custom_sync_enabled") is not None:
+            item.custom_sync_enabled = bool(payload["custom_sync_enabled"])
+        if "custom_sync_interval_hours" in payload and payload.get("custom_sync_interval_hours") is not None:
+            from .connector_sync_policy import clamp_custom_sync_interval_hours
+
+            item.custom_sync_interval_hours = clamp_custom_sync_interval_hours(
+                int(payload["custom_sync_interval_hours"])
+            )
+        elif item.custom_sync_enabled and not item.custom_sync_interval_hours:
+            from .connector_sync_policy import CUSTOM_SYNC_INTERVAL_HOURS_DEFAULT
+
+            item.custom_sync_interval_hours = CUSTOM_SYNC_INTERVAL_HOURS_DEFAULT
+        if not item.custom_sync_enabled:
+            item.custom_sync_interval_hours = None
         item.updated_at = datetime.utcnow()
         self.db.commit()
         from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
@@ -211,6 +229,8 @@ class DataApiService:
             "scope_labels": labels,
             "notes": item.notes,
             "fetch_limit": normalize_fetch_limit(item.fetch_limit, source=item.source),
+            "custom_sync_enabled": bool(getattr(item, "custom_sync_enabled", False)),
+            "custom_sync_interval_hours": getattr(item, "custom_sync_interval_hours", None),
             "updated_at": item.updated_at.isoformat(),
         }
 

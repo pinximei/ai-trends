@@ -74,9 +74,13 @@ def _startup_sync() -> None:
         repair_mainstream_heat_fetch_admin_sources(db)
         repair_short_probe_admin_sources(db)
         ensure_core_admin_connectors(db)
-        from .product_connectors_bootstrap import repair_low_yield_connector_intervals
+        from .product_connectors_bootstrap import (
+            migrate_legacy_thenewsapi_scheduler_to_source,
+            repair_custom_sync_connector_intervals,
+        )
 
-        repair_low_yield_connector_intervals(db)
+        migrate_legacy_thenewsapi_scheduler_to_source(db)
+        repair_custom_sync_connector_intervals(db)
         repair_connector_urls_from_admin_sources(db)
         enable_auto_pull_admin_sources_and_connectors(db)
         if demo_seed_enabled_effective():
@@ -182,16 +186,23 @@ def _job_connector_sync_gate() -> None:
                 logger.debug("connector batch: advisory lock busy, skip")
                 return
 
-        from .connector_sync_policy import is_low_yield_micro_batch_source
+        from .models import AdminSourceConfig
 
         rows = db.scalars(select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)).all()
         if not rows:
             return
 
+        custom_keys: set[str] = set()
+        for cfg in db.scalars(
+            select(AdminSourceConfig).where(AdminSourceConfig.custom_sync_enabled.is_(True))
+        ).all():
+            custom_keys.add((cfg.source or "").strip().lower())
+
         ok = 0
         fail = 0
         for r in rows:
-            if is_low_yield_micro_batch_source(r.admin_source_key or ""):
+            ask = (r.admin_source_key or "").strip().lower()
+            if ask and ask in custom_keys:
                 continue
             try:
                 out = run_connector_sync(db, r.id, actor="system", bypass_rate_limit=True)
@@ -232,22 +243,22 @@ def _job_connector_sync_gate() -> None:
         db.close()
 
 
-def _job_low_yield_connector_sync_gate() -> None:
-    """TheNewsAPI 等低产出源：按间隔小时单独微批（API 单次约 3 条，需每日多次拉取）。"""
+def _job_custom_source_sync_gate() -> None:
+    """数据源卡片开启「单独同步」的源：按各自间隔小时拉取，不参与整批 EOD。"""
     from sqlalchemy import select, text
 
     from fastapi import HTTPException
 
-    from .connector_sync_policy import LOW_YIELD_MICRO_BATCH_SOURCES
+    from .connector_sync_policy import clamp_custom_sync_interval_hours, custom_source_batch_due_now
     from .db import engine
+    from .models import AdminSourceConfig
     from .product_models import ProductConnector
     from .routers.admin_extended import run_connector_sync
     from .scheduler_settings_service import (
         ensure_scheduler_settings_row,
-        get_last_low_yield_batch_at,
+        get_last_custom_source_batch_at,
         get_scheduler_settings_merged,
-        low_yield_batch_due_now,
-        set_last_low_yield_batch_at,
+        set_last_custom_source_batch_at,
     )
 
     db = SessionLocal()
@@ -257,26 +268,33 @@ def _job_low_yield_connector_sync_gate() -> None:
         settings = get_scheduler_settings_merged(db)
         if not settings.get("connector_scheduler_enabled", True):
             return
-        if not settings.get("low_yield_sync_enabled", True):
-            return
 
-        interval_h = int(settings.get("thenewsapi_sync_interval_hours") or 2)
         now_utc = datetime.now(timezone.utc)
-        due_sources: list[str] = []
-        for sk in sorted(LOW_YIELD_MICRO_BATCH_SOURCES):
-            last_dt = get_last_low_yield_batch_at(settings, sk)
-            if low_yield_batch_due_now(interval_hours=interval_h, last_batch_at=last_dt, now=now_utc):
-                due_sources.append(sk)
-        if not due_sources:
+        due_rows: list[AdminSourceConfig] = []
+        for cfg in db.scalars(
+            select(AdminSourceConfig).where(
+                AdminSourceConfig.enabled.is_(True),
+                AdminSourceConfig.custom_sync_enabled.is_(True),
+            )
+        ).all():
+            sk = (cfg.source or "").strip().lower()
+            if not sk:
+                continue
+            interval_h = clamp_custom_sync_interval_hours(cfg.custom_sync_interval_hours)
+            last_dt = get_last_custom_source_batch_at(settings, sk)
+            if custom_source_batch_due_now(interval_hours=interval_h, last_batch_at=last_dt, now=now_utc):
+                due_rows.append(cfg)
+        if not due_rows:
             return
 
         if getattr(engine.dialect, "name", "") == "postgresql":
             locked = bool(db.execute(text("SELECT pg_try_advisory_lock(928471002)")).scalar())
             if not locked:
-                logger.debug("low-yield connector batch: advisory lock busy, skip")
+                logger.debug("custom-source connector batch: advisory lock busy, skip")
                 return
 
-        for sk in due_sources:
+        for cfg in due_rows:
+            sk = cfg.source
             rows = db.scalars(
                 select(ProductConnector)
                 .where(
@@ -290,10 +308,10 @@ def _job_low_yield_connector_sync_gate() -> None:
             ok = 0
             for r in rows:
                 try:
-                    out = run_connector_sync(db, r.id, actor="system_low_yield", bypass_rate_limit=True)
+                    out = run_connector_sync(db, r.id, actor="system_custom_sync", bypass_rate_limit=True)
                     if out.get("error"):
                         logger.warning(
-                            "low-yield sync %s connector #%s failed: %s",
+                            "custom sync %s connector #%s failed: %s",
                             sk,
                             r.id,
                             out.get("error"),
@@ -301,26 +319,26 @@ def _job_low_yield_connector_sync_gate() -> None:
                     else:
                         ok += 1
                         logger.info(
-                            "low-yield sync %s connector #%s ok articles_created=%s",
+                            "custom sync %s connector #%s ok articles_created=%s",
                             sk,
                             r.id,
                             out.get("articles_created"),
                         )
                 except HTTPException:
-                    logger.warning("low-yield sync %s connector #%s HTTPException", sk, r.id)
+                    logger.warning("custom sync %s connector #%s HTTPException", sk, r.id)
                 except Exception:
-                    logger.exception("low-yield sync failed source=%s id=%s", sk, r.id)
+                    logger.exception("custom sync failed source=%s id=%s", sk, r.id)
             if ok > 0:
-                set_last_low_yield_batch_at(db, sk, datetime.utcnow())
+                set_last_custom_source_batch_at(db, sk, datetime.utcnow())
     except Exception as e:
-        logger.exception("low-yield connector gate failed: %s", e)
+        logger.exception("custom-source connector gate failed: %s", e)
     finally:
         if locked and getattr(engine.dialect, "name", "") == "postgresql":
             try:
                 db.execute(text("SELECT pg_advisory_unlock(928471002)"))
                 db.commit()
             except Exception:
-                logger.exception("low-yield advisory unlock failed")
+                logger.exception("custom-source advisory unlock failed")
         db.close()
 
 
@@ -364,9 +382,9 @@ def _start_scheduler() -> None:
         id="connector_sync_gate",
     )
     _scheduler.add_job(
-        _job_low_yield_connector_sync_gate,
+        _job_custom_source_sync_gate,
         IntervalTrigger(minutes=15),
-        id="low_yield_connector_sync_gate",
+        id="custom_source_sync_gate",
     )
     _scheduler.add_job(
         _job_newsletter_daily,
