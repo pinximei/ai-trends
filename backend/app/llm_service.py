@@ -11,6 +11,7 @@ from .domain.articles import (
     CONNECTOR_LLM_SNIPPET_MAX_CHARS,
     FACET_ALL_LABELS,
     primary_canonical_from_raw_labels,
+    publish_polish_length_thresholds,
     required_feed_card_tab_labels,
     validate_llm_polish_for_publish,
 )
@@ -220,8 +221,9 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
     return _coerce_polish_output(out), ""
 
 
-def _describe_polish_reject(data: dict) -> str:
+def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) -> str:
     """润色结果未通过发布校验时的可读原因（供同步诊断）。"""
+    th = publish_polish_length_thresholds(admin_source_key)
     title = str(data.get("title") or "").strip()
     summary = str(data.get("summary") or "").strip()
     body_md = str(data.get("body_md") or "").strip()
@@ -253,8 +255,8 @@ def _describe_polish_reject(data: dict) -> str:
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
         labels.append(lab)
-        min_summ = 72 if lab == need_desc else 12
-        min_body = 120 if lab == need_desc else 60
+        min_summ = th["desc_summary"] if lab == need_desc else th["hi_summary"]
+        min_body = th["desc_body"] if lab == need_desc else th["hi_body"]
         if len(summ) < min_summ:
             return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
         if len(body) < min_body:
@@ -263,9 +265,9 @@ def _describe_polish_reject(data: dict) -> str:
     if labels != [need_desc, need_hi] and not legacy_ok:
         return f"tab_labels={labels!r} need={[need_desc, need_hi]!r}"
     tab_body_total = sum(len(str(t.get("body_md") or "")) for t in tabs if isinstance(t, dict))
-    if tab_body_total < 280:
-        return f"tab_body_total_short len={tab_body_total} need>=280"
-    if len(body_md) < 120 and tab_body_total < 500:
+    if tab_body_total < th["tab_body_total"]:
+        return f"tab_body_total_short len={tab_body_total} need>={th['tab_body_total']}"
+    if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
         return f"body_md_short body={len(body_md)} tabs_total={tab_body_total}"
     return "validate_unknown"
 
@@ -400,9 +402,10 @@ def polish_connector_article(
         out, parse_err = _parse_polish_response(raw, default_feed_kind=fk)
         if not out:
             return None, parse_err
-        if validate_llm_polish_for_publish(out):
+        if validate_llm_polish_for_publish(out, admin_source_key=admin_source_key):
             return out, ""
-        reject = _describe_polish_reject(out)
+        reject = _describe_polish_reject(out, admin_source_key=admin_source_key)
+        th = publish_polish_length_thresholds(admin_source_key)
         try:
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
 
@@ -420,7 +423,8 @@ def polish_connector_article(
         repair_user = (
             f"{user}\n\n【上次输出未通过校验】{reject}\n"
             "请重新输出完整 JSON：tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
-            "「描述」summary≥80 字、body_md≥150 字；「数据支撑」summary≥12 字、body_md≥60 字；"
+            f"「描述」summary≥{th['desc_summary']} 字、body_md≥{th['desc_body']} 字；"
+            f"「数据支撑」summary≥{th['hi_summary']} 字、body_md≥{th['hi_body']} 字；"
             f"categories 为恰好 1 个元素的数组，元素必须是下列之一：{', '.join(sorted(FACET_ALL_LABELS))}。"
         )
         try:
@@ -439,9 +443,35 @@ def polish_connector_article(
         out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
         if not out2:
             return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
-        if validate_llm_polish_for_publish(out2):
+        if validate_llm_polish_for_publish(out2, admin_source_key=admin_source_key):
             return out2, ""
-        return None, f"validate_failed_after_retry: {_describe_polish_reject(out2)}"
+        reject2 = _describe_polish_reject(out2, admin_source_key=admin_source_key)
+        # 仅差若干字时再做一次极短修复（避免 deepseek 等模型反复输出 68 字而门槛 72）
+        if "_short" in reject2:
+            repair2_user = (
+                f"{repair_user}\n\n【第二次修复】{reject2}\n"
+                "请在「描述」tab 的 summary 写满至少 80 个汉字（数清楚），body_md 至少 150 字；"
+                "「数据支撑」tab 须有表格与链接。只输出 JSON。"
+            )
+            try:
+                raw3, _, _ = chat_completion(
+                    db,
+                    system=system + " 请只输出一个 JSON 对象，不要其它文字。",
+                    user=repair2_user,
+                    scenario="article_ingest_polish",
+                    ref_type="connector_article",
+                    ref_id=(ref_id[:60] + ":r2")[:64],
+                    response_json=False,
+                    max_tokens=8192,
+                )
+                out3, parse_err3 = _parse_polish_response(raw3, default_feed_kind=fk)
+                if out3 and validate_llm_polish_for_publish(out3, admin_source_key=admin_source_key):
+                    return out3, ""
+                if out3:
+                    reject2 = _describe_polish_reject(out3, admin_source_key=admin_source_key)
+            except Exception:
+                pass
+        return None, f"validate_failed_after_retry: {reject2}"
     except Exception as e:
         err = f"{type(e).__name__}: {str(e)[:240]}"
         try:

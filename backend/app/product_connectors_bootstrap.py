@@ -13,8 +13,10 @@ from .connector_heat_fetch import (
     HN_ALGOLIA_SEARCH_DEFAULT,
     NEWSAPI_TOP_HEADLINES_DEFAULT,
     THENEWSAPI_TOP_DEFAULT,
+    arxiv_api_is_query_url,
     github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
+    huggingface_api_spaces_is_list_index,
     newsapi_is_v2_url,
     thenewsapi_is_news_url,
 )
@@ -65,6 +67,10 @@ def mainstream_heat_fetch_url_ok(source: str, url: str) -> bool:
         return newsapi_is_v2_url(u)
     if src == "thenewsapi":
         return thenewsapi_is_news_url(u)
+    if src == "arxiv":
+        return arxiv_api_is_query_url(u)
+    if src == "huggingface_spaces":
+        return huggingface_api_spaces_is_list_index(u)
     return False
 
 

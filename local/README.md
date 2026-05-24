@@ -1,53 +1,40 @@
-# 本地临时配置（勿提交密钥）
+# 本地凭据（单文件）
 
-| 文件 | 说明 |
-|------|------|
-| `product_hunt.credentials.example` | 模板，可提交 |
-| `product_hunt.credentials` | 你的真实 Token，**已 gitignore** |
-| `newsapi.credentials.example` | NewsAPI 模板 |
-| `newsapi.credentials` | `NEWSAPI_KEY`，**已 gitignore** |
-| `thenewsapi.credentials.example` | TheNewsAPI 模板 |
-| `thenewsapi.credentials` | `THENEWSAPI_API_TOKEN`，**已 gitignore** |
-
-**Product Hunt 本地全流程：**
+## 配置
 
 ```powershell
-copy local\product_hunt.credentials.example local\product_hunt.credentials
-# 编辑 local\product_hunt.credentials
-
-py -3.12 scripts/run_product_hunt_sync_local.py --sqlite
+copy local\credentials.example local\credentials
+# 编辑 local\credentials（已 gitignore，勿提交）
 ```
 
----
+`local/credentials` 包含：
 
-## 数据源逐个验收（必读）
+- **LLM**：`AITRENDS_LLM_API_KEY`（或 `AISOU_LLM_*`）
+- **NewsAPI**：`NEWSAPI_KEY`
+- **TheNewsAPI**：`THENEWSAPI_API_TOKEN`
+- **Product Hunt**：`PRODUCT_HUNT_API_KEY` + `PRODUCT_HUNT_APP_SECRET`，或仅 `PRODUCT_HUNT_ACCESS_TOKEN`
 
-当前内置 **5 路**：GitHub / Product Hunt / Hacker News / NewsAPI / TheNewsAPI。
+从旧分散文件迁移：
 
 ```powershell
-$env:AITRENDS_LLM_API_KEY = "sk-..."
-
-py -3.12 scripts/verify_all_sources_local.py
-# 或单源：
-py -3.12 scripts/verify_source_local.py --source github
-py -3.12 scripts/verify_source_local.py --source product_hunt
-py -3.12 scripts/verify_source_local.py --source hacker_news
-py -3.12 scripts/verify_source_local.py --source newsapi
-py -3.12 scripts/verify_source_local.py --source thenewsapi
+py -3.12 scripts/merge_local_credentials.py
 ```
+
+写入数据库：
 
 ```powershell
-copy local\newsapi.credentials.example local\newsapi.credentials
-copy local\thenewsapi.credentials.example local\thenewsapi.credentials
-# 分别填写 NEWSAPI_KEY、THENEWSAPI_API_TOKEN
+$env:AITRENDS_DATABASE_URL = "sqlite:///D:/aisoul/backend/data/dev_local.db"
+py -3.12 scripts/load_local_credentials.py
 ```
 
-分步脚本：
+## 全源验收
 
-| 源 | 命令 |
-|----|------|
-| GitHub | `py -3.12 scripts/run_github_sync_local.py` |
-| Product Hunt | `py -3.12 scripts/run_product_hunt_sync_local.py --sqlite` |
-| Hacker News | `py -3.12 scripts/run_hacker_news_sync_local.py --sqlite` |
+```powershell
+# 推荐：仅真实 LLM，独立库，避免 mock 阶段干扰
+py -3.12 scripts/verify_all_sources_local.py --real-llm-only
 
-流程见 [docs/DATA_SOURCE_ONBOARDING.md](../docs/DATA_SOURCE_ONBOARDING.md)。
+# 或 mock + 真实 LLM 连续（真实阶段会先清空各源旧文章）
+py -3.12 scripts/verify_all_sources_local.py --real-llm
+```
+
+覆盖：GitHub、Product Hunt、Hacker News、NewsAPI、TheNewsAPI、arXiv、Hugging Face Spaces（热度拉取 + 真实 LLM 入库 + 公开 feed）。

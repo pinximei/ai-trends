@@ -330,17 +330,25 @@ def _create_one_published_article_from_connector_targets(
         feed_kind=fk,
     )
     if not polished:
+        item_ref = (
+            f"pack {connector_rank + 1}/{connector_pool_size} "
+            if connector_pool_size > 1
+            else ""
+        )
         _diag(
             "error",
             "skip_llm_polish",
-            f"「{title_prev}」LLM 润色失败 — {polish_err or 'unknown'}。"
-            " 请查「AI 资讯」LLM 与 LlmUsageLog（scenario=article_ingest_polish）。",
+            f"{item_ref}「{title_prev}」— {polish_err or 'unknown'}。"
+            " 请查同步日志 llm_polish_retry、管理端 LLM 配置与 LlmUsageLog（scenario=article_ingest_polish）。",
         )
         return 0
-    if not validate_llm_polish_for_publish(polished):
+    if not validate_llm_polish_for_publish(polished, admin_source_key=admin_source_key):
+        from .domain.articles import publish_polish_length_thresholds
+
+        th = publish_polish_length_thresholds(admin_source_key)
         _skip(
             "skip_llm_shape",
-            "跳过：LLM 输出未通过发布校验（描述 tab summary≥72、body≥120）。可重试同步。",
+            f"跳过：LLM 输出未通过发布校验（描述 summary≥{th['desc_summary']}、body≥{th['desc_body']}）。可重试同步。",
         )
         return 0
 

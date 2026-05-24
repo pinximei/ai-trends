@@ -51,7 +51,7 @@ def seed_llm_from_env_if_empty(db: Session) -> bool:
     m = _llm_merged(db)
     if (m.get("api_key") or "").strip():
         return False
-    key = (os.getenv("AITRENDS_LLM_API_KEY") or "").strip()
+    key = (os.getenv("AITRENDS_LLM_API_KEY") or os.getenv("AISOU_LLM_API_KEY") or "").strip()
     if not key:
         return False
     row = db.get(ProductSetting, "llm")
@@ -60,10 +60,10 @@ def seed_llm_from_env_if_empty(db: Session) -> bool:
         db.add(row)
     cur = {**DEFAULT_LLM, **((row.value_json if row else {}) or {})}
     cur["api_key"] = key
-    ev_base = (os.getenv("AITRENDS_LLM_BASE_URL") or "").strip()
+    ev_base = (os.getenv("AITRENDS_LLM_BASE_URL") or os.getenv("AISOU_LLM_BASE_URL") or "").strip()
     if ev_base:
         cur["base_url"] = ev_base.rstrip("/")
-    ev_model = (os.getenv("AITRENDS_LLM_MODEL") or "").strip()
+    ev_model = (os.getenv("AITRENDS_LLM_MODEL") or os.getenv("AISOU_LLM_MODEL") or "").strip()
     if ev_model:
         cur["model"] = ev_model
     row.value_json = cur

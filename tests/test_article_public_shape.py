@@ -44,6 +44,23 @@ def _valid_tabs_apps() -> list[dict]:
     ]
 
 
+def test_validate_llm_polish_relaxed_for_newsapi() -> None:
+    """NewsAPI 原文偏短：略放宽「描述」tab 字数，仍须双 tab + 合法大类。"""
+    tabs = _valid_tabs_news()
+    tabs[0]["summary"] = tabs[0]["summary"][:65]
+    tabs[0]["body_md"] = tabs[0]["body_md"][:100]
+    data = {
+        "title": "某 AI 公司融资",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY[:90],
+        "categories": ["政策市场"],
+        "feed_kind": "news",
+        "tabs": tabs,
+    }
+    assert art.validate_llm_polish_for_publish(data) is False
+    assert art.validate_llm_polish_for_publish(data, admin_source_key="newsapi") is True
+
+
 def test_validate_llm_polish_accepts_minimal_valid_payload() -> None:
     data = {
         "title": "测试标题",

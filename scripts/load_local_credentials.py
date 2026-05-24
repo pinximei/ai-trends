@@ -1,11 +1,22 @@
-"""从 local/*.credentials 读取密钥并注入验收库连接器（勿提交真实 .credentials）。"""
+"""从 local/credentials（单文件）或环境变量读取密钥，写入 DB 连接器与 LLM 配置。
+
+推荐（SQLite 本地）:
+  copy local\\credentials.example local\\credentials
+  编辑 local\\credentials 填入各 Key
+  set AITRENDS_DATABASE_URL=sqlite:///D:/aisoul/backend/data/dev_local.db
+  py -3.12 scripts/load_local_credentials.py
+
+仍兼容 local/newsapi.credentials 等分散文件（credentials 优先）。
+"""
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / "local"
+UNIFIED_CREDENTIALS = LOCAL / "credentials"
 
 
 def _parse_credentials_file(path: Path) -> dict[str, str]:
@@ -21,24 +32,104 @@ def _parse_credentials_file(path: Path) -> dict[str, str]:
     return kv
 
 
+@lru_cache(maxsize=1)
+def merged_credentials_kv() -> dict[str, str]:
+    """合并：local/credentials → 环境变量 → 各 legacy 分散文件。"""
+    kv: dict[str, str] = {}
+
+    if UNIFIED_CREDENTIALS.is_file():
+        kv.update(_parse_credentials_file(UNIFIED_CREDENTIALS))
+    alt = LOCAL / "secrets.env"
+    if alt.is_file():
+        for k, v in _parse_credentials_file(alt).items():
+            kv.setdefault(k, v)
+
+    _ENV_KEYS = (
+        "AITRENDS_LLM_API_KEY",
+        "AISOU_LLM_API_KEY",
+        "AITRENDS_LLM_BASE_URL",
+        "AISOU_LLM_BASE_URL",
+        "AITRENDS_LLM_MODEL",
+        "AISOU_LLM_MODEL",
+        "NEWSAPI_KEY",
+        "AITRENDS_NEWSAPI_KEY",
+        "THENEWSAPI_API_TOKEN",
+        "AITRENDS_THENEWSAPI_TOKEN",
+        "PRODUCT_HUNT_API_KEY",
+        "PRODUCT_HUNT_CLIENT_ID",
+        "PRODUCT_HUNT_APP_SECRET",
+        "PRODUCT_HUNT_CLIENT_SECRET",
+        "PRODUCT_HUNT_ACCESS_TOKEN",
+    )
+    for ek in _ENV_KEYS:
+        ev = (os.getenv(ek) or "").strip()
+        if ev:
+            kv.setdefault(ek.upper(), ev)
+
+    # 分散文件仅作迁移备用；日常使用请只维护 local/credentials
+    if not UNIFIED_CREDENTIALS.is_file():
+        for name in ("newsapi", "thenewsapi", "product_hunt"):
+            p = LOCAL / f"{name}.credentials"
+            if p.is_file():
+                for k, v in _parse_credentials_file(p).items():
+                    kv.setdefault(k, v)
+
+    return kv
+
+
+def _kv(*keys: str) -> str:
+    m = merged_credentials_kv()
+    for k in keys:
+        v = (m.get(k.upper()) or "").strip()
+        if v:
+            return v
+    return ""
+
+
 def load_product_hunt_credentials() -> tuple[str, str, str]:
-    path = LOCAL / "product_hunt.credentials"
-    if not path.is_file():
-        return "", "", ""
-    kv = _parse_credentials_file(path)
-    api_key = (kv.get("PRODUCT_HUNT_API_KEY") or kv.get("PRODUCT_HUNT_CLIENT_ID") or "").strip()
-    secret = (kv.get("PRODUCT_HUNT_APP_SECRET") or kv.get("PRODUCT_HUNT_CLIENT_SECRET") or "").strip()
-    token = (kv.get("PRODUCT_HUNT_ACCESS_TOKEN") or "").strip()
+    api_key = _kv("PRODUCT_HUNT_API_KEY", "PRODUCT_HUNT_CLIENT_ID")
+    secret = _kv("PRODUCT_HUNT_APP_SECRET", "PRODUCT_HUNT_CLIENT_SECRET")
+    token = _kv("PRODUCT_HUNT_ACCESS_TOKEN")
     return api_key, secret, token
 
 
 def load_newsapi_credentials() -> str:
-    key = (os.getenv("AITRENDS_NEWSAPI_KEY") or os.getenv("NEWSAPI_KEY") or "").strip()
-    path = LOCAL / "newsapi.credentials"
-    if path.is_file() and not key:
-        kv = _parse_credentials_file(path)
-        key = (kv.get("NEWSAPI_KEY") or kv.get("NEWSAPI_API_KEY") or kv.get("AITRENDS_NEWSAPI_KEY") or "").strip()
-    return key
+    return _kv("NEWSAPI_KEY", "NEWSAPI_API_KEY", "AITRENDS_NEWSAPI_KEY")
+
+
+def load_thenewsapi_credentials() -> str:
+    return _kv("THENEWSAPI_API_TOKEN", "THENEWSAPI_TOKEN", "AITRENDS_THENEWSAPI_TOKEN")
+
+
+def load_llm_credentials() -> tuple[str, str, str]:
+    return (
+        _kv("AITRENDS_LLM_API_KEY", "AISOU_LLM_API_KEY"),
+        _kv("AITRENDS_LLM_BASE_URL", "AISOU_LLM_BASE_URL") or "https://api.deepseek.com/v1",
+        _kv("AITRENDS_LLM_MODEL", "AISOU_LLM_MODEL") or "deepseek-chat",
+    )
+
+
+def apply_llm_credentials(db) -> bool:
+    key, base, model = load_llm_credentials()
+    if not key:
+        return False
+    from backend.app.product_models import ProductSetting
+
+    from backend.app.llm_settings_service import DEFAULT_LLM
+
+    row = db.get(ProductSetting, "llm")
+    if not row:
+        row = ProductSetting(key="llm", value_json={})
+        db.add(row)
+    cur = {**DEFAULT_LLM, **((row.value_json if row else {}) or {})}
+    cur["api_key"] = key
+    if base:
+        cur["base_url"] = base.rstrip("/")
+    if model:
+        cur["model"] = model
+    row.value_json = cur
+    db.commit()
+    return True
 
 
 def apply_newsapi_credentials(db) -> bool:
@@ -65,20 +156,6 @@ def apply_newsapi_credentials(db) -> bool:
         conn.enabled = True
     db.commit()
     return True
-
-
-def load_thenewsapi_credentials() -> str:
-    token = (os.getenv("AITRENDS_THENEWSAPI_TOKEN") or os.getenv("THENEWSAPI_API_TOKEN") or "").strip()
-    path = LOCAL / "thenewsapi.credentials"
-    if path.is_file() and not token:
-        kv = _parse_credentials_file(path)
-        token = (
-            kv.get("THENEWSAPI_API_TOKEN")
-            or kv.get("THENEWSAPI_TOKEN")
-            or kv.get("AITRENDS_THENEWSAPI_TOKEN")
-            or ""
-        ).strip()
-    return token
 
 
 def apply_thenewsapi_credentials(db) -> bool:
@@ -140,3 +217,89 @@ def apply_product_hunt_credentials(db) -> bool:
         conn.enabled = True
     db.commit()
     return True
+
+
+def _mask(s: str) -> str:
+    s = (s or "").strip()
+    if not s:
+        return "(未配置)"
+    if len(s) <= 8:
+        return "*" * len(s)
+    return f"{s[:4]}...{s[-4:]}"
+
+
+def seed_all_local_credentials(db) -> dict[str, bool]:
+    merged_credentials_kv.cache_clear()
+    out = {
+        "llm": apply_llm_credentials(db),
+        **apply_news_credentials(db),
+        "product_hunt": apply_product_hunt_credentials(db),
+    }
+    return out
+
+
+def main() -> int:
+    import argparse
+
+    p = argparse.ArgumentParser(description="将 local/credentials 注入当前 DB")
+    p.add_argument("--db-url", default="", help="例如 sqlite:///D:/aisoul/backend/data/dev_local.db")
+    args = p.parse_args()
+    if args.db_url:
+        os.environ["AITRENDS_DATABASE_URL"] = args.db_url.strip()
+
+    if not UNIFIED_CREDENTIALS.is_file():
+        print(f"缺少 {UNIFIED_CREDENTIALS}")
+        print("  copy local\\credentials.example local\\credentials")
+        print("  或 py -3.12 scripts/merge_local_credentials.py  # 从旧分散文件合并")
+        return 1
+
+    from sqlalchemy import select
+
+    from backend.app.db import SessionLocal, engine
+    from backend.app.llm_settings_service import resolve_llm_http_config
+    from backend.app.product_models import ProductConnector
+
+    db = SessionLocal()
+    try:
+        from backend.app.db import Base, ensure_schema_compatibility
+        from backend.app.product_connectors_bootstrap import ensure_core_admin_connectors
+        from backend.app.services import ensure_mainstream_admin_sources
+
+        Base.metadata.create_all(bind=engine)
+        ensure_schema_compatibility()
+        ensure_mainstream_admin_sources(db)
+        ensure_core_admin_connectors(db)
+
+        applied = seed_all_local_credentials(db)
+        _base, llm_key, model = resolve_llm_http_config(db)
+        print(f"凭据文件: {UNIFIED_CREDENTIALS}")
+        print(f"数据库: {engine.url.database}")
+        print(f"LLM: model={model} key={_mask(llm_key)}")
+        print("写入结果:")
+        for src, ok in sorted(applied.items()):
+            print(f"  {src}: {'OK' if ok else '跳过(文件中为空)'}")
+        print("\n连接器 api_key:")
+        for c in db.scalars(select(ProductConnector).order_by(ProductConnector.id)).all():
+            cfg = dict(c.config_json or {})
+            has = bool(str(cfg.get("api_key") or "").strip())
+            sec = bool(str(cfg.get("oauth_client_secret") or "").strip())
+            print(f"  id={c.id} {c.admin_source_key}: {_mask(str(cfg.get('api_key') or ''))}{' +secret' if sec else ''}")
+        need = {"newsapi", "thenewsapi", "product_hunt"}
+        missing = [
+            c.admin_source_key
+            for c in db.scalars(select(ProductConnector).where(ProductConnector.enabled.is_(True))).all()
+            if c.admin_source_key in need and not str((dict(c.config_json or {}).get("api_key") or "")).strip()
+        ]
+        if not (llm_key or "").strip():
+            print("\n仍缺 LLM Key — 在 local/credentials 填写 AITRENDS_LLM_API_KEY")
+            return 1
+        if missing:
+            print(f"\n仍缺数据源 Key: {', '.join(missing)}")
+            return 1
+        return 0
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

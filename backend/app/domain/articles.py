@@ -1305,8 +1305,39 @@ def feed_card_highlights_tab_label(raw_label: str) -> bool:
     return lab == FEED_CARD_TAB_DATA or lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS
 
 
-def validate_llm_polish_for_publish(data: dict) -> bool:
+# 资讯/社区源（原文偏短）：略放宽 tab 字数门槛，仍要求双 tab + 单合法大类。
+_NEWS_API_RELAXED_SOURCES = frozenset(
+    {"newsapi", "thenewsapi", "finnhub", "hacker_news", "arxiv"}
+)
+
+
+def publish_polish_length_thresholds(admin_source_key: str | None = None) -> dict[str, int]:
+    """返回 validate_llm_polish_for_publish / 诊断文案共用的最低字数。"""
+    sk = (admin_source_key or "").strip().lower()
+    if sk in _NEWS_API_RELAXED_SOURCES:
+        return {
+            "desc_summary": 56,
+            "desc_body": 96,
+            "hi_summary": 10,
+            "hi_body": 48,
+            "tab_body_total": 200,
+            "body_md_min": 80,
+            "body_md_short_tabs_total": 380,
+        }
+    return {
+        "desc_summary": 72,
+        "desc_body": 120,
+        "hi_summary": 12,
+        "hi_body": 60,
+        "tab_body_total": 280,
+        "body_md_min": 120,
+        "body_md_short_tabs_total": 500,
+    }
+
+
+def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None = None) -> bool:
     """连接器入库：必须含合格分类、可读摘要与足够厚的总览/分 tab 正文。"""
+    th = publish_polish_length_thresholds(admin_source_key)
     title = str(data.get("title") or "").strip()
     summary = str(data.get("summary") or "").strip()
     body_md = str(data.get("body_md") or "").strip()
@@ -1341,8 +1372,8 @@ def validate_llm_polish_for_publish(data: dict) -> bool:
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
         labels.append(lab)
-        min_summ = 72 if lab == need_desc else 12
-        min_body = 120 if lab == need_desc else 60
+        min_summ = th["desc_summary"] if lab == need_desc else th["hi_summary"]
+        min_body = th["desc_body"] if lab == need_desc else th["hi_body"]
         if len(lab) < 2 or len(summ) < min_summ or len(body) < min_body:
             return False
         tab_body_total += len(body)
@@ -1350,9 +1381,9 @@ def validate_llm_polish_for_publish(data: dict) -> bool:
         legacy_ok = labels == [need_desc, "功能亮点"] if fk == "apps" else labels == [need_desc, "要点"]
         if not legacy_ok:
             return False
-    if tab_body_total < 280:
+    if tab_body_total < th["tab_body_total"]:
         return False
-    if len(body_md) < 120 and tab_body_total < 500:
+    if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
         return False
     return True
 

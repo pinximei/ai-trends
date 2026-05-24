@@ -41,11 +41,15 @@ from ..software_package_service import (
 )
 from ..article_ingest import create_published_articles_for_connector_targets
 from ..connector_heat_fetch import (
+    arxiv_api_is_query_url,
     github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
+    huggingface_api_spaces_is_list_index,
     newsapi_is_v2_url,
+    sync_arxiv_top_details,
     sync_github_trending_top_details,
     sync_hacker_news_top_details,
+    sync_huggingface_spaces_top_details,
     sync_newsapi_top_headlines,
     sync_product_hunt_top_details,
     sync_thenewsapi_top_news,
@@ -687,6 +691,38 @@ def _run_connector_request(
                     connector_id=connector_id, source_key=sk,
                 )
                 code, text = sync_thenewsapi_top_news(url, headers, limit=fetch_n)
+                out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+                _connector_req_diag(
+                    db,
+                    level="info" if code and 200 <= code < 300 else "error",
+                    step="heat_done",
+                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
+                    connector_id=connector_id,
+                    source_key=sk,
+                )
+                return code, out
+            if source_key == "arxiv" or arxiv_api_is_query_url(url):
+                _connector_req_diag(
+                    db, level="info", step="heat_path", message="走 arXiv Atom 热度打包",
+                    connector_id=connector_id, source_key=sk,
+                )
+                code, text = sync_arxiv_top_details(url, headers)
+                out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+                _connector_req_diag(
+                    db,
+                    level="info" if code and 200 <= code < 300 else "error",
+                    step="heat_done",
+                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
+                    connector_id=connector_id,
+                    source_key=sk,
+                )
+                return code, out
+            if source_key == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url):
+                _connector_req_diag(
+                    db, level="info", step="heat_path", message="走 Hugging Face Spaces 热度打包",
+                    connector_id=connector_id, source_key=sk,
+                )
+                code, text = sync_huggingface_spaces_top_details(url, headers)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
