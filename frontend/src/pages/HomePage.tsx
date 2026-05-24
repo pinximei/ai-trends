@@ -189,12 +189,12 @@ function HeroGraphic() {
 
 type SparkPoint = { day: string; count: number };
 
-const SPARK_W = 320;
-const SPARK_H = 128;
-const SPARK_ML = 36;
-const SPARK_MR = 10;
-const SPARK_MT = 10;
-const SPARK_MB = 26;
+const SPARK_W = 340;
+const SPARK_H = 118;
+const SPARK_ML = 32;
+const SPARK_MR = 16;
+const SPARK_MT = 12;
+const SPARK_MB = 8;
 
 function formatSparkDayShort(day: string): string {
   const parts = day.split("-");
@@ -250,12 +250,12 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
   const { t } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
 
-  const emptyH = tall ? "h-40 sm:h-48 lg:h-52" : "h-36 sm:h-40";
-  const chartH = tall ? "min-h-[11rem] w-full sm:min-h-[13rem]" : "min-h-[9.5rem] w-full";
+  const emptyH = tall ? "h-44 sm:h-52" : "h-40 sm:h-44";
+  const chartMaxW = tall ? "max-w-[min(100%,22rem)] sm:max-w-[24rem]" : "max-w-[min(100%,20rem)]";
 
   if (!points.length) {
     return (
-      <div className={`flex items-center justify-center text-xs text-slate-400 ${emptyH}`}>
+      <div className={`flex items-center justify-center text-sm text-slate-400 ${emptyH}`}>
         —
       </div>
     );
@@ -269,21 +269,34 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
   const avg = points.length ? Math.round((sum / points.length) * 10) / 10 : 0;
   const active = hover != null ? coords[hover] : null;
   const baselineY = SPARK_MT + innerH;
+  const chartPct = (x: number) => `${(x / SPARK_W) * 100}%`;
 
   return (
-    <div className={chartH}>
-      <div className="relative">
+    <div className={`flex w-full flex-col items-center ${tall ? "py-1" : ""}`}>
+      <div className={`relative w-full ${chartMaxW}`}>
         <svg
           viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-          className="h-auto w-full text-violet-600"
+          className="mx-auto block h-auto w-full text-violet-600"
           role="img"
           aria-label={`${t("homeTrendChartTitle")}，${t("homeTrendFootSum")} ${formatCount(sum)}`}
         >
           <defs>
             <linearGradient id="home-trend-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity="0.32" />
-              <stop offset="100%" stopColor="rgb(139 92 246)" stopOpacity="0" />
+              <stop offset="0%" stopColor="rgb(129 140 248)" stopOpacity="0.38" />
+              <stop offset="55%" stopColor="rgb(167 139 250)" stopOpacity="0.14" />
+              <stop offset="100%" stopColor="rgb(167 139 250)" stopOpacity="0" />
             </linearGradient>
+            <linearGradient id="home-trend-stroke" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgb(99 102 241)" />
+              <stop offset="100%" stopColor="rgb(139 92 246)" />
+            </linearGradient>
+            <filter id="home-trend-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.8" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
           {yTicks.map((tick) => {
@@ -295,15 +308,15 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
                   y1={y}
                   x2={SPARK_W - SPARK_MR}
                   y2={y}
-                  stroke="rgb(226 232 240)"
-                  strokeWidth="1"
-                  strokeDasharray={tick === 0 ? undefined : "4 3"}
+                  stroke={tick === 0 ? "rgb(203 213 225)" : "rgb(226 232 240)"}
+                  strokeWidth={tick === 0 ? 1.25 : 1}
+                  strokeDasharray={tick === 0 ? undefined : "5 4"}
                 />
                 <text
-                  x={SPARK_ML - 6}
-                  y={y + 3.5}
+                  x={SPARK_ML - 8}
+                  y={y + 4}
                   textAnchor="end"
-                  className="fill-slate-400 text-[9px] font-medium tabular-nums"
+                  className="fill-slate-500 text-[10px] font-medium tabular-nums"
                 >
                   {tick}
                 </text>
@@ -311,30 +324,16 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
             );
           })}
 
-          <text
-            x={4}
-            y={SPARK_MT + innerH / 2}
-            textAnchor="start"
-            transform={`rotate(-90 4 ${SPARK_MT + innerH / 2})`}
-            className="fill-slate-500 text-[8px] font-semibold"
-          >
-            {t("homeTrendYUnit")}
-          </text>
-
-          {xLabelIdx.map((idx) => (
-            <text
-              key={points[idx]?.day ?? idx}
-              x={coords[idx]?.x ?? SPARK_ML}
-              y={SPARK_H - 6}
-              textAnchor="middle"
-              className="fill-slate-500 text-[9px] tabular-nums"
-            >
-              {formatSparkDayShort(points[idx]?.day ?? "")}
-            </text>
-          ))}
-
           <path d={area} fill="url(#home-trend-fill)" />
-          <path d={line} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d={line}
+            fill="none"
+            stroke="url(#home-trend-stroke)"
+            strokeWidth="2.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#home-trend-glow)"
+          />
 
           {active ? (
             <line
@@ -343,8 +342,9 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
               x2={active.x}
               y2={baselineY}
               stroke="rgb(167 139 250)"
-              strokeWidth="1"
-              strokeDasharray="3 3"
+              strokeWidth="1.25"
+              strokeDasharray="4 4"
+              opacity={0.85}
             />
           ) : null}
 
@@ -352,17 +352,22 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
             const on = hover === p.index;
             return (
               <g key={p.day}>
+                {on ? (
+                  <circle cx={p.x} cy={p.y} r={9} fill="rgb(167 139 250)" opacity={0.22} />
+                ) : null}
                 <circle
                   cx={p.x}
                   cy={p.y}
-                  r={on ? 5.5 : 4}
-                  className={`transition-all ${on ? "fill-violet-600 stroke-white" : "fill-violet-500 stroke-white"}`}
-                  strokeWidth={2}
+                  r={on ? 6 : 4.5}
+                  fill={on ? "rgb(79 70 229)" : "rgb(124 58 237)"}
+                  stroke="white"
+                  strokeWidth={2.5}
+                  className="transition-all duration-150"
                 />
                 <circle
                   cx={p.x}
                   cy={p.y}
-                  r={14}
+                  r={16}
                   fill="transparent"
                   className="cursor-pointer"
                   onMouseEnter={() => setHover(p.index)}
@@ -380,32 +385,54 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
 
         {active ? (
           <div
-            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-violet-200/90 bg-white px-2.5 py-1.5 text-center shadow-md shadow-violet-100/80"
+            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl border border-violet-200/90 bg-white/95 px-3 py-2 text-center shadow-lg shadow-violet-200/50 backdrop-blur-sm"
             style={{
-              left: `${(active.x / SPARK_W) * 100}%`,
-              top: `${Math.max(0, (active.y / SPARK_H) * 100 - 18)}%`,
+              left: chartPct(active.x),
+              top: `${Math.max(4, (active.y / SPARK_H) * 100 - 22)}%`,
             }}
           >
-            <p className="text-[10px] font-semibold text-slate-600">{formatSparkDayLabel(active.day)}</p>
-            <p className="text-sm font-bold tabular-nums text-violet-700">
+            <p className="text-xs font-semibold text-slate-600">{formatSparkDayLabel(active.day)}</p>
+            <p className="text-base font-bold tabular-nums text-violet-700">
               {formatCount(active.count)}
-              <span className="ml-0.5 text-[10px] font-medium text-violet-500">{t("homeTrendUnitShort")}</span>
+              <span className="ml-0.5 text-xs font-medium text-violet-500">{t("homeTrendUnitShort")}</span>
             </p>
           </div>
         ) : null}
       </div>
 
-      <p className="mt-2 text-[10px] leading-relaxed text-slate-500">{t("homeTrendLegend")}</p>
-      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
-        <span>
-          {t("homeTrendFootSum")} <strong className="tabular-nums text-slate-800">{formatCount(sum)}</strong>
-        </span>
-        <span>
-          {t("homeTrendFootAvg")} <strong className="tabular-nums text-slate-800">{avg}</strong>
-        </span>
-        <span>
-          {t("homeTrendFootPeak")} <strong className="tabular-nums text-slate-800">{formatCount(peak)}</strong>
-        </span>
+      <div className={`relative mt-2 h-5 w-full tabular-nums text-slate-500 ${chartMaxW}`}>
+        {xLabelIdx.map((idx) => {
+          const c = coords[idx];
+          if (!c) return null;
+          const edge = idx === 0 ? "-translate-x-0" : idx === points.length - 1 ? "-translate-x-full" : "-translate-x-1/2";
+          return (
+            <span
+              key={points[idx]?.day ?? idx}
+              className={`absolute top-0 text-xs font-medium sm:text-sm ${edge}`}
+              style={{ left: chartPct(c.x) }}
+            >
+              {formatSparkDayShort(points[idx]?.day ?? "")}
+            </span>
+          );
+        })}
+      </div>
+      <p className={`mt-1 text-center text-xs text-slate-400 ${chartMaxW}`}>{t("homeTrendYUnit")}</p>
+
+      <div className={`mt-4 w-full space-y-3 text-center ${chartMaxW}`}>
+        <p className="text-xs leading-relaxed text-slate-600 sm:text-sm">{t("homeTrendLegend")}</p>
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+          <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200/90 shadow-sm sm:px-3.5 sm:text-sm">
+            {t("homeTrendFootSum")}{" "}
+            <strong className="tabular-nums text-violet-700">{formatCount(sum)}</strong>
+          </span>
+          <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200/90 shadow-sm sm:px-3.5 sm:text-sm">
+            {t("homeTrendFootAvg")} <strong className="tabular-nums text-violet-700">{avg}</strong>
+          </span>
+          <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200/90 shadow-sm sm:px-3.5 sm:text-sm">
+            {t("homeTrendFootPeak")}{" "}
+            <strong className="tabular-nums text-violet-700">{formatCount(peak)}</strong>
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -733,18 +760,19 @@ export function HomePage() {
           <div
             className={`flex min-w-0 flex-col ${!loading && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}`}
           >
-            <p className="text-sm font-bold text-slate-900">{t("homeAiTrend")}</p>
-            <p className="mt-1 text-xs text-slate-500">{t("homeTrendChartTitle")}</p>
-            <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
-            <div className="mt-3 flex flex-1 flex-col rounded-xl bg-slate-50/90 px-3 py-3 ring-1 ring-slate-100">
+            <p className="text-center text-sm font-bold text-slate-900 lg:text-left">{t("homeAiTrend")}</p>
+            <div className="mt-3 flex flex-1 flex-col items-center rounded-2xl bg-gradient-to-b from-violet-50/90 via-white to-slate-50/80 px-3 py-4 ring-1 ring-violet-100/70 sm:px-4 sm:py-5">
               {loading ? (
-                <div className="flex min-h-[10rem] flex-1 items-center justify-center text-xs text-slate-400 lg:min-h-[13rem]">
+                <div className="flex min-h-[10rem] flex-1 items-center justify-center text-sm text-slate-400 lg:min-h-[13rem]">
                   {t("homeLoading")}
                 </div>
               ) : (
                 <TrendSparkline points={trendOverview?.sparkline ?? []} tall />
               )}
             </div>
+            <p className="mt-3 text-center text-xs leading-relaxed text-slate-500 sm:text-sm lg:text-left">
+              {t("homeTrendChartTitle")} · {t("homeTrendDataNote")}
+            </p>
           </div>
         </div>
       </section>
