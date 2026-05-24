@@ -20,6 +20,8 @@ def default_newsletter_json() -> dict[str, Any]:
         "article_limit": 36,
         "apps_limit": 12,
         "news_limit": 12,
+        "llm_apps_limit": 3,
+        "llm_news_limit": 3,
         "daily_hour": 9,
         "daily_minute": 0,
         "public_site_base_url": "",
@@ -54,6 +56,8 @@ def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     out["article_limit"] = max(1, min(80, int(out.get("article_limit") or 36)))
     out["apps_limit"] = max(1, min(40, int(out.get("apps_limit") or min(12, out["article_limit"] // 2 or 12))))
     out["news_limit"] = max(1, min(40, int(out.get("news_limit") or min(12, out["article_limit"] // 2 or 12))))
+    out["llm_apps_limit"] = max(0, min(8, int(out.get("llm_apps_limit", 3))))
+    out["llm_news_limit"] = max(0, min(8, int(out.get("llm_news_limit", 3))))
     out["daily_hour"] = max(0, min(23, int(out.get("daily_hour") or 9)))
     out["daily_minute"] = max(0, min(59, int(out.get("daily_minute") or 0)))
     out["smtp_port"] = max(1, min(65535, int(out.get("smtp_port") or 465)))
@@ -113,7 +117,17 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         "daily_digest_job_enabled",
         "subscribe_verify_mx",
     )
-    int_keys = ("article_limit", "apps_limit", "news_limit", "daily_hour", "daily_minute", "smtp_port", "bcc_batch")
+    int_keys = (
+        "article_limit",
+        "apps_limit",
+        "news_limit",
+        "llm_apps_limit",
+        "llm_news_limit",
+        "daily_hour",
+        "daily_minute",
+        "smtp_port",
+        "bcc_batch",
+    )
     str_keys = (
         "public_site_base_url",
         "smtp_host",

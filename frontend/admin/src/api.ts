@@ -10,6 +10,8 @@ export type NewsletterSettingsResponse = {
   article_limit: number;
   apps_limit: number;
   news_limit: number;
+  llm_apps_limit: number;
+  llm_news_limit: number;
   daily_hour: number;
   daily_minute: number;
   public_site_base_url: string;

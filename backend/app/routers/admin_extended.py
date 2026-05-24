@@ -162,6 +162,8 @@ class NewsletterSettingsPatch(BaseModel):
     article_limit: int | None = Field(None, ge=1, le=80)
     apps_limit: int | None = Field(None, ge=1, le=40)
     news_limit: int | None = Field(None, ge=1, le=40)
+    llm_apps_limit: int | None = Field(None, ge=0, le=8, description="仅用于 LLM 写标题的 Top 应用数，0=不用 LLM")
+    llm_news_limit: int | None = Field(None, ge=0, le=8, description="仅用于 LLM 写标题的 Top 资讯数，0=不用 LLM")
     daily_hour: int | None = Field(None, ge=0, le=23)
     daily_minute: int | None = Field(None, ge=0, le=59)
     public_site_base_url: str | None = None
@@ -507,6 +509,12 @@ def _run_connector_request(
     auth_mode = ((cfg or {}).get("auth_mode") or "bearer").strip().lower()
     api_key = ((cfg or {}).get("api_key") or "").strip()
     key_param = ((cfg or {}).get("key_param") or "key").strip() or "key"
+    from ..admin_source_fetch import normalize_fetch_limit
+
+    fetch_n = normalize_fetch_limit(
+        int((cfg or {}).get("fetch_limit") or 0) or None,
+        source=sk or None,
+    )
     headers = {
         "User-Agent": "AiTrends-ConnectorSync/1.0",
         "Accept": "application/json",
@@ -564,7 +572,7 @@ def _run_connector_request(
                     db, level="info", step="heat_path", message="走 Product Hunt GraphQL 热度打包",
                     connector_id=connector_id, source_key=sk,
                 )
-                code, text = sync_product_hunt_top_details(headers)
+                code, text = sync_product_hunt_top_details(headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
@@ -580,7 +588,7 @@ def _run_connector_request(
                     db, level="info", step="heat_path", message="走 GitHub Trending 热度打包",
                     connector_id=connector_id, source_key=sk,
                 )
-                code, text = sync_github_trending_top_details(url, headers)
+                code, text = sync_github_trending_top_details(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
@@ -596,7 +604,7 @@ def _run_connector_request(
                     db, level="info", step="heat_path", message="走 HN Algolia 热度打包",
                     connector_id=connector_id, source_key=sk,
                 )
-                code, text = sync_hacker_news_top_details(url, headers)
+                code, text = sync_hacker_news_top_details(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
@@ -612,7 +620,7 @@ def _run_connector_request(
                     db, level="info", step="heat_path", message="走 NewsAPI 热度打包",
                     connector_id=connector_id, source_key=sk,
                 )
-                code, text = sync_newsapi_top_headlines(url, headers)
+                code, text = sync_newsapi_top_headlines(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
@@ -628,7 +636,7 @@ def _run_connector_request(
                     db, level="info", step="heat_path", message="走 TheNewsAPI 热度打包",
                     connector_id=connector_id, source_key=sk,
                 )
-                code, text = sync_thenewsapi_top_news(url, headers)
+                code, text = sync_thenewsapi_top_news(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
@@ -750,6 +758,8 @@ def run_connector_sync(
                 cfg.setdefault("key_param", "api_token")
             else:
                 cfg.setdefault("auth_mode", "bearer")
+            if int(src.fetch_limit or 0) > 0:
+                cfg["fetch_limit"] = int(src.fetch_limit)
 
     tnorm = (theme or "").strip() or None
     if tnorm:

@@ -47,7 +47,7 @@ def _startup_sync() -> None:
         refresh_runtime_snapshot(db)
         assert_production_security()
         ensure_default_admin(db)
-        from .services import ensure_mainstream_admin_sources, seed_if_empty, sync_catalog_preset_metadata
+        from .services import ensure_mainstream_admin_sources, repair_mainstream_fetch_limits, seed_if_empty, sync_catalog_preset_metadata
 
         from .product_connectors_bootstrap import (
             enable_auto_pull_admin_sources_and_connectors,
@@ -69,6 +69,9 @@ def _startup_sync() -> None:
         prune_disabled_admin_sources(db)
         ensure_mainstream_admin_sources(db)
         sync_catalog_preset_metadata(db)
+        n_fl = repair_mainstream_fetch_limits(db)
+        if n_fl:
+            logger.info("startup: repaired mainstream fetch_limit rows=%s", n_fl)
         repair_github_admin_source_if_still_zen(db)
         repair_mainstream_heat_fetch_admin_sources(db)
         repair_short_probe_admin_sources(db)

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .models import AdminSetting, AdminSourceConfig, AdminUser, EvidenceSignal, Trend
 from .product_models import ProductConnector
 from .scope_labels_util import apply_scope_labels_to_row, get_scope_labels_from_source, normalize_scope_labels_from_payload
+from .admin_source_fetch import normalize_fetch_limit
 from .connector_heat_fetch import (
     github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
@@ -55,6 +56,7 @@ class DataApiService:
                     "content_role_label_zh": CONTENT_ROLE_LABEL_ZH.get(role, role),
                     "show_api_key_field": show_api_key_field,
                     "show_app_secret_field": show_app_secret_field,
+                    "fetch_limit": normalize_fetch_limit(getattr(i, "fetch_limit", None), source=i.source),
                 }
             )
         return items
@@ -103,6 +105,7 @@ class DataApiService:
                     "scope_label": i.scope_label or "",
                     "scope_labels": get_scope_labels_from_source(i),
                     "notes": i.notes,
+                    "fetch_limit": normalize_fetch_limit(getattr(i, "fetch_limit", None), source=i.source),
                     "updated_at": i.updated_at.isoformat(),
                 }
             )
@@ -157,6 +160,10 @@ class DataApiService:
                 cfg["oauth_client_secret"] = raw_secret
                 c.config_json = cfg
         item.notes = payload["notes"].strip()
+        if "fetch_limit" in payload and payload.get("fetch_limit") is not None:
+            item.fetch_limit = normalize_fetch_limit(int(payload["fetch_limit"]), source=source)
+        elif not item.id:
+            item.fetch_limit = normalize_fetch_limit(None, source=source)
         labels = normalize_scope_labels_from_payload(payload)
         apply_scope_labels_to_row(item, labels)
         item.updated_at = datetime.utcnow()
@@ -192,6 +199,7 @@ class DataApiService:
             "scope_label": item.scope_label or "",
             "scope_labels": labels,
             "notes": item.notes,
+            "fetch_limit": normalize_fetch_limit(item.fetch_limit, source=item.source),
             "updated_at": item.updated_at.isoformat(),
         }
 

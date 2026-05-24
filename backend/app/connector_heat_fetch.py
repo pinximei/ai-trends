@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from .admin_source_fetch import normalize_fetch_limit, per_item_snippet_max
 from .domain.articles import CONNECTOR_HEAT_TOP_N, CONNECTOR_SNIPPET_MAX_CHARS
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
@@ -294,9 +295,12 @@ def parse_github_trending_repos(html: str, *, limit: int = CONNECTOR_HEAT_TOP_N)
     return out
 
 
-def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]) -> tuple[int, str]:
+def sync_github_trending_top_details(
+    discovery_url: str, headers: dict[str, str], *, limit: int | None = None
+) -> tuple[int, str]:
     """GET Trending HTML → 解析榜单 → 对每个 repo GET ``api.github.com/repos/{owner}/{repo}``。"""
-    n = CONNECTOR_HEAT_TOP_N
+    n = normalize_fetch_limit(limit, source="github")
+    item_max = per_item_snippet_max(n)
     url = (discovery_url or "").strip() or GITHUB_TRENDING_DEFAULT
     since = _github_trending_since(url)
     html_headers = {
@@ -373,7 +377,7 @@ def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]
                 )
             pack = {
                 "connector_sync_items_v1": [
-                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in payloads
                 ],
                 "note": f"github_trending_{since}",
             }
@@ -466,9 +470,10 @@ def _ph_fetch_daily_featured_posts(
     return 200, [], "no_posts"
 
 
-def sync_product_hunt_top_details(headers: dict[str, str]) -> tuple[int, str]:
+def sync_product_hunt_top_details(headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
     """PT 日榜精选 + 按票数 Top N（对齐官网 Daily / 邮件），再对每个 slug 拉详情。"""
-    n = CONNECTOR_HEAT_TOP_N
+    n = normalize_fetch_limit(limit, source="product_hunt")
+    item_max = per_item_snippet_max(n)
     try:
         with httpx.Client(timeout=45.0) as client:
             code, nodes, list_note = _ph_fetch_daily_featured_posts(client, headers, n=n)
@@ -510,7 +515,7 @@ def sync_product_hunt_top_details(headers: dict[str, str]) -> tuple[int, str]:
 
             pack = {
                 "connector_sync_items_v1": [
-                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in payloads
                 ],
                 "note": list_note,
             }
@@ -645,9 +650,10 @@ def _newsapi_pack_from_body(body: dict[str, Any], *, n: int) -> tuple[list[dict[
     return normed, "newsapi_ok"
 
 
-def sync_newsapi_top_headlines(url: str, headers: dict[str, str]) -> tuple[int, str]:
+def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
     """NewsAPI v2（优先 everything；top-headlines 空结果时自动回退）。"""
-    n = CONNECTOR_HEAT_TOP_N
+    n = normalize_fetch_limit(limit, source="newsapi")
+    item_max = per_item_snippet_max(n)
     raw_url = (url or "").strip() or NEWSAPI_TOP_HEADLINES_DEFAULT
     h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-NewsAPI/1.0"}
     urls_to_try: list[str] = [_merge_query(raw_url, {"pageSize": str(max(n, 20))})]
@@ -674,7 +680,7 @@ def sync_newsapi_top_headlines(url: str, headers: dict[str, str]) -> tuple[int, 
                 if normed:
                     pack = {
                         "connector_sync_items_v1": [
-                            {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in normed
+                            {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in normed
                         ],
                         "note": "newsapi_everything" if "everything" in api_url else "newsapi_v2",
                     }
@@ -689,9 +695,10 @@ def sync_newsapi_top_headlines(url: str, headers: dict[str, str]) -> tuple[int, 
         return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
 
 
-def sync_thenewsapi_top_news(url: str, headers: dict[str, str]) -> tuple[int, str]:
+def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
     """TheNewsAPI v1/news/top（或 all）→ AI/tech Top N。"""
-    n = CONNECTOR_HEAT_TOP_N
+    n = normalize_fetch_limit(limit, source="thenewsapi")
+    item_max = per_item_snippet_max(n)
     raw_url = (url or "").strip() or THENEWSAPI_TOP_DEFAULT
     api_url = _merge_query(raw_url, {"limit": str(max(n, 10))})
     h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-TheNewsAPI/1.0"}
@@ -737,7 +744,7 @@ def sync_thenewsapi_top_news(url: str, headers: dict[str, str]) -> tuple[int, st
                 return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_ai_articles"}, ensure_ascii=False)
             pack = {
                 "connector_sync_items_v1": [
-                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in normed
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in normed
                 ],
                 "note": "thenewsapi_top",
             }
@@ -764,9 +771,10 @@ def _hn_normalize_hit(hit: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def sync_hacker_news_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
+def sync_hacker_news_top_details(url: str, headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
     """Algolia HN API：首页热门（``tags=front_page``），按 points 取 Top N 逐条入库。"""
-    n = CONNECTOR_HEAT_TOP_N
+    n = normalize_fetch_limit(limit, source="hacker_news")
+    item_max = per_item_snippet_max(n)
     raw_url = (url or "").strip() or HN_ALGOLIA_SEARCH_DEFAULT
     parts = urlsplit(raw_url)
     q = dict(parse_qsl(parts.query, keep_blank_values=True))
@@ -814,7 +822,7 @@ def sync_hacker_news_top_details(url: str, headers: dict[str, str]) -> tuple[int
                 return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_titled_hits"}, ensure_ascii=False)
             pack = {
                 "connector_sync_items_v1": [
-                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in payloads
                 ],
                 "note": "hn_algolia_front_page",
             }

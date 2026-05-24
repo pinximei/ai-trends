@@ -204,6 +204,9 @@ def ensure_schema_compatibility() -> None:
         cols = _column_names(conn, "newsletter_daily_digests")
         if cols and "feishu_sent_at" not in cols:
             conn.execute(text("ALTER TABLE newsletter_daily_digests ADD COLUMN feishu_sent_at TIMESTAMP"))
+        cols = _column_names(conn, "admin_source_configs")
+        if cols and "fetch_limit" not in cols:
+            conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN fetch_limit INTEGER DEFAULT 10"))
 
 
 def get_db():

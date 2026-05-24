@@ -20,6 +20,13 @@ from ..db import SessionLocal
 from ..llm_service import chat_completion
 from ..llm_settings_service import resolve_llm_http_config
 from ..models import NewsletterDailyDigest, NewsletterSubscriber
+from ..newsletter_digest_format import (
+    DIGEST_SUBJECT_LLM_SYSTEM,
+    build_digest_body_from_articles,
+    build_digest_subject_default,
+    digest_delivery_texts,
+    format_digest_for_delivery,
+)
 from ..newsletter_settings_service import get_newsletter_settings_merged
 from ..product_models import Article, Industry
 
@@ -104,43 +111,46 @@ def fetch_articles_for_shanghai_day_split(
     return apps, news
 
 
-def _article_lines(articles: list[Article], *, heading: str) -> list[str]:
-    lines: list[str] = [heading, ""]
-    if not articles:
-        lines.append("（本栏当日无新稿）")
-        lines.append("")
-        return lines
-    for i, a in enumerate(articles, 1):
-        title = (a.title or "").strip().replace("\n", " ")
-        summ = (a.summary or "").strip().replace("\n", " ")
-        tier = (a.replication_tier or "").strip()
-        if len(summ) > 420:
-            summ = summ[:418] + "…"
-        tier_s = f" | 复刻{tier}" if tier else ""
-        lines.append(f"{i}. id={a.id} | {title}{tier_s}")
-        lines.append(f"   摘要：{summ or '（无摘要）'}")
-        lines.append("")
-    return lines
-
-
-def _build_llm_user_payload(
+def _build_llm_subject_payload(
     apps: list[Article],
     news: list[Article],
     digest_key: str,
 ) -> str:
-    lines: list[str] = [
-        f"日期（上海时区日历日）：{digest_key}",
-        "",
-        "请为订阅用户写「今日精选」：分 **AI 应用（可安装/可复刻产品）** 与 **AI 资讯** 两栏，突出值得跟进的条目。",
-        "",
-    ]
-    lines.extend(_article_lines(apps, heading="## AI 应用（feed=apps）"))
-    lines.extend(_article_lines(news, heading="## AI 资讯（feed=news）"))
+    """仅标题列表，供 LLM 写推送标题（极短 prompt）。"""
+    lines = [f"日期：{digest_key}", "根据下列标题写推送 subject，勿写正文："]
+    for a in apps:
+        title = (a.title or "").strip().replace("\n", " ")[:48]
+        lines.append(f"- 应用 #{a.id} {title}")
+    for a in news:
+        title = (a.title or "").strip().replace("\n", " ")[:48]
+        lines.append(f"- 资讯 #{a.id} {title}")
     if not apps and not news:
-        lines.append(
-            "（当日两栏均无新稿，仍请写简短简报：说明今日无稿或可关注站内历史精选，语气友好，2～4 段即可）"
-        )
+        lines.append("（今日无新稿，标题可写「今日暂无更新」类简短说明）")
     return "\n".join(lines)
+
+
+def _parse_subject_json(raw: str) -> str | None:
+    s = (raw or "").strip()
+    if not s:
+        return None
+    try:
+        obj = json.loads(s)
+    except json.JSONDecodeError:
+        m = re.search(r"\{[\s\S]*\}", s)
+        if not m:
+            return None
+        try:
+            obj = json.loads(m.group())
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(obj, dict):
+        return None
+    subj = str(obj.get("subject") or "").strip()
+    if not subj:
+        return None
+    if len(subj) > 200:
+        subj = subj[:198] + "…"
+    return subj
 
 
 def _parse_digest_json(raw: str) -> tuple[str, str] | None:
@@ -166,14 +176,6 @@ def _parse_digest_json(raw: str) -> tuple[str, str] | None:
     if len(subj) > 200:
         subj = subj[:198] + "…"
     return subj, body
-
-
-def _md_to_plain(md: str) -> str:
-    t = (md or "").strip()
-    t = re.sub(r"^#+\s*", "", t, flags=re.MULTILINE)
-    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)
-    t = re.sub(r"`([^`]+)`", r"\1", t)
-    return t
 
 
 def _smtp_config_from_settings(s: dict[str, Any]) -> dict[str, Any] | None:
@@ -272,7 +274,7 @@ def generate_digest_content(
     news: list[Article],
     settings: dict[str, Any],
 ) -> None:
-    """调用 LLM 写入 subject / body_md / article_ids_json；失败则 status=failed。"""
+    """拼装正文（站内摘要）+ 可选 LLM 仅写标题；落库 subject / body_md。"""
     row = _get_or_create_digest(db, digest_date)
     if _digest_delivery_complete(row, settings):
         return
@@ -281,40 +283,49 @@ def generate_digest_content(
         row.error_message = "后台已关闭「生成摘要」"
         db.commit()
         return
-    if not resolve_llm_http_config(db)[1]:
-        row.status = "failed"
-        row.error_message = "LLM 未配置，无法生成摘要"
-        db.commit()
-        return
-    system = (
-        "你是独立开发者向的 AI 产品情报站编辑，为订阅用户写「今日精选」简报。"
-        "必须严格输出一个 JSON 对象，不要 Markdown 围栏，不要多余说明。"
-        '键：subject（字符串，标题，中文，60字以内）、body_md（字符串，正文 Markdown，'
-        "必须含「## 今日应用」与「## 今日资讯」两栏，各栏用要点列表；可引用文章 id；"
-        "应用栏侧重可复刻/商业灵感，资讯栏侧重行业动态；语气专业友好。"
+
+    public_base = str(settings.get("public_site_base_url") or "").strip()
+    hl_apps = max(0, min(8, int(settings.get("llm_apps_limit", 3))))
+    hl_news = max(0, min(8, int(settings.get("llm_news_limit", 3))))
+    body_md = build_digest_body_from_articles(
+        apps,
+        news,
+        highlight_apps=hl_apps,
+        highlight_news=hl_news,
     )
-    user = _build_llm_user_payload(apps, news, digest_date)
-    raw, it, ot = chat_completion(
-        db,
-        system=system,
-        user=user,
-        scenario="newsletter_daily_digest",
-        ref_type="newsletter_daily_digest",
-        ref_id=digest_date,
-        response_json=True,
-        max_tokens=4096,
+    subject = build_digest_subject_default(digest_date, apps, news)
+    it, ot = 0, 0
+    model: str | None = None
+
+    llm_apps = max(0, min(8, int(settings.get("llm_apps_limit", 3))))
+    llm_news = max(0, min(8, int(settings.get("llm_news_limit", 3))))
+    _base, llm_key, model_resolved = resolve_llm_http_config(db)
+    if (llm_apps or llm_news) and llm_key:
+        user = _build_llm_subject_payload(apps[:llm_apps], news[:llm_news], digest_date)
+        raw, it, ot = chat_completion(
+            db,
+            system=DIGEST_SUBJECT_LLM_SYSTEM,
+            user=user,
+            scenario="newsletter_daily_digest",
+            ref_type="newsletter_daily_digest",
+            ref_id=digest_date,
+            response_json=True,
+            max_tokens=128,
+        )
+        subj_llm = _parse_subject_json(raw)
+        if subj_llm:
+            subject = subj_llm
+        model = model_resolved
+
+    body_md, _email_plain, _feishu = format_digest_for_delivery(
+        body_md,
+        subject,
+        digest_date=digest_date,
+        public_site_base_url=public_base,
+        apps=apps,
+        news=news,
     )
-    parsed = _parse_digest_json(raw)
-    if not parsed:
-        row.status = "failed"
-        row.error_message = "模型返回非预期 JSON"
-        row.input_token_count = it
-        row.output_token_count = ot
-        db.commit()
-        return
-    subj, body_md = parsed
-    _base, _key, model = resolve_llm_http_config(db)
-    row.subject = subj
+    row.subject = subject
     row.body_md = body_md
     row.article_ids_json = json.dumps(
         {"apps": [a.id for a in apps], "news": [a.id for a in news]},
@@ -322,7 +333,7 @@ def generate_digest_content(
     )
     row.input_token_count = it
     row.output_token_count = ot
-    row.model_used = model
+    row.model_used = model or model_resolved
     row.status = "ready"
     row.error_message = None
     db.commit()
@@ -342,15 +353,15 @@ def send_digest_to_feishu(db: Session, *, digest_date: str, settings: dict[str, 
     if not webhook:
         raise RuntimeError("未配置飞书 Webhook URL")
     public_base = str(settings.get("public_site_base_url") or "").strip()
-    send_daily_digest_feishu(
-        webhook_url=webhook,
+    _, feishu_text = digest_delivery_texts(
+        row.body_md,
+        row.subject,
         digest_date=digest_date,
-        subject=row.subject,
-        body_md=row.body_md,
         public_site_base_url=public_base,
         apps_count=apps_count,
         news_count=news_count,
     )
+    send_daily_digest_feishu(webhook_url=webhook, text=feishu_text)
     row.feishu_sent_at = datetime.utcnow()
     if row.status != "sent":
         row.status = "sent"
@@ -387,7 +398,20 @@ def send_digest_to_subscribers(db: Session, *, digest_date: str, settings: dict[
     public_base = str(settings.get("public_site_base_url") or "").strip()
     if not public_base:
         raise RuntimeError("未配置 public_site_base_url（站点对外根 URL，用于退订链接）")
-    plain = _md_to_plain(row.body_md)
+    try:
+        id_map = json.loads(row.article_ids_json or "{}")
+        apps_n = len(id_map.get("apps") or []) if isinstance(id_map, dict) else 0
+        news_n = len(id_map.get("news") or []) if isinstance(id_map, dict) else 0
+    except json.JSONDecodeError:
+        apps_n, news_n = 0, 0
+    plain, _ = digest_delivery_texts(
+        row.body_md,
+        row.subject,
+        digest_date=digest_date,
+        public_site_base_url=public_base,
+        apps_count=apps_n,
+        news_count=news_n,
+    )
     recipients = [(s.email, s.unsubscribe_token or "") for s in subs if s.unsubscribe_token]
     if not recipients:
         raise RuntimeError("订阅者缺少退订 token，请等待后台补全或重新订阅")

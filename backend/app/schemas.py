@@ -16,6 +16,8 @@ class AdminSourceConfigUpsert(BaseModel):
     scope_label: str = ""
     # 多条领域/板块；提交时优先于单字段 scope_label。
     scope_labels: list[str] = Field(default_factory=list)
+    # 单次同步拉取条数（1～80）；Product Hunt 建议 ≤30。
+    fetch_limit: int | None = Field(None, ge=1, le=80)
 
 
 class AdminSourceTestRequest(BaseModel):

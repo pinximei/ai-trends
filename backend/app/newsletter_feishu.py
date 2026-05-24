@@ -3,23 +3,11 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import urllib.error
 import urllib.request
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
-
-def _md_to_feishu_lines(md: str, *, max_chars: int = 3500) -> str:
-    t = (md or "").strip()
-    t = re.sub(r"^#+\s*", "", t, flags=re.MULTILINE)
-    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)
-    t = re.sub(r"`([^`]+)`", r"\1", t)
-    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
-    if len(t) > max_chars:
-        t = t[: max_chars - 1] + "…"
-    return t
 
 
 def send_feishu_text(webhook_url: str, text: str) -> None:
@@ -51,21 +39,6 @@ def send_feishu_text(webhook_url: str, text: str) -> None:
         raise RuntimeError(f"飞书返回错误: {data.get('msg') or data.get('StatusMessage') or raw[:200]}")
 
 
-def send_daily_digest_feishu(
-    *,
-    webhook_url: str,
-    digest_date: str,
-    subject: str,
-    body_md: str,
-    public_site_base_url: str,
-    apps_count: int = 0,
-    news_count: int = 0,
-) -> None:
-    base = (public_site_base_url or "").strip().rstrip("/")
-    site_line = f"\n\n🔗 打开站点：{base}" if base else ""
-    header = f"📬 AiTrends 每日精选 · {digest_date}\n"
-    if apps_count or news_count:
-        header += f"（应用 {apps_count} 条 · 资讯 {news_count} 条）\n"
-    header += f"\n【{subject.strip()}】\n\n"
-    body = _md_to_feishu_lines(body_md)
-    send_feishu_text(webhook_url, header + body + site_line)
+def send_daily_digest_feishu(*, webhook_url: str, text: str) -> None:
+    """发送已排版好的飞书正文（由 newsletter_digest_format 生成）。"""
+    send_feishu_text(webhook_url, text)

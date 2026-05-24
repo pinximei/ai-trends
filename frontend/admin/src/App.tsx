@@ -90,7 +90,13 @@ function publicFeedLaneForSourceKey(sourceKey: string): { lane: "apps" | "news";
   };
 }
 
-type SourceCardDraft = { api_base: string; scope_text: string; api_key: string; app_secret: string };
+type SourceCardDraft = {
+  api_base: string;
+  scope_text: string;
+  api_key: string;
+  app_secret: string;
+  fetch_limit: number;
+};
 
 function inferSourceTestAuthMode(apiBase: string): "bearer" | "private_token" {
   return apiBase.toLowerCase().includes("gitlab") ? "private_token" : "bearer";
@@ -130,6 +136,7 @@ type Source = {
   scope_label?: string;
   scope_labels?: string[];
   notes: string;
+  fetch_limit?: number;
 };
 
 type AdminUser = {
@@ -190,6 +197,8 @@ function newsletterFormFromView(nl: NewsletterSettingsView) {
     article_limit: nl.article_limit,
     apps_limit: nl.apps_limit ?? 12,
     news_limit: nl.news_limit ?? 12,
+    llm_apps_limit: nl.llm_apps_limit ?? 3,
+    llm_news_limit: nl.llm_news_limit ?? 3,
     daily_hour: nl.daily_hour,
     daily_minute: nl.daily_minute,
     public_site_base_url: nl.public_site_base_url,
@@ -217,6 +226,7 @@ type SourcePresetRow = {
   show_api_key_field?: boolean;
   /** 为 true 时另展示 OAuth Client Secret（如 Product Hunt） */
   show_app_secret_field?: boolean;
+  fetch_limit?: number;
   /** 与后端预设 content_role 一致；旧后端可能无此字段 */
   content_role?: string;
   content_role_label_zh?: string;
@@ -229,11 +239,13 @@ function scopeTextFromSavedOrPreset(saved: Source | undefined, preset: SourcePre
 }
 
 function defaultSourceCardDraft(saved: Source | undefined, preset: SourcePresetRow | undefined): SourceCardDraft {
+  const fl = saved?.fetch_limit ?? preset?.fetch_limit ?? 10;
   return {
     api_base: (saved?.api_base ?? preset?.api_base ?? "").trim(),
     scope_text: scopeTextFromSavedOrPreset(saved, preset),
     api_key: "",
     app_secret: "",
+    fetch_limit: fl,
   };
 }
 
@@ -264,6 +276,7 @@ export function App() {
     app_secret: "",
     scope_labels: [""] as string[],
     notes: "",
+    fetch_limit: 10,
   });
   const [userForm, setUserForm] = useState({ username: "", password: "", role: "viewer", enabled: true });
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
@@ -333,6 +346,8 @@ export function App() {
     article_limit: 36,
     apps_limit: 12,
     news_limit: 12,
+    llm_apps_limit: 3,
+    llm_news_limit: 3,
     daily_hour: 9,
     daily_minute: 0,
     public_site_base_url: "",
@@ -772,6 +787,8 @@ export function App() {
         article_limit: Math.min(80, Math.max(1, Math.floor(Number(newsletterForm.article_limit)) || 36)),
         apps_limit: Math.min(40, Math.max(1, Math.floor(Number(newsletterForm.apps_limit)) || 12)),
         news_limit: Math.min(40, Math.max(1, Math.floor(Number(newsletterForm.news_limit)) || 12)),
+        llm_apps_limit: Math.min(8, Math.max(0, Math.floor(Number(newsletterForm.llm_apps_limit)) ?? 3)),
+        llm_news_limit: Math.min(8, Math.max(0, Math.floor(Number(newsletterForm.llm_news_limit)) ?? 3)),
         daily_hour: Math.min(23, Math.max(0, Math.floor(Number(newsletterForm.daily_hour)) || 9)),
         daily_minute: Math.min(59, Math.max(0, Math.floor(Number(newsletterForm.daily_minute)) || 0)),
         public_site_base_url: newsletterForm.public_site_base_url.trim(),
@@ -872,6 +889,7 @@ export function App() {
         api_key: showKey ? draft.api_key.trim() : "",
         app_secret: showAppSecret ? draft.app_secret.trim() : "",
         notes: (row.notes ?? "").trim(),
+        fetch_limit: Math.min(80, Math.max(1, Math.floor(Number(draft.fetch_limit)) || 10)),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
           .map((x) => x.trim())
@@ -908,6 +926,7 @@ export function App() {
         app_secret: showAppSecret && !phTokenDirect ? draft.app_secret.trim() : "",
         clear_app_secret: sourceKey === "product_hunt" && phTokenDirect,
         notes: sourceNotesForUpsert(saved, preset),
+        fetch_limit: Math.min(80, Math.max(1, Math.floor(Number(draft.fetch_limit)) || 10)),
         scope_labels: draft.scope_text
           .split(/[\n\r]+/)
           .map((x) => x.trim())
@@ -923,6 +942,7 @@ export function App() {
               : (row.scope_label || "").trim(),
           api_key: "",
           app_secret: "",
+          fetch_limit: row.fetch_limit ?? draft.fetch_limit,
         },
       }));
       await loadAdminData();
@@ -948,6 +968,7 @@ export function App() {
             : "",
         clear_app_secret: sourceForm.source.trim().toLowerCase() === "product_hunt" && phTokenDirect,
         notes: sourceForm.notes,
+        fetch_limit: Math.min(80, Math.max(1, Math.floor(Number(sourceForm.fetch_limit)) || 10)),
         scope_labels: sourceForm.scope_labels.map((s) => s.trim()).filter(Boolean),
       });
       setSourceForm((p) => ({ ...p, api_key: "", app_secret: "" }));
@@ -1497,6 +1518,30 @@ export function App() {
                                 <dt>拉取节奏</dt>
                                 <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                               </div>
+                              <div className="source-card__meta-row">
+                                <dt>单次拉取条数</dt>
+                                <dd style={{ margin: 0 }}>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={80}
+                                    style={{ width: 88, padding: "4px 8px", fontSize: 12 }}
+                                    value={draft.fetch_limit}
+                                    onChange={(e) =>
+                                      setSourceCardDrafts((prev) => ({
+                                        ...prev,
+                                        [p.source]: {
+                                          ...(prev[p.source] ?? defaultSourceCardDraft(saved, p)),
+                                          fetch_limit: Number(e.target.value),
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  <span className="muted tiny" style={{ marginLeft: 8 }}>
+                                    热度 Top N（Product Hunt 建议 ≤30）
+                                  </span>
+                                </dd>
+                              </div>
                               <div className="source-card__meta-row source-card__meta-row--scope-inline">
                                 <dt>领域主题</dt>
                                 <dd>
@@ -1775,6 +1820,30 @@ export function App() {
                               <dd className="muted tiny">统一定时（「AI 资讯与数据」页配置间隔）</dd>
                             </div>
                             <div className="source-card__meta-row">
+                              <dt>单次拉取条数</dt>
+                              <dd style={{ margin: 0 }}>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={80}
+                                  style={{ width: 88, padding: "4px 8px", fontSize: 12 }}
+                                  value={draft.fetch_limit}
+                                  onChange={(e) =>
+                                    setSourceCardDrafts((prev) => ({
+                                      ...prev,
+                                      [s.source]: {
+                                        ...(prev[s.source] ?? defaultSourceCardDraft(s, undefined)),
+                                        fetch_limit: Number(e.target.value),
+                                      },
+                                    }))
+                                  }
+                                />
+                                <span className="muted tiny" style={{ marginLeft: 8 }}>
+                                  热度 Top N（1～80）
+                                </span>
+                              </dd>
+                            </div>
+                            <div className="source-card__meta-row">
                               <dt>接口地址</dt>
                               <dd style={{ margin: 0 }}>
                                 <input
@@ -1972,6 +2041,16 @@ export function App() {
                       value={sourceForm.api_base}
                       onChange={(e) => setSourceForm((p) => ({ ...p, api_base: e.target.value }))}
                       placeholder="https://…"
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 160 }}>
+                    <label>单次拉取条数（1～80）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={80}
+                      value={sourceForm.fetch_limit}
+                      onChange={(e) => setSourceForm((p) => ({ ...p, fetch_limit: Number(e.target.value) }))}
                     />
                   </div>
                   <div className="form-field">
@@ -2362,6 +2441,29 @@ export function App() {
                       onChange={(e) => setNewsletterForm((p) => ({ ...p, news_limit: Number(e.target.value) }))}
                     />
                   </div>
+                  <div className="form-field" style={{ maxWidth: 160 }}>
+                    <label>亮点应用条数 / LLM 标题（0～8）</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={8}
+                      value={newsletterForm.llm_apps_limit}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, llm_apps_limit: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 160 }}>
+                    <label>亮点资讯条数 / LLM 标题（0～8）</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={8}
+                      value={newsletterForm.llm_news_limit}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, llm_news_limit: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <p className="muted" style={{ gridColumn: "1 / -1", margin: 0 }}>
+                    推送正文：热度 Top N 作为「亮点应用/资讯」单独介绍，其余为简明列表；不二次 LLM 写正文。Top N 标题亦用于生成主题（设为 0 则不用 LLM 写标题，亮点仍默认 Top 3）。
+                  </p>
                   <div className="form-field" style={{ maxWidth: 120 }}>
                     <label>发送时刻 · 时（0～23）</label>
                     <input

@@ -76,6 +76,8 @@ class AdminSourceConfig(Base):
     # 多条「所属领域/板块」JSON 数组文本；旧行可仅有 scope_label，由读取逻辑合并。
     scope_labels_json: Mapped[str] = mapped_column(Text, default="[]")
     notes: Mapped[str] = mapped_column(Text, default="")
+    # 单次同步拉取条数（热度 Top N）；各内置源默认见 admin_source_fetch.PRESET_FETCH_LIMIT。
+    fetch_limit: Mapped[int] = mapped_column(Integer, default=10)
     # 后台「预设模板」展示名与内容角色；运行时 GET /sources/presets 仅从数据库读取。
     preset_label: Mapped[str] = mapped_column(String(128), default="")
     content_role: Mapped[str] = mapped_column(String(32), default="")

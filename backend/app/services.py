@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import AuditLog, AdminSession, AdminSourceConfig, EvidenceSignal, PipelineRun, RemovalRequest, Trend
+from .admin_source_fetch import PRESET_FETCH_LIMIT, default_fetch_limit_for_source, normalize_fetch_limit
 from .scope_labels_util import dump_scope_labels_json
 
 
@@ -32,6 +33,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "scope_label": "AI｜客户端·开源",
         "content_role": "daily_editorial",
         "notes": "Trending 日榜 → 仅保留 desktop/tauri/electron/flutter/chrome-extension/client/gui 等客户端向仓库。",
+        "fetch_limit": PRESET_FETCH_LIMIT["github"],
     },
     {
         "source": "product_hunt",
@@ -41,7 +43,8 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜应用发现",
         "content_role": "app_launches",
-        "notes": "Product Hunt GraphQL v2；PT 昨日 Top10。",
+        "notes": "Product Hunt GraphQL v2；PT 日榜按票数 Top N（默认 30，可在卡片配置）。",
+        "fetch_limit": PRESET_FETCH_LIMIT["product_hunt"],
     },
     {
         "source": "hacker_news",
@@ -51,7 +54,8 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜社区资讯",
         "content_role": "daily_editorial",
-        "notes": "Algolia HN front_page，按 points Top10。",
+        "notes": "Algolia HN front_page，按 points Top N。",
+        "fetch_limit": PRESET_FETCH_LIMIT["hacker_news"],
     },
     {
         "source": "newsapi",
@@ -62,6 +66,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "scope_label": "AI｜新闻聚合",
         "content_role": "daily_editorial",
         "notes": "NewsAPI v2 everything（免费档 top-headlines 组合常为空，默认 everything + AI 过滤）。Query 参数 apiKey。",
+        "fetch_limit": PRESET_FETCH_LIMIT["newsapi"],
     },
     {
         "source": "thenewsapi",
@@ -72,6 +77,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "scope_label": "AI｜新闻聚合",
         "content_role": "daily_editorial",
         "notes": "TheNewsAPI v1/news/top；Query 参数 api_token。",
+        "fetch_limit": PRESET_FETCH_LIMIT["thenewsapi"],
     },
 ]
 
@@ -141,6 +147,24 @@ def sync_catalog_preset_metadata(db: Session) -> int:
     return n
 
 
+def repair_mainstream_fetch_limits(db: Session) -> int:
+    """将内置源的 fetch_limit 对齐预设默认（仅当未配置或仍为旧默认 10 且预设非 10）。"""
+    n = 0
+    for row in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+        src = row["source"]
+        item = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == src))
+        if not item:
+            continue
+        want = int(row.get("fetch_limit") or default_fetch_limit_for_source(src))
+        cur = int(item.fetch_limit or 0)
+        if cur <= 0 or (cur == 10 and want != 10):
+            item.fetch_limit = want
+            n += 1
+    if n:
+        db.commit()
+    return n
+
+
 def ensure_mainstream_admin_sources(db: Session) -> int:
     """补全主流数据源行；已存在的 source 不修改。"""
     n = 0
@@ -152,6 +176,7 @@ def ensure_mainstream_admin_sources(db: Session) -> int:
         sl = row.get("scope_label") or ""
         pl = (row.get("preset_label") or "").strip() or source.replace("_", " ").title()
         cr = str(row.get("content_role") or "daily_editorial").strip() or "daily_editorial"
+        fl = normalize_fetch_limit(row.get("fetch_limit"), source=source)
         db.add(
             AdminSourceConfig(
                 source=source,
@@ -162,6 +187,7 @@ def ensure_mainstream_admin_sources(db: Session) -> int:
                 scope_label=sl,
                 scope_labels_json=dump_scope_labels_json([sl]) if sl else "[]",
                 notes=row["notes"],
+                fetch_limit=fl,
                 preset_label=pl,
                 content_role=cr,
                 updated_at=datetime.utcnow(),
