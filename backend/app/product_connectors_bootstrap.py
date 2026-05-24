@@ -306,13 +306,16 @@ def prune_articles_for_admin_source_keys(db: Session, keys: tuple[str, ...]) -> 
     """删除 third_party_source 以给定 admin source 开头的文章（含 TAAFT / Acquire 等下线源）。"""
     import logging
 
-    from sqlalchemy import delete
+    from sqlalchemy import delete, func, select
 
     from .product_models import Article
 
     log = logging.getLogger(__name__)
     clause = _article_clauses_for_admin_source_keys(keys)
     if clause is None:
+        return 0
+    pending = int(db.scalar(select(func.count()).select_from(Article).where(clause)) or 0)
+    if pending <= 0:
         return 0
     r = db.execute(delete(Article).where(clause))
     db.commit()

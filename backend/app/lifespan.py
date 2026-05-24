@@ -17,11 +17,22 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _startup_sync() -> None:
+    import time
+
     from . import models as _core_site_models  # noqa: F401
 
     from . import product_models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
+    t0 = time.perf_counter()
+    logger.info("startup: database %s", engine.url.render_as_string(hide_password=True))
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        raise RuntimeError(
+            "无法连接数据库。请确认 PostgreSQL 已启动（如 docker compose up -d），"
+            "且 backend/.env 中 AITRENDS_DATABASE_URL / AISOU_DB_URL_TEST 正确。"
+        ) from e
+    logger.info("startup: schema ready (%.1fs)", time.perf_counter() - t0)
     ensure_schema_compatibility()
     db = SessionLocal()
     try:
@@ -50,7 +61,10 @@ def _startup_sync() -> None:
             repair_short_probe_admin_sources,
         )
 
-        prune_discontinued_bootstrap_admin_sources(db)
+        t_prune = time.perf_counter()
+        pr = prune_discontinued_bootstrap_admin_sources(db)
+        if any(pr.values()):
+            logger.info("startup: pruned discontinued sources %s (%.1fs)", pr, time.perf_counter() - t_prune)
         prune_admin_sources_outside_mainstream(db)
         prune_disabled_admin_sources(db)
         ensure_mainstream_admin_sources(db)
@@ -96,6 +110,7 @@ def _startup_sync() -> None:
         ind = db.scalar(select(Industry).where(Industry.slug == "ai"))
         if ind and not db.scalar(select(HotSnapshot).where(HotSnapshot.industry_id == ind.id).limit(1)):
             rebuild_hot_snapshot(db, trigger="system")
+        logger.info("startup: finished (%.1fs)", time.perf_counter() - t0)
     finally:
         db.close()
 
@@ -272,7 +287,11 @@ def _shutdown_scheduler() -> None:
 
 @asynccontextmanager
 async def app_lifespan(_):
-    _startup_sync()
+    try:
+        _startup_sync()
+    except Exception:
+        logger.exception("application startup failed")
+        raise
     _start_scheduler()
     yield
     _shutdown_scheduler()

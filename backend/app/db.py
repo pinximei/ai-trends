@@ -78,11 +78,14 @@ class Base(DeclarativeBase):
     pass
 
 
-_connect_args = {}
+_connect_args: dict = {}
 _engine_kwargs: dict = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
     _connect_args["check_same_thread"] = False
     _engine_kwargs.pop("pool_pre_ping", None)
+elif DATABASE_URL.startswith("postgresql"):
+    # 避免 Postgres 未启动时 lifespan 卡两分钟才报错
+    _connect_args["connect_timeout"] = int(os.getenv("AITRENDS_DB_CONNECT_TIMEOUT", "10"))
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
