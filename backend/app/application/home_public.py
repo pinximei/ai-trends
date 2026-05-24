@@ -140,6 +140,41 @@ def _home_pick_quality_ok(item: dict) -> bool:
     return True
 
 
+def _home_pick_relaxed_ok(item: dict) -> bool:
+    """质量门槛未达标时仍可用于首页展示的最低条件。"""
+    title = str(item.get("title") or "").strip()
+    if len(title) < 4:
+        return False
+    summary = str(item.get("card_description") or item.get("summary") or "").strip()
+    return bool(summary) or float(item.get("heat_score") or 0.0) > 0
+
+
+def _select_home_picks(items: list[dict], limit: int) -> list[dict]:
+    """
+    优先高质量条目；不足时用热度榜回填，避免首页整块空白。
+    """
+    lim = max(1, int(limit))
+    picked: list[dict] = []
+    seen: set[int] = set()
+
+    def _take(pool: list[dict]) -> None:
+        for it in pool:
+            if len(picked) >= lim:
+                return
+            aid = it.get("id")
+            if aid is None or aid in seen:
+                continue
+            seen.add(aid)
+            picked.append(it)
+
+    _take([x for x in items if _home_pick_quality_ok(x)])
+    if len(picked) < lim:
+        _take([x for x in items if _home_pick_relaxed_ok(x)])
+    if len(picked) < lim:
+        _take(items)
+    return picked[:lim]
+
+
 def get_home_editorial_picks(
     db: Session,
     *,
@@ -183,8 +218,8 @@ def get_home_editorial_picks(
         heat_page_size=al * 2,
         heat_max_ranked=min(100, al * 4),
     )
-    news_items = [x for x in (news_raw.get("items") or []) if _home_pick_quality_ok(x)][:nl]
-    apps_items = [x for x in (apps_raw.get("items") or []) if _home_pick_quality_ok(x)][:al]
+    news_items = _select_home_picks(news_raw.get("items") or [], nl)
+    apps_items = _select_home_picks(apps_raw.get("items") or [], al)
     return {
         "news": news_items,
         "apps": apps_items,
@@ -299,10 +334,12 @@ def get_home_dashboard(
         heat_max_ranked=96,
     )
 
-    news_pool = [x for x in (news_raw.get("items") or []) if _home_pick_quality_ok(x)]
-    apps_pool = [x for x in (apps_raw.get("items") or []) if _home_pick_quality_ok(x)]
-    news_items = news_pool[:nl]
-    apps_items = apps_pool[:al]
+    news_raw_items = news_raw.get("items") or []
+    apps_raw_items = apps_raw.get("items") or []
+    news_items = _select_home_picks(news_raw_items, nl)
+    apps_items = _select_home_picks(apps_raw_items, al)
+    news_pool = _select_home_picks(news_raw_items, min(len(news_raw_items), 48))
+    apps_pool = _select_home_picks(apps_raw_items, min(len(apps_raw_items), 48))
 
     facet_kw = dict(
         industry_slug=industry_slug,

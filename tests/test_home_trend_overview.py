@@ -26,6 +26,18 @@ def test_home_dashboard_shape(client: TestClient) -> None:
     assert isinstance(data["top_categories"], list)
 
 
+def test_select_home_picks_backfills_when_quality_filter_empty() -> None:
+    from backend.app.application.home_public import _select_home_picks
+
+    raw = [
+        {"id": 1, "title": "Lo", "card_description": "short", "heat_score": 10.0},
+        {"id": 2, "title": "Valid title here", "card_description": "x" * 40, "heat_score": 80.0},
+    ]
+    picked = _select_home_picks(raw, 2)
+    assert len(picked) == 2
+    assert picked[0]["id"] == 2
+
+
 def test_home_trend_overview_shape(client: TestClient) -> None:
     r = client.get("/api/public/v1/home/trend-overview?sparkline_days=10&period_days=7")
     assert r.status_code == 200
