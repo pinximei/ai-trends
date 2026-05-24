@@ -74,6 +74,16 @@ def mainstream_heat_fetch_url_ok(source: str, url: str) -> bool:
     return False
 
 
+def _news_wire_url_needs_repair(src: str, url: str) -> bool:
+    """旧 everything?q= / search= 限制导致条数过少或日期过旧。"""
+    u = (url or "").strip().lower()
+    if src == "newsapi":
+        return "everything" in u and ("q=" in u or "query=" in u)
+    if src == "thenewsapi":
+        return "search=" in u
+    return False
+
+
 def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
     """内置源 api_base / scope_label 与热度打包路径对齐（含 HN firebase 等旧地址）。"""
     changed = 0
@@ -86,7 +96,7 @@ def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
         if not default_base:
             continue
         u = (row.api_base or "").strip()
-        if not mainstream_heat_fetch_url_ok(src, u):
+        if not mainstream_heat_fetch_url_ok(src, u) or _news_wire_url_needs_repair(src, u):
             row.api_base = default_base
             changed += 1
         sl = (preset.get("scope_label") or "").strip()

@@ -545,28 +545,12 @@ def _hf_list_pool_limit(url: str) -> tuple[str, int]:
 
 HN_ALGOLIA_SEARCH_DEFAULT = "https://hn.algolia.com/api/v1/search?tags=front_page"
 NEWSAPI_TOP_HEADLINES_DEFAULT = (
-    "https://newsapi.org/v2/everything?q=artificial+intelligence&language=en"
-    "&sortBy=publishedAt&pageSize=20"
+    "https://newsapi.org/v2/top-headlines?country=us&category=technology"
+    "&pageSize=10"
 )
 THENEWSAPI_TOP_DEFAULT = (
     "https://api.thenewsapi.com/v1/news/top?locale=us&language=en&categories=tech"
-    "&search=artificial+intelligence&limit=10"
-)
-_AI_NEWS_KEYWORDS: tuple[str, ...] = (
-    "artificial intelligence",
-    "machine learning",
-    " openai",
-    " chatgpt",
-    "anthropic",
-    " deepseek",
-    " llm",
-    " generative ai",
-    " gemini",
-    " copilot",
-    "nvidia ai",
-    " ai ",
-    " ai,",
-    " ai.",
+    "&limit=10"
 )
 
 
@@ -584,11 +568,6 @@ def newsapi_is_v2_url(url: str) -> bool:
 def thenewsapi_is_news_url(url: str) -> bool:
     p = urlsplit((url or "").strip().lower())
     return "thenewsapi.com" in (p.netloc or "") and "/v1/news/" in (p.path or "")
-
-
-def _news_text_ai_relevant(title: str, description: str) -> bool:
-    blob = f"{title} {description}".lower()
-    return any(k in blob for k in _AI_NEWS_KEYWORDS)
 
 
 def _normalize_newsapi_article(art: dict[str, Any]) -> dict[str, Any]:
@@ -630,6 +609,25 @@ def _merge_query(url: str, extra: dict[str, str]) -> str:
     return urlunsplit((parts.scheme or "https", parts.netloc, parts.path, urlencode(q), parts.fragment))
 
 
+def _newsapi_fetch_url(raw: str, *, n: int) -> str:
+    """优先 top-headlines 最新 Top N；旧 everything?q= 配置自动改用默认。"""
+    u = (raw or "").strip() or NEWSAPI_TOP_HEADLINES_DEFAULT
+    low = u.lower()
+    if "everything" in low and ("q=" in low or "query=" in low):
+        return _merge_query(NEWSAPI_TOP_HEADLINES_DEFAULT, {"pageSize": str(n)})
+    return u
+
+
+def _thenewsapi_fetch_url(raw: str, *, n: int) -> str:
+    """去掉 search= 等关键词限制，保留 locale/categories 取当日 tech top。"""
+    u = (raw or "").strip() or THENEWSAPI_TOP_DEFAULT
+    parts = urlsplit(u)
+    q = dict(parse_qsl(parts.query, keep_blank_values=True))
+    q.pop("search", None)
+    q["limit"] = str(n)
+    return urlunsplit((parts.scheme or "https", parts.netloc, parts.path, urlencode(q), parts.fragment))
+
+
 def _newsapi_pack_from_body(body: dict[str, Any], *, n: int) -> tuple[list[dict[str, Any]], str, dict[str, int]]:
     articles = body.get("articles")
     if not isinstance(articles, list) or not articles:
@@ -650,15 +648,11 @@ def _newsapi_pack_from_body(body: dict[str, Any], *, n: int) -> tuple[list[dict[
         if not row["title"] or not row["url"]:
             stats["skip_no_title_url"] += 1
             continue
-        if not _news_text_ai_relevant(row["title"], row["description"]):
-            stats["skip_ai_filter"] += 1
-            continue
         normed.append(row)
     normed = normed[:n]
     stats["packed"] = len(normed)
     if not normed:
-        note = "no_ai_articles" if stats["skip_ai_filter"] else "no_articles"
-        return [], note, stats
+        return [], "no_articles", stats
     return normed, "newsapi_ok", stats
 
 
@@ -679,15 +673,20 @@ def _news_fetch_diag_message(source: str, note: str, stats: dict[str, int]) -> s
 
 
 def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
-    """NewsAPI v2（优先 everything；top-headlines 空结果时自动回退）。"""
+    """NewsAPI v2 top-headlines：最新 Top N，不做标题/关键词过滤。"""
     n = normalize_fetch_limit(limit, source="newsapi")
     item_max = per_item_snippet_max(n)
-    raw_url = (url or "").strip() or NEWSAPI_TOP_HEADLINES_DEFAULT
+    raw_url = _newsapi_fetch_url(url, n=n)
     h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-NewsAPI/1.0"}
-    urls_to_try: list[str] = [_merge_query(raw_url, {"pageSize": str(max(n, 20))})]
+    urls_to_try: list[str] = [_merge_query(raw_url, {"pageSize": str(n)})]
     low = raw_url.lower()
-    if "top-headlines" in low and NEWSAPI_TOP_HEADLINES_DEFAULT not in urls_to_try:
-        urls_to_try.append(_merge_query(NEWSAPI_TOP_HEADLINES_DEFAULT, {"pageSize": str(max(n, 20))}))
+    if "top-headlines" in low:
+        general = _merge_query(
+            "https://newsapi.org/v2/top-headlines?country=us&pageSize=10",
+            {"pageSize": str(n)},
+        )
+        if general not in urls_to_try:
+            urls_to_try.append(general)
     last_code, last_text = 0, ""
     last_note = ""
     last_stats: dict[str, int] = {}
@@ -730,11 +729,10 @@ def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int 
 
 
 def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
-    """TheNewsAPI v1/news/top（或 all）→ AI/tech Top N。"""
+    """TheNewsAPI v1/news/top：最新 tech Top N，不做关键词过滤。"""
     n = normalize_fetch_limit(limit, source="thenewsapi")
     item_max = per_item_snippet_max(n)
-    raw_url = (url or "").strip() or THENEWSAPI_TOP_DEFAULT
-    api_url = _merge_query(raw_url, {"limit": str(max(n, 10))})
+    api_url = _thenewsapi_fetch_url(url, n=n)
     h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-TheNewsAPI/1.0"}
     try:
         with httpx.Client(timeout=45.0, follow_redirects=True) as client:
@@ -773,21 +771,12 @@ def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | 
                 if not row["title"] or not row["url"]:
                     stats["skip_no_title_url"] += 1
                     continue
-                if not _news_text_ai_relevant(row["title"], row["description"]):
-                    stats["skip_ai_filter"] += 1
-                    continue
                 normed.append(row)
-            try:
-                normed.sort(
-                    key=lambda x: float(x.get("relevance_score") or 0),
-                    reverse=True,
-                )
-            except (TypeError, ValueError):
-                pass
+            normed.sort(key=lambda x: (x.get("published_at") or ""), reverse=True)
             normed = normed[:n]
             stats["packed"] = len(normed)
             if not normed:
-                note = "no_ai_articles" if stats["skip_ai_filter"] else "no_data"
+                note = "no_data"
                 return 200, json.dumps(
                     {"connector_sync_items_v1": [], "note": note, "diag": stats},
                     ensure_ascii=False,
