@@ -49,39 +49,97 @@ def _ai_industry_ids(db: Session) -> list[int]:
     return _public_industry_ids_for_slug(db, ind)
 
 
-def fetch_articles_for_shanghai_day(db: Session, d: date, *, limit: int) -> list[Article]:
+def _fetch_articles_for_day_lane(
+    db: Session,
+    d: date,
+    *,
+    feed_kind: str,
+    limit: int,
+    industry_ids: list[int],
+) -> list[Article]:
     start_utc, end_utc = utc_naive_bounds_for_shanghai_date(d)
-    ids_ = _ai_industry_ids(db)
-    if not ids_:
+    if not industry_ids:
         return []
-    lim = max(1, min(80, int(limit)))
+    lim = max(1, min(40, int(limit)))
+    fk = (feed_kind or "news").strip().lower()
     q = (
         select(Article)
         .where(
-            Article.industry_id.in_(ids_),
+            Article.industry_id.in_(industry_ids),
             Article.status == "published",
             Article.published_at.is_not(None),
             Article.published_at >= start_utc,
             Article.published_at < end_utc,
+            Article.feed_kind == fk,
         )
-        .order_by(Article.published_at.desc())
+        .order_by(Article.heat_score.desc(), Article.published_at.desc())
         .limit(lim)
     )
     return list(db.scalars(q).all())
 
 
-def _build_llm_user_payload(articles: list[Article], digest_key: str) -> str:
-    lines: list[str] = [f"日期（上海时区日历日）：{digest_key}", "", "以下为当日已发布文章（标题与摘要），请生成订阅邮件内容：", ""]
+def fetch_articles_for_shanghai_day(db: Session, d: date, *, limit: int) -> list[Article]:
+    """兼容旧调用：合并应用与资讯，按发布时间排序。"""
+    apps, news = fetch_articles_for_shanghai_day_split(
+        db,
+        d,
+        apps_limit=max(1, limit // 2),
+        news_limit=max(1, limit - max(1, limit // 2)),
+    )
+    merged = apps + news
+    merged.sort(key=lambda a: (a.published_at or datetime.min), reverse=True)
+    return merged[: max(1, min(80, int(limit)))]
+
+
+def fetch_articles_for_shanghai_day_split(
+    db: Session,
+    d: date,
+    *,
+    apps_limit: int,
+    news_limit: int,
+) -> tuple[list[Article], list[Article]]:
+    ids_ = _ai_industry_ids(db)
+    apps = _fetch_articles_for_day_lane(db, d, feed_kind="apps", limit=apps_limit, industry_ids=ids_)
+    news = _fetch_articles_for_day_lane(db, d, feed_kind="news", limit=news_limit, industry_ids=ids_)
+    return apps, news
+
+
+def _article_lines(articles: list[Article], *, heading: str) -> list[str]:
+    lines: list[str] = [heading, ""]
+    if not articles:
+        lines.append("（本栏当日无新稿）")
+        lines.append("")
+        return lines
     for i, a in enumerate(articles, 1):
         title = (a.title or "").strip().replace("\n", " ")
         summ = (a.summary or "").strip().replace("\n", " ")
+        tier = (a.replication_tier or "").strip()
         if len(summ) > 420:
             summ = summ[:418] + "…"
-        lines.append(f"{i}. id={a.id} | {title}")
+        tier_s = f" | 复刻{tier}" if tier else ""
+        lines.append(f"{i}. id={a.id} | {title}{tier_s}")
         lines.append(f"   摘要：{summ or '（无摘要）'}")
         lines.append("")
-    if not articles:
-        lines.append("（当日无新发布文章，仍请写一封简短简报：说明今日无稿或可关注站内历史精选，语气友好，2～4 段即可）")
+    return lines
+
+
+def _build_llm_user_payload(
+    apps: list[Article],
+    news: list[Article],
+    digest_key: str,
+) -> str:
+    lines: list[str] = [
+        f"日期（上海时区日历日）：{digest_key}",
+        "",
+        "请为订阅用户写「今日精选」：分 **AI 应用（可安装/可复刻产品）** 与 **AI 资讯** 两栏，突出值得跟进的条目。",
+        "",
+    ]
+    lines.extend(_article_lines(apps, heading="## AI 应用（feed=apps）"))
+    lines.extend(_article_lines(news, heading="## AI 资讯（feed=news）"))
+    if not apps and not news:
+        lines.append(
+            "（当日两栏均无新稿，仍请写简短简报：说明今日无稿或可关注站内历史精选，语气友好，2～4 段即可）"
+        )
     return "\n".join(lines)
 
 
@@ -194,10 +252,29 @@ def _get_or_create_digest(db: Session, digest_date: str) -> NewsletterDailyDiges
     return row
 
 
-def generate_digest_content(db: Session, *, digest_date: str, articles: list[Article], settings: dict[str, Any]) -> None:
+def _digest_delivery_complete(row: NewsletterDailyDigest, settings: dict[str, Any]) -> bool:
+    email_needed = bool(settings.get("send_enabled")) and _smtp_config_from_settings(settings)
+    feishu_needed = bool(settings.get("feishu_enabled")) and bool((settings.get("feishu_webhook_url") or "").strip())
+    if email_needed and row.sent_at is None:
+        return False
+    if feishu_needed and row.feishu_sent_at is None:
+        return False
+    if not email_needed and not feishu_needed:
+        return row.status == "ready"
+    return True
+
+
+def generate_digest_content(
+    db: Session,
+    *,
+    digest_date: str,
+    apps: list[Article],
+    news: list[Article],
+    settings: dict[str, Any],
+) -> None:
     """调用 LLM 写入 subject / body_md / article_ids_json；失败则 status=failed。"""
     row = _get_or_create_digest(db, digest_date)
-    if row.sent_at is not None:
+    if _digest_delivery_complete(row, settings):
         return
     if not settings.get("generate_enabled", True):
         row.status = "failed"
@@ -210,12 +287,13 @@ def generate_digest_content(db: Session, *, digest_date: str, articles: list[Art
         db.commit()
         return
     system = (
-        "你是 AI 科技资讯站的编辑，为邮件订阅用户写「今日精选」简报。"
+        "你是独立开发者向的 AI 产品情报站编辑，为订阅用户写「今日精选」简报。"
         "必须严格输出一个 JSON 对象，不要 Markdown 围栏，不要多余说明。"
-        '键：subject（字符串，邮件标题，中文，60字以内）、body_md（字符串，正文 Markdown，'
-        "含二级标题与要点列表，可含文章 id 引用；语气专业友好，适合中文读者）。"
+        '键：subject（字符串，标题，中文，60字以内）、body_md（字符串，正文 Markdown，'
+        "必须含「## 今日应用」与「## 今日资讯」两栏，各栏用要点列表；可引用文章 id；"
+        "应用栏侧重可复刻/商业灵感，资讯栏侧重行业动态；语气专业友好。"
     )
-    user = _build_llm_user_payload(articles, digest_date)
+    user = _build_llm_user_payload(apps, news, digest_date)
     raw, it, ot = chat_completion(
         db,
         system=system,
@@ -238,11 +316,44 @@ def generate_digest_content(db: Session, *, digest_date: str, articles: list[Art
     _base, _key, model = resolve_llm_http_config(db)
     row.subject = subj
     row.body_md = body_md
-    row.article_ids_json = json.dumps([a.id for a in articles], ensure_ascii=False)
+    row.article_ids_json = json.dumps(
+        {"apps": [a.id for a in apps], "news": [a.id for a in news]},
+        ensure_ascii=False,
+    )
     row.input_token_count = it
     row.output_token_count = ot
     row.model_used = model
     row.status = "ready"
+    row.error_message = None
+    db.commit()
+
+
+def send_digest_to_feishu(db: Session, *, digest_date: str, settings: dict[str, Any], apps_count: int, news_count: int) -> None:
+    from ..newsletter_feishu import send_daily_digest_feishu
+
+    row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_date))
+    if not row or not row.body_md or not row.subject:
+        raise RuntimeError("digest 无正文，无法推送飞书")
+    if row.feishu_sent_at is not None:
+        return
+    if not settings.get("feishu_enabled", False):
+        raise RuntimeError("后台已关闭「飞书推送」")
+    webhook = str(settings.get("feishu_webhook_url") or "").strip()
+    if not webhook:
+        raise RuntimeError("未配置飞书 Webhook URL")
+    public_base = str(settings.get("public_site_base_url") or "").strip()
+    send_daily_digest_feishu(
+        webhook_url=webhook,
+        digest_date=digest_date,
+        subject=row.subject,
+        body_md=row.body_md,
+        public_site_base_url=public_base,
+        apps_count=apps_count,
+        news_count=news_count,
+    )
+    row.feishu_sent_at = datetime.utcnow()
+    if row.status != "sent":
+        row.status = "sent"
     row.error_message = None
     db.commit()
 
@@ -288,31 +399,61 @@ def send_digest_to_subscribers(db: Session, *, digest_date: str, settings: dict[
     db.commit()
 
 
-def run_daily_newsletter_digest_job(db: Session | None = None, settings: dict[str, Any] | None = None) -> dict[str, Any]:
+def run_daily_newsletter_digest_job(
+    db: Session | None = None,
+    settings: dict[str, Any] | None = None,
+    *,
+    digest_date: str | None = None,
+    force: bool = False,
+    regenerate: bool = False,
+) -> dict[str, Any]:
     """
-    定时任务：上海日历「今天」；按 product_settings_kv.newsletter 决定是否生成/发送。
-    总开关为后台字段 daily_digest_job_enabled。
+    定时/手动：上海日历日摘要；按 newsletter 配置生成并推送邮件与/或飞书。
+    force=True 时忽略「已全部送达」跳过（用于后台手动重试）。
+    regenerate=True 时强制重新生成正文（保留未发送渠道可再发）。
     """
     own_session = db is None
     db = db or SessionLocal()
     try:
         if settings is None:
             settings = get_newsletter_settings_merged(db)
-        if not settings.get("daily_digest_job_enabled", True):
+        if not settings.get("daily_digest_job_enabled", True) and not force:
             return {"skipped": True, "reason": "daily_digest_job_disabled"}
-        if not settings.get("cron_enabled", True):
+        if not settings.get("cron_enabled", True) and not force:
             return {"skipped": True, "reason": "cron_disabled"}
 
-        d = shanghai_calendar_today()
+        d = date.fromisoformat(digest_date) if digest_date else shanghai_calendar_today()
         digest_key = d.isoformat()
         row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
-        if row and row.sent_at is not None:
-            return {"skipped": True, "reason": "already_sent", "digest_date": digest_key}
+        if row and _digest_delivery_complete(row, settings) and not force and not regenerate:
+            return {"skipped": True, "reason": "already_delivered", "digest_date": digest_key}
 
-        article_limit = int(settings.get("article_limit") or 36)
-        articles = fetch_articles_for_shanghai_day(db, d, limit=article_limit)
-        if not row or not (row.body_md or "").strip() or row.status == "failed":
-            generate_digest_content(db, digest_date=digest_key, articles=articles, settings=settings)
+        apps_limit = int(settings.get("apps_limit") or 12)
+        news_limit = int(settings.get("news_limit") or 12)
+        apps, news = fetch_articles_for_shanghai_day_split(db, d, apps_limit=apps_limit, news_limit=news_limit)
+
+        need_generate = (
+            regenerate
+            or not row
+            or not (row.body_md or "").strip()
+            or row.status == "failed"
+        )
+        if need_generate:
+            if regenerate and row:
+                row.body_md = ""
+                row.subject = ""
+                row.status = "pending"
+                row.sent_at = None
+                row.feishu_sent_at = None
+                row.error_message = None
+                db.commit()
+            generate_digest_content(
+                db,
+                digest_date=digest_key,
+                apps=apps,
+                news=news,
+                settings=settings,
+            )
             db.expire_all()
             row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
         if not row or row.status != "ready" or not (row.body_md or "").strip():
@@ -323,25 +464,81 @@ def run_daily_newsletter_digest_job(db: Session | None = None, settings: dict[st
                 "error": getattr(row, "error_message", None) if row else None,
             }
 
-        if not settings.get("send_enabled", True):
-            logger.info("newsletter daily: send disabled in settings, digest_date=%s", digest_key)
-            return {"digest_date": digest_key, "ok": True, "generated": True, "sent": False, "reason": "send_disabled"}
+        out: dict[str, Any] = {
+            "digest_date": digest_key,
+            "ok": True,
+            "generated": True,
+            "apps_count": len(apps),
+            "news_count": len(news),
+            "email_sent": False,
+            "feishu_sent": False,
+        }
 
-        if not _smtp_config_from_settings(settings):
-            logger.warning("newsletter daily: SMTP incomplete in settings, digest_date=%s", digest_key)
-            return {"digest_date": digest_key, "ok": True, "generated": True, "sent": False, "reason": "no_smtp"}
+        if settings.get("send_enabled", True) and _smtp_config_from_settings(settings):
+            if row.sent_at is None:
+                try:
+                    send_digest_to_subscribers(db, digest_date=digest_key, settings=settings)
+                    out["email_sent"] = True
+                except Exception as e:
+                    logger.exception("newsletter daily email send failed: %s", e)
+                    r2 = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
+                    if r2:
+                        r2.error_message = f"email: {e}"[:2000]
+                        db.commit()
+                    return {**out, "ok": False, "error": str(e)}
+            else:
+                out["email_sent"] = True
+        elif settings.get("send_enabled", True):
+            logger.warning("newsletter daily: SMTP incomplete, digest_date=%s", digest_key)
+            out["email_skip"] = "no_smtp"
 
-        try:
-            send_digest_to_subscribers(db, digest_date=digest_key, settings=settings)
-        except Exception as e:
-            logger.exception("newsletter daily send failed: %s", e)
-            r2 = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
-            if r2:
-                r2.error_message = f"send: {e}"[:2000]
-                db.commit()
-            return {"digest_date": digest_key, "ok": False, "sent": False, "error": str(e)}
+        feishu_on = bool(settings.get("feishu_enabled")) and bool((settings.get("feishu_webhook_url") or "").strip())
+        if feishu_on:
+            db.expire_all()
+            row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
+            if row and row.feishu_sent_at is None:
+                try:
+                    send_digest_to_feishu(
+                        db,
+                        digest_date=digest_key,
+                        settings=settings,
+                        apps_count=len(apps),
+                        news_count=len(news),
+                    )
+                    out["feishu_sent"] = True
+                except Exception as e:
+                    logger.exception("newsletter daily feishu send failed: %s", e)
+                    r2 = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
+                    if r2:
+                        prev = (r2.error_message or "").strip()
+                        r2.error_message = f"{prev}; feishu: {e}"[:2000].strip("; ")
+                        db.commit()
+                    return {**out, "ok": False, "error": str(e)}
+            else:
+                out["feishu_sent"] = True
 
-        return {"digest_date": digest_key, "ok": True, "generated": True, "sent": True}
+        out["sent"] = bool(out.get("email_sent")) or bool(out.get("feishu_sent"))
+        return out
     finally:
         if own_session:
             db.close()
+
+
+def digest_row_public(row: NewsletterDailyDigest | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    try:
+        ids = json.loads(row.article_ids_json or "{}")
+    except json.JSONDecodeError:
+        ids = row.article_ids_json
+    return {
+        "digest_date": row.digest_date,
+        "subject": row.subject,
+        "body_md": row.body_md,
+        "status": row.status,
+        "error_message": row.error_message,
+        "article_ids": ids,
+        "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+        "feishu_sent_at": row.feishu_sent_at.isoformat() if row.feishu_sent_at else None,
+        "model_used": row.model_used,
+    }

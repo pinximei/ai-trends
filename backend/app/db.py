@@ -201,6 +201,9 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE newsletter_subscribers ADD COLUMN unsubscribe_token VARCHAR(64)"))
             if "unsubscribed_at" not in cols:
                 conn.execute(text("ALTER TABLE newsletter_subscribers ADD COLUMN unsubscribed_at TIMESTAMP"))
+        cols = _column_names(conn, "newsletter_daily_digests")
+        if cols and "feishu_sent_at" not in cols:
+            conn.execute(text("ALTER TABLE newsletter_daily_digests ADD COLUMN feishu_sent_at TIMESTAMP"))
 
 
 def get_db():

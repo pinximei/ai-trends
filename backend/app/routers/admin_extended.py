@@ -20,7 +20,7 @@ from ..runtime_settings_service import get_runtime_settings_public, save_runtime
 from ..newsletter_settings_service import get_newsletter_settings_public, save_newsletter_settings_patch
 from ..scheduler_settings_service import get_scheduler_settings_public, save_scheduler_settings_patch
 from ..llm_service import generate_inspiration_body
-from ..models import AdminSession, AdminSourceConfig
+from ..models import AdminSession, AdminSourceConfig, NewsletterDailyDigest, NewsletterSubscriber
 from ..product_models import (
     Article,
     HotSnapshot,
@@ -156,9 +156,12 @@ class NewsletterSettingsPatch(BaseModel):
     cron_enabled: bool | None = None
     generate_enabled: bool | None = None
     send_enabled: bool | None = None
+    feishu_enabled: bool | None = None
     daily_digest_job_enabled: bool | None = None
     subscribe_verify_mx: bool | None = None
     article_limit: int | None = Field(None, ge=1, le=80)
+    apps_limit: int | None = Field(None, ge=1, le=40)
+    news_limit: int | None = Field(None, ge=1, le=40)
     daily_hour: int | None = Field(None, ge=0, le=23)
     daily_minute: int | None = Field(None, ge=0, le=59)
     public_site_base_url: str | None = None
@@ -168,6 +171,7 @@ class NewsletterSettingsPatch(BaseModel):
     smtp_password: str | None = Field(None, description="非空则覆盖已存 SMTP 密码；空串表示保留")
     mail_from: str | None = None
     smtp_use_tls: bool | None = None
+    feishu_webhook_url: str | None = Field(None, description="非空则覆盖已存飞书 Webhook；空串表示保留")
     bcc_batch: int | None = Field(None, ge=1, le=80)
     footer_note: str | None = None
 
@@ -188,8 +192,71 @@ def put_newsletter_setting(
 ):
     patch = payload.model_dump(exclude_unset=True)
     merged = save_newsletter_settings_patch(db, patch)
-    audit(db, actor=session.username, action="product.settings.newsletter", target="newsletter", detail=str({k: v for k, v in patch.items() if k != "smtp_password"}))
+    audit(
+        db,
+        actor=session.username,
+        action="product.settings.newsletter",
+        target="newsletter",
+        detail=str({k: v for k, v in patch.items() if k not in ("smtp_password", "feishu_webhook_url")}),
+    )
     return ok(merged)
+
+
+class NewsletterDigestRunBody(BaseModel):
+    digest_date: str | None = Field(None, description="YYYY-MM-DD，默认上海今日")
+    regenerate: bool = False
+
+
+@router.get("/product/newsletter/digest/today")
+def get_newsletter_digest_today(
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    from ..application.newsletter_daily_digest import digest_row_public, shanghai_calendar_today
+
+    key = shanghai_calendar_today().isoformat()
+    row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == key))
+    active_subs = db.scalar(
+        select(func.count())
+        .select_from(NewsletterSubscriber)
+        .where(
+            NewsletterSubscriber.unsubscribed_at.is_(None),
+        )
+    )
+    return ok(
+        {
+            "digest": digest_row_public(row),
+            "digest_date": key,
+            "active_subscribers": int(active_subs or 0),
+        }
+    )
+
+
+@router.post("/product/newsletter/digest/run")
+def post_newsletter_digest_run(
+    body: NewsletterDigestRunBody,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("operator")),
+):
+    from ..application.newsletter_daily_digest import run_daily_newsletter_digest_job
+    from ..newsletter_settings_service import get_newsletter_settings_merged
+
+    settings = get_newsletter_settings_merged(db)
+    out = run_daily_newsletter_digest_job(
+        db,
+        settings=settings,
+        digest_date=body.digest_date,
+        force=True,
+        regenerate=body.regenerate,
+    )
+    audit(
+        db,
+        actor=session.username,
+        action="product.newsletter.digest.run",
+        target=body.digest_date or "today",
+        detail=str(out),
+    )
+    return ok(out)
 
 
 class RuntimeSettingsPatch(BaseModel):

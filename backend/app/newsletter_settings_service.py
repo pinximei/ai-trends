@@ -16,7 +16,10 @@ def default_newsletter_json() -> dict[str, Any]:
         "cron_enabled": False,
         "generate_enabled": False,
         "send_enabled": False,
+        "feishu_enabled": False,
         "article_limit": 36,
+        "apps_limit": 12,
+        "news_limit": 12,
         "daily_hour": 9,
         "daily_minute": 0,
         "public_site_base_url": "",
@@ -26,6 +29,7 @@ def default_newsletter_json() -> dict[str, Any]:
         "smtp_password": "",
         "mail_from": "",
         "smtp_use_tls": False,
+        "feishu_webhook_url": "",
         "bcc_batch": 40,
         "footer_note": "",
         # 定时任务与订阅校验：可在后台「邮件订阅」页修改
@@ -44,9 +48,12 @@ def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     out["cron_enabled"] = bool(out.get("cron_enabled", False))
     out["generate_enabled"] = bool(out.get("generate_enabled", False))
     out["send_enabled"] = bool(out.get("send_enabled", False))
+    out["feishu_enabled"] = bool(out.get("feishu_enabled", False))
     out["daily_digest_job_enabled"] = bool(out.get("daily_digest_job_enabled", True))
     out["subscribe_verify_mx"] = bool(out.get("subscribe_verify_mx", True))
     out["article_limit"] = max(1, min(80, int(out.get("article_limit") or 36)))
+    out["apps_limit"] = max(1, min(40, int(out.get("apps_limit") or min(12, out["article_limit"] // 2 or 12))))
+    out["news_limit"] = max(1, min(40, int(out.get("news_limit") or min(12, out["article_limit"] // 2 or 12))))
     out["daily_hour"] = max(0, min(23, int(out.get("daily_hour") or 9)))
     out["daily_minute"] = max(0, min(59, int(out.get("daily_minute") or 0)))
     out["smtp_port"] = max(1, min(65535, int(out.get("smtp_port") or 465)))
@@ -62,12 +69,24 @@ def get_newsletter_settings_merged(db: Session) -> dict[str, Any]:
     return _normalize_merged(_merged_stored(db))
 
 
+def _mask_secret(value: str) -> str:
+    v = (value or "").strip()
+    if not v:
+        return ""
+    if len(v) <= 8:
+        return "****"
+    return f"{v[:4]}...{v[-4:]}"
+
+
 def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
-    """管理端展示：密码脱敏。"""
+    """管理端展示：密码 / Webhook 脱敏。"""
     m = dict(_normalize_merged(_merged_stored(db)))
     pw = str(m.pop("smtp_password", "") or "")
     m["smtp_password_masked"] = "****" if pw else ""
     m["has_smtp_password"] = bool(pw)
+    wh = str(m.pop("feishu_webhook_url", "") or "")
+    m["feishu_webhook_masked"] = _mask_secret(wh)
+    m["has_feishu_webhook"] = bool(wh)
     return m
 
 
@@ -89,17 +108,19 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         "cron_enabled",
         "generate_enabled",
         "send_enabled",
+        "feishu_enabled",
         "smtp_use_tls",
         "daily_digest_job_enabled",
         "subscribe_verify_mx",
     )
-    int_keys = ("article_limit", "daily_hour", "daily_minute", "smtp_port", "bcc_batch")
+    int_keys = ("article_limit", "apps_limit", "news_limit", "daily_hour", "daily_minute", "smtp_port", "bcc_batch")
     str_keys = (
         "public_site_base_url",
         "smtp_host",
         "smtp_user",
         "mail_from",
         "footer_note",
+        "feishu_webhook_url",
     )
     for k in bool_keys:
         if k in patch:
@@ -114,6 +135,10 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         nk = str(patch["smtp_password"]).strip()
         if nk:
             cur["smtp_password"] = nk
+    if "feishu_webhook_url" in patch and patch["feishu_webhook_url"] is not None:
+        nw = str(patch["feishu_webhook_url"]).strip()
+        if nw:
+            cur["feishu_webhook_url"] = nw
     row.value_json = _normalize_merged(cur)
     row.updated_at = datetime.utcnow()
     db.commit()

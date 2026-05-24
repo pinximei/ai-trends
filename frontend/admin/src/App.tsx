@@ -177,35 +177,19 @@ type SchedulerSettingsView = {
   daily_slot_times_local?: string;
 };
 
-type NewsletterSettingsView = {
-  cron_enabled: boolean;
-  generate_enabled: boolean;
-  send_enabled: boolean;
-  daily_digest_job_enabled: boolean;
-  subscribe_verify_mx: boolean;
-  article_limit: number;
-  daily_hour: number;
-  daily_minute: number;
-  public_site_base_url: string;
-  smtp_host: string;
-  smtp_port: number;
-  smtp_user: string;
-  smtp_password_masked: string;
-  has_smtp_password: boolean;
-  mail_from: string;
-  smtp_use_tls: boolean;
-  bcc_batch: number;
-  footer_note: string;
-};
+type NewsletterSettingsView = import("./api").NewsletterSettingsResponse;
 
 function newsletterFormFromView(nl: NewsletterSettingsView) {
   return {
     cron_enabled: nl.cron_enabled,
     generate_enabled: nl.generate_enabled,
     send_enabled: nl.send_enabled,
+    feishu_enabled: nl.feishu_enabled ?? false,
     daily_digest_job_enabled: nl.daily_digest_job_enabled ?? true,
     subscribe_verify_mx: nl.subscribe_verify_mx ?? true,
     article_limit: nl.article_limit,
+    apps_limit: nl.apps_limit ?? 12,
+    news_limit: nl.news_limit ?? 12,
     daily_hour: nl.daily_hour,
     daily_minute: nl.daily_minute,
     public_site_base_url: nl.public_site_base_url,
@@ -215,6 +199,7 @@ function newsletterFormFromView(nl: NewsletterSettingsView) {
     smtp_password: "",
     mail_from: nl.mail_from,
     smtp_use_tls: nl.smtp_use_tls,
+    feishu_webhook_url: "",
     bcc_batch: nl.bcc_batch,
     footer_note: nl.footer_note,
   };
@@ -344,7 +329,10 @@ export function App() {
     send_enabled: false,
     daily_digest_job_enabled: true,
     subscribe_verify_mx: true,
+    feishu_enabled: false,
     article_limit: 36,
+    apps_limit: 12,
+    news_limit: 12,
     daily_hour: 9,
     daily_minute: 0,
     public_site_base_url: "",
@@ -355,10 +343,18 @@ export function App() {
     has_smtp_password: false,
     mail_from: "",
     smtp_use_tls: false,
+    feishu_webhook_masked: "",
+    has_feishu_webhook: false,
     bcc_batch: 40,
     footer_note: "",
   }));
   const [newsletterSaving, setNewsletterSaving] = useState(false);
+  const [digestPreview, setDigestPreview] = useState<{
+    digest_date: string;
+    active_subscribers: number;
+    digest: { subject: string; body_md: string; status: string; sent_at: string | null; feishu_sent_at: string | null; error_message: string | null } | null;
+  } | null>(null);
+  const [digestRunBusy, setDigestRunBusy] = useState(false);
   const [clearIngestBusy, setClearIngestBusy] = useState(false);
   const [themeFetchBusy, setThemeFetchBusy] = useState(false);
   const [diagLogs, setDiagLogs] = useState<
@@ -519,6 +515,12 @@ export function App() {
       setSchedulerSettings(sched);
       setNewsletterSettings(nl);
       setNewsletterForm(newsletterFormFromView(nl));
+      try {
+        const dp = await adminApi.getNewsletterDigestToday();
+        setDigestPreview(dp);
+      } catch {
+        setDigestPreview(null);
+      }
       setSchedulerForm({ enabled: sched.connector_scheduler_enabled, hours: sched.connector_sync_interval_hours });
       setLlmForm((p) => ({
         ...p,
@@ -764,9 +766,12 @@ export function App() {
         cron_enabled: newsletterForm.cron_enabled,
         generate_enabled: newsletterForm.generate_enabled,
         send_enabled: newsletterForm.send_enabled,
+        feishu_enabled: newsletterForm.feishu_enabled,
         daily_digest_job_enabled: newsletterForm.daily_digest_job_enabled,
         subscribe_verify_mx: newsletterForm.subscribe_verify_mx,
         article_limit: Math.min(80, Math.max(1, Math.floor(Number(newsletterForm.article_limit)) || 36)),
+        apps_limit: Math.min(40, Math.max(1, Math.floor(Number(newsletterForm.apps_limit)) || 12)),
+        news_limit: Math.min(40, Math.max(1, Math.floor(Number(newsletterForm.news_limit)) || 12)),
         daily_hour: Math.min(23, Math.max(0, Math.floor(Number(newsletterForm.daily_hour)) || 9)),
         daily_minute: Math.min(59, Math.max(0, Math.floor(Number(newsletterForm.daily_minute)) || 0)),
         public_site_base_url: newsletterForm.public_site_base_url.trim(),
@@ -779,6 +784,7 @@ export function App() {
         footer_note: newsletterForm.footer_note.trim(),
       };
       if (newsletterForm.smtp_password.trim()) payload.smtp_password = newsletterForm.smtp_password.trim();
+      if (newsletterForm.feishu_webhook_url.trim()) payload.feishu_webhook_url = newsletterForm.feishu_webhook_url.trim();
       const out = await adminApi.saveNewsletterSettings(payload);
       setNewsletterSettings(out);
       setNewsletterForm(newsletterFormFromView(out));
@@ -786,6 +792,25 @@ export function App() {
       setErr(friendlyErr(error instanceof Error ? error.message : "save newsletter failed"));
     } finally {
       setNewsletterSaving(false);
+    }
+  }
+
+  async function onRunNewsletterDigest(regenerate: boolean) {
+    if (!canOperate) return;
+    setDigestRunBusy(true);
+    setErr("");
+    try {
+      const out = await adminApi.runNewsletterDigest({ regenerate });
+      const dp = await adminApi.getNewsletterDigestToday();
+      setDigestPreview(dp);
+      const ok = Boolean((out as { ok?: boolean }).ok);
+      if (!ok) {
+        setErr(typeof (out as { error?: string }).error === "string" ? (out as { error: string }).error : "摘要任务未完全成功");
+      }
+    } catch (error) {
+      setErr(friendlyErr(error instanceof Error ? error.message : "digest run failed"));
+    } finally {
+      setDigestRunBusy(false);
     }
   }
 
@@ -2240,12 +2265,12 @@ export function App() {
 
             <div className="card settings-panel">
               <h3 className="settings-title" style={{ marginTop: 0 }}>
-                邮件订阅 · 每日摘要与 SMTP
+                每日精选推送 · 邮件 / 飞书
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                配置存于 <code className="inline-code">product_settings_kv.newsletter</code>。进程每 <strong>5 分钟</strong>检查一次，在
-                上海时区所设 <strong>时:分</strong> 起的 5 分钟窗口内执行当日摘要（需已配置 LLM）与可选发信。退订链接依赖下方「站点对外根 URL」。
-                所有参数保存后写入库表；<strong>建议继续保留</strong> <code className="inline-code">backend/.env</code>：其中 SMTP 等密钥可作备份，若库内对应项仍为空，启动时会从环境变量一次性迁入。
+                按上海时区每日汇总<strong> AI 应用</strong>与<strong> AI 资讯</strong>，由 LLM 生成简报，可邮件发给订阅用户、飞书群机器人推送。
+                配置存于 <code className="inline-code">product_settings_kv.newsletter</code>；进程每 <strong>5 分钟</strong>检查，在所设
+                <strong> 时:分</strong> 起 5 分钟内自动执行。也可在下方手动「立即生成并推送」。
               </p>
               {newsletterSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
@@ -2289,6 +2314,16 @@ export function App() {
                     <label>
                       <input
                         type="checkbox"
+                        checked={newsletterForm.feishu_enabled}
+                        onChange={(e) => setNewsletterForm((p) => ({ ...p, feishu_enabled: e.target.checked }))}
+                      />{" "}
+                      推送飞书群（需 Webhook URL）
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 420 }}>
+                    <label>
+                      <input
+                        type="checkbox"
                         checked={newsletterForm.daily_digest_job_enabled}
                         onChange={(e) =>
                           setNewsletterForm((p) => ({ ...p, daily_digest_job_enabled: e.target.checked }))
@@ -2307,14 +2342,24 @@ export function App() {
                       订阅邮箱时校验 MX（关闭可加快测试，生产建议开启）
                     </label>
                   </div>
-                  <div className="form-field" style={{ maxWidth: 160 }}>
-                    <label>纳入摘要文章条数（1～80）</label>
+                  <div className="form-field" style={{ maxWidth: 140 }}>
+                    <label>应用条数（1～40）</label>
                     <input
                       type="number"
                       min={1}
-                      max={80}
-                      value={newsletterForm.article_limit}
-                      onChange={(e) => setNewsletterForm((p) => ({ ...p, article_limit: Number(e.target.value) }))}
+                      max={40}
+                      value={newsletterForm.apps_limit}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, apps_limit: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 140 }}>
+                    <label>资讯条数（1～40）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={40}
+                      value={newsletterForm.news_limit}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, news_limit: Number(e.target.value) }))}
                     />
                   </div>
                   <div className="form-field" style={{ maxWidth: 120 }}>
@@ -2410,6 +2455,19 @@ export function App() {
                     />
                   </div>
                   <div className="form-field">
+                    <label>飞书群机器人 Webhook URL（留空保留已存）</label>
+                    <input
+                      value={newsletterForm.feishu_webhook_url}
+                      onChange={(e) => setNewsletterForm((p) => ({ ...p, feishu_webhook_url: e.target.value }))}
+                      placeholder={
+                        newsletterSettings?.has_feishu_webhook
+                          ? `已保存 ${newsletterSettings.feishu_webhook_masked}`
+                          : "https://open.feishu.cn/open-apis/bot/v2/hook/..."
+                      }
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-field">
                     <label>邮件底部附加说明（退订链接上方）</label>
                     <textarea
                       rows={2}
@@ -2418,7 +2476,7 @@ export function App() {
                     />
                   </div>
                   <button type="submit" disabled={newsletterSaving}>
-                    {newsletterSaving ? "保存中…" : "保存邮件订阅配置"}
+                    {newsletterSaving ? "保存中…" : "保存推送配置"}
                   </button>
                 </form>
               ) : (
@@ -2426,6 +2484,40 @@ export function App() {
                   只读：需要运营或管理员角色才可修改。
                 </p>
               )}
+              {digestPreview ? (
+                <div className="card" style={{ marginTop: 16, padding: 14, background: "rgba(15,23,42,0.04)" }}>
+                  <p className="muted tiny" style={{ margin: "0 0 8px" }}>
+                    今日摘要（{digestPreview.digest_date}）· 活跃订阅 {digestPreview.active_subscribers} 人
+                    {digestPreview.digest?.sent_at ? " · 邮件已发" : ""}
+                    {digestPreview.digest?.feishu_sent_at ? " · 飞书已推" : ""}
+                    {digestPreview.digest?.status ? ` · 状态 ${digestPreview.digest.status}` : ""}
+                  </p>
+                  {digestPreview.digest?.subject ? (
+                    <p style={{ margin: "0 0 6px", fontWeight: 600 }}>{digestPreview.digest.subject}</p>
+                  ) : null}
+                  {digestPreview.digest?.body_md ? (
+                    <pre className="mono tiny" style={{ maxHeight: 200, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                      {digestPreview.digest.body_md.slice(0, 2000)}
+                      {digestPreview.digest.body_md.length > 2000 ? "\n…" : ""}
+                    </pre>
+                  ) : (
+                    <p className="muted tiny">尚未生成今日摘要。</p>
+                  )}
+                  {digestPreview.digest?.error_message ? (
+                    <p className="err-text tiny">{digestPreview.digest.error_message}</p>
+                  ) : null}
+                </div>
+              ) : null}
+              {canOperate ? (
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="secondary" disabled={digestRunBusy} onClick={() => onRunNewsletterDigest(false)}>
+                    {digestRunBusy ? "执行中…" : "立即生成并推送"}
+                  </button>
+                  <button type="button" className="secondary" disabled={digestRunBusy} onClick={() => onRunNewsletterDigest(true)}>
+                    重新生成并推送
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="card settings-panel">

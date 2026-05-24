@@ -102,6 +102,20 @@ def seed_newsletter_from_env_if_needed(db: Session) -> bool:
     if _blank(merged.get("public_site_base_url")) and (os.getenv("AITRENDS_PUBLIC_BASE_URL") or "").strip():
         merged["public_site_base_url"] = (os.getenv("AITRENDS_PUBLIC_BASE_URL") or "").strip()
         changed = True
+    if _blank(merged.get("feishu_webhook_url")) and (os.getenv("NEWSLETTER_FEISHU_WEBHOOK_URL") or "").strip():
+        merged["feishu_webhook_url"] = (os.getenv("NEWSLETTER_FEISHU_WEBHOOK_URL") or "").strip()
+        changed = True
+    if "feishu_enabled" not in raw:
+        ev = (os.getenv("NEWSLETTER_FEISHU_ENABLED") or "").strip().lower()
+        if ev in ("1", "true", "yes", "on"):
+            merged["feishu_enabled"] = True
+            changed = True
+    if "apps_limit" not in raw and merged.get("article_limit"):
+        merged["apps_limit"] = max(1, min(40, int(merged["article_limit"]) // 2))
+        changed = True
+    if "news_limit" not in raw and merged.get("article_limit"):
+        merged["news_limit"] = max(1, min(40, int(merged["article_limit"]) // 2))
+        changed = True
 
     if "daily_digest_job_enabled" not in raw:
         env_off = (os.getenv("NEWSLETTER_DAILY_ENABLED") or "").strip().lower() in ("0", "false", "no", "off")

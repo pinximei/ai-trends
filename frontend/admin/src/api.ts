@@ -1,5 +1,31 @@
 type Envelope<T> = { code: number; message: string; data: T };
 
+export type NewsletterSettingsResponse = {
+  cron_enabled: boolean;
+  generate_enabled: boolean;
+  send_enabled: boolean;
+  feishu_enabled: boolean;
+  daily_digest_job_enabled: boolean;
+  subscribe_verify_mx: boolean;
+  article_limit: number;
+  apps_limit: number;
+  news_limit: number;
+  daily_hour: number;
+  daily_minute: number;
+  public_site_base_url: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password_masked: string;
+  has_smtp_password: boolean;
+  mail_from: string;
+  smtp_use_tls: boolean;
+  feishu_webhook_masked: string;
+  has_feishu_webhook: boolean;
+  bcc_batch: number;
+  footer_note: string;
+};
+
 /** FastAPI：detail 可能是字符串或校验错误数组，直接塞进 Error 会显示 [object Object] */
 function describeDetail(detail: unknown): string {
   if (detail == null) return "";
@@ -411,50 +437,32 @@ export const adminApi = {
       body: JSON.stringify(payload),
     }),
   getNewsletterSettings: () =>
-    request<{
-      cron_enabled: boolean;
-      generate_enabled: boolean;
-      send_enabled: boolean;
-      daily_digest_job_enabled: boolean;
-      subscribe_verify_mx: boolean;
-      article_limit: number;
-      daily_hour: number;
-      daily_minute: number;
-      public_site_base_url: string;
-      smtp_host: string;
-      smtp_port: number;
-      smtp_user: string;
-      smtp_password_masked: string;
-      has_smtp_password: boolean;
-      mail_from: string;
-      smtp_use_tls: boolean;
-      bcc_batch: number;
-      footer_note: string;
-    }>("/api/admin/v1/product/settings/newsletter"),
+    request<NewsletterSettingsResponse>("/api/admin/v1/product/settings/newsletter"),
   saveNewsletterSettings: (payload: Record<string, unknown>) =>
-    request<{
-      cron_enabled: boolean;
-      generate_enabled: boolean;
-      send_enabled: boolean;
-      daily_digest_job_enabled: boolean;
-      subscribe_verify_mx: boolean;
-      article_limit: number;
-      daily_hour: number;
-      daily_minute: number;
-      public_site_base_url: string;
-      smtp_host: string;
-      smtp_port: number;
-      smtp_user: string;
-      smtp_password_masked: string;
-      has_smtp_password: boolean;
-      mail_from: string;
-      smtp_use_tls: boolean;
-      bcc_batch: number;
-      footer_note: string;
-    }>("/api/admin/v1/product/settings/newsletter", {
+    request<NewsletterSettingsResponse>("/api/admin/v1/product/settings/newsletter", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    }),
+  getNewsletterDigestToday: () =>
+    request<{
+      digest_date: string;
+      active_subscribers: number;
+      digest: {
+        digest_date: string;
+        subject: string;
+        body_md: string;
+        status: string;
+        error_message: string | null;
+        sent_at: string | null;
+        feishu_sent_at: string | null;
+      } | null;
+    }>("/api/admin/v1/product/newsletter/digest/today"),
+  runNewsletterDigest: (payload?: { digest_date?: string; regenerate?: boolean }) =>
+    request<Record<string, unknown>>("/api/admin/v1/product/newsletter/digest/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
     }),
   softwarePackages: (limit = 80) =>
     request<
