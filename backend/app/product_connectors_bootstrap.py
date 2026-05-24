@@ -251,15 +251,13 @@ def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
     if not MAINSTREAM_ADMIN_SOURCE_KEYS:
         return {"connectors_deleted": 0, "admin_sources_deleted": 0}
     keys = tuple(MAINSTREAM_ADMIN_SOURCE_KEYS)
-    rc = db.execute(
-        delete(ProductConnector).where(
-            ProductConnector.admin_source_key.isnot(None),
-            ~ProductConnector.admin_source_key.in_(keys),
-        )
+    n_c = _delete_product_connectors_where(
+        db,
+        ProductConnector.admin_source_key.isnot(None),
+        ~ProductConnector.admin_source_key.in_(keys),
     )
     ra = db.execute(delete(AdminSourceConfig).where(~AdminSourceConfig.source.in_(keys)))
     db.commit()
-    n_c = int(rc.rowcount) if rc.rowcount is not None and rc.rowcount >= 0 else 0
     n_a = int(ra.rowcount) if ra.rowcount is not None and ra.rowcount >= 0 else 0
     if n_c or n_a:
         log.info("pruned admin sources outside mainstream: connectors=%s admin_sources=%s", n_c, n_a)
@@ -282,14 +280,31 @@ def prune_disabled_admin_sources(db: Session) -> dict[str, int]:
     keys = tuple({r.source.strip().lower() for r in rows if (r.source or "").strip()})
     if not keys:
         return {"connectors_deleted": 0, "admin_sources_deleted": 0}
-    rc = db.execute(delete(ProductConnector).where(ProductConnector.admin_source_key.in_(keys)))
+    n_c = _delete_product_connectors_where(db, ProductConnector.admin_source_key.in_(keys))
     ra = db.execute(delete(AdminSourceConfig).where(AdminSourceConfig.enabled.is_(False)))
     db.commit()
-    n_c = int(rc.rowcount) if rc.rowcount is not None and rc.rowcount >= 0 else 0
     n_a = int(ra.rowcount) if ra.rowcount is not None and ra.rowcount >= 0 else 0
     if n_c or n_a:
         log.info("pruned disabled admin sources: connectors=%s admin_sources=%s keys=%s", n_c, n_a, keys)
     return {"connectors_deleted": n_c, "admin_sources_deleted": n_a}
+
+
+def _delete_product_connectors_where(db: Session, *where_clauses) -> int:
+    """先删同步日志再删连接器，避免 product_connector_logs 外键阻塞启动清理。"""
+    from sqlalchemy import delete, select
+
+    from .product_models import ProductConnector, ProductConnectorLog, ProductSyncDiagnosticLog
+
+    q = select(ProductConnector.id)
+    for clause in where_clauses:
+        q = q.where(clause)
+    ids = tuple(db.scalars(q).all())
+    if not ids:
+        return 0
+    db.execute(delete(ProductConnectorLog).where(ProductConnectorLog.connector_id.in_(ids)))
+    db.execute(delete(ProductSyncDiagnosticLog).where(ProductSyncDiagnosticLog.connector_id.in_(ids)))
+    r = db.execute(delete(ProductConnector).where(ProductConnector.id.in_(ids)))
+    return int(r.rowcount) if r.rowcount is not None and r.rowcount >= 0 else 0
 
 
 def _article_clauses_for_admin_source_keys(keys: tuple[str, ...]):
@@ -338,10 +353,9 @@ def prune_discontinued_bootstrap_admin_sources(db: Session) -> dict[str, int]:
         return {"connectors_deleted": 0, "admin_sources_deleted": 0, "articles_deleted": 0}
     keys = tuple(DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES)
     n_art = prune_articles_for_admin_source_keys(db, keys)
-    rc = db.execute(delete(ProductConnector).where(ProductConnector.admin_source_key.in_(keys)))
+    n_c = _delete_product_connectors_where(db, ProductConnector.admin_source_key.in_(keys))
     ra = db.execute(delete(AdminSourceConfig).where(AdminSourceConfig.source.in_(keys)))
     db.commit()
-    n_c = int(rc.rowcount) if rc.rowcount is not None and rc.rowcount >= 0 else 0
     n_a = int(ra.rowcount) if ra.rowcount is not None and ra.rowcount >= 0 else 0
     if n_c or n_a or n_art:
         log.info(

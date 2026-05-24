@@ -30,6 +30,9 @@ function friendlyErr(msg: string): string {
   if (m.includes("cannot disable yourself")) return "不能禁用自己的账号。";
   if (m.includes("cannot delete your own account")) return "不能删除当前登录账号。";
   if (/invalid credentials|incorrect password|401/i.test(m)) return "用户名或密码错误。";
+  if (/https required/i.test(m)) return "须通过 HTTPS 访问 API；请确认 Nginx 已设置 X-Forwarded-Proto。";
+  if (m.includes("account locked")) return "账号已锁定，请稍后再试或联系管理员。";
+  if (/HTTP 502|bad gateway/i.test(m)) return m;
   return msg;
 }
 

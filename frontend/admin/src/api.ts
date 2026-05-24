@@ -38,7 +38,16 @@ async function parse<T>(res: Response): Promise<T> {
     try {
       j = JSON.parse(text) as Record<string, unknown>;
     } catch {
-      throw new Error(text.slice(0, 240) || `HTTP ${res.status}`);
+      const snippet = text.slice(0, 240) || `HTTP ${res.status}`;
+      if (res.status === 502 || /bad gateway/i.test(text)) {
+        throw new Error("HTTP 502：后端未启动或 Nginx 连不上本机 8000，请检查服务器 systemd 日志。");
+      }
+      if (snippet.startsWith("<") || /<!DOCTYPE/i.test(text)) {
+        throw new Error(
+          `HTTP ${res.status}：接口返回 HTML 而非 JSON（多为 502/504 或 /api 未反代到后端）。`,
+        );
+      }
+      throw new Error(snippet);
     }
   }
 
