@@ -187,45 +187,227 @@ function HeroGraphic() {
   );
 }
 
-function buildSparklinePaths(values: number[], width = 280, height = 100): { area: string; line: string } | null {
-  if (!values.length) return null;
-  const padY = 10;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const span = max - min || 1;
-  const innerH = height - padY * 2;
-  const pts = values.map((v, i) => {
-    const x = values.length === 1 ? width / 2 : (i / (values.length - 1)) * width;
-    const y = padY + innerH - ((v - min) / span) * innerH;
-    return { x, y };
-  });
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const area = `${line} L${width} ${height} L0 ${height} Z`;
-  return { area, line };
+type SparkPoint = { day: string; count: number };
+
+const SPARK_W = 320;
+const SPARK_H = 128;
+const SPARK_ML = 36;
+const SPARK_MR = 10;
+const SPARK_MT = 10;
+const SPARK_MB = 26;
+
+function formatSparkDayShort(day: string): string {
+  const parts = day.split("-");
+  if (parts.length >= 3) return `${parts[1]}/${parts[2]}`;
+  return day;
 }
 
-function TrendSparkline({ values, tall = false }: { values: number[]; tall?: boolean }) {
-  const paths = buildSparklinePaths(values);
+function formatSparkDayLabel(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric", timeZone: "UTC" });
+}
+
+function buildYTicks(maxVal: number): number[] {
+  const max = Math.max(maxVal, 1);
+  if (max <= 4) return Array.from({ length: max + 1 }, (_, i) => i);
+  const mid = Math.round(max / 2);
+  return [...new Set([0, mid, max])].sort((a, b) => a - b);
+}
+
+function layoutSparkline(points: SparkPoint[]) {
+  const counts = points.map((p) => p.count);
+  const max = Math.max(...counts, 1);
+  const yTicks = buildYTicks(max);
+  const yMax = yTicks[yTicks.length - 1] ?? max;
+  const innerW = SPARK_W - SPARK_ML - SPARK_MR;
+  const innerH = SPARK_H - SPARK_MT - SPARK_MB;
+  const yAt = (v: number) => SPARK_MT + innerH - (v / yMax) * innerH;
+  const xAt = (i: number) =>
+    points.length === 1 ? SPARK_ML + innerW / 2 : SPARK_ML + (i / (points.length - 1)) * innerW;
+
+  const coords = points.map((p, i) => ({
+    ...p,
+    x: xAt(i),
+    y: yAt(p.count),
+    index: i,
+  }));
+
+  const line = coords.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const area = `${line} L${coords[coords.length - 1]?.x ?? SPARK_ML} ${SPARK_MT + innerH} L${coords[0]?.x ?? SPARK_ML} ${SPARK_MT + innerH} Z`;
+
+  const xLabelIdx =
+    points.length <= 1
+      ? [0]
+      : points.length === 2
+        ? [0, points.length - 1]
+        : [0, Math.floor((points.length - 1) / 2), points.length - 1];
+
+  return { coords, line, area, yTicks, yMax, innerH, xLabelIdx };
+}
+
+function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?: boolean }) {
+  const { t } = useI18n();
+  const [hover, setHover] = useState<number | null>(null);
+
   const emptyH = tall ? "h-40 sm:h-48 lg:h-52" : "h-36 sm:h-40";
-  const chartH = tall ? "h-36 w-full sm:h-44 lg:h-52 xl:h-56" : "h-28 w-full sm:h-32";
-  if (!paths) {
+  const chartH = tall ? "min-h-[11rem] w-full sm:min-h-[13rem]" : "min-h-[9.5rem] w-full";
+
+  if (!points.length) {
     return (
       <div className={`flex items-center justify-center text-xs text-slate-400 ${emptyH}`}>
         —
       </div>
     );
   }
+
+  const layout = layoutSparkline(points);
+  const { coords, line, area, yTicks, yMax, innerH, xLabelIdx } = layout;
+  const counts = points.map((p) => p.count);
+  const sum = counts.reduce((a, n) => a + n, 0);
+  const peak = Math.max(...counts);
+  const avg = points.length ? Math.round((sum / points.length) * 10) / 10 : 0;
+  const active = hover != null ? coords[hover] : null;
+  const baselineY = SPARK_MT + innerH;
+
   return (
-    <svg viewBox="0 0 280 100" className={`${chartH} text-violet-500`} aria-hidden>
-      <defs>
-        <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="rgb(139 92 246)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={paths.area} fill="url(#trend-fill)" />
-      <path d={paths.line} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className={chartH}>
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+          className="h-auto w-full text-violet-600"
+          role="img"
+          aria-label={`${t("homeTrendChartTitle")}，${t("homeTrendFootSum")} ${formatCount(sum)}`}
+        >
+          <defs>
+            <linearGradient id="home-trend-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="rgb(139 92 246)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {yTicks.map((tick) => {
+            const y = SPARK_MT + innerH - (tick / yMax) * innerH;
+            return (
+              <g key={tick}>
+                <line
+                  x1={SPARK_ML}
+                  y1={y}
+                  x2={SPARK_W - SPARK_MR}
+                  y2={y}
+                  stroke="rgb(226 232 240)"
+                  strokeWidth="1"
+                  strokeDasharray={tick === 0 ? undefined : "4 3"}
+                />
+                <text
+                  x={SPARK_ML - 6}
+                  y={y + 3.5}
+                  textAnchor="end"
+                  className="fill-slate-400 text-[9px] font-medium tabular-nums"
+                >
+                  {tick}
+                </text>
+              </g>
+            );
+          })}
+
+          <text
+            x={4}
+            y={SPARK_MT + innerH / 2}
+            textAnchor="start"
+            transform={`rotate(-90 4 ${SPARK_MT + innerH / 2})`}
+            className="fill-slate-500 text-[8px] font-semibold"
+          >
+            {t("homeTrendYUnit")}
+          </text>
+
+          {xLabelIdx.map((idx) => (
+            <text
+              key={points[idx]?.day ?? idx}
+              x={coords[idx]?.x ?? SPARK_ML}
+              y={SPARK_H - 6}
+              textAnchor="middle"
+              className="fill-slate-500 text-[9px] tabular-nums"
+            >
+              {formatSparkDayShort(points[idx]?.day ?? "")}
+            </text>
+          ))}
+
+          <path d={area} fill="url(#home-trend-fill)" />
+          <path d={line} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+
+          {active ? (
+            <line
+              x1={active.x}
+              y1={SPARK_MT}
+              x2={active.x}
+              y2={baselineY}
+              stroke="rgb(167 139 250)"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+          ) : null}
+
+          {coords.map((p) => {
+            const on = hover === p.index;
+            return (
+              <g key={p.day}>
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={on ? 5.5 : 4}
+                  className={`transition-all ${on ? "fill-violet-600 stroke-white" : "fill-violet-500 stroke-white"}`}
+                  strokeWidth={2}
+                />
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={14}
+                  fill="transparent"
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHover(p.index)}
+                  onMouseLeave={() => setHover(null)}
+                  onFocus={() => setHover(p.index)}
+                  onBlur={() => setHover(null)}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${formatSparkDayLabel(p.day)} ${t("homeTrendHoverPublished")} ${p.count} ${t("homeTrendUnitShort")}`}
+                />
+              </g>
+            );
+          })}
+        </svg>
+
+        {active ? (
+          <div
+            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-violet-200/90 bg-white px-2.5 py-1.5 text-center shadow-md shadow-violet-100/80"
+            style={{
+              left: `${(active.x / SPARK_W) * 100}%`,
+              top: `${Math.max(0, (active.y / SPARK_H) * 100 - 18)}%`,
+            }}
+          >
+            <p className="text-[10px] font-semibold text-slate-600">{formatSparkDayLabel(active.day)}</p>
+            <p className="text-sm font-bold tabular-nums text-violet-700">
+              {formatCount(active.count)}
+              <span className="ml-0.5 text-[10px] font-medium text-violet-500">{t("homeTrendUnitShort")}</span>
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <p className="mt-2 text-[10px] leading-relaxed text-slate-500">{t("homeTrendLegend")}</p>
+      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+        <span>
+          {t("homeTrendFootSum")} <strong className="tabular-nums text-slate-800">{formatCount(sum)}</strong>
+        </span>
+        <span>
+          {t("homeTrendFootAvg")} <strong className="tabular-nums text-slate-800">{avg}</strong>
+        </span>
+        <span>
+          {t("homeTrendFootPeak")} <strong className="tabular-nums text-slate-800">{formatCount(peak)}</strong>
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -261,11 +443,6 @@ export function HomePage() {
     apps_growth_pct: number | null;
     news_growth_pct: number | null;
   } | null>(null);
-
-  const sparklineValues = useMemo(
-    () => trendOverview?.sparkline.map((p) => p.count) ?? [],
-    [trendOverview],
-  );
 
   const sparkSummary = useMemo(() => {
     const spark = trendOverview?.sparkline ?? [];
@@ -565,7 +742,7 @@ export function HomePage() {
                   {t("homeLoading")}
                 </div>
               ) : (
-                <TrendSparkline values={sparklineValues} tall />
+                <TrendSparkline points={trendOverview?.sparkline ?? []} tall />
               )}
             </div>
           </div>
