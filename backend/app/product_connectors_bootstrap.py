@@ -21,6 +21,10 @@ from .connector_heat_fetch import (
     thenewsapi_is_news_url,
 )
 from .scope_labels_util import get_scope_labels_from_source
+from .connector_sync_policy import (
+    LOW_YIELD_MICRO_BATCH_SOURCES,
+    min_interval_seconds_for_source,
+)
 from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
@@ -82,6 +86,26 @@ def _news_wire_url_needs_repair(src: str, url: str) -> bool:
     if src == "thenewsapi":
         return "search=" in u
     return False
+
+
+def repair_low_yield_connector_intervals(db: Session) -> int:
+    """低产出源连接器：缩短 min_interval，便于运营手动补拉；定时走微批调度。"""
+    changed = 0
+    for c in db.scalars(
+        select(ProductConnector).where(ProductConnector.admin_source_key.isnot(None))
+    ).all():
+        sk = (c.admin_source_key or "").strip().lower()
+        if sk not in LOW_YIELD_MICRO_BATCH_SOURCES:
+            continue
+        want = min_interval_seconds_for_source(sk)
+        if want is None:
+            continue
+        if int(c.min_interval_seconds or 0) != want:
+            c.min_interval_seconds = want
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
 
 
 def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
@@ -219,14 +243,15 @@ def ensure_core_admin_connectors(db: Session) -> None:
         if exists:
             continue
         label = ((src.preset_label or "").strip() or key.replace("_", " ").title())
+        min_iv = min_interval_seconds_for_source(key) or 3600
         db.add(
             ProductConnector(
-                name=f"{label} 拉取",
+                name=f"{label} 拉取" + ("（微批）" if key in LOW_YIELD_MICRO_BATCH_SOURCES else ""),
                 provider_name=key,
                 type="api",
                 config_json={"method": "GET"},
                 enabled=key in AUTO_ENABLE_PULL_SOURCE_KEYS,
-                min_interval_seconds=3600,
+                min_interval_seconds=min_iv,
                 admin_source_key=key,
             )
         )

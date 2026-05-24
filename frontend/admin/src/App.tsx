@@ -189,6 +189,10 @@ type SchedulerSettingsView = {
   gate_interval_minutes: number;
   scheduler_timezone?: string;
   daily_slot_times_local?: string;
+  low_yield_sync_enabled?: boolean;
+  thenewsapi_sync_interval_hours?: number;
+  last_thenewsapi_batch_at?: string | null;
+  thenewsapi_api_max_rows?: number;
 };
 
 type NewsletterSettingsView = import("./api").NewsletterSettingsResponse;
@@ -326,7 +330,12 @@ export function App() {
   const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
   const [llmSaving, setLlmSaving] = useState(false);
   const [schedulerSettings, setSchedulerSettings] = useState<SchedulerSettingsView | null>(null);
-  const [schedulerForm, setSchedulerForm] = useState({ enabled: true, hours: 6 });
+  const [schedulerForm, setSchedulerForm] = useState({
+    enabled: true,
+    hours: 6,
+    lowYieldEnabled: true,
+    thenewsapiHours: 2,
+  });
   const [schedulerSaving, setSchedulerSaving] = useState(false);
   const [newsletterSettings, setNewsletterSettings] = useState<NewsletterSettingsView | null>(null);
   const [newsletterForm, setNewsletterForm] = useState(() =>
@@ -517,7 +526,12 @@ export function App() {
       } catch {
         setDigestPreview(null);
       }
-      setSchedulerForm({ enabled: sched.connector_scheduler_enabled, hours: sched.connector_sync_interval_hours });
+      setSchedulerForm({
+        enabled: sched.connector_scheduler_enabled,
+        hours: sched.connector_sync_interval_hours,
+        lowYieldEnabled: sched.low_yield_sync_enabled !== false,
+        thenewsapiHours: sched.thenewsapi_sync_interval_hours ?? 2,
+      });
       setLlmForm((p) => ({
         ...p,
         provider: llm.provider,
@@ -736,15 +750,23 @@ export function App() {
     e.preventDefault();
     if (!canOperate) return;
     const h = Math.min(168, Math.max(1, Math.floor(Number(schedulerForm.hours)) || 6));
+    const th = Math.min(12, Math.max(1, Math.floor(Number(schedulerForm.thenewsapiHours)) || 2));
     setSchedulerSaving(true);
     setErr("");
     try {
       const out = await adminApi.saveSchedulerSettings({
         connector_scheduler_enabled: schedulerForm.enabled,
         connector_sync_interval_hours: h,
+        low_yield_sync_enabled: schedulerForm.lowYieldEnabled,
+        thenewsapi_sync_interval_hours: th,
       });
       setSchedulerSettings(out);
-      setSchedulerForm({ enabled: out.connector_scheduler_enabled, hours: out.connector_sync_interval_hours });
+      setSchedulerForm({
+        enabled: out.connector_scheduler_enabled,
+        hours: out.connector_sync_interval_hours,
+        lowYieldEnabled: out.low_yield_sync_enabled !== false,
+        thenewsapiHours: out.thenewsapi_sync_interval_hours ?? 2,
+      });
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "save scheduler failed"));
     } finally {
@@ -2254,9 +2276,14 @@ export function App() {
                 定时同步与数据清理
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；仅在<strong>美东当日 23:00–24:00</strong>触发整批同步（与 NewsAPI 等按美国日切分的数据源对齐，每日最多一次）。对<strong>所有已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
+                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；仅在<strong>美东当日 23:00–24:00</strong>触发整批同步（与 NewsAPI 等按美国日切分的数据源对齐，每日最多一次）。整批<strong>不包含</strong> TheNewsAPI（上游单次仅约{" "}
+                <strong>{schedulerSettings?.thenewsapi_api_max_rows ?? 3}</strong> 条，见下方微批）。对其余<strong>已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
                 <code className="inline-code">min_interval_seconds</code> 限制）。配置保存在{" "}
                 <code className="inline-code">product_settings_kv.scheduler</code>。
+              </p>
+              <p className="muted tiny" style={{ marginTop: 8, lineHeight: 1.6 }}>
+                <strong>TheNewsAPI 微批</strong>：与整批独立，按间隔小时全天自动拉取（默认每 2 小时，约每日 12 次 × 3 条）。上次微批成功：{" "}
+                <strong style={{ color: "#312e81" }}>{schedulerSettings?.last_thenewsapi_batch_at || "—"}</strong>
               </p>
               {schedulerSettings ? (
                 <p className="muted tiny" style={{ marginTop: 8 }}>
@@ -2291,6 +2318,26 @@ export function App() {
                       max={168}
                       value={schedulerForm.hours}
                       onChange={(e) => setSchedulerForm((p) => ({ ...p, hours: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 360 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={schedulerForm.lowYieldEnabled}
+                        onChange={(e) => setSchedulerForm((p) => ({ ...p, lowYieldEnabled: e.target.checked }))}
+                      />{" "}
+                      启用 TheNewsAPI 微批同步
+                    </label>
+                  </div>
+                  <div className="form-field" style={{ maxWidth: 200 }}>
+                    <label>TheNewsAPI 微批间隔（小时，1～12）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      value={schedulerForm.thenewsapiHours}
+                      onChange={(e) => setSchedulerForm((p) => ({ ...p, thenewsapiHours: Number(e.target.value) }))}
                     />
                   </div>
                   <button type="submit" disabled={schedulerSaving}>

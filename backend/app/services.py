@@ -76,7 +76,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜新闻聚合",
         "content_role": "daily_editorial",
-        "notes": "TheNewsAPI v1/news/top（US tech 最新 Top 10，无 search 关键词过滤）。Query 参数 api_token。",
+        "notes": "TheNewsAPI：上游单次约 3 条，由系统每 2 小时微批同步（可在调度设置改间隔）；不参与美东 23:00 整批。",
         "fetch_limit": PRESET_FETCH_LIMIT["thenewsapi"],
     },
 ]

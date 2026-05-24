@@ -781,12 +781,14 @@ def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | 
                     {"connector_sync_items_v1": [], "note": note, "diag": stats},
                     ensure_ascii=False,
                 )
+            stats["api_row_cap"] = 3
             pack = {
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in normed
                 ],
                 "note": "thenewsapi_top",
                 "diag": stats,
+                "hint": "thenewsapi_api_returns_max_3_per_request_use_micro_batch_scheduler",
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

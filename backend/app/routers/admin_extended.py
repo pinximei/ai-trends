@@ -134,6 +134,8 @@ def put_llm_settings(
 class SchedulerSettingsPatch(BaseModel):
     connector_scheduler_enabled: bool | None = None
     connector_sync_interval_hours: int | None = Field(None, ge=1, le=168)
+    low_yield_sync_enabled: bool | None = None
+    thenewsapi_sync_interval_hours: int | None = Field(None, ge=1, le=12)
 
 
 @router.get("/product/settings/scheduler")
