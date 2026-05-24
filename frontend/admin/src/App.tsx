@@ -98,8 +98,15 @@ type SourceCardDraft = {
   fetch_limit: number;
 };
 
-function inferSourceTestAuthMode(apiBase: string): "bearer" | "private_token" {
-  return apiBase.toLowerCase().includes("gitlab") ? "private_token" : "bearer";
+function inferSourceTestAuth(
+  source: string | undefined,
+  apiBase: string,
+): { auth_mode: "bearer" | "private_token" | "query_key"; key_param?: string } {
+  const sk = (source || "").trim().toLowerCase();
+  if (sk === "newsapi") return { auth_mode: "query_key", key_param: "apiKey" };
+  if (sk === "thenewsapi") return { auth_mode: "query_key", key_param: "api_token" };
+  if (apiBase.toLowerCase().includes("gitlab")) return { auth_mode: "private_token" };
+  return { auth_mode: "bearer" };
 }
 
 /** 将后端 ``abcd...wxyz`` 掩码改为「首尾 + 中间星号」展示。 */
@@ -585,13 +592,13 @@ export function App() {
   async function runSourceTest(
     payload: { source?: string; api_base?: string; api_key?: string },
     resultKey: string,
-    authMode: "bearer" | "private_token",
+    auth: { auth_mode: "bearer" | "private_token" | "query_key"; key_param?: string },
   ) {
     setSourceTestLoading(resultKey);
     setSourceTestResult(null);
     setErr("");
     try {
-      const data = await adminApi.testSource({ ...payload, auth_mode: authMode });
+      const data = await adminApi.testSource({ ...payload, auth_mode: auth.auth_mode, key_param: auth.key_param });
       setSourceTestResult({
         key: resultKey,
         ok: data.ok,
@@ -804,17 +811,28 @@ export function App() {
     }
   }
 
-  async function onRunNewsletterDigest(regenerate: boolean) {
+  async function onRunNewsletterDigest(opts: { regenerate?: boolean; pushOnly?: boolean }) {
     if (!canOperate) return;
     setDigestRunBusy(true);
     setErr("");
     try {
-      const out = await adminApi.runNewsletterDigest({ regenerate });
+      const out = await adminApi.runNewsletterDigest({
+        regenerate: opts.regenerate === true,
+        push_only: opts.pushOnly === true,
+      });
       const dp = await adminApi.getNewsletterDigestToday();
       setDigestPreview(dp);
+      const skipped = Boolean((out as { skipped?: boolean }).skipped);
       const ok = Boolean((out as { ok?: boolean }).ok);
-      if (!ok) {
+      if (skipped) {
+        const reason = (out as { reason?: string }).reason;
+        const msg = (out as { message?: string }).message;
+        setErr(msg || (reason ? `已跳过：${reason}` : "今日摘要任务已跳过"));
+      } else if (!ok) {
         setErr(typeof (out as { error?: string }).error === "string" ? (out as { error: string }).error : "摘要任务未完全成功");
+      } else {
+        const msg = (out as { message?: string }).message;
+        if (msg) setErr("");
       }
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "digest run failed"));
@@ -1715,7 +1733,7 @@ export function App() {
                                               ...(draft.api_key.trim() && showApiKey ? { api_key: draft.api_key.trim() } : {}),
                                             },
                                         cardTestKey,
-                                        inferSourceTestAuthMode(testBase),
+                                        inferSourceTestAuth(saved ? p.source : undefined, testBase),
                                       )
                                     }
                                   >
@@ -1946,7 +1964,7 @@ export function App() {
                                         ...(draft.api_key.trim() ? { api_key: draft.api_key.trim() } : {}),
                                       },
                                       cardTestKey,
-                                      inferSourceTestAuthMode(testBase),
+                                      inferSourceTestAuth(s.source, testBase),
                                     )
                                   }
                                 >
@@ -2339,124 +2357,186 @@ export function App() {
                 订阅推送 · 邮件 / 飞书
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                每日汇总 AI 应用与资讯简报，发给邮件订阅用户和/或飞书群。开启任一渠道后，系统按默认时刻（上海 09:00 起 5 分钟内）自动推送；也可在下方手动试发。
+                按<strong>上海日历日</strong>从站内<strong>当日已发布</strong>的应用/资讯拼一篇摘要，写入{" "}
+                <code className="inline-code">newsletter_daily_digests</code>（每天一篇，非连接器「新建文章」）。
+                库中已有今日摘要时，「立即推送」只发邮件/飞书、不重复生成；需重写内容请点「重新生成并推送」。定时默认 09:00 起 5 分钟内执行。
               </p>
               {canOperate ? (
-                <form className="create-user-form" onSubmit={onSaveNewsletter} style={{ marginTop: 14 }}>
-                  <fieldset style={{ border: "1px solid rgba(15,23,42,0.12)", borderRadius: 8, padding: "12px 14px", margin: 0 }}>
-                    <legend style={{ padding: "0 6px", fontWeight: 600 }}>邮件</legend>
-                    <div className="form-field" style={{ maxWidth: 420 }}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={newsletterForm.email_enabled}
-                          onChange={(e) => setNewsletterForm((p) => ({ ...p, email_enabled: e.target.checked }))}
-                        />{" "}
-                        启用邮件推送
-                      </label>
-                    </div>
-                    {newsletterForm.email_enabled ? (
-                      <>
-                        <div className="form-field">
-                          <label>站点根 URL（退订链接，必填）</label>
+                <form className="newsletter-push-form" onSubmit={onSaveNewsletter}>
+                  <div className="push-channels">
+                    <section
+                      className={`push-channel-card push-channel-card--email${newsletterForm.email_enabled ? " is-on" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="push-channel-card__head"
+                        aria-expanded={newsletterForm.email_enabled}
+                        onClick={() =>
+                          setNewsletterForm((p) => ({ ...p, email_enabled: !p.email_enabled }))
+                        }
+                      >
+                        <span className="push-channel-card__meta">
+                          <span className="push-channel-card__icon" aria-hidden>
+                            ✉
+                          </span>
+                          <span>
+                            <span className="push-channel-card__title">邮件推送</span>
+                            <span className="push-channel-card__desc">每日简报发给站内订阅用户</span>
+                            <span className="push-channel-card__status">
+                              {newsletterForm.email_enabled ? "已开启" : "未开启"}
+                            </span>
+                          </span>
+                        </span>
+                        <span
+                          className="toggle-switch"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
                           <input
-                            value={newsletterForm.public_site_base_url}
-                            onChange={(e) => setNewsletterForm((p) => ({ ...p, public_site_base_url: e.target.value }))}
-                            placeholder="https://www.ai-trends.news"
-                            autoComplete="off"
+                            type="checkbox"
+                            checked={newsletterForm.email_enabled}
+                            onChange={(e) =>
+                              setNewsletterForm((p) => ({ ...p, email_enabled: e.target.checked }))
+                            }
+                            aria-label="启用邮件推送"
                           />
+                          <span className="toggle-switch__track" aria-hidden />
+                        </span>
+                      </button>
+                      {newsletterForm.email_enabled ? (
+                        <div className="push-channel-card__body">
+                          <div className="form-field">
+                            <label>站点根 URL（退订链接，必填）</label>
+                            <input
+                              value={newsletterForm.public_site_base_url}
+                              onChange={(e) =>
+                                setNewsletterForm((p) => ({ ...p, public_site_base_url: e.target.value }))
+                              }
+                              placeholder="https://www.ai-trends.news"
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div className="form-field">
+                            <label>SMTP 主机（必填）</label>
+                            <input
+                              value={newsletterForm.smtp_host}
+                              onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_host: e.target.value }))}
+                              placeholder="smtp.example.com"
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div className="form-field" style={{ maxWidth: 140 }}>
+                            <label>SMTP 端口（必填）</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={newsletterForm.smtp_port}
+                              onChange={(e) =>
+                                setNewsletterForm((p) => ({ ...p, smtp_port: Number(e.target.value) }))
+                              }
+                            />
+                          </div>
+                          <div className="form-field">
+                            <label>SMTP 用户名（必填）</label>
+                            <input
+                              value={newsletterForm.smtp_user}
+                              onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_user: e.target.value }))}
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div className="form-field">
+                            <label>
+                              SMTP 密码（必填
+                              {newsletterSettings?.has_smtp_password ? "，留空保留已存" : ""}）
+                            </label>
+                            <input
+                              type="password"
+                              value={newsletterForm.smtp_password}
+                              onChange={(e) =>
+                                setNewsletterForm((p) => ({ ...p, smtp_password: e.target.value }))
+                              }
+                              autoComplete="new-password"
+                            />
+                          </div>
+                          <div className="form-field">
+                            <label>发件人 From（必填）</label>
+                            <input
+                              value={newsletterForm.mail_from}
+                              onChange={(e) => setNewsletterForm((p) => ({ ...p, mail_from: e.target.value }))}
+                              placeholder="noreply@example.com"
+                              autoComplete="off"
+                            />
+                          </div>
                         </div>
-                        <div className="form-field">
-                          <label>SMTP 主机（必填）</label>
+                      ) : null}
+                    </section>
+
+                    <section
+                      className={`push-channel-card push-channel-card--feishu${newsletterForm.feishu_enabled ? " is-on" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="push-channel-card__head"
+                        aria-expanded={newsletterForm.feishu_enabled}
+                        onClick={() =>
+                          setNewsletterForm((p) => ({ ...p, feishu_enabled: !p.feishu_enabled }))
+                        }
+                      >
+                        <span className="push-channel-card__meta">
+                          <span className="push-channel-card__icon" aria-hidden>
+                            💬
+                          </span>
+                          <span>
+                            <span className="push-channel-card__title">飞书群推送</span>
+                            <span className="push-channel-card__desc">通过群机器人 Webhook 发送同一份简报</span>
+                            <span className="push-channel-card__status">
+                              {newsletterForm.feishu_enabled ? "已开启" : "未开启"}
+                            </span>
+                          </span>
+                        </span>
+                        <span
+                          className="toggle-switch"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
                           <input
-                            value={newsletterForm.smtp_host}
-                            onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_host: e.target.value }))}
-                            placeholder="smtp.example.com"
-                            autoComplete="off"
+                            type="checkbox"
+                            checked={newsletterForm.feishu_enabled}
+                            onChange={(e) =>
+                              setNewsletterForm((p) => ({ ...p, feishu_enabled: e.target.checked }))
+                            }
+                            aria-label="启用飞书群推送"
                           />
+                          <span className="toggle-switch__track" aria-hidden />
+                        </span>
+                      </button>
+                      {newsletterForm.feishu_enabled ? (
+                        <div className="push-channel-card__body">
+                          <div className="form-field">
+                            <label>
+                              群机器人 Webhook URL（必填
+                              {newsletterSettings?.has_feishu_webhook ? "，留空保留已存" : ""}）
+                            </label>
+                            <input
+                              value={newsletterForm.feishu_webhook_url}
+                              onChange={(e) =>
+                                setNewsletterForm((p) => ({ ...p, feishu_webhook_url: e.target.value }))
+                              }
+                              placeholder={
+                                newsletterSettings?.has_feishu_webhook
+                                  ? `已保存 ${newsletterSettings.feishu_webhook_masked}`
+                                  : "https://open.feishu.cn/open-apis/bot/v2/hook/..."
+                              }
+                              autoComplete="off"
+                            />
+                          </div>
                         </div>
-                        <div className="form-field" style={{ maxWidth: 140 }}>
-                          <label>SMTP 端口（必填）</label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={65535}
-                            value={newsletterForm.smtp_port}
-                            onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_port: Number(e.target.value) }))}
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>SMTP 用户名（必填）</label>
-                          <input
-                            value={newsletterForm.smtp_user}
-                            onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_user: e.target.value }))}
-                            autoComplete="off"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>
-                            SMTP 密码（必填
-                            {newsletterSettings?.has_smtp_password ? "，留空保留已存" : ""}）
-                          </label>
-                          <input
-                            type="password"
-                            value={newsletterForm.smtp_password}
-                            onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_password: e.target.value }))}
-                            autoComplete="new-password"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>发件人 From（必填）</label>
-                          <input
-                            value={newsletterForm.mail_from}
-                            onChange={(e) => setNewsletterForm((p) => ({ ...p, mail_from: e.target.value }))}
-                            placeholder="noreply@example.com"
-                            autoComplete="off"
-                          />
-                        </div>
-                      </>
-                    ) : null}
-                  </fieldset>
-                  <fieldset
-                    style={{
-                      border: "1px solid rgba(15,23,42,0.12)",
-                      borderRadius: 8,
-                      padding: "12px 14px",
-                      margin: "16px 0 0",
-                    }}
-                  >
-                    <legend style={{ padding: "0 6px", fontWeight: 600 }}>飞书</legend>
-                    <div className="form-field" style={{ maxWidth: 420 }}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={newsletterForm.feishu_enabled}
-                          onChange={(e) => setNewsletterForm((p) => ({ ...p, feishu_enabled: e.target.checked }))}
-                        />{" "}
-                        启用飞书群推送
-                      </label>
-                    </div>
-                    {newsletterForm.feishu_enabled ? (
-                      <div className="form-field">
-                        <label>
-                          群机器人 Webhook URL（必填
-                          {newsletterSettings?.has_feishu_webhook ? "，留空保留已存" : ""}）
-                        </label>
-                        <input
-                          value={newsletterForm.feishu_webhook_url}
-                          onChange={(e) => setNewsletterForm((p) => ({ ...p, feishu_webhook_url: e.target.value }))}
-                          placeholder={
-                            newsletterSettings?.has_feishu_webhook
-                              ? `已保存 ${newsletterSettings.feishu_webhook_masked}`
-                              : "https://open.feishu.cn/open-apis/bot/v2/hook/..."
-                          }
-                          autoComplete="off"
-                        />
-                      </div>
-                    ) : null}
-                  </fieldset>
-                  <button type="submit" disabled={newsletterSaving} style={{ marginTop: 16 }}>
-                    {newsletterSaving ? "保存中…" : "保存"}
+                      ) : null}
+                    </section>
+                  </div>
+                  <button type="submit" disabled={newsletterSaving}>
+                    {newsletterSaving ? "保存中…" : "保存推送配置"}
                   </button>
                 </form>
               ) : (
@@ -2468,6 +2548,22 @@ export function App() {
                 <div className="card" style={{ marginTop: 16, padding: 14, background: "rgba(15,23,42,0.04)" }}>
                   <p className="muted tiny" style={{ margin: "0 0 8px" }}>
                     今日摘要（{digestPreview.digest_date}）· 活跃订阅 {digestPreview.active_subscribers} 人
+                    {digestPreview.digest?.article_ids &&
+                    typeof digestPreview.digest.article_ids === "object" &&
+                    !Array.isArray(digestPreview.digest.article_ids) ? (
+                      <>
+                        {" "}
+                        · 含{" "}
+                        {Array.isArray((digestPreview.digest.article_ids as { apps?: unknown }).apps)
+                          ? (digestPreview.digest.article_ids as { apps: unknown[] }).apps.length
+                          : 0}{" "}
+                        应用 /{" "}
+                        {Array.isArray((digestPreview.digest.article_ids as { news?: unknown }).news)
+                          ? (digestPreview.digest.article_ids as { news: unknown[] }).news.length
+                          : 0}{" "}
+                        资讯（当日已发布）
+                      </>
+                    ) : null}
                     {digestPreview.digest?.sent_at ? " · 邮件已发" : ""}
                     {digestPreview.digest?.feishu_sent_at ? " · 飞书已推" : ""}
                     {digestPreview.digest?.status ? ` · 状态 ${digestPreview.digest.status}` : ""}
@@ -2490,10 +2586,22 @@ export function App() {
               ) : null}
               {canOperate ? (
                 <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" className="secondary" disabled={digestRunBusy} onClick={() => onRunNewsletterDigest(false)}>
-                    {digestRunBusy ? "执行中…" : "立即生成并推送"}
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={digestRunBusy}
+                    title="库中已有今日摘要则只推送；否则先生成再推送"
+                    onClick={() => onRunNewsletterDigest({ regenerate: false })}
+                  >
+                    {digestRunBusy ? "执行中…" : "立即推送"}
                   </button>
-                  <button type="button" className="secondary" disabled={digestRunBusy} onClick={() => onRunNewsletterDigest(true)}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={digestRunBusy}
+                    title="按当日已发布内容重新生成摘要并推送"
+                    onClick={() => onRunNewsletterDigest({ regenerate: true })}
+                  >
                     重新生成并推送
                   </button>
                 </div>

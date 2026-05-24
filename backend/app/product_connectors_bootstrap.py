@@ -172,9 +172,18 @@ def repair_connector_urls_from_admin_sources(db: Session) -> int:
         base = (src.api_base or "").strip()
         if not base:
             continue
+        from .source_query_auth import apply_connector_auth_defaults
+
         cfg = dict(c.config_json or {})
+        changed = False
         if (cfg.get("url") or "").strip() != base:
             cfg["url"] = base
+            changed = True
+        new_cfg = apply_connector_auth_defaults(ask, cfg)
+        if new_cfg != cfg:
+            cfg = new_cfg
+            changed = True
+        if changed:
             c.config_json = cfg
             n += 1
     if n:

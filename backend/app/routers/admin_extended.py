@@ -207,6 +207,7 @@ def put_newsletter_setting(
 class NewsletterDigestRunBody(BaseModel):
     digest_date: str | None = Field(None, description="YYYY-MM-DD，默认上海今日")
     regenerate: bool = False
+    push_only: bool = Field(False, description="仅推送库内已有摘要，不生成（无当日摘要时报错）")
 
 
 @router.get("/product/newsletter/digest/today")
@@ -248,8 +249,9 @@ def post_newsletter_digest_run(
         db,
         settings=settings,
         digest_date=body.digest_date,
-        force=True,
+        manual_run=True,
         regenerate=body.regenerate,
+        push_only=body.push_only,
     )
     audit(
         db,

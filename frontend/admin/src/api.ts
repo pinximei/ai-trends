@@ -215,8 +215,9 @@ export const adminApi = {
     source?: string;
     api_base?: string;
     api_key?: string;
-    /** GitLab 个人访问令牌用 private_token */
-    auth_mode?: "bearer" | "private_token";
+    /** GitLab 个人访问令牌用 private_token；NewsAPI / TheNewsAPI 用 query_key */
+    auth_mode?: "bearer" | "private_token" | "query_key";
+    key_param?: string;
   }) =>
     request<{ http_status: number; snippet: string; ok: boolean; url_tested: string }>("/api/admin/v1/sources/test", {
       method: "POST",
@@ -456,11 +457,12 @@ export const adminApi = {
         body_md: string;
         status: string;
         error_message: string | null;
+        article_ids?: { apps?: number[]; news?: number[] } | unknown;
         sent_at: string | null;
         feishu_sent_at: string | null;
       } | null;
     }>("/api/admin/v1/product/newsletter/digest/today"),
-  runNewsletterDigest: (payload?: { digest_date?: string; regenerate?: boolean }) =>
+  runNewsletterDigest: (payload?: { digest_date?: string; regenerate?: boolean; push_only?: boolean }) =>
     request<Record<string, unknown>>("/api/admin/v1/product/newsletter/digest/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

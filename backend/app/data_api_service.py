@@ -14,9 +14,19 @@ from .admin_source_fetch import normalize_fetch_limit
 from .connector_heat_fetch import (
     github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
+    newsapi_is_v2_url,
     sync_github_trending_top_details,
     sync_hacker_news_top_details,
+    sync_newsapi_top_headlines,
     sync_product_hunt_top_details,
+    sync_thenewsapi_top_news,
+    thenewsapi_is_news_url,
+)
+from .source_query_auth import (
+    load_stored_api_key_for_source,
+    merge_api_key_into_url,
+    query_auth_for_source,
+    source_uses_query_key_auth,
 )
 from .services import (
     ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY,
@@ -134,8 +144,9 @@ class DataApiService:
             ).all():
                 cfg = dict(c.config_json or {})
                 cfg["api_key"] = raw_key
-                cfg.setdefault("auth_mode", "bearer")
-                c.config_json = cfg
+                from .source_query_auth import apply_connector_auth_defaults
+
+                c.config_json = apply_connector_auth_defaults(item.source, cfg)
         raw_secret = (payload.get("app_secret") or "").strip()
         if payload.get("clear_app_secret"):
             item.app_secret_masked = ""
@@ -245,6 +256,19 @@ class DataApiService:
             "Accept": "application/json",
         }
         k = (api_key or "").strip()
+        if not k and sk:
+            k = load_stored_api_key_for_source(self.db, sk)
+        if sk and source_uses_query_key_auth(sk):
+            mode, kp = query_auth_for_source(sk)
+        else:
+            mode = (auth_mode or "bearer").strip().lower()
+            kp = (key_param or "key").strip() or "key"
+        if sk in ("newsapi", "thenewsapi") and not k:
+            _, param = query_auth_for_source(sk)
+            raise ValueError(
+                f"{sk} 需要 API Key：请在卡片填写密钥并「保存」，或在测试前于密钥框输入一次（"
+                f"请求 Query 参数 {param}）。"
+            )
         ph_secret = ""
         if sk == "product_hunt":
             conn = self.db.scalar(
@@ -258,7 +282,6 @@ class DataApiService:
                 if not k:
                     k = str(cfg.get("api_key") or "").strip()
                 ph_secret = str(cfg.get("oauth_client_secret") or "").strip()
-        mode = (auth_mode or "bearer").strip().lower()
         if sk == "product_hunt":
             from .product_hunt_oauth import resolve_product_hunt_bearer
 
@@ -271,13 +294,7 @@ class DataApiService:
             if mode == "private_token":
                 headers["PRIVATE-TOKEN"] = k
             elif mode == "query_key":
-                from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
-                kp = (key_param or "key").strip() or "key"
-                parts = urlsplit(url)
-                q = dict(parse_qsl(parts.query, keep_blank_values=True))
-                q[kp] = k
-                url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
+                url = merge_api_key_into_url(url, api_key=k, key_param=kp)
             else:
                 headers["Authorization"] = f"Bearer {k}"
         try:
@@ -309,6 +326,20 @@ class DataApiService:
                         text = body_text
 
                     r = _RespHn()
+                elif sk == "newsapi" and newsapi_is_v2_url(url):
+                    code, body_text = sync_newsapi_top_headlines(url, headers, limit=3)
+                    class _RespNewsapi:
+                        status_code = code
+                        text = body_text
+
+                    r = _RespNewsapi()
+                elif sk == "thenewsapi" and thenewsapi_is_news_url(url):
+                    code, body_text = sync_thenewsapi_top_news(url, headers, limit=3)
+                    class _RespThenewsapi:
+                        status_code = code
+                        text = body_text
+
+                    r = _RespThenewsapi()
                 elif sk == "anthropic":
                     # Anthropic Messages 仅支持 POST；用最小消息体做真实可用性测试。
                     if "Authorization" not in headers:
@@ -333,17 +364,24 @@ class DataApiService:
                 if sk == "product_hunt"
                 or (sk == "github" and github_trending_is_discovery_url(url))
                 or (sk == "hacker_news" and hacker_news_algolia_is_search_url(url))
+                or (sk == "newsapi" and newsapi_is_v2_url(url))
+                or (sk == "thenewsapi" and thenewsapi_is_news_url(url))
                 else 600
             )
             snippet = (r.text or "")[:cap]
             code = r.status_code
-            # 2xx–3xx：正常；401/403：服务可达但需密钥；405：常见为仅支持 POST 的端点；429：限流但服务可达。
-            ok_http = (200 <= code < 400) or code in (401, 403, 405, 429)
+            ok_http = 200 <= code < 300
+            url_report = url[:512]
+            if mode == "query_key" and k:
+                from urllib.parse import urlsplit
+
+                parts = urlsplit(url_report)
+                url_report = f"{parts.scheme}://{parts.netloc}{parts.path}?…&{kp}=***"
             return {
                 "http_status": code,
                 "snippet": snippet,
                 "ok": ok_http,
-                "url_tested": url[:512],
+                "url_tested": url_report,
             }
         except Exception as e:
             return {

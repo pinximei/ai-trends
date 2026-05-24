@@ -266,6 +266,22 @@ def _digest_delivery_complete(row: NewsletterDailyDigest, settings: dict[str, An
     return True
 
 
+def _digest_has_content(row: NewsletterDailyDigest | None) -> bool:
+    return bool(row and row.status == "ready" and (row.body_md or "").strip())
+
+
+def _article_counts_from_row(row: NewsletterDailyDigest | None) -> tuple[int, int]:
+    if not row:
+        return 0, 0
+    try:
+        id_map = json.loads(row.article_ids_json or "{}")
+        if isinstance(id_map, dict):
+            return len(id_map.get("apps") or []), len(id_map.get("news") or [])
+    except json.JSONDecodeError:
+        pass
+    return 0, 0
+
+
 def generate_digest_content(
     db: Session,
     *,
@@ -274,10 +290,8 @@ def generate_digest_content(
     news: list[Article],
     settings: dict[str, Any],
 ) -> None:
-    """拼装正文（站内摘要）+ 可选 LLM 仅写标题；落库 subject / body_md。"""
+    """拼装正文（站内摘要）+ 可选 LLM 仅写标题；落库 subject / body_md（每个日历日一篇）。"""
     row = _get_or_create_digest(db, digest_date)
-    if _digest_delivery_complete(row, settings):
-        return
     if not settings.get("generate_enabled", True):
         row.status = "failed"
         row.error_message = "后台已关闭「生成摘要」"
@@ -428,40 +442,58 @@ def run_daily_newsletter_digest_job(
     settings: dict[str, Any] | None = None,
     *,
     digest_date: str | None = None,
-    force: bool = False,
+    manual_run: bool = False,
     regenerate: bool = False,
+    push_only: bool = False,
 ) -> dict[str, Any]:
     """
-    定时/手动：上海日历日摘要；按 newsletter 配置生成并推送邮件与/或飞书。
-    force=True 时忽略「已全部送达」跳过（用于后台手动重试）。
-    regenerate=True 时强制重新生成正文（保留未发送渠道可再发）。
+    定时/手动：按上海日历日在 ``newsletter_daily_digests`` 存一篇摘要（非新建站点文章）。
+    - 库中已有当日 ready 摘要且未要求 regenerate：不重复生成，仅推送未发渠道。
+    - regenerate=True：强制按当日已发布内容重写摘要后再推送。
+    - manual_run=True：跳过后台定时总开关检查（管理端手动触发）。
     """
     own_session = db is None
     db = db or SessionLocal()
     try:
         if settings is None:
             settings = get_newsletter_settings_merged(db)
-        if not settings.get("daily_digest_job_enabled", True) and not force:
+        if not settings.get("daily_digest_job_enabled", True) and not manual_run:
             return {"skipped": True, "reason": "daily_digest_job_disabled"}
-        if not settings.get("cron_enabled", True) and not force:
+        if not settings.get("cron_enabled", True) and not manual_run:
             return {"skipped": True, "reason": "cron_disabled"}
 
         d = date.fromisoformat(digest_date) if digest_date else shanghai_calendar_today()
         digest_key = d.isoformat()
         row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
-        if row and _digest_delivery_complete(row, settings) and not force and not regenerate:
-            return {"skipped": True, "reason": "already_delivered", "digest_date": digest_key}
+        has_ready = _digest_has_content(row)
+
+        if push_only and not has_ready:
+            return {
+                "digest_date": digest_key,
+                "ok": False,
+                "error": "今日摘要尚未生成，请先「生成并推送」或等待定时任务。",
+            }
+
+        if not manual_run and not regenerate and row and _digest_delivery_complete(row, settings):
+            return {
+                "skipped": True,
+                "reason": "already_delivered",
+                "digest_date": digest_key,
+                "message": "今日摘要已生成且已推送，定时任务跳过。",
+            }
 
         apps_limit = int(settings.get("apps_limit") or 12)
         news_limit = int(settings.get("news_limit") or 12)
         apps, news = fetch_articles_for_shanghai_day_split(db, d, apps_limit=apps_limit, news_limit=news_limit)
 
-        need_generate = (
-            regenerate
-            or not row
-            or not (row.body_md or "").strip()
-            or row.status == "failed"
-        )
+        if regenerate:
+            need_generate = True
+        elif push_only or has_ready:
+            need_generate = False
+        else:
+            need_generate = not row or not (row.body_md or "").strip() or row.status == "failed"
+
+        content_generated = False
         if need_generate:
             if regenerate and row:
                 row.body_md = ""
@@ -478,6 +510,7 @@ def run_daily_newsletter_digest_job(
                 news=news,
                 settings=settings,
             )
+            content_generated = True
             db.expire_all()
             row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
         if not row or row.status != "ready" or not (row.body_md or "").strip():
@@ -485,18 +518,28 @@ def run_daily_newsletter_digest_job(
                 "digest_date": digest_key,
                 "ok": False,
                 "status": getattr(row, "status", "missing") if row else "missing",
-                "error": getattr(row, "error_message", None) if row else None,
+                "error": getattr(row, "error_message", None) if row else "生成摘要失败或未开启「生成」",
             }
+
+        if content_generated:
+            apps_count, news_count = len(apps), len(news)
+        else:
+            apps_count, news_count = _article_counts_from_row(row)
 
         out: dict[str, Any] = {
             "digest_date": digest_key,
             "ok": True,
-            "generated": True,
-            "apps_count": len(apps),
-            "news_count": len(news),
+            "generated": content_generated,
+            "reused_existing": has_ready and not content_generated,
+            "apps_count": apps_count,
+            "news_count": news_count,
             "email_sent": False,
             "feishu_sent": False,
         }
+        if out["reused_existing"]:
+            out["message"] = f"沿用库内今日摘要（{apps_count} 应用 / {news_count} 资讯），未重复生成。"
+        elif content_generated:
+            out["message"] = f"已生成并落库今日摘要（{apps_count} 应用 / {news_count} 资讯，来自当日已发布内容）。"
 
         if settings.get("send_enabled", True) and _smtp_config_from_settings(settings):
             if row.sent_at is None:
@@ -526,8 +569,8 @@ def run_daily_newsletter_digest_job(
                         db,
                         digest_date=digest_key,
                         settings=settings,
-                        apps_count=len(apps),
-                        news_count=len(news),
+                        apps_count=apps_count,
+                        news_count=news_count,
                     )
                     out["feishu_sent"] = True
                 except Exception as e:
