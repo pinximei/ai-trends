@@ -7,12 +7,17 @@ import pytest
 from sqlalchemy import select
 
 from backend.app.connector_heat_fetch import (
+    GITHUB_TRENDING_DEFAULT,
     arxiv_api_is_query_url,
+    github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
 )
 from backend.app.db import SessionLocal
 from backend.app.models import AdminSourceConfig
-from backend.app.product_connectors_bootstrap import repair_mainstream_heat_fetch_admin_sources
+from backend.app.product_connectors_bootstrap import (
+    mainstream_heat_fetch_url_ok,
+    repair_mainstream_heat_fetch_admin_sources,
+)
 from backend.app.scope_labels_util import get_scope_labels_from_source
 from backend.app.services import ensure_mainstream_admin_sources
 
@@ -34,6 +39,22 @@ def _legacy_bad_url(source: str) -> str:
     if source == "arxiv":
         return "https://arxiv.org/abs/2401.00001"
     return ""
+
+
+def test_mainstream_url_ok_matrix() -> None:
+    assert mainstream_heat_fetch_url_ok("github", GITHUB_TRENDING_DEFAULT)
+    assert mainstream_heat_fetch_url_ok(
+        "huggingface_spaces", "https://huggingface.co/api/spaces?trending=true&limit=80"
+    )
+    assert mainstream_heat_fetch_url_ok("product_hunt", "https://api.producthunt.com/v2/api/graphql")
+    assert mainstream_heat_fetch_url_ok("hacker_news", "https://hn.algolia.com/api/v1/search?tags=front_page")
+    assert mainstream_heat_fetch_url_ok(
+        "arxiv",
+        "https://export.arxiv.org/api/query?search_query=cat:cs.AI&max_results=10",
+    )
+    assert not mainstream_heat_fetch_url_ok("hacker_news", "https://hacker-news.firebaseio.com/v0/topstories.json")
+    assert not mainstream_heat_fetch_url_ok("arxiv", "https://arxiv.org/abs/2401.00001")
+    assert not mainstream_heat_fetch_url_ok("github", "https://api.github.com/zen")
 
 
 def test_repair_hn_and_arxiv_urls(db) -> None:

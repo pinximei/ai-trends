@@ -52,6 +52,7 @@ const STRINGS: Record<string, string> = {
   homeStatTotalItems: "近 30 日入库",
   homeSourceRadar: "五源雷达",
   homeSourceRadarSub: "GitHub · Product Hunt · Hugging Face · Hacker News · arXiv 各平台当前最热一条",
+  homeSourceRadarNoData: "近 30 天暂无内容，请在后台检查该源 URL 与连接器同步",
   homeNewsWall: "资讯情报墙",
   homeNewsWallSub: "按跨源热度精选，首页预览；深入阅读请进入资讯雷达",
   homeAppsLeaderboard: "应用热力榜",

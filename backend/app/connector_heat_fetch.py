@@ -520,7 +520,7 @@ def sync_huggingface_spaces_top_details(url: str, headers: dict[str, str]) -> tu
 
 
 ARXIV_API_QUERY_DEFAULT = (
-    "http://export.arxiv.org/api/query?"
+    "https://export.arxiv.org/api/query?"
     "search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&"
     "sortBy=lastUpdatedDate&sortOrder=descending&max_results=80"
 )

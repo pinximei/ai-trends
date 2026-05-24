@@ -219,6 +219,27 @@ def admin_source_presets(
     return api_envelope(request, {"items": DataApiService(db).list_admin_source_presets()})
 
 
+@app.get("/api/admin/v1/sources/mainstream-audit")
+def admin_mainstream_sources_audit(
+    request: Request,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    """五路内置数据源 URL / 连接器 / 板块解析诊断（排查首页只显示 4 源）。"""
+    from .product_connectors_bootstrap import audit_mainstream_connector_paths, repair_mainstream_heat_fetch_admin_sources
+
+    _ = session
+    repaired = repair_mainstream_heat_fetch_admin_sources(db)
+    return api_envelope(
+        request,
+        {
+            "repaired_rows": repaired,
+            "sources": audit_mainstream_connector_paths(db),
+            "expected_count": 5,
+        },
+    )
+
+
 @app.get("/api/admin/v1/sources")
 def admin_sources_v2(
     request: Request,

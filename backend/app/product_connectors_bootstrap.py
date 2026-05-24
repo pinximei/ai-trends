@@ -13,7 +13,9 @@ from .connector_heat_fetch import (
     GITHUB_TRENDING_DEFAULT,
     HN_ALGOLIA_SEARCH_DEFAULT,
     arxiv_api_is_query_url,
+    github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
+    huggingface_api_spaces_is_list_index,
 )
 from .scope_labels_util import get_scope_labels_from_source
 from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
@@ -45,8 +47,28 @@ def _preset_by_source(source: str) -> dict | None:
     return None
 
 
+def mainstream_heat_fetch_url_ok(source: str, url: str) -> bool:
+    """内置五路数据源 api_base 是否可走 connector_sync_items_v1 热度打包。"""
+    src = (source or "").strip().lower()
+    u = (url or "").strip()
+    if not u:
+        return False
+    if src == "github":
+        return github_trending_is_discovery_url(u)
+    if src == "huggingface_spaces":
+        return huggingface_api_spaces_is_list_index(u)
+    if src == "product_hunt":
+        low = u.lower()
+        return "api.producthunt.com" in low and "graphql" in low
+    if src == "hacker_news":
+        return hacker_news_algolia_is_search_url(u)
+    if src == "arxiv":
+        return arxiv_api_is_query_url(u)
+    return False
+
+
 def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
-    """旧库中 HN/arXiv 若仍为 firebase/单条 abs 等地址，热榜打包不会走 TopN 入库；并补齐空的 scope_label。"""
+    """五路内置源 api_base / scope_label 与热度打包路径对齐（含 HN firebase、arXiv abs 等旧地址）。"""
     changed = 0
     for row in db.scalars(select(AdminSourceConfig)).all():
         preset = _preset_by_source(row.source)
@@ -57,12 +79,7 @@ def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
         if not default_base:
             continue
         u = (row.api_base or "").strip()
-        need_url = False
-        if src == "hacker_news" and not hacker_news_algolia_is_search_url(u):
-            need_url = True
-        elif src == "arxiv" and not arxiv_api_is_query_url(u):
-            need_url = True
-        if need_url:
+        if not mainstream_heat_fetch_url_ok(src, u):
             row.api_base = default_base
             changed += 1
         sl = (preset.get("scope_label") or "").strip()
@@ -75,6 +92,49 @@ def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
     if changed:
         db.commit()
     return changed
+
+
+def audit_mainstream_connector_paths(db: Session) -> list[dict]:
+    """诊断五路内置源的 URL、连接器与板块解析（供后台/运维排查「只有 4 源」）。"""
+    from .source_segment_resolve import resolve_admin_source_key_to_segments
+
+    out: list[dict] = []
+    for preset in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+        src = preset["source"]
+        row = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == src))
+        api_base = (row.api_base or "").strip() if row else ""
+        default_base = (preset.get("api_base") or "").strip()
+        conn = db.scalar(
+            select(ProductConnector).where(ProductConnector.admin_source_key == src).order_by(ProductConnector.id).limit(1)
+        )
+        cfg_url = ""
+        if conn and isinstance(conn.config_json, dict):
+            cfg_url = (conn.config_json.get("url") or "").strip()
+        segments = resolve_admin_source_key_to_segments(db, src) if row else []
+        out.append(
+            {
+                "source": src,
+                "label": (row.preset_label if row else None) or preset.get("preset_label") or src,
+                "configured": row is not None,
+                "enabled": bool(row.enabled) if row else False,
+                "api_base": api_base,
+                "default_api_base": default_base,
+                "heat_fetch_url_ok": mainstream_heat_fetch_url_ok(src, api_base),
+                "connector_id": conn.id if conn else None,
+                "connector_enabled": bool(conn.enabled) if conn else False,
+                "connector_url": cfg_url,
+                "connector_url_matches_admin": (not cfg_url) or cfg_url == api_base,
+                "segment_count": len(segments),
+                "expected_path": {
+                    "github": "github.com/trending → api.github.com/repos",
+                    "huggingface_spaces": "huggingface.co/api/spaces?…",
+                    "product_hunt": "api.producthunt.com/v2/api/graphql",
+                    "hacker_news": "hn.algolia.com/api/v1/search?tags=front_page",
+                    "arxiv": "export.arxiv.org/api/query?…",
+                }.get(src, ""),
+            }
+        )
+    return out
 
 
 def repair_short_probe_admin_sources(db: Session) -> None:
@@ -180,7 +240,7 @@ def enable_auto_pull_admin_sources_and_connectors(db: Session) -> dict[str, int]
 def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
     """删除库中一切不在当前 MAINSTREAM 预置列表内的 admin 数据源及其绑定连接器。
 
-    自定义标识、旧版预置残留等都会被清掉；随后 ``ensure_mainstream_admin_sources`` 会补回四条 AI 内置行。
+    自定义标识、旧版预置残留等都会被清掉；随后 ``ensure_mainstream_admin_sources`` 会补回五条 AI 内置行。
     """
     import logging
 

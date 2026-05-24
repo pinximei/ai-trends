@@ -452,7 +452,10 @@ export function HomePage() {
           </div>
           <div className="rounded-xl bg-indigo-50/80 px-4 py-3 ring-1 ring-indigo-100">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{sourceFacets.length}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+              {sourceFacets.length}
+              <span className="text-sm font-semibold text-slate-400">/5</span>
+            </p>
           </div>
         </section>
       ) : null}
@@ -464,15 +467,28 @@ export function HomePage() {
       >
         {loading ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : mergedLanes.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {mergedLanes.map((lane) => {
               const item = lane.items[0];
-              if (!item) return null;
               const accent = platformAccent(lane.source_key);
               const facet = sourceFacets.find((f) => f.key === lane.source_key);
+              if (!item) {
+                return (
+                  <div
+                    key={lane.source_key}
+                    className={`ui-card p-3 sm:p-4 ring-1 ring-dashed ${accent.ring} bg-slate-50/80`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot} opacity-50`} aria-hidden />
+                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
+                        {lane.source_label}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-500">{t("homeSourceRadarNoData")}</p>
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={lane.source_key}

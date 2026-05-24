@@ -69,7 +69,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "preset_label": "arXiv",
         "enabled": True,
         "api_base": (
-            "http://export.arxiv.org/api/query?"
+            "https://export.arxiv.org/api/query?"
             "search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&"
             "sortBy=lastUpdatedDate&sortOrder=descending&max_results=80"
         ),

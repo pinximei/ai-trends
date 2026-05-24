@@ -237,15 +237,26 @@ def _group_source_lanes(items: list[dict], *, per_source: int = 1) -> list[dict]
         if k not in buckets or len(buckets[k]) >= per_source:
             continue
         buckets[k].append(it)
+    label_by_key: dict[str, str] = {}
+    for it in items:
+        k = (it.get("admin_source_key") or "").strip().lower()
+        if k in HOME_MAIN_SOURCE_KEYS and k not in label_by_key:
+            label_by_key[k] = (it.get("platform_label") or "").strip() or k.replace("_", " ").title()
+
+    preset_labels = {
+        "github": "GitHub",
+        "product_hunt": "Product Hunt",
+        "huggingface_spaces": "Hugging Face Spaces",
+        "hacker_news": "Hacker News",
+        "arxiv": "arXiv",
+    }
     lanes: list[dict] = []
     for k in HOME_MAIN_SOURCE_KEYS:
         picked = buckets[k]
-        if not picked:
-            continue
         lanes.append(
             {
                 "source_key": k,
-                "source_label": picked[0].get("platform_label") or k.replace("_", " ").title(),
+                "source_label": label_by_key.get(k) or preset_labels.get(k, k.replace("_", " ").title()),
                 "items": picked,
             }
         )

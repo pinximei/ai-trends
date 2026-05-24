@@ -431,6 +431,15 @@ def _run_connector_request(cfg: dict) -> tuple[int, str]:
             if source_key == "arxiv" and arxiv_api_is_query_url(url):
                 code, text = sync_arxiv_top_details(url, headers)
                 return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            from ..product_connectors_bootstrap import mainstream_heat_fetch_url_ok
+            from ..services import MAINSTREAM_ADMIN_SOURCE_KEYS
+
+            if source_key in MAINSTREAM_ADMIN_SOURCE_KEYS and not mainstream_heat_fetch_url_ok(source_key, url):
+                return (
+                    0,
+                    f"数据源 {source_key} 的 URL 未匹配热度打包路径，请使用后台预设 api_base 或执行修复。"
+                    f" 当前: {url[:240]}",
+                )
             r = client.request(method, url, headers=headers)
         text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
         return r.status_code, text

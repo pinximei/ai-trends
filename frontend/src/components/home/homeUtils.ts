@@ -9,6 +9,14 @@ export const HOME_SOURCE_ORDER = [
   "arxiv",
 ] as const;
 
+export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], string> = {
+  github: "GitHub",
+  product_hunt: "Product Hunt",
+  huggingface_spaces: "Hugging Face Spaces",
+  hacker_news: "Hacker News",
+  arxiv: "arXiv",
+};
+
 export type HeatTier = "blazing" | "hot" | "fresh";
 
 export function heatTier(heat: number | undefined): HeatTier | null {
@@ -66,5 +74,13 @@ export function mergeSourceLanes(newsLanes: SourceLane[], appsLanes: SourceLane[
   for (const lane of appsLanes) {
     if (!byKey.has(lane.source_key)) byKey.set(lane.source_key, lane);
   }
-  return HOME_SOURCE_ORDER.map((k) => byKey.get(k)).filter((x): x is SourceLane => Boolean(x));
+  return HOME_SOURCE_ORDER.map((k) => {
+    const hit = byKey.get(k);
+    if (hit) return hit;
+    return {
+      source_key: k,
+      source_label: HOME_SOURCE_LABELS[k],
+      items: [],
+    };
+  });
 }
