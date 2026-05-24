@@ -14,7 +14,7 @@ type Props = {
 export function HomeSection({ title, subtitle, icon, action, children, className = "" }: Props) {
   return (
     <section className={className}>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200/80 pb-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-base font-bold tracking-tight text-slate-900 sm:text-lg">
             {icon ? <span className="shrink-0 text-violet-600">{icon}</span> : null}

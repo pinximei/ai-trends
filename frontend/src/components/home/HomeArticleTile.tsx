@@ -21,7 +21,7 @@ function timeAgo(iso: string | null): string {
 
 type Props = {
   item: ArticleFeedCard;
-  variant: "spotlight" | "tile" | "rank";
+  variant: "feature" | "list" | "grid-mini" | "rank";
   rank?: number;
   detailLink?: boolean;
 };
@@ -51,13 +51,13 @@ function CoverFrame({
   );
 }
 
-function MetaRow({ item }: { item: ArticleFeedCard }) {
+function MetaRow({ item, compact = false }: { item: ArticleFeedCard; compact?: boolean }) {
   const { t } = useI18n();
   const accent = platformAccent(item.admin_source_key || "");
   const engagement = itemEngagementLine(item);
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-      <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${accent.badge}`}>
+    <div className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 ${compact ? "text-[10px]" : "text-xs"} text-slate-500`}>
+      <span className={`rounded px-1.5 py-0.5 font-semibold uppercase tracking-wide ${accent.badge} ${compact ? "text-[9px]" : "text-[10px]"}`}>
         {item.platform_label || t("source")}
       </span>
       <HomeHeatBadge heat={item.heat_score} />
@@ -70,90 +70,98 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
 export function HomeArticleTile({ item, variant, rank, detailLink = false }: Props) {
   const { t } = useI18n();
   const highlights = (item.card_highlights || "").trim();
-  const categories = item.categories?.slice(0, 2) ?? [];
 
   let inner: ReactNode;
 
-  if (variant === "spotlight") {
+  if (variant === "feature") {
     inner = (
-      <div className="grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      <div className="flex min-h-0 flex-col gap-3 sm:flex-row sm:gap-4">
         <CoverFrame
           item={item}
-          seed={`spot-${item.id}`}
-          className="ring-0 lg:min-h-[240px]"
-          aspectClass="aspect-[16/9] w-full lg:aspect-auto lg:h-full lg:min-h-[240px]"
+          seed={`feat-${item.id}`}
+          className="shrink-0 rounded-lg ring-1 ring-slate-200/80 sm:w-[42%]"
+          aspectClass="aspect-[16/10] w-full sm:aspect-[4/3] sm:min-h-[11rem]"
         />
-        <div className="flex flex-col justify-center gap-3 p-4 sm:p-5 lg:border-l lg:border-slate-100">
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-2 py-0.5 sm:py-2">
           <MetaRow item={item} />
-          <h3 className="line-clamp-3 text-xl font-bold leading-snug text-slate-900 sm:text-2xl">{item.title}</h3>
-          <p className="line-clamp-4 text-sm leading-relaxed text-slate-600">{itemBlurb(item, 220)}</p>
+          <h3 className="line-clamp-3 text-lg font-bold leading-snug text-slate-900 sm:text-xl">{item.title}</h3>
+          <p className="line-clamp-3 text-sm leading-relaxed text-slate-600">{itemBlurb(item, 160)}</p>
           {highlights ? (
-            <p className="line-clamp-2 rounded-lg bg-violet-50/80 px-3 py-2 text-xs leading-relaxed text-violet-900/90">
-              <span className="font-semibold text-violet-700">{t("homeHighlightsLabel")}: </span>
+            <p className="line-clamp-2 text-xs leading-snug text-violet-800/90">
+              <span className="font-semibold text-violet-600">{t("homeHighlightsLabel")}: </span>
               {highlights}
             </p>
           ) : null}
         </div>
       </div>
     );
-  } else if (variant === "tile") {
+  } else if (variant === "list") {
     inner = (
-      <div className="flex h-full flex-col overflow-hidden sm:flex-row">
+      <div className="flex gap-2.5 py-2">
         <CoverFrame
           item={item}
-          seed={`tile-${item.id}`}
-          className="shrink-0 ring-0 sm:w-32 md:w-36"
-          aspectClass="aspect-[16/10] w-full sm:aspect-auto sm:h-auto sm:min-h-[6.5rem] sm:self-stretch"
+          seed={`list-${item.id}`}
+          className="h-[4.25rem] w-[4.25rem] shrink-0 rounded-md ring-1 ring-slate-200/80"
+          aspectClass="h-full w-full"
         />
-        <div className="flex min-w-0 flex-1 flex-col gap-2 p-3.5 sm:p-4">
-          <MetaRow item={item} />
-          <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">{item.title}</h3>
-          <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-slate-600">{itemBlurb(item, 120)}</p>
-          {categories.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {categories.map((c) => (
-                <span key={c} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-600">
-                  {c}
-                </span>
-              ))}
-            </div>
-          ) : null}
+        <div className="min-w-0 flex-1">
+          <MetaRow item={item} compact />
+          <h3 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</h3>
+        </div>
+      </div>
+    );
+  } else if (variant === "grid-mini") {
+    inner = (
+      <div className="flex h-full flex-col overflow-hidden">
+        <CoverFrame
+          item={item}
+          seed={`mini-${item.id}`}
+          className="ring-0"
+          aspectClass="aspect-[16/10] w-full"
+        />
+        <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+          <MetaRow item={item} compact />
+          <h3 className="line-clamp-2 text-xs font-bold leading-snug text-slate-900">{item.title}</h3>
         </div>
       </div>
     );
   } else {
     inner = (
-      <div className="flex items-center gap-3 p-3 sm:gap-4 sm:p-3.5">
+      <div className="flex items-center gap-2.5 px-2 py-2 sm:px-3">
         {rank != null ? (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-sm font-bold text-violet-700 ring-1 ring-violet-100">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50 text-xs font-bold text-violet-700">
             {rank}
           </span>
         ) : null}
         <CoverFrame
           item={item}
           seed={`rank-${item.id}`}
-          className="h-14 w-14 shrink-0 rounded-xl ring-1 ring-slate-200/80"
-          aspectClass="h-14 w-14"
+          className="h-11 w-11 shrink-0 rounded-lg ring-1 ring-slate-200/80"
+          aspectClass="h-full w-full"
         />
         <div className="min-w-0 flex-1">
-          <MetaRow item={item} />
-          <h3 className="mt-1 line-clamp-1 text-sm font-semibold text-slate-900">{item.title}</h3>
-          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{itemBlurb(item, 80)}</p>
+          <h3 className="line-clamp-1 text-sm font-semibold text-slate-900">{item.title}</h3>
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">{itemBlurb(item, 56)}</p>
+          <div className="mt-1">
+            <MetaRow item={item} compact />
+          </div>
         </div>
       </div>
     );
   }
 
   const className =
-    variant === "spotlight"
-      ? "ui-card overflow-hidden transition hover:shadow-md"
-      : variant === "tile"
-        ? "ui-card h-full overflow-hidden transition hover:border-violet-200/80 hover:shadow-sm"
-        : "transition hover:bg-slate-50/80";
+    variant === "feature"
+      ? "block transition hover:opacity-95"
+      : variant === "list"
+        ? "block border-b border-slate-100 last:border-0 transition hover:bg-slate-50/80"
+        : variant === "grid-mini"
+          ? "ui-card h-full overflow-hidden transition hover:border-violet-200/70 hover:shadow-sm"
+          : "transition hover:bg-slate-50/80";
 
   if (detailLink) {
     return (
-      <Link to={`/resources/${item.id}`} className={`group block ${className}`}>
+      <Link to={`/resources/${item.id}`} className={`group ${className}`}>
         {inner}
       </Link>
     );
