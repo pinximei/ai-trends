@@ -460,8 +460,8 @@ def create_published_articles_for_connector_targets(
 
             diag_write(
                 db,
-                step="pack_items",
-                message=f"多段 pack：共 {len(parts)} 条，逐条价值分+LLM",
+                step="ingest_pack",
+                message=f"多段 pack：共 {len(parts)} 条，逐条价值分+LLM（可能需数分钟）",
                 connector_id=connector_id,
                 source_key=(admin_source_key or "").strip() or None,
             )

@@ -765,18 +765,95 @@ def run_connector_sync(
             if int(src.fetch_limit or 0) > 0:
                 cfg["fetch_limit"] = int(src.fetch_limit)
 
+    if ask:
+        from ..source_query_auth import (
+            load_stored_api_key_for_source,
+            query_auth_for_source,
+            source_uses_query_key_auth,
+        )
+
+        if source_uses_query_key_auth(ask) and not str(cfg.get("api_key") or "").strip():
+            stored = load_stored_api_key_for_source(db, ask)
+            if stored:
+                cfg["api_key"] = stored
+        if source_uses_query_key_auth(ask) and not str(cfg.get("api_key") or "").strip():
+            _, param = query_auth_for_source(ask)
+            err = (
+                f"{ask} 未配置 API Key：请在数据源卡片填写密钥并「保存」"
+                f"（同步使用 Query 参数 {param}，与「测试连接」相同）"
+            )
+            c.last_error = err
+            log.status = "error"
+            log.error_message = err
+            log.finished_at = datetime.utcnow()
+            diag_write(
+                db,
+                level="error",
+                step="auth_missing",
+                message=err,
+                connector_id=c.id,
+                source_key=ask,
+            )
+            diag_write(
+                db,
+                level="error",
+                step="connector_done",
+                message=f"同步结束 status=error 新建文章=0 错误={err}",
+                connector_id=c.id,
+                source_key=ask,
+            )
+            commit_diagnostics(db)
+            db.commit()
+            return {
+                "diagnostic_run_id": get_current_run_id(),
+                "connector_id": c.id,
+                "http_status": 0,
+                "rows_ingested": 0,
+                "articles_created": 0,
+                "error": err,
+            }
+
     tnorm = (theme or "").strip() or None
     if tnorm:
         u0 = (cfg.get("url") or "").strip()
         if u0:
             cfg["url"] = apply_theme_to_connector_url(u0, tnorm)
 
-    status_code, snippet = _run_connector_request(
-        cfg, db, connector_id=c.id, source_key=ask or ask_preview,
-    )
+    status_code = 0
+    snippet = ""
     rows_ingested = 0
     articles_created = 0
     err = None
+    try:
+        status_code, snippet = _run_connector_request(
+            cfg, db, connector_id=c.id, source_key=ask or ask_preview,
+        )
+        diag_write(
+            db,
+            step="connector_fetch",
+            message=f"HTTP {status_code or '—'} {_snippet_pack_diag(snippet or '')}",
+            connector_id=c.id,
+            source_key=ask or ask_preview or None,
+        )
+        commit_diagnostics(db)
+    except Exception as e:
+        err = f"{type(e).__name__}: {str(e)[:400]}"
+        c.last_error = err
+        log.status = "error"
+        log.error_message = err
+        log.finished_at = datetime.utcnow()
+        diag_write(
+            db,
+            level="error",
+            step="connector_aborted",
+            message=f"同步异常中断：{err}",
+            connector_id=c.id,
+            source_key=ask or ask_preview or None,
+        )
+        commit_diagnostics(db)
+        db.commit()
+        raise
+
     if status_code and 200 <= status_code < 300:
         base_val = float(status_code % 100) / 10.0 + 0.1
         if ask:
@@ -872,19 +949,31 @@ def run_connector_sync(
 
     log.finished_at = datetime.utcnow()
     log.rows_ingested = rows_ingested + articles_created
-    diag_write(
-        db,
-        level="info" if not err and articles_created else ("warn" if not err else "error"),
-        step="connector_done",
-        message=(
-            f"同步结束 status={log.status} 新建文章={articles_created} "
-            f"指标点={rows_ingested}" + (f" 错误={err}" if err else "")
-        ),
-        connector_id=c.id,
-        source_key=ask or None,
-    )
-    commit_diagnostics(db)
-    db.commit()
+    try:
+        diag_write(
+            db,
+            level="info" if not err and articles_created else ("warn" if not err else "error"),
+            step="connector_done",
+            message=(
+                f"同步结束 status={log.status} 新建文章={articles_created} "
+                f"指标点={rows_ingested}" + (f" 错误={err}" if err else "")
+            ),
+            connector_id=c.id,
+            source_key=ask or None,
+        )
+        commit_diagnostics(db)
+        db.commit()
+    except Exception as e:
+        diag_write(
+            db,
+            level="error",
+            step="connector_aborted",
+            message=f"同步收尾失败（可能已部分入库）：{type(e).__name__}: {str(e)[:300]}",
+            connector_id=c.id,
+            source_key=ask or None,
+        )
+        commit_diagnostics(db)
+        raise
     audit(db, actor=actor, action="product.connector.sync", target=str(connector_id))
     run_id = get_current_run_id()
     return {

@@ -10,6 +10,8 @@ def test_should_persist_diagnostic_errors_and_warnings():
 def test_should_persist_diagnostic_key_info_only():
     assert should_persist_diagnostic(level="info", step="batch_start")
     assert should_persist_diagnostic(level="info", step="connector_done")
+    assert should_persist_diagnostic(level="info", step="connector_fetch")
+    assert should_persist_diagnostic(level="info", step="ingest_pack")
     assert not should_persist_diagnostic(level="info", step="http_done")
     assert not should_persist_diagnostic(level="info", step="pack_items")
     assert not should_persist_diagnostic(level="info", step="article_ok")
