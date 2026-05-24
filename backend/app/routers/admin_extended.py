@@ -463,13 +463,59 @@ def _snippet_pack_diag(snippet: str) -> str:
     s = (snippet or "")[:120000]
     n = len(parse_connector_sync_item_snippets(s) or [])
     note = ""
+    diag_s = ""
     try:
         obj = json.loads(s[:12000])
         if isinstance(obj, dict):
             note = str(obj.get("note") or "").strip()
+            diag = obj.get("diag")
+            if isinstance(diag, dict) and diag:
+                diag_s = " " + " ".join(f"{k}={v}" for k, v in diag.items())
     except json.JSONDecodeError:
         note = "not_json"
-    return f"pack_items={n}" + (f" note={note}" if note else "")
+    return f"pack_items={n}" + (f" note={note}" if note else "") + diag_s
+
+
+def _log_news_fetch_stats(
+    db: Session,
+    *,
+    snippet: str,
+    source_key: str,
+    connector_id: int,
+    http_status: int,
+) -> None:
+    """NewsAPI / TheNewsAPI：将 pack 内 diag 统计写入同步日志。"""
+    import json
+
+    from ..connector_heat_fetch import _news_fetch_diag_message
+    from ..sync_diagnostic_log import commit_diagnostics, write as diag_write
+
+    sk = (source_key or "").strip().lower()
+    if sk not in ("newsapi", "thenewsapi"):
+        return
+    note = ""
+    stats: dict[str, int] = {}
+    try:
+        obj = json.loads((snippet or "")[:12000])
+        if isinstance(obj, dict):
+            note = str(obj.get("note") or "").strip()
+            raw_diag = obj.get("diag")
+            if isinstance(raw_diag, dict):
+                stats = {str(k): int(v) for k, v in raw_diag.items() if isinstance(v, (int, float))}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+    msg = f"HTTP {http_status} {_news_fetch_diag_message(sk, note or '—', stats)}"
+    if http_status and 200 <= http_status < 300 and not stats.get("packed"):
+        preview = (snippet or "").replace("\n", " ")[:200]
+        msg += f" body_preview={preview!r}"
+    diag_write(
+        db,
+        step="news_fetch_stats",
+        message=msg,
+        connector_id=connector_id,
+        source_key=sk,
+    )
+    commit_diagnostics(db)
 
 
 def _connector_req_diag(
@@ -836,6 +882,14 @@ def run_connector_sync(
             source_key=ask or ask_preview or None,
         )
         commit_diagnostics(db)
+        if ask or ask_preview:
+            _log_news_fetch_stats(
+                db,
+                snippet=snippet or "",
+                source_key=ask or ask_preview or "",
+                connector_id=c.id,
+                http_status=status_code or 0,
+            )
     except Exception as e:
         err = f"{type(e).__name__}: {str(e)[:400]}"
         c.last_error = err

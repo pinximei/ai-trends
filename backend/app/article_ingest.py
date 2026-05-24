@@ -36,6 +36,22 @@ from .domain.articles import (
 from .product_models import Article
 
 
+def _snippet_title_preview(snippet: str, *, max_len: int = 100) -> str:
+    """从连接器单条 JSON snippet 提取标题，供同步诊断日志展示。"""
+    text = (snippet or "").strip()
+    if not text:
+        return "—"
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, dict):
+            t = (obj.get("title") or obj.get("name") or "").strip()
+            if t:
+                return t[:max_len]
+    except json.JSONDecodeError:
+        pass
+    return text.replace("\n", " ")[:max_len]
+
+
 def _strip_raw_json_from_markdown(text: str) -> str:
     s = (text or "").strip()
     if not s:
@@ -209,9 +225,13 @@ def _create_one_published_article_from_connector_targets(
     ing_fp = ingest_fingerprint(safe)
     src_tag = (admin_source_key or "").strip() or "未绑定数据源"
 
+    title_prev = _snippet_title_preview(safe)
+    sk_low = src_tag.lower()
+    verbose_news = sk_low in ("newsapi", "thenewsapi")
+
     def _diag(level: str, step: str, msg: str) -> None:
         try:
-            from .sync_diagnostic_log import write as diag_write
+            from .sync_diagnostic_log import commit_diagnostics, write as diag_write
 
             diag_write(
                 db,
@@ -221,11 +241,18 @@ def _create_one_published_article_from_connector_targets(
                 connector_id=connector_id,
                 source_key=src_tag if src_tag != "未绑定数据源" else None,
             )
+            if verbose_news:
+                commit_diagnostics(db)
         except Exception:
             pass
 
+    def _skip(step: str, msg: str) -> None:
+        lv = "warn" if verbose_news else "info"
+        prefix = f"「{title_prev}」" if verbose_news else ""
+        _diag(lv, step, f"{prefix}{msg}")
+
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
-        _diag("info", "skip_dup_fp", f"跳过：内容指纹重复（ingest_fingerprint）")
+        _skip("skip_dup_fp", "跳过：内容指纹重复（ingest_fingerprint）")
         return 0
 
     source_external_id = extract_source_external_id_from_connector_snippet(safe)
@@ -241,7 +268,7 @@ def _create_one_published_article_from_connector_targets(
             http_status=http_status,
             now=now,
         )
-        _diag("info", "skip_dup_ext", f"重复上游 id={source_external_id or '—'}：已刷新热度/star，未新建")
+        _skip("skip_dup_ext", f"重复上游 id={source_external_id or '—'}：已刷新热度/star，未新建")
         return n
 
     summary_base, readable_body = _render_readable_snapshot(safe)
@@ -257,11 +284,7 @@ def _create_one_published_article_from_connector_targets(
             preview = (safe or "").strip().replace("\n", " ")[:120]
             if preview:
                 hint += f" 片段={preview!r}"
-        _diag(
-            "warn",
-            "skip_score",
-            f"跳过：规则价值分 {vs:.0f} < 门槛 {VALUE_SCORE_MIN:.0f}{hint}",
-        )
+        _skip("skip_score", f"跳过：规则价值分 {vs:.0f} < 门槛 {VALUE_SCORE_MIN:.0f}{hint}")
         return 0
 
     fk = feed_lane(src_tag)
@@ -289,8 +312,8 @@ def _create_one_published_article_from_connector_targets(
         _diag(
             "error",
             "skip_llm_no_key",
-            "跳过：库内未配置 LLM API Key（所有数据源共用）。请在管理端「AI 资讯与数据」保存 Key，"
-            "或设置 AITRENDS_LLM_API_KEY 后重启以迁入库表 product_settings_kv.llm",
+            f"「{title_prev}」跳过：库内未配置 LLM API Key（所有数据源共用）。"
+            "请在管理端「AI 资讯与数据」保存 Key。",
         )
         return 0
 
@@ -310,17 +333,14 @@ def _create_one_published_article_from_connector_targets(
         _diag(
             "error",
             "skip_llm_polish",
-            f"跳过：LLM 润色失败 — {polish_err or 'unknown'}。"
-            " 常见：DeepSeek 超时/余额、JSON 解析失败、tab 过短或 categories 不在合法大类。"
-            " 请查「AI 资讯」LLM 配置与 LlmUsageLog（scenario=article_ingest_polish），修正后重试同步。",
+            f"「{title_prev}」LLM 润色失败 — {polish_err or 'unknown'}。"
+            " 请查「AI 资讯」LLM 与 LlmUsageLog（scenario=article_ingest_polish）。",
         )
         return 0
     if not validate_llm_polish_for_publish(polished):
-        _diag(
-            "warn",
+        _skip(
             "skip_llm_shape",
-            "跳过：LLM 输出未通过发布校验（须恰好 2 个 tab「描述」「数据支撑」；「描述」summary≥72 字、body≥120 字）。"
-            " 新源 HN/arXiv 常因模型写得太短触发，可重试同步或略调提示词",
+            "跳过：LLM 输出未通过发布校验（描述 tab summary≥72、body≥120）。可重试同步。",
         )
         return 0
 
@@ -386,7 +406,7 @@ def _create_one_published_article_from_connector_targets(
     ).all()
     for a in recent:
         if display_fingerprint(a.title, a.summary or "") == disp_fp:
-            _diag("info", "skip_disp_fp", "跳过：展示指纹与近期文章重复")
+            _skip("skip_disp_fp", "跳过：展示指纹与近期文章重复")
             return 0
 
     cover_image_url = extract_cover_image_url(src_tag, safe)
@@ -426,7 +446,7 @@ def _create_one_published_article_from_connector_targets(
     _diag(
         "info",
         "article_ok",
-        f"入库成功 id={art.id} feed={stored_feed_kind} 标题={(title or '')[:80]}",
+        f"「{title_prev}」入库成功 id={art.id} feed={stored_feed_kind} 标题={(title or '')[:80]}",
     )
     return 1
 
@@ -469,8 +489,25 @@ def create_published_articles_for_connector_targets(
             pass
         pool_n = len(parts)
         total = 0
+        sk = (admin_source_key or "").strip().lower()
+        verbose_news = sk in ("newsapi", "thenewsapi")
         for rank, piece in enumerate(parts):
-            total += _create_one_published_article_from_connector_targets(
+            title_prev = _snippet_title_preview(piece)
+            if verbose_news:
+                try:
+                    from .sync_diagnostic_log import commit_diagnostics, write as diag_write
+
+                    diag_write(
+                        db,
+                        step="ingest_item",
+                        message=f"#{rank + 1}/{pool_n} 开始处理 title={title_prev!r}",
+                        connector_id=connector_id,
+                        source_key=sk or None,
+                    )
+                    commit_diagnostics(db)
+                except Exception:
+                    pass
+            n = _create_one_published_article_from_connector_targets(
                 db,
                 connector_id=connector_id,
                 connector_name=connector_name,
@@ -483,6 +520,35 @@ def create_published_articles_for_connector_targets(
                 connector_rank=rank,
                 connector_pool_size=pool_n,
             )
+            total += n
+            if verbose_news:
+                try:
+                    from .sync_diagnostic_log import commit_diagnostics, write as diag_write
+
+                    diag_write(
+                        db,
+                        step="ingest_item_done",
+                        message=f"#{rank + 1}/{pool_n} 结束 created={n} title={title_prev!r}",
+                        connector_id=connector_id,
+                        source_key=sk or None,
+                    )
+                    commit_diagnostics(db)
+                except Exception:
+                    pass
+        if verbose_news:
+            try:
+                from .sync_diagnostic_log import commit_diagnostics, write as diag_write
+
+                diag_write(
+                    db,
+                    step="ingest_summary",
+                    message=f"pack 入库汇总：{total}/{pool_n} 篇新建",
+                    connector_id=connector_id,
+                    source_key=sk or None,
+                )
+                commit_diagnostics(db)
+            except Exception:
+                pass
         return total
     return _create_one_published_article_from_connector_targets(
         db,

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 # 写入 batch_start 消息，便于确认线上是否已部署最新诊断提交逻辑。
-DIAG_PIPELINE_VERSION = "6"
+DIAG_PIPELINE_VERSION = "7"
 
 # 仅保留关键 info（批次/连接器起止 + 拉取/入库进度）；warn/error 始终入库。
 _KEY_INFO_STEPS: frozenset[str] = frozenset(
@@ -15,10 +15,15 @@ _KEY_INFO_STEPS: frozenset[str] = frozenset(
         "batch_done",
         "connector_start",
         "connector_fetch",
+        "news_fetch_stats",
         "ingest_pack",
+        "ingest_item",
+        "ingest_item_done",
+        "ingest_summary",
         "connector_done",
         "connector_aborted",
         "auth_missing",
+        "llm_polish_retry",
     }
 )
 

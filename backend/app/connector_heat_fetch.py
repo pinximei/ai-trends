@@ -630,24 +630,52 @@ def _merge_query(url: str, extra: dict[str, str]) -> str:
     return urlunsplit((parts.scheme or "https", parts.netloc, parts.path, urlencode(q), parts.fragment))
 
 
-def _newsapi_pack_from_body(body: dict[str, Any], *, n: int) -> tuple[list[dict[str, Any]], str]:
+def _newsapi_pack_from_body(body: dict[str, Any], *, n: int) -> tuple[list[dict[str, Any]], str, dict[str, int]]:
     articles = body.get("articles")
     if not isinstance(articles, list) or not articles:
-        return [], "no_articles"
+        return [], "no_articles", {"articles_in_response": 0, "skip_bad_row": 0, "skip_no_title_url": 0, "skip_ai_filter": 0, "packed": 0}
+    stats = {
+        "articles_in_response": len(articles),
+        "skip_bad_row": 0,
+        "skip_no_title_url": 0,
+        "skip_ai_filter": 0,
+        "packed": 0,
+    }
     normed: list[dict[str, Any]] = []
     for art in articles:
         if not isinstance(art, dict):
+            stats["skip_bad_row"] += 1
             continue
         row = _normalize_newsapi_article(art)
         if not row["title"] or not row["url"]:
+            stats["skip_no_title_url"] += 1
             continue
         if not _news_text_ai_relevant(row["title"], row["description"]):
+            stats["skip_ai_filter"] += 1
             continue
         normed.append(row)
     normed = normed[:n]
+    stats["packed"] = len(normed)
     if not normed:
-        return [], "no_ai_articles"
-    return normed, "newsapi_ok"
+        note = "no_ai_articles" if stats["skip_ai_filter"] else "no_articles"
+        return [], note, stats
+    return normed, "newsapi_ok", stats
+
+
+def _news_fetch_diag_message(source: str, note: str, stats: dict[str, int]) -> str:
+    """供同步日志展示的拉取过滤统计（不含密钥）。"""
+    parts = [f"source={source}", f"note={note}"]
+    for k in (
+        "articles_in_response",
+        "raw_rows",
+        "skip_bad_row",
+        "skip_no_title_url",
+        "skip_ai_filter",
+        "packed",
+    ):
+        if k in stats:
+            parts.append(f"{k}={stats[k]}")
+    return " ".join(parts)
 
 
 def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
@@ -662,6 +690,7 @@ def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int 
         urls_to_try.append(_merge_query(NEWSAPI_TOP_HEADLINES_DEFAULT, {"pageSize": str(max(n, 20))}))
     last_code, last_text = 0, ""
     last_note = ""
+    last_stats: dict[str, int] = {}
     try:
         with httpx.Client(timeout=45.0, follow_redirects=True) as client:
             for api_url in urls_to_try:
@@ -676,18 +705,23 @@ def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int 
                     continue
                 if not isinstance(body, dict):
                     continue
-                normed, last_note = _newsapi_pack_from_body(body, n=n)
+                normed, last_note, last_stats = _newsapi_pack_from_body(body, n=n)
                 if normed:
                     pack = {
                         "connector_sync_items_v1": [
                             {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in normed
                         ],
                         "note": "newsapi_everything" if "everything" in api_url else "newsapi_v2",
+                        "diag": last_stats,
                     }
                     return 200, _trim_pack_json(pack)
             if last_code and 200 <= last_code < 300:
                 return 200, json.dumps(
-                    {"connector_sync_items_v1": [], "note": last_note or "no_articles"},
+                    {
+                        "connector_sync_items_v1": [],
+                        "note": last_note or "no_articles",
+                        "diag": last_stats,
+                    },
                     ensure_ascii=False,
                 )
             return last_code or 0, last_text
@@ -722,14 +756,25 @@ def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | 
                 for _cat, rows in data.items():
                     if isinstance(rows, list):
                         flat.extend([x for x in rows if isinstance(x, dict)])
+            stats = {
+                "raw_rows": len(flat),
+                "skip_no_title_url": 0,
+                "skip_ai_filter": 0,
+                "packed": 0,
+            }
             if not flat:
-                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_data"}, ensure_ascii=False)
+                return 200, json.dumps(
+                    {"connector_sync_items_v1": [], "note": "no_data", "diag": stats},
+                    ensure_ascii=False,
+                )
             normed: list[dict[str, Any]] = []
             for art in flat:
                 row = _normalize_thenewsapi_article(art)
                 if not row["title"] or not row["url"]:
+                    stats["skip_no_title_url"] += 1
                     continue
                 if not _news_text_ai_relevant(row["title"], row["description"]):
+                    stats["skip_ai_filter"] += 1
                     continue
                 normed.append(row)
             try:
@@ -740,13 +785,19 @@ def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | 
             except (TypeError, ValueError):
                 pass
             normed = normed[:n]
+            stats["packed"] = len(normed)
             if not normed:
-                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_ai_articles"}, ensure_ascii=False)
+                note = "no_ai_articles" if stats["skip_ai_filter"] else "no_data"
+                return 200, json.dumps(
+                    {"connector_sync_items_v1": [], "note": note, "diag": stats},
+                    ensure_ascii=False,
+                )
             pack = {
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in normed
                 ],
                 "note": "thenewsapi_top",
+                "diag": stats,
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

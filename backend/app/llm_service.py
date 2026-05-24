@@ -403,6 +403,20 @@ def polish_connector_article(
         if validate_llm_polish_for_publish(out):
             return out, ""
         reject = _describe_polish_reject(out)
+        try:
+            from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
+
+            diag_write(
+                db,
+                level="warn",
+                step="llm_polish_retry",
+                message=f"source={admin_source_key} ref={ref_id[:32]} 首次校验未通过：{reject}",
+                source_key=(admin_source_key or "").strip().lower() or None,
+                run_id=get_current_run_id(),
+            )
+            commit_diagnostics(db)
+        except Exception:
+            pass
         repair_user = (
             f"{user}\n\n【上次输出未通过校验】{reject}\n"
             "请重新输出完整 JSON：tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
