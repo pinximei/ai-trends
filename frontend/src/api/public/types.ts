@@ -23,7 +23,7 @@ export type ArticleCard = {
   /** Product Hunt / HF Spaces 等封面图 */
   cover_image_url?: string | null;
   categories?: string[];
-  /** LLM 复刻难度 S/A/B/C（S 最易抄） */
+  /** LLM 可复刻性档位 S/A/B/C（S=高可复刻） */
   replication_tier?: string | null;
 };
 

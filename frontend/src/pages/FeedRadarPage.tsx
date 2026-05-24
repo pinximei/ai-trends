@@ -664,7 +664,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                               {tierBadge ? (
                                 <span
                                   className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800"
-                                  title={`复刻难度 ${(a.replication_tier || "").trim().toUpperCase()}`}
+                                  title={`可复刻性 ${(a.replication_tier || "").trim().toUpperCase()} 档`}
                                 >
                                   {tierBadge}
                                 </span>

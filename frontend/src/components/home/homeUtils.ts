@@ -20,13 +20,13 @@ export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], stri
 export type HeatTier = "blazing" | "hot" | "fresh";
 
 const REPLICATION_TIER_LABEL: Record<string, string> = {
-  S: "易复刻",
-  A: "可抄",
-  B: "中等",
-  C: "难抄",
+  S: "高可复刻",
+  A: "较高可复刻",
+  B: "可复刻性中",
+  C: "低可复刻",
 };
 
-/** 列表卡片复刻难度徽章文案；无档位时返回 null。 */
+/** 列表卡片可复刻性档位徽章；无档位时返回 null。 */
 export function replicationTierLabel(tier: string | null | undefined): string | null {
   const k = (tier || "").trim().toUpperCase();
   return REPLICATION_TIER_LABEL[k] ?? null;

@@ -559,7 +559,7 @@ FACET_PRIMARY_CATEGORIES: tuple[str, ...] = (
     "模型层(谨慎)",
     "开源客户端(好抄)",
     "应用产品",
-    "易复刻",
+    "高可复刻",
     "已验证变现",
     "变现案例",
     "数据算力",
@@ -574,22 +574,28 @@ _LEGACY_CATEGORY_ALIASES: dict[str, str] = {
     "大模型": "模型层(谨慎)",
     "开源工具": "开源客户端(好抄)",
     "论文研究": "模型层(谨慎)",
+    "易复刻": "高可复刻",
 }
 
 REPLICATION_TIER_ALLOWED: frozenset[str] = frozenset({"S", "A", "B", "C"})
 
 
 def normalize_replication_tier(raw: object) -> str | None:
-    """LLM 复刻难度档位：S=极易 … C=难；兼容中文别名。"""
+    """LLM 可复刻性档位：S=高可复刻 … C=低可复刻；兼容中文别名。"""
     s = str(raw or "").strip().upper()
     if not s:
         return None
     alias = {
         "易": "S",
         "易复刻": "S",
+        "高可复刻": "S",
+        "极高": "S",
         "极易": "S",
+        "较高可复刻": "A",
+        "可复刻": "A",
         "A级": "A",
         "B级": "B",
+        "低可复刻": "C",
         "难": "C",
         "困难": "C",
     }
@@ -607,7 +613,7 @@ FACET_DISPLAY_ORDER: tuple[str, ...] = (*FACET_PRIMARY_CATEGORIES, FACET_CATEGOR
 _CATEGORY_KEYWORD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("变现案例", ("acquire", "并购", "出售", "arr", "mrr", "估值", "退出")),
     ("已验证变现", ("付费", "订阅", "营收", "变现", "商业化", "saas 收入")),
-    ("易复刻", ("复刻", "克隆", "mvp", "一周", "独立开发", "side project")),
+    ("高可复刻", ("高可复刻", "易复刻", "复刻", "克隆", "mvp", "一周", "独立开发", "side project")),
     ("Agent", ("agent", "智能体", "工作流", "自动化")),
     ("政策市场", ("政策", "监管", "市场", "融资")),
     ("安全合规", ("安全", "对齐", "合规", "隐私", "风险")),

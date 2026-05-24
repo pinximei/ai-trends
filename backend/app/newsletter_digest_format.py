@@ -35,15 +35,34 @@ def build_digest_subject_default(digest_date: str, apps: list[Any], news: list[A
     return f"AiTrends 每日精选 · {d}"
 
 
+_TIER_LABEL: dict[str, str] = {
+    "S": "高可复刻",
+    "A": "较高可复刻",
+    "B": "可复刻性中",
+    "C": "低可复刻",
+}
+
+
+def _tier_display(tier: str) -> str:
+    t = (tier or "").strip().upper()
+    if not t:
+        return ""
+    return _TIER_LABEL.get(t, f"{t} 档")
+
+
 def _why_follow(a: Any, *, feed_kind: str) -> str:
     tier = (getattr(a, "replication_tier", None) or "").strip().upper()
     if feed_kind == "apps":
+        if tier == "S":
+            return "高可复刻：产品边界清晰，适合独立开发者快速验证 MVP 与变现假设"
         if tier == "A":
-            return "复刻难度较低，适合独立开发者快速做 MVP 验证"
+            return "较高可复刻：形态明确，可参考其技术栈与用户路径做 1 月内验证"
         if tier == "B":
-            return "具备明确商业形态，可参考产品结构与变现路径"
+            return "可复刻性中等，需更多工程投入，建议结合站内详情评估范围"
+        if tier == "C":
+            return "低可复刻：偏基础设施或强依赖闭源能力，更适合跟踪趋势而非直接抄"
         if tier:
-            return f"已标注复刻档位 {tier}，建议结合站内详情评估"
+            return f"可复刻性 {_tier_display(tier)}，建议结合站内详情评估"
         return "热度靠前，适合作为今日可跟进的应用样本"
     return "当日高热度资讯，建议了解对行业与产品方向的影响"
 
@@ -54,7 +73,7 @@ def _highlight_item_lines(articles: list[Any], *, feed_kind: str) -> list[str]:
         title = _snippet((getattr(a, "title", None) or "无标题"), max_len=64)
         intro = _snippet(getattr(a, "summary", None) or "", max_len=_HIGHLIGHT_SNIP)
         tier = (getattr(a, "replication_tier", None) or "").strip()
-        tier_s = f" · 复刻{tier}" if tier and feed_kind == "apps" else ""
+        tier_s = f" · {_tier_display(tier)}" if tier and feed_kind == "apps" else ""
         aid = int(getattr(a, "id", 0) or 0)
         lines.append(f"### {i}. {title}{tier_s}")
         lines.append(f"- **介绍**：{intro or '见站内详情'}")

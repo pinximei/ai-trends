@@ -2462,7 +2462,7 @@ export function App() {
                     />
                   </div>
                   <p className="muted" style={{ gridColumn: "1 / -1", margin: 0 }}>
-                    推送正文：热度 Top N 作为「亮点应用/资讯」单独介绍，其余为简明列表；不二次 LLM 写正文。Top N 标题亦用于生成主题（设为 0 则不用 LLM 写标题，亮点仍默认 Top 3）。
+                    推送正文：热度 Top N 作为「亮点应用/资讯」单独介绍，其余为简明列表；不二次 LLM 写正文。应用档位以「高可复刻」等为口径（S=高可复刻）。Top N 标题亦用于生成主题（设为 0 则不用 LLM 写标题，亮点仍默认 Top 3）。
                   </p>
                   <div className="form-field" style={{ maxWidth: 120 }}>
                     <label>发送时刻 · 时（0～23）</label>

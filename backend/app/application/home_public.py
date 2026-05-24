@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..domain.articles import FEED_APPS_KEYS
 from ..product_models import Article, Industry
+
+# 首页「亮点应用」：S=高可复刻优先，不足时用 A=较高可复刻补足
+HOME_REPLICABLE_TIERS: tuple[str, ...] = ("S", "A")
 
 
 def _industry_article_ids(db: Session, *, industry_slug: str) -> list[int]:
@@ -149,6 +152,21 @@ def _home_pick_relaxed_ok(item: dict) -> bool:
     return bool(summary) or float(item.get("heat_score") or 0.0) > 0
 
 
+def _article_ids(items: list[dict]) -> set[int]:
+    out: set[int] = set()
+    for it in items:
+        aid = it.get("id")
+        if aid is not None:
+            out.add(int(aid))
+    return out
+
+
+def _exclude_article_ids(items: list[dict], exclude: set[int]) -> list[dict]:
+    if not exclude:
+        return list(items)
+    return [it for it in items if it.get("id") is not None and int(it["id"]) not in exclude]
+
+
 def _select_home_picks(items: list[dict], limit: int) -> list[dict]:
     """
     优先高质量条目；不足时用热度榜回填，避免首页整块空白。
@@ -229,10 +247,19 @@ def get_home_editorial_picks(
     }
 
 
-def _group_source_lanes(items: list[dict], *, per_source: int = 1) -> list[dict]:
-    """按内置主数据源各取热度最高的一条，供首页「多源雷达」展示。"""
+def _group_source_lanes(
+    items: list[dict],
+    *,
+    per_source: int = 1,
+    exclude_ids: set[int] | None = None,
+) -> list[dict]:
+    """按内置主数据源各取热度最高的一条，供首页「多源雷达」展示；可跳过已在它区展示的文章。"""
+    skip = exclude_ids or set()
     buckets: dict[str, list[dict]] = {k: [] for k in HOME_MAIN_SOURCE_KEYS}
     for it in items:
+        aid = it.get("id")
+        if aid is not None and int(aid) in skip:
+            continue
         k = (it.get("admin_source_key") or "").strip().lower()
         if k not in buckets or len(buckets[k]) >= per_source:
             continue
@@ -293,18 +320,70 @@ def _merge_source_facets(news_facets: list[dict], apps_facets: list[dict]) -> li
     return out
 
 
+def list_highlight_replicable_apps(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    limit: int = 6,
+    published_within_days: int = 30,
+    tiers: tuple[str, ...] = HOME_REPLICABLE_TIERS,
+) -> list[dict]:
+    """首页亮点应用：feed=apps 且可复刻档位为 S/A，S 优先、再按热度。"""
+    from .article_public import _admin_source_label_by_key, _feed_card_from_article
+
+    lim = max(1, min(int(limit), 12))
+    days = max(1, min(int(published_within_days), 120))
+    tier_set = {str(t).strip().upper() for t in tiers if str(t).strip()}
+    if not tier_set:
+        tier_set = set(HOME_REPLICABLE_TIERS)
+
+    industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
+    if not industry_ids:
+        return []
+
+    since = datetime.utcnow() - timedelta(days=days)
+    tier_rank = case(
+        (func.upper(Article.replication_tier) == "S", 0),
+        (func.upper(Article.replication_tier) == "A", 1),
+        else_=2,
+    )
+    rows = list(
+        db.scalars(
+            select(Article)
+            .where(
+                Article.industry_id.in_(industry_ids),
+                Article.status == "published",
+                Article.published_at.is_not(None),
+                Article.published_at >= since,
+                Article.feed_kind == "apps",
+                func.upper(Article.replication_tier).in_(tier_set),
+            )
+            .order_by(
+                tier_rank,
+                desc(Article.heat_score),
+                desc(Article.published_at),
+                desc(Article.id),
+            )
+            .limit(lim)
+        ).all()
+    )
+    label_by_key = _admin_source_label_by_key(db)
+    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
+
+
 def get_home_dashboard(
     db: Session,
     *,
     industry_slug: str = "ai",
     news_limit: int = 8,
     apps_limit: int = 10,
+    replicable_apps_limit: int = 6,
     published_within_days: int = 30,
 ) -> dict:
     """
-    首页一站式数据：热度精选、趋势、五路雷达、来源/话题统计。
+    首页一站式数据：亮点应用、资讯/应用精选、五路雷达、趋势与统计。
 
-    比多次请求 editorial-picks + trend-overview 更省往返，并附带跨源聚合。
+    各区块互斥：亮点应用 id 不出现在热力榜与雷达应用源；资讯精选 id 不出现在雷达资讯源。
     """
     from .article_public import (
         list_article_category_facets,
@@ -347,10 +426,24 @@ def get_home_dashboard(
 
     news_raw_items = news_raw.get("items") or []
     apps_raw_items = apps_raw.get("items") or []
+
+    highlight_replicable_apps = list_highlight_replicable_apps(
+        db,
+        industry_slug=industry_slug,
+        limit=replicable_apps_limit,
+        published_within_days=days,
+    )
+    highlight_ids = _article_ids(highlight_replicable_apps)
+
     news_items = _select_home_picks(news_raw_items, nl)
-    apps_items = _select_home_picks(apps_raw_items, al)
-    news_pool = _select_home_picks(news_raw_items, min(len(news_raw_items), 48))
-    apps_pool = _select_home_picks(apps_raw_items, min(len(apps_raw_items), 48))
+    news_pick_ids = _article_ids(news_items)
+
+    apps_items = _select_home_picks(_exclude_article_ids(apps_raw_items, highlight_ids), al)
+    apps_pick_ids = _article_ids(apps_items)
+    apps_radar_skip = highlight_ids | apps_pick_ids
+
+    news_pool = _exclude_article_ids(news_raw_items, news_pick_ids)
+    apps_pool = _exclude_article_ids(apps_raw_items, apps_radar_skip)
 
     facet_kw = dict(
         industry_slug=industry_slug,
@@ -366,12 +459,13 @@ def get_home_dashboard(
     return {
         "news": news_items,
         "apps": apps_items,
+        "highlight_replicable_apps": highlight_replicable_apps,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
         "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
         "trend": trend,
-        "news_source_lanes": _group_source_lanes(news_pool),
-        "apps_source_lanes": _group_source_lanes(apps_pool),
+        "news_source_lanes": _group_source_lanes(news_pool, exclude_ids=news_pick_ids),
+        "apps_source_lanes": _group_source_lanes(apps_pool, exclude_ids=apps_radar_skip),
         "source_facets": _merge_source_facets(news_sources, apps_sources),
         "top_categories": top_categories,
         "active_source_count": len(_merge_source_facets(news_sources, apps_sources)),

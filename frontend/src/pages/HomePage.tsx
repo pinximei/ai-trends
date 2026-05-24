@@ -1,17 +1,7 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Brain,
-  ChevronRight,
-  Download,
-  Flame,
-  LayoutGrid,
-  Mail,
-  Newspaper,
-  Radar,
-  Wrench,
-} from "lucide-react";
+import { Brain, Flame, Mail, Radar, Sparkles, Wrench } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
@@ -467,6 +457,7 @@ export function HomePage() {
   const { t } = useI18n();
   const [news, setNews] = useState<ArticleFeedCard[]>([]);
   const [apps, setApps] = useState<ArticleFeedCard[]>([]);
+  const [highlightApps, setHighlightApps] = useState<ArticleFeedCard[]>([]);
   const [newsLanes, setNewsLanes] = useState<SourceLane[]>([]);
   const [appsLanes, setAppsLanes] = useState<SourceLane[]>([]);
   const [sourceFacets, setSourceFacets] = useState<
@@ -498,15 +489,6 @@ export function HomePage() {
   }, [trendOverview]);
 
   const mergedLanes = useMemo(() => mergeSourceLanes(newsLanes, appsLanes), [newsLanes, appsLanes]);
-
-  const quickNav = useMemo(
-    () => [
-      { to: "/news", label: t("homeGoNewsRadar"), Icon: Newspaper, grad: "from-violet-600 to-indigo-600" },
-      { to: "/apps", label: t("homeGoAppsRadar"), Icon: LayoutGrid, grad: "from-sky-500 to-blue-600" },
-      { to: "/downloads", label: t("homePopularCat5Title"), Icon: Download, grad: "from-emerald-500 to-teal-600" },
-    ],
-    [t],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -552,6 +534,7 @@ export function HomePage() {
         if (cancelled) return;
         setNews(nextNews);
         setApps(nextApps);
+        setHighlightApps(data.highlight_replicable_apps ?? []);
         setNewsLanes(data.news_source_lanes ?? []);
         setAppsLanes(data.apps_source_lanes ?? []);
         setSourceFacets(data.source_facets ?? []);
@@ -572,9 +555,11 @@ export function HomePage() {
           if (!cancelled) {
             setNews([]);
             setApps([]);
+            setHighlightApps([]);
           }
         }
         if (!cancelled) {
+          setHighlightApps([]);
           setNewsLanes([]);
           setAppsLanes([]);
           setSourceFacets([]);
@@ -626,21 +611,6 @@ export function HomePage() {
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
             {t("homeMainHeroDesc")}
           </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
-            <Link
-              to="/news"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
-            >
-              {t("homeMainHeroCta1")}
-              <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
-            </Link>
-            <Link
-              to="/apps"
-              className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-7 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700 sm:text-[15px]"
-            >
-              {t("homeMainHeroCta2")}
-            </Link>
-          </div>
         </div>
         <div className="flex min-w-0 items-center justify-center px-2 py-2 sm:px-4 lg:px-6">
           <div className="w-full max-w-[min(100%,380px)] shrink-0 sm:max-w-[400px]">
@@ -789,6 +759,26 @@ export function HomePage() {
       </section>
 
       <HomeSection
+        title={t("homeHighlightReplicableApps")}
+        subtitle={t("homeHighlightReplicableAppsSub")}
+        icon={<Sparkles className="h-5 w-5 text-sky-600" strokeWidth={2} />}
+      >
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : highlightApps.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-8 text-center text-sm text-slate-600">
+            {t("homeHighlightReplicableAppsEmpty")}
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {highlightApps.map((item) => (
+              <HomeArticleTile key={item.id} item={item} variant="tile" />
+            ))}
+          </div>
+        )}
+      </HomeSection>
+
+      <HomeSection
         title={t("homeSourceRadar")}
         subtitle={t("homeSourceRadarSub")}
         icon={<Radar className="h-5 w-5" strokeWidth={2} />}
@@ -862,7 +852,7 @@ export function HomePage() {
             )}
           </HomeSection>
 
-          <HomeSection title={t("homeNewsWall")} action={{ label: t("homeGoNewsRadar"), to: "/news" }}>
+          <HomeSection title={t("homeNewsWall")}>
             {loading ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
             ) : newsWall.length === 0 ? (
@@ -879,10 +869,9 @@ export function HomePage() {
 
         <aside className="space-y-6 lg:col-span-4 lg:space-y-8">
           <HomeSection
-            title={t("homePopularTools")}
+            title={t("homeAppsLeaderboard")}
             subtitle={t("homeAppsLeaderboardSub")}
             icon={<Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />}
-            action={{ label: t("homeGoAppsRadar"), to: "/apps" }}
           >
             {loading ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
@@ -898,25 +887,6 @@ export function HomePage() {
           </HomeSection>
         </aside>
       </div>
-
-      <HomeSection title={t("homeQuickNav")}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {quickNav.map(({ to, label, Icon, grad }) => (
-            <Link
-              key={to}
-              to={to}
-              className="ui-card group flex items-center gap-3 rounded-xl p-4 transition hover:border-violet-300 hover:shadow-md"
-            >
-              <span
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${grad} text-white shadow-sm`}
-              >
-                <Icon className="h-5 w-5" strokeWidth={1.75} />
-              </span>
-              <span className="text-sm font-bold text-slate-900 group-hover:text-violet-700">{label}</span>
-            </Link>
-          ))}
-        </div>
-      </HomeSection>
 
       {HOME_NEWSLETTER_VISIBLE ? (
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">

@@ -71,7 +71,7 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
         {item.platform_label || t("source")}
       </span>
       {tierLabel ? (
-        <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800" title={`复刻难度 ${tier}`}>
+        <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800" title={`可复刻性 ${tier} 档`}>
           {tierLabel}
         </span>
       ) : null}

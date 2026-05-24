@@ -114,17 +114,20 @@ export const publicApi = {
     industry_slug?: string;
     news_limit?: number;
     apps_limit?: number;
+    replicable_apps_limit?: number;
     published_within_days?: number;
   }) => {
     const sp = new URLSearchParams();
     if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
     if (opts?.news_limit != null) sp.set("news_limit", String(opts.news_limit));
     if (opts?.apps_limit != null) sp.set("apps_limit", String(opts.apps_limit));
+    if (opts?.replicable_apps_limit != null) sp.set("replicable_apps_limit", String(opts.replicable_apps_limit));
     if (opts?.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
     const qs = sp.toString();
     return publicGet<{
       news: ArticleFeedCard[];
       apps: ArticleFeedCard[];
+      highlight_replicable_apps: ArticleFeedCard[];
       featured_news_id: number | null;
       pick_window_days: number;
       scoring_note: string;
