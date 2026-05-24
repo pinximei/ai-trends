@@ -204,17 +204,19 @@ function buildSparklinePaths(values: number[], width = 280, height = 100): { are
   return { area, line };
 }
 
-function TrendSparkline({ values }: { values: number[] }) {
+function TrendSparkline({ values, tall = false }: { values: number[]; tall?: boolean }) {
   const paths = buildSparklinePaths(values);
+  const emptyH = tall ? "h-40 sm:h-48 lg:h-52" : "h-36 sm:h-40";
+  const chartH = tall ? "h-36 w-full sm:h-44 lg:h-52 xl:h-56" : "h-28 w-full sm:h-32";
   if (!paths) {
     return (
-      <div className="flex h-36 items-center justify-center text-xs text-slate-400 sm:h-40">
+      <div className={`flex items-center justify-center text-xs text-slate-400 ${emptyH}`}>
         —
       </div>
     );
   }
   return (
-    <svg viewBox="0 0 280 100" className="h-28 w-full text-violet-500 sm:h-32" aria-hidden>
+    <svg viewBox="0 0 280 100" className={`${chartH} text-violet-500`} aria-hidden>
       <defs>
         <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity="0.35" />
@@ -386,8 +388,8 @@ export function HomePage() {
 
   return (
     <div className="w-full space-y-5 lg:space-y-6">
-      <section className="relative overflow-visible lg:min-h-[20rem] xl:min-h-[22rem]">
-        <div className="relative z-10 max-w-xl text-center lg:max-w-lg lg:pt-1 lg:text-left">
+      <section className="grid items-center gap-6 overflow-visible lg:grid-cols-2 lg:gap-8 lg:py-2 xl:gap-10">
+        <div className="relative z-10 min-w-0 text-center lg:max-w-lg lg:text-left">
           <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
             {t("homeMainHeroTitle")}
           </h1>
@@ -410,15 +412,15 @@ export function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="mt-6 flex justify-center lg:pointer-events-none lg:absolute lg:inset-0 lg:mt-0 lg:items-center lg:justify-center">
-          <div className="w-full max-w-[min(100%,340px)] shrink-0 lg:pointer-events-auto sm:max-w-[380px]">
+        <div className="flex min-w-0 justify-center lg:justify-end lg:pl-4 xl:pl-8">
+          <div className="w-full max-w-[min(100%,380px)] shrink-0 sm:max-w-[400px] lg:max-w-[min(100%,420px)]">
             <HeroGraphic />
           </div>
         </div>
       </section>
 
       <section className="ui-card overflow-hidden p-4 sm:p-5">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-stretch xl:grid-cols-[minmax(0,1.15fr)_minmax(0,22rem)]">
+        <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
           {!loading && trendOverview ? (
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
@@ -471,26 +473,28 @@ export function HomePage() {
           ) : null}
 
           <div
-            className={`min-w-0 ${!loading && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0" : ""}`}
+            className={`flex min-w-0 flex-col ${!loading && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}`}
           >
-            <p className="text-xs font-bold text-slate-900">{t("homeAiTrend")}</p>
-            <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendChartTitle")}</p>
+            <p className="text-sm font-bold text-slate-900">{t("homeAiTrend")}</p>
+            <p className="mt-1 text-xs text-slate-500">{t("homeTrendChartTitle")}</p>
             <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendDataNote")}</p>
-            <div className="mt-3 rounded-xl bg-slate-50/90 px-2 py-2 ring-1 ring-slate-100">
+            <div className="mt-3 flex flex-1 flex-col rounded-xl bg-slate-50/90 px-3 py-3 ring-1 ring-slate-100">
               {loading ? (
-                <div className="flex h-28 items-center justify-center text-xs text-slate-400 sm:h-32">{t("homeLoading")}</div>
+                <div className="flex min-h-[10rem] flex-1 items-center justify-center text-xs text-slate-400 lg:min-h-[13rem]">
+                  {t("homeLoading")}
+                </div>
               ) : (
-                <TrendSparkline values={sparklineValues} />
+                <TrendSparkline values={sparklineValues} tall />
               )}
             </div>
             {topCategories.length > 0 ? (
-              <div className="mt-3 border-t border-slate-100 pt-3">
+              <div className="mt-4 border-t border-slate-100 pt-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {topCategories.slice(0, 6).map((c) => (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {topCategories.slice(0, 10).map((c) => (
                     <span
                       key={c.label}
-                      className="rounded-full border border-violet-200 bg-violet-50/80 px-2.5 py-0.5 text-[10px] font-medium text-violet-900"
+                      className="rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1 text-xs font-medium text-violet-900"
                     >
                       {c.label}
                       <span className="ml-0.5 tabular-nums text-violet-600/80">{c.count}</span>
