@@ -94,12 +94,12 @@ function HeroGraphic() {
   return (
     <div
       data-testid="hero-graphic"
-      className="relative mx-auto w-full max-w-[min(100%,100%)] shrink-0 overflow-visible px-0 py-0"
+      className="relative mx-auto w-full max-w-[min(100%,392px)] shrink-0 overflow-visible px-0 py-0 sm:max-w-[416px] sm:px-0.5"
       style={heroMotionStyle}
     >
       <div
         data-orbit-square
-        className="relative isolate mx-auto aspect-square w-full max-w-[280px] overflow-visible [perspective:1000px] [perspective-origin:50%_50%] sm:max-w-[300px]"
+        className="relative isolate mx-auto aspect-square w-full max-w-[352px] overflow-visible [perspective:1000px] [perspective-origin:50%_50%] sm:max-w-[380px]"
       >
         {/* 背面大环境光（不倾斜） */}
         <div
@@ -386,32 +386,39 @@ export function HomePage() {
 
   return (
     <div className="w-full space-y-5 lg:space-y-6">
-      <section className="text-center lg:text-left">
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
-          {t("homeMainHeroTitle")}
-        </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
-          {t("homeMainHeroDesc")}
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
-          <Link
-            to="/news"
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
-          >
-            {t("homeMainHeroCta1")}
-            <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
-          </Link>
-          <Link
-            to="/apps"
-            className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-7 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700 sm:text-[15px]"
-          >
-            {t("homeMainHeroCta2")}
-          </Link>
+      <section className="relative overflow-visible lg:min-h-[20rem] xl:min-h-[22rem]">
+        <div className="relative z-10 max-w-xl text-center lg:max-w-lg lg:pt-1 lg:text-left">
+          <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
+            {t("homeMainHeroTitle")}
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
+            {t("homeMainHeroDesc")}
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
+            <Link
+              to="/news"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-105 active:scale-[0.99] sm:text-[15px]"
+            >
+              {t("homeMainHeroCta1")}
+              <ChevronRight className="h-4 w-4 opacity-90" strokeWidth={2} />
+            </Link>
+            <Link
+              to="/apps"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white px-7 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-violet-300 hover:text-violet-700 sm:text-[15px]"
+            >
+              {t("homeMainHeroCta2")}
+            </Link>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-center lg:pointer-events-none lg:absolute lg:inset-0 lg:mt-0 lg:items-center lg:justify-center">
+          <div className="w-full max-w-[min(100%,340px)] shrink-0 lg:pointer-events-auto sm:max-w-[380px]">
+            <HeroGraphic />
+          </div>
         </div>
       </section>
 
       <section className="ui-card overflow-hidden p-4 sm:p-5">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(11rem,15rem)_minmax(0,18rem)] lg:items-center xl:grid-cols-[minmax(0,1.1fr)_minmax(12rem,16rem)_minmax(0,20rem)]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-stretch xl:grid-cols-[minmax(0,1.15fr)_minmax(0,22rem)]">
           {!loading && trendOverview ? (
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
@@ -463,14 +470,8 @@ export function HomePage() {
             <div className="flex min-h-[8rem] items-center justify-center text-sm text-slate-500">{t("homeLoading")}</div>
           ) : null}
 
-          <div className="flex items-center justify-center overflow-visible py-2 lg:px-2 lg:py-0">
-            <div className="w-full max-w-[min(100%,280px)] scale-[0.88] sm:max-w-[300px] sm:scale-95 lg:max-w-[min(100%,15rem)] lg:scale-[0.82] xl:scale-90">
-              <HeroGraphic />
-            </div>
-          </div>
-
           <div
-            className={`min-w-0 border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0`}
+            className={`min-w-0 ${!loading && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0" : ""}`}
           >
             <p className="text-xs font-bold text-slate-900">{t("homeAiTrend")}</p>
             <p className="mt-0.5 text-[10px] text-slate-400">{t("homeTrendChartTitle")}</p>
