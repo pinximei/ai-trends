@@ -40,7 +40,7 @@ export function ArticleCoverVisual({
   }
   return (
     <div
-      className={`relative overflow-hidden ${fallbackClassName}`}
+      className={`relative flex items-center justify-center overflow-hidden ${fallbackClassName}`}
       style={articleThumbGradientStyle(seed)}
       aria-hidden
     >

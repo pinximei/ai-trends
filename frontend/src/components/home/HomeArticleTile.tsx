@@ -25,16 +25,24 @@ type Props = {
   rank?: number;
 };
 
+function hasCoverUrl(item: ArticleFeedCard): boolean {
+  return Boolean((item.cover_image_url || "").trim());
+}
+
 function CoverFrame({
   item,
   seed,
   className,
   aspectClass,
+  fallbackMode = "pattern",
+  initialClassName,
 }: {
   item: ArticleFeedCard;
   seed: string;
   className: string;
   aspectClass: string;
+  fallbackMode?: "initial" | "pattern";
+  initialClassName?: string;
 }) {
   return (
     <div className={`relative overflow-hidden ${aspectClass} ${className}`}>
@@ -42,9 +50,10 @@ function CoverFrame({
         coverUrl={item.cover_image_url}
         title={item.title || ""}
         seed={seed}
-        fallbackMode="pattern"
+        fallbackMode={fallbackMode}
         fallbackClassName="absolute inset-0"
         imgClassName="absolute inset-0 h-full w-full object-cover"
+        initialClassName={initialClassName}
       />
     </div>
   );
@@ -74,15 +83,26 @@ export function HomeArticleTile({ item, variant, rank }: Props) {
   let inner: ReactNode;
 
   if (variant === "spotlight") {
+    const showCover = hasCoverUrl(item);
     inner = (
-      <div className="grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-        <CoverFrame
-          item={item}
-          seed={`spot-${item.id}`}
-          className="ring-0 lg:min-h-[220px]"
-          aspectClass="aspect-[16/9] w-full lg:aspect-auto lg:h-full lg:min-h-[220px]"
-        />
-        <div className="flex flex-col justify-center gap-3 p-4 sm:p-5 lg:border-l lg:border-slate-100">
+      <div
+        className={
+          showCover ? "grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]" : ""
+        }
+      >
+        {showCover ? (
+          <CoverFrame
+            item={item}
+            seed={`spot-${item.id}`}
+            className="ring-0"
+            aspectClass="aspect-[16/9] w-full sm:aspect-[2/1] lg:aspect-[4/3] lg:max-h-[280px]"
+            fallbackMode="initial"
+            initialClassName="select-none text-5xl font-black text-white drop-shadow-lg sm:text-6xl"
+          />
+        ) : null}
+        <div
+          className={`flex flex-col justify-center gap-3 p-4 sm:p-5 ${showCover ? "lg:border-l lg:border-slate-100" : ""}`}
+        >
           <MetaRow item={item} />
           <h3 className="line-clamp-3 text-xl font-bold leading-snug text-slate-900 sm:text-2xl">{item.title}</h3>
           <p className="line-clamp-4 text-sm leading-relaxed text-slate-600">{itemBlurb(item, 220)}</p>
@@ -103,6 +123,8 @@ export function HomeArticleTile({ item, variant, rank }: Props) {
           seed={`tile-${item.id}`}
           className="shrink-0 ring-0 sm:w-32 md:w-36"
           aspectClass="aspect-[16/10] w-full sm:aspect-auto sm:h-auto sm:min-h-[6.5rem] sm:self-stretch"
+          fallbackMode="initial"
+          initialClassName="select-none text-2xl font-black text-white drop-shadow-md"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-2 p-3.5 sm:p-4">
           <MetaRow item={item} />
@@ -133,6 +155,8 @@ export function HomeArticleTile({ item, variant, rank }: Props) {
           seed={`rank-${item.id}`}
           className="h-14 w-14 shrink-0 rounded-xl ring-1 ring-slate-200/80"
           aspectClass="h-14 w-14"
+          fallbackMode="initial"
+          initialClassName="select-none text-lg font-black text-white drop-shadow-md"
         />
         <div className="min-w-0 flex-1">
           <MetaRow item={item} />
