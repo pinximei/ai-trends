@@ -51,7 +51,11 @@ from ..connector_heat_fetch import (
     sync_huggingface_spaces_top_details,
     sync_product_hunt_top_details,
 )
-from ..domain.articles import CONNECTOR_SNIPPET_MAX_CHARS, unified_editorial_heat
+from ..domain.articles import (
+    CONNECTOR_SNIPPET_MAX_CHARS,
+    parse_connector_sync_item_snippets,
+    unified_editorial_heat,
+)
 from ..source_segment_resolve import first_metric_for_segment, resolve_admin_source_key_to_segments
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin-product-extended"])
@@ -385,8 +389,6 @@ def apply_theme_to_connector_url(url: str, theme: str) -> str:
 def _snippet_pack_diag(snippet: str) -> str:
     import json
 
-    from ..domain.articles import parse_connector_sync_item_snippets
-
     s = (snippet or "")[:120000]
     n = len(parse_connector_sync_item_snippets(s) or [])
     note = ""
@@ -685,13 +687,7 @@ def run_connector_sync(
         cfg, db, connector_id=c.id, source_key=ask or ask_preview,
     )
     snip_len = len(snippet or "")
-    pack_n = 0
-    try:
-        from ..domain.articles import parse_connector_sync_item_snippets
-
-        pack_n = len(parse_connector_sync_item_snippets((snippet or "")[:120000]))
-    except Exception:
-        pack_n = 0
+    pack_n = len(parse_connector_sync_item_snippets((snippet or "")[:120000]) or [])
     diag_write(
         db,
         step="http_done",

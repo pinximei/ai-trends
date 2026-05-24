@@ -14,6 +14,7 @@ from .domain.articles import (
     CONNECTOR_HEAT_TOP_N,
     CONNECTOR_SNIPPET_MAX_CHARS,
     VALUE_SCORE_MIN,
+    parse_connector_sync_item_snippets,
     display_fingerprint,
     extract_cover_image_url,
     extract_connector_primary_url,
@@ -102,33 +103,6 @@ def _render_readable_snapshot(snippet: str) -> tuple[str, str]:
 
     val = str(payload)
     return (val[:500], val[:3000])
-
-
-CONNECTOR_SYNC_ITEMS_V1_KEY = "connector_sync_items_v1"
-
-
-def parse_connector_sync_item_snippets(snippet: str) -> list[str] | None:
-    """若顶层为 ``connector_sync_items_v1`` 多段 pack，返回各段独立 JSON 字符串供逐条入库。"""
-    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
-    if not s:
-        return None
-    try:
-        root = json.loads(s)
-    except Exception:
-        return None
-    if not isinstance(root, dict):
-        return None
-    raw_items = root.get(CONNECTOR_SYNC_ITEMS_V1_KEY)
-    if not isinstance(raw_items, list) or not raw_items:
-        return None
-    out: list[str] = []
-    for it in raw_items[:15]:
-        if not isinstance(it, dict):
-            continue
-        chunk = it.get("snippet")
-        if isinstance(chunk, str) and chunk.strip():
-            out.append(chunk.strip()[:CONNECTOR_SNIPPET_MAX_CHARS])
-    return out or None
 
 
 def _apply_github_engagement_to_article(
