@@ -21,26 +21,29 @@ ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "backend" / "data" / "_verify_e2e.sqlite3"
 
 
-def _fake_polish(*_a, **_k) -> dict:
-    return {
-        "title": "验证：连接器同步快照",
-        "summary": "本地端到端脚本写入：模拟 LLM 润色后的摘要，用于确认 product_articles 与公开 feed 接口字段一致。",
-        "body_md": "## 验证\n\n占位正文；生产环境为模型根据原始片段重写。",
-        "categories": ["大模型"],
-        "feed_kind": "news",
-        "tabs": [
-            {
-                "label": "要点",
-                "summary": "从数据源 HTTP 响应提炼的结构化要点（脚本占位）。",
-                "body_md": "- 拉取成功\n- 规则价值分通过阈值\n- 已写入 product_articles",
-            },
-            {
-                "label": "说明",
-                "summary": "本段由验证脚本注入，不代表真实模型输出。",
-                "body_md": "配置 AITRENDS_LLM_API_KEY 后，此处为 DeepSeek 等对原始 JSON 的重写与分 tab。",
-            },
-        ],
-    }
+def _fake_polish(*_a, feed_kind: str = "news", **_k) -> tuple[dict, str]:
+    return (
+        {
+            "title": "验证：连接器同步快照",
+            "summary": "本地端到端脚本写入：模拟 LLM 润色后的摘要，用于确认 product_articles 与公开 feed 接口字段一致。" + "验" * 20,
+            "body_md": "## 验证\n\n占位正文；生产环境为模型根据原始片段重写。\n\n" + "正文" * 60,
+            "categories": ["大模型"],
+            "feed_kind": feed_kind if feed_kind in ("news", "apps") else "news",
+            "tabs": [
+                {
+                    "label": "描述",
+                    "summary": "从数据源 HTTP 响应提炼的结构化描述（脚本占位）。" + "述" * 40,
+                    "body_md": "拉取成功；规则价值分通过阈值；将写入 product_articles。\n\n" + "内容" * 80,
+                },
+                {
+                    "label": "数据支撑",
+                    "summary": "数据支撑摘要占位" + "数" * 4,
+                    "body_md": "| 步骤 | 状态 |\n| --- | --- |\n| HTTP | OK |\n" + "补充" * 25,
+                },
+            ],
+        },
+        "",
+    )
 
 
 def main() -> int:
@@ -82,8 +85,14 @@ def main() -> int:
         conn.min_interval_seconds = 0
         db.commit()
 
-        with patch("backend.app.llm_service.polish_connector_article", new=_fake_polish):
+        import backend.app.llm_service as llm_mod
+
+        saved = llm_mod.polish_connector_article
+        llm_mod.polish_connector_article = _fake_polish
+        try:
             out = run_connector_sync(db, conn.id, actor="verify-script", bypass_rate_limit=True)
+        finally:
+            llm_mod.polish_connector_article = saved
 
         if out.get("error"):
             print("FAIL run_connector_sync:", out)
