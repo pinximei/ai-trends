@@ -15,7 +15,7 @@ import {
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
-import { mergeSourceLanes, platformAccent, type SourceLane } from "@/components/home/homeUtils";
+import { HOME_SOURCE_LABELS, mergeSourceLanes, platformAccent, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
 
@@ -267,6 +267,17 @@ export function HomePage() {
     [trendOverview],
   );
 
+  const sparkSummary = useMemo(() => {
+    const spark = trendOverview?.sparkline ?? [];
+    if (!spark.length) return null;
+    const counts = spark.map((p) => p.count);
+    return {
+      sum: counts.reduce((a, n) => a + n, 0),
+      peak: Math.max(...counts),
+      last: counts[counts.length - 1] ?? 0,
+    };
+  }, [trendOverview]);
+
   const mergedLanes = useMemo(() => mergeSourceLanes(newsLanes, appsLanes), [newsLanes, appsLanes]);
 
   const quickNav = useMemo(
@@ -388,8 +399,8 @@ export function HomePage() {
 
   return (
     <div className="w-full space-y-5 lg:space-y-6">
-      <section className="grid items-center gap-6 overflow-visible lg:grid-cols-2 lg:gap-8 lg:py-2 xl:gap-10">
-        <div className="relative z-10 min-w-0 text-center lg:max-w-lg lg:text-left">
+      <section className="grid items-center gap-6 overflow-visible lg:grid-cols-[minmax(0,26rem)_1fr] lg:gap-6 lg:py-2 xl:grid-cols-[minmax(0,28rem)_1fr]">
+        <div className="relative z-10 min-w-0 text-center lg:max-w-none lg:text-left">
           <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
             {t("homeMainHeroTitle")}
           </h1>
@@ -412,8 +423,8 @@ export function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="flex min-w-0 justify-center lg:justify-end lg:pl-4 xl:pl-8">
-          <div className="w-full max-w-[min(100%,380px)] shrink-0 sm:max-w-[400px] lg:max-w-[min(100%,420px)]">
+        <div className="flex min-w-0 items-center justify-center px-2 py-2 sm:px-4 lg:px-6">
+          <div className="w-full max-w-[min(100%,380px)] shrink-0 sm:max-w-[400px]">
             <HeroGraphic />
           </div>
         </div>
@@ -424,10 +435,10 @@ export function HomePage() {
           {!loading && trendOverview ? (
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-violet-50/80 px-3 py-2.5 ring-1 ring-violet-100 sm:px-4 sm:py-3">
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+                <div className="rounded-xl bg-violet-50/80 px-3 py-2.5 ring-1 ring-violet-100">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80">{t("homeStatNewArticles")}</p>
-                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
                     {formatCount(trendOverview.news_count)}
                   </p>
                   <p className="text-xs text-slate-500">
@@ -440,9 +451,9 @@ export function HomePage() {
                     )}
                   </p>
                 </div>
-                <div className="rounded-xl bg-sky-50/80 px-3 py-2.5 ring-1 ring-sky-100 sm:px-4 sm:py-3">
+                <div className="rounded-xl bg-sky-50/80 px-3 py-2.5 ring-1 ring-sky-100">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-800/80">{t("homeStatActiveTools")}</p>
-                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
                     {formatCount(trendOverview.apps_count)}
                   </p>
                   <p className="text-xs text-slate-500">
@@ -455,18 +466,88 @@ export function HomePage() {
                     )}
                   </p>
                 </div>
-                <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200 sm:px-4 sm:py-3">
+                <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t("homeStatTotalItems")}</p>
-                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{formatCount(totalInWindow)}</p>
+                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">{formatCount(totalInWindow)}</p>
                 </div>
-                <div className="rounded-xl bg-indigo-50/80 px-3 py-2.5 ring-1 ring-indigo-100 sm:px-4 sm:py-3">
+                <div className="rounded-xl bg-indigo-50/80 px-3 py-2.5 ring-1 ring-indigo-100">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
-                  <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">
+                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
                     {sourceFacets.length}
                     <span className="text-sm font-semibold text-slate-400">/5</span>
                   </p>
                 </div>
+                {sparkSummary ? (
+                  <>
+                    <div className="rounded-xl bg-emerald-50/80 px-3 py-2.5 ring-1 ring-emerald-100">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/80">
+                        {t("homeStatTrendSum")}
+                      </p>
+                      <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
+                        {formatCount(sparkSummary.sum)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-amber-50/80 px-3 py-2.5 ring-1 ring-amber-100">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800/80">
+                        {t("homeStatTrendPeak")}
+                      </p>
+                      <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
+                        {formatCount(sparkSummary.peak)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {t("homeTrendChartTitle")} · {formatCount(sparkSummary.last)}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
               </div>
+
+              {sourceFacets.length > 0 ? (
+                <>
+                  <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeStatPerSource")}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {sourceFacets.map((f) => {
+                      const accent = platformAccent(f.key);
+                      const label =
+                        f.label ||
+                        HOME_SOURCE_LABELS[f.key as keyof typeof HOME_SOURCE_LABELS] ||
+                        f.key;
+                      const total = f.news_count + f.apps_count;
+                      return (
+                        <div
+                          key={f.key}
+                          className={`rounded-lg border-l-[3px] bg-slate-50/90 px-2.5 py-2 ring-1 ring-slate-200/90 ${accent.border}`}
+                        >
+                          <span className={`inline-block max-w-full truncate rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${accent.badge}`}>
+                            {label}
+                          </span>
+                          <p className="mt-1 text-base font-bold tabular-nums text-slate-900">{formatCount(total)}</p>
+                          <p className="text-[10px] text-slate-500">
+                            {t("homeStatNewArticles")} {f.news_count} · {t("homeStatActiveTools")} {f.apps_count}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+
+              {topCategories.length > 0 ? (
+                <>
+                  <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {topCategories.slice(0, 6).map((c) => (
+                      <div
+                        key={c.label}
+                        className="rounded-lg border border-violet-100 bg-violet-50/90 px-2.5 py-2 ring-1 ring-violet-100/80"
+                      >
+                        <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-violet-900">{c.label}</p>
+                        <p className="mt-1 text-sm font-bold tabular-nums text-violet-700">{c.count}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
           ) : loading ? (
             <div className="flex min-h-[8rem] items-center justify-center text-sm text-slate-500">{t("homeLoading")}</div>
@@ -487,22 +568,6 @@ export function HomePage() {
                 <TrendSparkline values={sparklineValues} tall />
               )}
             </div>
-            {topCategories.length > 0 ? (
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {topCategories.slice(0, 10).map((c) => (
-                    <span
-                      key={c.label}
-                      className="rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1 text-xs font-medium text-violet-900"
-                    >
-                      {c.label}
-                      <span className="ml-0.5 tabular-nums text-violet-600/80">{c.count}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
