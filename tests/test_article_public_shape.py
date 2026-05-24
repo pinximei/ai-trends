@@ -97,7 +97,7 @@ def test_validate_llm_polish_rejects_unknown_canonical() -> None:
         "title": "测试标题",
         "summary": _VALID_SUMMARY,
         "body_md": _VALID_BODY,
-        "categories": ["云计算专区"],
+        "categories": ["不可识别标签XYZ"],
         "feed_kind": "news",
         "tabs": _valid_tabs_news(),
     }
@@ -144,7 +144,7 @@ def test_validate_llm_polish_rejects_placeholder_title() -> None:
 
 
 def test_primary_canonical_prefers_first_non_other() -> None:
-    assert art.primary_canonical_from_raw_labels(["无关词", "开源工具", "foo"]) == "开源工具"
+    assert art.primary_canonical_from_raw_labels(["无关词", "开源工具", "foo"]) == "开源客户端(好抄)"
 
 
 def test_display_categories_collapses_legacy_multi() -> None:

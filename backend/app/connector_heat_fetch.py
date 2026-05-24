@@ -42,6 +42,97 @@ _GITHUB_TRENDING_SKIP_SLUGS = frozenset(
 _PER_ITEM_SNIPPET_MAX = min(48_000, CONNECTOR_SNIPPET_MAX_CHARS // 10)
 _README_MD_MAX = 24_000
 
+# GitHub Trending：仅保留「可复刻客户端 / 桌面 / 插件」向仓库
+GITHUB_CLIENT_KEYWORDS: tuple[str, ...] = (
+    "desktop-app",
+    "desktop app",
+    "desktop",
+    "tauri",
+    "electron",
+    "flutter",
+    "chrome-extension",
+    "chrome extension",
+    "browser extension",
+    "client",
+    "gui",
+    "cross-platform",
+    "cross platform",
+    "macos",
+    "windows",
+    "linux",
+    "native",
+    "swift",
+    "kotlin",
+    "react native",
+    "vscode",
+    "vs code",
+    "mobile app",
+    "ios app",
+    "android app",
+    "wpf",
+    "qt",
+    "gtk",
+)
+
+TAAFT_NEW_DEFAULT = "https://theresanaiforthat.com/new/"
+ACQUIRE_PORTAL_DEFAULT = "https://acquire.com/"
+ACQUIRE_SEARCH_API_DEFAULT = "https://us-central1-microacquire.cloudfunctions.net/v1-search"
+# 与 Acquire 官网 JS 中 anon 搜索一致的 __meta.cookie（公开页嵌入值）
+_ACQUIRE_SEARCH_META_COOKIE = "lockModeAccess=SZL1hM0m5b35UBOJTDts262pOk"
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+
+def _http_get_text(url: str, headers: dict[str, str], *, timeout: float = 45.0) -> tuple[int, str]:
+    """GET HTML；优先 curl_cffi 模拟浏览器（绕过 TAAFT Cloudflare）。"""
+    h = {
+        **headers,
+        "User-Agent": _BROWSER_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    host = (urlsplit(url).netloc or "").lower()
+    needs_browser = "theresanaiforthat.com" in host
+    last_code, last_text = 0, ""
+    for attempt in range(3):
+        try:
+            from curl_cffi import requests as cf_requests
+
+            r = cf_requests.get(
+                url,
+                headers=h,
+                impersonate="chrome131",
+                timeout=timeout,
+                allow_redirects=True,
+            )
+            last_code, last_text = int(r.status_code or 0), r.text or ""
+            if last_code == 200 and (not needs_browser or "theresanaiforthat.com/ai/" in last_text):
+                return last_code, last_text
+            if last_code == 403 and attempt < 2:
+                time.sleep(1.5 + attempt)
+                continue
+            if not needs_browser and 200 <= last_code < 300:
+                return last_code, last_text
+        except Exception:
+            if attempt < 2:
+                time.sleep(1.0)
+                continue
+        if not needs_browser:
+            break
+    if needs_browser:
+        return last_code or 403, last_text
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        r = client.get(url, headers=h)
+        return r.status_code, r.text or ""
+
+
+def acquire_search_api_is_url(url: str) -> bool:
+    p = urlsplit((url or "").strip())
+    host = (p.netloc or "").lower()
+    return "microacquire.cloudfunctions.net" in host and "/v1-search" in (p.path or "")
+
 
 def _decode_github_readme_body(readme_json: dict[str, Any]) -> str:
     enc = str(readme_json.get("encoding") or "").strip().lower()
@@ -108,6 +199,60 @@ def _github_valid_repo_slug(slug: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", s))
 
 
+def github_matches_client_filter(repo: dict[str, Any]) -> bool:
+    """Repository topics + description + 仓库名 须命中客户端/桌面/插件向关键词之一。"""
+    topics = [str(t).lower() for t in (repo.get("topics") or []) if t]
+    blob = " ".join(topics) + " " + str(repo.get("description") or "").lower()
+    blob += " " + str(repo.get("full_name") or repo.get("name") or "").lower().replace("/", " ")
+    return any(k in blob for k in GITHUB_CLIENT_KEYWORDS)
+
+
+def _github_trending_chunk_description(chunk: str) -> str:
+    p = re.search(r"<p[^>]*>([^<]{8,480})</p>", chunk, flags=re.IGNORECASE)
+    if not p:
+        return ""
+    return re.sub(r"\s+", " ", p.group(1)).strip()
+
+
+def _github_minimal_repo_from_trending_row(row: dict[str, Any]) -> dict[str, Any]:
+    """无 GitHub API 详情时，用 Trending HTML 字段拼最小仓库 JSON（供入库价值分与 LLM）。"""
+    slug = str(row.get("full_name") or "").strip()
+    owner, _, name = slug.partition("/")
+    desc = str(row.get("description") or "").strip()
+    stars_today = row.get("stars_today")
+    repo: dict[str, Any] = {
+        "full_name": slug,
+        "name": name or slug,
+        "owner": {"login": owner} if owner else {},
+        "html_url": f"https://github.com/{slug}",
+        "description": desc or f"GitHub Trending client-oriented repo {slug}",
+        "topics": [],
+        "stargazers_count": 0,
+        "language": "",
+    }
+    if stars_today is not None:
+        repo["trending_stars_today"] = stars_today
+    return repo
+
+
+def taaft_list_is_new_tools_url(url: str) -> bool:
+    p = urlsplit((url or "").strip())
+    host = (p.netloc or "").lower()
+    if "theresanaiforthat.com" not in host:
+        return False
+    path = (p.path or "").strip("/").lower()
+    return path in ("new", "new/") or path.startswith("new/")
+
+
+def acquire_portal_is_list_url(url: str) -> bool:
+    u = (url or "").strip()
+    if acquire_search_api_is_url(u):
+        return True
+    p = urlsplit(u)
+    host = (p.netloc or "").lower()
+    return "acquire.com" in host
+
+
 def _github_trending_since(url: str) -> str:
     q = dict(parse_qsl(urlsplit((url or "").strip()).query, keep_blank_values=True))
     since = str(q.get("since") or "daily").strip().lower()
@@ -136,7 +281,14 @@ def parse_github_trending_repos(html: str, *, limit: int = CONNECTOR_HEAT_TOP_N)
                 stars_today = int(sm.group(1).replace(",", ""))
             except ValueError:
                 stars_today = None
-        out.append({"full_name": slug, "stars_today": stars_today, "rank": len(out) + 1})
+        out.append(
+            {
+                "full_name": slug,
+                "stars_today": stars_today,
+                "rank": len(out) + 1,
+                "description": _github_trending_chunk_description(chunk),
+            }
+        )
         if len(out) >= limit:
             break
     return out
@@ -162,7 +314,7 @@ def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]
             r = client.get(url, headers=html_headers)
             if r.status_code < 200 or r.status_code >= 300:
                 return r.status_code, (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-            ranked = parse_github_trending_repos(r.text or "", limit=n)
+            ranked = parse_github_trending_repos(r.text or "", limit=max(n * 4, 30))
             if not ranked:
                 return r.status_code, json.dumps(
                     {"connector_sync_items_v1": [], "note": "trending_parse_empty", "since": since},
@@ -182,13 +334,19 @@ def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]
                 if r2.status_code == 403 and not has_auth:
                     time.sleep(3.0)
                     r2 = client.get(api_url, headers=api_headers)
-                if r2.status_code < 200 or r2.status_code >= 300:
+                repo: dict[str, Any] | None = None
+                if 200 <= r2.status_code < 300:
+                    try:
+                        parsed = json.loads(r2.text or "{}")
+                    except json.JSONDecodeError:
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        repo = parsed
+                elif not has_auth:
+                    repo = _github_minimal_repo_from_trending_row(row)
+                if not repo:
                     continue
-                try:
-                    repo = json.loads(r2.text or "{}")
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(repo, dict):
+                if not github_matches_client_filter(repo):
                     continue
                 extra: dict[str, Any] = {"since": since, "rank": row.get("rank"), "discovery_url": url}
                 if row.get("stars_today") is not None:
@@ -198,6 +356,16 @@ def sync_github_trending_top_details(discovery_url: str, headers: dict[str, str]
                     repo["trending_stars_today"] = row["stars_today"]
                 _attach_github_readme(client, api_url, api_headers, repo)
                 payloads.append(repo)
+            if not payloads and ranked:
+                for row in ranked[:n]:
+                    repo = _github_minimal_repo_from_trending_row(row)
+                    extra = {"since": since, "rank": row.get("rank"), "discovery_url": url, "filter_fallback": True}
+                    repo["_aisoul_trending"] = extra
+                    if row.get("stars_today") is not None:
+                        repo["trending_stars_today"] = row["stars_today"]
+                    payloads.append(repo)
+                    if len(payloads) >= n:
+                        break
             if not payloads:
                 return r.status_code, json.dumps(
                     {"connector_sync_items_v1": [], "note": "repo_api_empty", "since": since},
@@ -371,12 +539,211 @@ def _hf_list_pool_limit(url: str) -> tuple[str, int]:
 
 
 HN_ALGOLIA_SEARCH_DEFAULT = "https://hn.algolia.com/api/v1/search?tags=front_page"
+NEWSAPI_TOP_HEADLINES_DEFAULT = (
+    "https://newsapi.org/v2/everything?q=artificial+intelligence&language=en"
+    "&sortBy=publishedAt&pageSize=20"
+)
+THENEWSAPI_TOP_DEFAULT = (
+    "https://api.thenewsapi.com/v1/news/top?locale=us&language=en&categories=tech"
+    "&search=artificial+intelligence&limit=10"
+)
+_AI_NEWS_KEYWORDS: tuple[str, ...] = (
+    "artificial intelligence",
+    "machine learning",
+    " openai",
+    " chatgpt",
+    "anthropic",
+    " deepseek",
+    " llm",
+    " generative ai",
+    " gemini",
+    " copilot",
+    "nvidia ai",
+    " ai ",
+    " ai,",
+    " ai.",
+)
 
 
 def hacker_news_algolia_is_search_url(url: str) -> bool:
     """Algolia HN Search API（列表发现）；非 ``firebaseio.com`` 单条 item API。"""
     p = urlsplit((url or "").strip().lower())
     return "hn.algolia.com" in (p.netloc or "") and "/api/" in (p.path or "")
+
+
+def newsapi_is_v2_url(url: str) -> bool:
+    p = urlsplit((url or "").strip().lower())
+    return "newsapi.org" in (p.netloc or "") and "/v2/" in (p.path or "")
+
+
+def thenewsapi_is_news_url(url: str) -> bool:
+    p = urlsplit((url or "").strip().lower())
+    return "thenewsapi.com" in (p.netloc or "") and "/v1/news/" in (p.path or "")
+
+
+def _news_text_ai_relevant(title: str, description: str) -> bool:
+    blob = f"{title} {description}".lower()
+    return any(k in blob for k in _AI_NEWS_KEYWORDS)
+
+
+def _normalize_newsapi_article(art: dict[str, Any]) -> dict[str, Any]:
+    src = art.get("source") if isinstance(art.get("source"), dict) else {}
+    return {
+        "source": "newsapi",
+        "title": (art.get("title") or "").strip(),
+        "url": (art.get("url") or "").strip(),
+        "description": (art.get("description") or art.get("content") or "").strip()[:8000],
+        "publishedAt": art.get("publishedAt"),
+        "urlToImage": art.get("urlToImage"),
+        "author": art.get("author"),
+        "source_name": (src.get("name") or src.get("id") or "").strip(),
+        "uuid": (art.get("url") or "").strip(),
+    }
+
+
+def _normalize_thenewsapi_article(art: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source": "thenewsapi",
+        "title": (art.get("title") or "").strip(),
+        "url": (art.get("url") or "").strip(),
+        "description": (art.get("description") or art.get("snippet") or "").strip()[:8000],
+        "published_at": art.get("published_at"),
+        "image_url": art.get("image_url"),
+        "source_name": (art.get("source") or "").strip(),
+        "uuid": (art.get("uuid") or art.get("url") or "").strip(),
+        "categories": art.get("categories"),
+        "relevance_score": art.get("relevance_score"),
+    }
+
+
+def _merge_query(url: str, extra: dict[str, str]) -> str:
+    parts = urlsplit((url or "").strip())
+    q = dict(parse_qsl(parts.query, keep_blank_values=True))
+    for k, v in extra.items():
+        if v:
+            q[k] = v
+    return urlunsplit((parts.scheme or "https", parts.netloc, parts.path, urlencode(q), parts.fragment))
+
+
+def _newsapi_pack_from_body(body: dict[str, Any], *, n: int) -> tuple[list[dict[str, Any]], str]:
+    articles = body.get("articles")
+    if not isinstance(articles, list) or not articles:
+        return [], "no_articles"
+    normed: list[dict[str, Any]] = []
+    for art in articles:
+        if not isinstance(art, dict):
+            continue
+        row = _normalize_newsapi_article(art)
+        if not row["title"] or not row["url"]:
+            continue
+        if not _news_text_ai_relevant(row["title"], row["description"]):
+            continue
+        normed.append(row)
+    normed = normed[:n]
+    if not normed:
+        return [], "no_ai_articles"
+    return normed, "newsapi_ok"
+
+
+def sync_newsapi_top_headlines(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """NewsAPI v2（优先 everything；top-headlines 空结果时自动回退）。"""
+    n = CONNECTOR_HEAT_TOP_N
+    raw_url = (url or "").strip() or NEWSAPI_TOP_HEADLINES_DEFAULT
+    h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-NewsAPI/1.0"}
+    urls_to_try: list[str] = [_merge_query(raw_url, {"pageSize": str(max(n, 20))})]
+    low = raw_url.lower()
+    if "top-headlines" in low and NEWSAPI_TOP_HEADLINES_DEFAULT not in urls_to_try:
+        urls_to_try.append(_merge_query(NEWSAPI_TOP_HEADLINES_DEFAULT, {"pageSize": str(max(n, 20))}))
+    last_code, last_text = 0, ""
+    last_note = ""
+    try:
+        with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+            for api_url in urls_to_try:
+                r = client.get(api_url, headers=h)
+                last_code = int(r.status_code or 0)
+                last_text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+                if last_code < 200 or last_code >= 300:
+                    continue
+                try:
+                    body = json.loads(last_text)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(body, dict):
+                    continue
+                normed, last_note = _newsapi_pack_from_body(body, n=n)
+                if normed:
+                    pack = {
+                        "connector_sync_items_v1": [
+                            {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in normed
+                        ],
+                        "note": "newsapi_everything" if "everything" in api_url else "newsapi_v2",
+                    }
+                    return 200, _trim_pack_json(pack)
+            if last_code and 200 <= last_code < 300:
+                return 200, json.dumps(
+                    {"connector_sync_items_v1": [], "note": last_note or "no_articles"},
+                    ensure_ascii=False,
+                )
+            return last_code or 0, last_text
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
+
+
+def sync_thenewsapi_top_news(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """TheNewsAPI v1/news/top（或 all）→ AI/tech Top N。"""
+    n = CONNECTOR_HEAT_TOP_N
+    raw_url = (url or "").strip() or THENEWSAPI_TOP_DEFAULT
+    api_url = _merge_query(raw_url, {"limit": str(max(n, 10))})
+    h = {**headers, "Accept": "application/json", "User-Agent": headers.get("User-Agent") or "AiTrends-TheNewsAPI/1.0"}
+    try:
+        with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+            r = client.get(api_url, headers=h)
+            text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+            if r.status_code < 200 or r.status_code >= 300:
+                return r.status_code, text
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError:
+                return r.status_code, text
+            if not isinstance(body, dict):
+                return r.status_code, json.dumps({"connector_sync_items_v1": [], "note": "not_object"}, ensure_ascii=False)
+            data = body.get("data")
+            flat: list[dict[str, Any]] = []
+            if isinstance(data, list):
+                flat = [x for x in data if isinstance(x, dict)]
+            elif isinstance(data, dict):
+                for _cat, rows in data.items():
+                    if isinstance(rows, list):
+                        flat.extend([x for x in rows if isinstance(x, dict)])
+            if not flat:
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_data"}, ensure_ascii=False)
+            normed: list[dict[str, Any]] = []
+            for art in flat:
+                row = _normalize_thenewsapi_article(art)
+                if not row["title"] or not row["url"]:
+                    continue
+                if not _news_text_ai_relevant(row["title"], row["description"]):
+                    continue
+                normed.append(row)
+            try:
+                normed.sort(
+                    key=lambda x: float(x.get("relevance_score") or 0),
+                    reverse=True,
+                )
+            except (TypeError, ValueError):
+                pass
+            normed = normed[:n]
+            if not normed:
+                return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_ai_articles"}, ensure_ascii=False)
+            pack = {
+                "connector_sync_items_v1": [
+                    {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in normed
+                ],
+                "note": "thenewsapi_top",
+            }
+            return 200, _trim_pack_json(pack)
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
 
 
 def _hn_normalize_hit(hit: dict[str, Any]) -> dict[str, Any]:
@@ -649,6 +1016,202 @@ def sync_arxiv_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]
                     {"snippet": json.dumps(p, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for p in payloads
                 ],
                 "note": "arxiv_atom_cs_ai_lg_cl",
+            }
+            return 200, _trim_pack_json(pack)
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
+
+
+def _taaft_title_for_slug(html: str, slug: str) -> str:
+    base = f"https://theresanaiforthat.com/ai/{slug}"
+    for pat in (
+        rf'href="{re.escape(base)}/?"[^>]*title="([^"]{{2,160}})"',
+        rf'title="([^"]{{2,160}})"[^>]*href="{re.escape(base)}/?"',
+        rf'href="{re.escape(base)}/?"[^>]*>([^<]{{2,120}})</a>',
+    ):
+        m = re.search(pat, html, flags=re.IGNORECASE)
+        if m:
+            t = re.sub(r"\s+", " ", m.group(1)).strip()
+            if len(t) >= 2 and t.lower() not in ("ai", "new"):
+                return t
+    return slug.replace("-", " ").strip().title()
+
+
+def _parse_taaft_listing_html(html: str, *, limit: int) -> list[dict[str, Any]]:
+    """从 TAAFT /new/ HTML 解析工具卡片（需 curl_cffi 拉取）。"""
+    if not (html or "").strip():
+        return []
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for m in re.finditer(r"https://theresanaiforthat\.com/ai/([a-z0-9-]+)/?", html, flags=re.IGNORECASE):
+        slug = (m.group(1) or "").strip().lower()
+        if not slug or slug in seen:
+            continue
+        seen.add(slug)
+        page_url = f"https://theresanaiforthat.com/ai/{slug}/"
+        title = _taaft_title_for_slug(html, slug)
+        desc = (
+            f"{title} — new on There's An AI For That (/new/). "
+            f"Listing: {page_url}. For indie devs tracking AI tools to clone or monetize."
+        )
+        out.append(
+            {
+                "source": "taaft",
+                "name": title[:200],
+                "slug": slug[:120],
+                "url": page_url,
+                "listing_url": page_url,
+                "description": desc[:1200],
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+def sync_taaft_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """TAAFT 新工具列表页 → Top N 工具卡片 JSON。"""
+    n = CONNECTOR_HEAT_TOP_N
+    list_url = (url or "").strip() or TAAFT_NEW_DEFAULT
+    try:
+        code, text = _http_get_text(list_url, headers, timeout=60.0)
+        if code < 200 or code >= 300:
+            return code, (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+        items = _parse_taaft_listing_html(text or "", limit=n)
+        if not items:
+            return 200, json.dumps(
+                {"connector_sync_items_v1": [], "note": "taaft_parse_empty"},
+                ensure_ascii=False,
+            )
+        pack = {
+            "connector_sync_items_v1": [
+                {"snippet": json.dumps(it, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for it in items
+            ],
+            "note": "taaft_new_list",
+        }
+        return 200, _trim_pack_json(pack)
+    except Exception as e:
+        return 0, str(e)[:CONNECTOR_SNIPPET_MAX_CHARS]
+
+
+def _parse_money_usd(text: str) -> float | None:
+    s = (text or "").lower().replace(",", "")
+    m = re.search(r"\$?\s*([\d.]+)\s*([km])?", s)
+    if not m:
+        return None
+    try:
+        val = float(m.group(1))
+    except ValueError:
+        return None
+    suf = (m.group(2) or "").lower()
+    if suf == "k":
+        val *= 1000
+    elif suf == "m":
+        val *= 1_000_000
+    return val
+
+
+def _acquire_v1_search(
+    client: httpx.Client,
+    *,
+    operation: str,
+    params: dict[str, Any],
+    headers: dict[str, str],
+) -> list[dict[str, Any]]:
+    api_url = ACQUIRE_SEARCH_API_DEFAULT
+    body = {
+        "data": {
+            operation: params,
+            "__meta": {
+                "referrer": "https://acquire.com/",
+                "cookie": _ACQUIRE_SEARCH_META_COOKIE,
+            },
+        }
+    }
+    h = {
+        **headers,
+        "Content-Type": "application/json",
+        "Origin": "https://acquire.com",
+        "Referer": "https://acquire.com/",
+        "User-Agent": headers.get("User-Agent") or _BROWSER_UA,
+    }
+    r = client.post(api_url, headers=h, json=body)
+    if r.status_code < 200 or r.status_code >= 300:
+        return []
+    try:
+        payload = r.json()
+    except Exception:
+        return []
+    result = payload.get("result") if isinstance(payload, dict) else None
+    if not isinstance(result, dict):
+        return []
+    rows = result.get(operation)
+    return [x for x in rows if isinstance(x, dict)] if isinstance(rows, list) else []
+
+
+def _acquire_row_is_ai(row: dict[str, Any]) -> bool:
+    blob = f"{row.get('type') or ''} {row.get('listingHeadline') or ''}".lower()
+    return "ai" in blob or "artificial intelligence" in blob or "machine learning" in blob
+
+
+def _parse_acquire_api_rows(rows: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    """MicroAcquire v1-search 匿名列表 → 连接器 snippet。"""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if len(out) >= limit:
+            break
+        if not _acquire_row_is_ai(row):
+            continue
+        link = str(row.get("link") or "").strip()
+        if not link or link in seen:
+            continue
+        seen.add(link)
+        headline = re.sub(r"\s+", " ", str(row.get("listingHeadline") or "")).strip()
+        if len(headline) < 4:
+            continue
+        asking = row.get("askingPrice")
+        try:
+            ask_usd = float(asking) if asking is not None else None
+        except (TypeError, ValueError):
+            ask_usd = None
+        out.append(
+            {
+                "source": "acquire",
+                "name": headline[:200],
+                "url": link[:2048],
+                "asking_price_usd": ask_usd,
+                "arr_usd": ask_usd,
+                "type": str(row.get("type") or "AI")[:64],
+                "location": str(row.get("location") or "")[:120],
+                "category": "AI",
+            }
+        )
+    return out
+
+
+def sync_acquire_top_details(url: str, headers: dict[str, str]) -> tuple[int, str]:
+    """Acquire：MicroAcquire 公开 v1-search（anonTopPicks + anonStartupsByCategory）。"""
+    n = CONNECTOR_HEAT_TOP_N
+    try:
+        with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+            merged: list[dict[str, Any]] = []
+            for op, params in (
+                ("anonTopPicks", {"type": "saas", "advisory": False}),
+                ("anonStartupsByCategory", {"category": "ai"}),
+            ):
+                merged.extend(_acquire_v1_search(client, operation=op, params=params, headers=headers))
+            items = _parse_acquire_api_rows(merged, limit=n)
+            if not items:
+                return 200, json.dumps(
+                    {"connector_sync_items_v1": [], "note": "acquire_parse_empty"},
+                    ensure_ascii=False,
+                )
+            pack = {
+                "connector_sync_items_v1": [
+                    {"snippet": json.dumps(it, ensure_ascii=False)[:_PER_ITEM_SNIPPET_MAX]} for it in items
+                ],
+                "note": "acquire_v1_search_ai",
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

@@ -362,6 +362,9 @@ def _create_one_published_article_from_connector_targets(
         ai_categories_json=ai_categories_json,
         ai_tabs_json=ai_tabs_json,
     )
+    from .domain.articles import normalize_replication_tier
+
+    replication_tier = normalize_replication_tier(polished.get("replication_tier"))
 
     disp_fp = display_fingerprint(title, summary)
 
@@ -405,6 +408,7 @@ def _create_one_published_article_from_connector_targets(
         ai_categories_json=ai_categories_json,
         ai_tabs_json=ai_tabs_json,
         feed_kind=stored_feed_kind,
+        replication_tier=replication_tier,
         heat_score=heat,
         cover_image_url=cover_image_url,
     )

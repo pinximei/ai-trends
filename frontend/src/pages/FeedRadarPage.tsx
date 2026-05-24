@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
+import { replicationTierLabel } from "@/components/home/homeUtils";
 import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
 import { formatStarCount } from "@/articleCardVisual";
 import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
@@ -629,6 +630,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                     const displayIso = a.published_at;
                     const starsTotal = a.engagement_stars_total;
                     const starsToday = a.engagement_stars_today;
+                    const tierBadge = replicationTierLabel(a.replication_tier);
                     return (
                       <Link
                         key={a.id}
@@ -655,9 +657,19 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                           </div>
                           <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 pb-3">
-                            <span className="inline-flex max-w-[min(100%,18rem)] items-center truncate rounded-md bg-gradient-to-r from-emerald-50/90 to-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-100/90">
-                              {a.platform_label || t("source")}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="inline-flex max-w-[min(100%,18rem)] items-center truncate rounded-md bg-gradient-to-r from-emerald-50/90 to-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-100/90">
+                                {a.platform_label || t("source")}
+                              </span>
+                              {tierBadge ? (
+                                <span
+                                  className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800"
+                                  title={`复刻难度 ${(a.replication_tier || "").trim().toUpperCase()}`}
+                                >
+                                  {tierBadge}
+                                </span>
+                              ) : null}
+                            </div>
                             <div className="flex shrink-0 flex-col items-end gap-0.5">
                               {displayDay && displayDay !== "_" ? (
                                 <time

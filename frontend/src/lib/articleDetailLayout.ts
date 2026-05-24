@@ -134,6 +134,7 @@ const PROFILE_BY_SOURCE: Record<string, DetailProfileId> = {
   hacker_news: "news_wire",
   arxiv: "news_article",
   newsapi: "news_wire",
+  thenewsapi: "news_wire",
   finnhub: "news_wire",
   youtube_data: "news_wire",
   mapbox: "news_wire",

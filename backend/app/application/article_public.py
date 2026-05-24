@@ -264,6 +264,7 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
         "card_description": card_description,
         "card_highlights": card_highlights,
         "cover_image_url": (getattr(a, "cover_image_url", None) or "")[:2048] or None,
+        "replication_tier": getattr(a, "replication_tier", None),
     }
 
 

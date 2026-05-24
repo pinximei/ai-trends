@@ -69,7 +69,7 @@ function formatDiagLogLine(r: {
 }
 
 /** 与后端 ``FEED_APPS_KEYS`` 对齐：仅下列标识默认进前台「应用」Feed。 */
-const APPS_FEED_SOURCE_KEYS = new Set(["product_hunt", "huggingface_spaces"]);
+const APPS_FEED_SOURCE_KEYS = new Set(["product_hunt"]);
 
 function publicFeedLaneForSourceKey(sourceKey: string): { lane: "apps" | "news"; title: string; detail: string } {
   const k = sourceKey.trim().toLowerCase();

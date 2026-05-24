@@ -17,32 +17,21 @@ CONTENT_ROLE_LABEL_ZH: dict[str, str] = {
     "academic": "学术论文元数据",
     "runnable_apps": "可运行应用（Spaces 等演示入口）",
     "app_launches": "应用首发（Product Hunt）",
+    "monetization_listing": "变现案例 / 商业资产",
 }
 
 
-# 后台「数据源」预设：仅当库中尚无该 source 时插入，不覆盖运营已改过的行。
-# 下列为 **AI 向** 内置预置（5 路）：GitHub、HF Spaces、Product Hunt、Hacker News、arXiv；Product Hunt 须 OAuth Bearer。
-# 新增数据源：须先通过 scripts/verify_source_local.py 与 docs/DATA_SOURCE_ONBOARDING.md 门禁，再改本列表。
+# 独立开发者向内置 5 路（含 NewsAPI / TheNewsAPI 新闻聚合）
 MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     {
         "source": "github",
-        "preset_label": "GitHub",
+        "preset_label": "GitHub（客户端）",
         "enabled": True,
         "api_base": "https://github.com/trending?since=daily",
         "api_key_masked": "",
-        "scope_label": "AI｜通用·开源协作",
+        "scope_label": "AI｜客户端·开源",
         "content_role": "daily_editorial",
-        "notes": "默认 **Trending 日榜** HTML 发现（stars today 增速）→ 再 GET ``api.github.com/repos/{owner}/{repo}`` 详情。可选 PAT 提高限流；``since=weekly|monthly`` 可改 query。若 api_base 仍为 ``api.github.com/...`` 则走单次 REST GET（如 issues 列表）。",
-    },
-    {
-        "source": "huggingface_spaces",
-        "preset_label": "Hugging Face Spaces",
-        "enabled": True,
-        "api_base": "https://huggingface.co/api/spaces?trending=true&limit=80",
-        "api_key_masked": "",
-        "scope_label": "AI｜Spaces·应用",
-        "content_role": "runnable_apps",
-        "notes": "Spaces 公开列表 JSON（``trending=true``）：按 **trendingScore** 取 Top10，对齐官网/邮件「本周热门」；非历史总点赞榜。免 Key；私有 Space 请填 HF_TOKEN。",
+        "notes": "Trending 日榜 → 仅保留 desktop/tauri/electron/flutter/chrome-extension/client/gui 等客户端向仓库。",
     },
     {
         "source": "product_hunt",
@@ -52,7 +41,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜应用发现",
         "content_role": "app_launches",
-        "notes": "Product Hunt **GraphQL v2**（POST）。拉取规则：PT **昨日** 单日窗口内精选按票数 Top10（对齐邮件 Leaderboard「昨日 launches」；非今日榜、非 RANKING）。推荐 Access Token 直连。",
+        "notes": "Product Hunt GraphQL v2；PT 昨日 Top10。",
     },
     {
         "source": "hacker_news",
@@ -62,21 +51,27 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜社区资讯",
         "content_role": "daily_editorial",
-        "notes": "Algolia **HN Search API**（GET，免 Key）：``tags=front_page`` 首页热门，按 points 取 Top10 逐条入库；snippet 含 objectID、链接、票数与评论数。",
+        "notes": "Algolia HN front_page，按 points Top10。",
     },
     {
-        "source": "arxiv",
-        "preset_label": "arXiv",
+        "source": "newsapi",
+        "preset_label": "NewsAPI",
         "enabled": True,
-        "api_base": (
-            "https://export.arxiv.org/api/query?"
-            "search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&"
-            "sortBy=lastUpdatedDate&sortOrder=descending&max_results=80"
-        ),
+        "api_base": "https://newsapi.org/v2/everything?q=artificial+intelligence&language=en&sortBy=publishedAt&pageSize=20",
         "api_key_masked": "",
-        "scope_label": "AI｜论文预印本",
-        "content_role": "academic",
-        "notes": "arXiv **Atom API**（GET，免 Key）：cs.AI / cs.LG / cs.CL 最近更新 Top10；snippet 含 arxiv_id、标题、摘要、作者与 abs/pdf 链接。",
+        "scope_label": "AI｜新闻聚合",
+        "content_role": "daily_editorial",
+        "notes": "NewsAPI v2 everything（免费档 top-headlines 组合常为空，默认 everything + AI 过滤）。Query 参数 apiKey。",
+    },
+    {
+        "source": "thenewsapi",
+        "preset_label": "TheNewsAPI",
+        "enabled": True,
+        "api_base": "https://api.thenewsapi.com/v1/news/top?locale=us&language=en&categories=tech&search=artificial+intelligence&limit=10",
+        "api_key_masked": "",
+        "scope_label": "AI｜新闻聚合",
+        "content_role": "daily_editorial",
+        "notes": "TheNewsAPI v1/news/top；Query 参数 api_token。",
     },
 ]
 
@@ -88,7 +83,6 @@ MAINSTREAM_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row i
 DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
     {
         "mcp_skills",
-        "newsapi",
         "openai",
         "google_gemini",
         "finnhub",
@@ -98,6 +92,10 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "openalex",
         "rss_arstechnica",
         "rss_theverge",
+        "huggingface_spaces",
+        "arxiv",
+        "taaft",
+        "acquire",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
@@ -105,16 +103,15 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
 ), "DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES overlaps MAINSTREAM_ADMIN_SOURCE_PRESETS"
 
 # 后台数据源卡片：下列预置 source 的公开模板可不填 Key 即可拉取；卡片上隐藏「API Key」输入。
-# 其余预置（如 product_hunt、huggingface_spaces）及运营自增的任意标识默认显示密钥框。
+# 其余预置（如 product_hunt）及运营自增的任意标识默认显示密钥框。
 ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
         "hacker_news",
-        "arxiv",
     }
 )
 
-# 凭据形态：当前仅保留三条 AI 工程/产品向内置预置；旧预置（含 arXiv 论文流）已进 DISCONTINUED 并由启动任务删库。
+# 凭据形态：当前内置 5 路；旧预置已进 DISCONTINUED 并由启动任务删库。
 # 后台第二输入框「APP Secret」仅对 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD 为真时展示（当前仅 product_hunt）。
 # 后台卡片在「Bearer Access Token」之外另展示「OAuth Client Secret」输入的预置（Developer OAuth 换 token 用）。
 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product_hunt"})

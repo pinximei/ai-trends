@@ -41,15 +41,15 @@ from ..software_package_service import (
 )
 from ..article_ingest import create_published_articles_for_connector_targets
 from ..connector_heat_fetch import (
-    arxiv_api_is_query_url,
     github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
-    huggingface_api_spaces_is_list_index,
-    sync_arxiv_top_details,
+    newsapi_is_v2_url,
     sync_github_trending_top_details,
     sync_hacker_news_top_details,
-    sync_huggingface_spaces_top_details,
+    sync_newsapi_top_headlines,
     sync_product_hunt_top_details,
+    sync_thenewsapi_top_news,
+    thenewsapi_is_news_url,
 )
 from ..domain.articles import (
     CONNECTOR_SNIPPET_MAX_CHARS,
@@ -524,22 +524,6 @@ def _run_connector_request(
                     source_key=sk,
                 )
                 return code, out
-            if source_key == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 Hugging Face Spaces 列表热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
-                code, text = sync_huggingface_spaces_top_details(url, headers)
-                out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
-                )
-                return code, out
             if source_key == "hacker_news" and hacker_news_algolia_is_search_url(url):
                 _connector_req_diag(
                     db, level="info", step="heat_path", message="走 HN Algolia 热度打包",
@@ -556,12 +540,28 @@ def _run_connector_request(
                     source_key=sk,
                 )
                 return code, out
-            if source_key == "arxiv" and arxiv_api_is_query_url(url):
+            if source_key == "newsapi" and newsapi_is_v2_url(url):
                 _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 arXiv Atom API 热度打包",
+                    db, level="info", step="heat_path", message="走 NewsAPI 热度打包",
                     connector_id=connector_id, source_key=sk,
                 )
-                code, text = sync_arxiv_top_details(url, headers)
+                code, text = sync_newsapi_top_headlines(url, headers)
+                out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+                _connector_req_diag(
+                    db,
+                    level="info" if code and 200 <= code < 300 else "error",
+                    step="heat_done",
+                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
+                    connector_id=connector_id,
+                    source_key=sk,
+                )
+                return code, out
+            if source_key == "thenewsapi" and thenewsapi_is_news_url(url):
+                _connector_req_diag(
+                    db, level="info", step="heat_path", message="走 TheNewsAPI 热度打包",
+                    connector_id=connector_id, source_key=sk,
+                )
+                code, text = sync_thenewsapi_top_news(url, headers)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_req_diag(
                     db,
@@ -675,7 +675,14 @@ def run_connector_sync(
             if api_base:
                 cfg["url"] = api_base
             # 真实密钥以数据源保存为准：见 DataApiService.upsert_admin_source 写入各绑定连接器的 config_json.api_key。
-            cfg.setdefault("auth_mode", "bearer")
+            if ask == "newsapi":
+                cfg.setdefault("auth_mode", "query_key")
+                cfg.setdefault("key_param", "apiKey")
+            elif ask == "thenewsapi":
+                cfg.setdefault("auth_mode", "query_key")
+                cfg.setdefault("key_param", "api_token")
+            else:
+                cfg.setdefault("auth_mode", "bearer")
 
     tnorm = (theme or "").strip() or None
     if tnorm:
@@ -869,7 +876,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
                     " 仍异常: "
                     + ", ".join(f"{r['source']}({r.get('api_base', '')[:48]})" for r in bad_urls)
                     if bad_urls
-                    else " 五路 URL 均已匹配热度打包路径。"
+                    else " 三路 URL 均已匹配热度打包路径。"
                 )
             ),
         )

@@ -225,7 +225,7 @@ def admin_mainstream_sources_audit(
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("viewer")),
 ):
-    """五路内置数据源 URL / 连接器 / 板块解析诊断（排查首页只显示 4 源）。"""
+    """三路内置数据源 URL / 连接器 / 板块解析诊断。"""
     from .product_connectors_bootstrap import audit_mainstream_connector_paths, repair_mainstream_heat_fetch_admin_sources
 
     _ = session
@@ -235,7 +235,7 @@ def admin_mainstream_sources_audit(
         {
             "repaired_rows": repaired,
             "sources": audit_mainstream_connector_paths(db),
-            "expected_count": 5,
+            "expected_count": 3,
         },
     )
 

@@ -121,9 +121,9 @@ HOME_PICKS_MIN_HEAT = 72.0
 HOME_MAIN_SOURCE_KEYS: tuple[str, ...] = (
     "github",
     "product_hunt",
-    "huggingface_spaces",
     "hacker_news",
-    "arxiv",
+    "newsapi",
+    "thenewsapi",
 )
 
 
@@ -230,7 +230,7 @@ def get_home_editorial_picks(
 
 
 def _group_source_lanes(items: list[dict], *, per_source: int = 1) -> list[dict]:
-    """按五路主数据源各取热度最高的一条，供首页「多源雷达」展示。"""
+    """按内置主数据源各取热度最高的一条，供首页「多源雷达」展示。"""
     buckets: dict[str, list[dict]] = {k: [] for k in HOME_MAIN_SOURCE_KEYS}
     for it in items:
         k = (it.get("admin_source_key") or "").strip().lower()
@@ -244,11 +244,11 @@ def _group_source_lanes(items: list[dict], *, per_source: int = 1) -> list[dict]
             label_by_key[k] = (it.get("platform_label") or "").strip() or k.replace("_", " ").title()
 
     preset_labels = {
-        "github": "GitHub",
+        "github": "GitHub（客户端）",
         "product_hunt": "Product Hunt",
-        "huggingface_spaces": "Hugging Face Spaces",
         "hacker_news": "Hacker News",
-        "arxiv": "arXiv",
+        "newsapi": "NewsAPI",
+        "thenewsapi": "TheNewsAPI",
     }
     lanes: list[dict] = []
     for k in HOME_MAIN_SOURCE_KEYS:
@@ -302,7 +302,7 @@ def get_home_dashboard(
     published_within_days: int = 30,
 ) -> dict:
     """
-    首页一站式数据：热度精选、趋势、五源雷达、来源/话题统计。
+    首页一站式数据：热度精选、趋势、五路雷达、来源/话题统计。
 
     比多次请求 editorial-picks + trend-overview 更省往返，并附带跨源聚合。
     """

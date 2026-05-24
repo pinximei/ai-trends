@@ -9,20 +9,21 @@ from sqlalchemy.orm import Session
 from .models import AdminSourceConfig
 from .product_models import ProductConnector
 from .connector_heat_fetch import (
-    ARXIV_API_QUERY_DEFAULT,
     GITHUB_TRENDING_DEFAULT,
     HN_ALGOLIA_SEARCH_DEFAULT,
-    arxiv_api_is_query_url,
+    NEWSAPI_TOP_HEADLINES_DEFAULT,
+    THENEWSAPI_TOP_DEFAULT,
     github_trending_is_discovery_url,
     hacker_news_algolia_is_search_url,
-    huggingface_api_spaces_is_list_index,
+    newsapi_is_v2_url,
+    thenewsapi_is_news_url,
 )
 from .scope_labels_util import get_scope_labels_from_source
 from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
-# 启动时默认启用拉取（参与定时连接器批量同步）；与 MAINSTREAM 内置源一致（5 路）。
+# 启动时默认启用拉取（参与定时连接器批量同步）；与 MAINSTREAM 内置源一致（3 路）。
 # 扩容：每增加一个 key 前须本地 verify_source_local.py 通过，见 docs/DATA_SOURCE_ONBOARDING.md。
 AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = MAINSTREAM_ADMIN_SOURCE_KEYS
 
@@ -48,27 +49,27 @@ def _preset_by_source(source: str) -> dict | None:
 
 
 def mainstream_heat_fetch_url_ok(source: str, url: str) -> bool:
-    """内置五路数据源 api_base 是否可走 connector_sync_items_v1 热度打包。"""
+    """内置数据源 api_base 是否可走 connector_sync_items_v1 热度打包。"""
     src = (source or "").strip().lower()
     u = (url or "").strip()
     if not u:
         return False
     if src == "github":
         return github_trending_is_discovery_url(u)
-    if src == "huggingface_spaces":
-        return huggingface_api_spaces_is_list_index(u)
     if src == "product_hunt":
         low = u.lower()
         return "api.producthunt.com" in low and "graphql" in low
     if src == "hacker_news":
         return hacker_news_algolia_is_search_url(u)
-    if src == "arxiv":
-        return arxiv_api_is_query_url(u)
+    if src == "newsapi":
+        return newsapi_is_v2_url(u)
+    if src == "thenewsapi":
+        return thenewsapi_is_news_url(u)
     return False
 
 
 def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
-    """五路内置源 api_base / scope_label 与热度打包路径对齐（含 HN firebase、arXiv abs 等旧地址）。"""
+    """内置源 api_base / scope_label 与热度打包路径对齐（含 HN firebase 等旧地址）。"""
     changed = 0
     for row in db.scalars(select(AdminSourceConfig)).all():
         preset = _preset_by_source(row.source)
@@ -95,7 +96,7 @@ def repair_mainstream_heat_fetch_admin_sources(db: Session) -> int:
 
 
 def audit_mainstream_connector_paths(db: Session) -> list[dict]:
-    """诊断五路内置源的 URL、连接器与板块解析（供后台/运维排查「只有 4 源」）。"""
+    """诊断内置源的 URL、连接器与板块解析。"""
     from .source_segment_resolve import resolve_admin_source_key_to_segments
 
     out: list[dict] = []
@@ -126,11 +127,11 @@ def audit_mainstream_connector_paths(db: Session) -> list[dict]:
                 "connector_url_matches_admin": (not cfg_url) or cfg_url == api_base,
                 "segment_count": len(segments),
                 "expected_path": {
-                    "github": "github.com/trending → api.github.com/repos",
-                    "huggingface_spaces": "huggingface.co/api/spaces?…",
+                    "github": "github.com/trending → api.github.com/repos（客户端关键词过滤）",
                     "product_hunt": "api.producthunt.com/v2/api/graphql",
                     "hacker_news": "hn.algolia.com/api/v1/search?tags=front_page",
-                    "arxiv": "export.arxiv.org/api/query?…",
+                    "newsapi": NEWSAPI_TOP_HEADLINES_DEFAULT,
+                    "thenewsapi": THENEWSAPI_TOP_DEFAULT,
                 }.get(src, ""),
             }
         )
@@ -240,7 +241,7 @@ def enable_auto_pull_admin_sources_and_connectors(db: Session) -> dict[str, int]
 def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
     """删除库中一切不在当前 MAINSTREAM 预置列表内的 admin 数据源及其绑定连接器。
 
-    自定义标识、旧版预置残留等都会被清掉；随后 ``ensure_mainstream_admin_sources`` 会补回五条 AI 内置行。
+    自定义标识、旧版预置残留等都会被清掉；随后 ``ensure_mainstream_admin_sources`` 会补回内置行。
     """
     import logging
 
@@ -291,8 +292,38 @@ def prune_disabled_admin_sources(db: Session) -> dict[str, int]:
     return {"connectors_deleted": n_c, "admin_sources_deleted": n_a}
 
 
+def _article_clauses_for_admin_source_keys(keys: tuple[str, ...]):
+    from sqlalchemy import or_
+
+    from .product_models import Article
+
+    if not keys:
+        return None
+    return or_(*[Article.third_party_source.ilike(f"{k}%") for k in keys])
+
+
+def prune_articles_for_admin_source_keys(db: Session, keys: tuple[str, ...]) -> int:
+    """删除 third_party_source 以给定 admin source 开头的文章（含 TAAFT / Acquire 等下线源）。"""
+    import logging
+
+    from sqlalchemy import delete
+
+    from .product_models import Article
+
+    log = logging.getLogger(__name__)
+    clause = _article_clauses_for_admin_source_keys(keys)
+    if clause is None:
+        return 0
+    r = db.execute(delete(Article).where(clause))
+    db.commit()
+    n = int(r.rowcount) if r.rowcount is not None and r.rowcount >= 0 else 0
+    if n:
+        log.info("pruned articles for admin sources %s: count=%s", keys, n)
+    return n
+
+
 def prune_discontinued_bootstrap_admin_sources(db: Session) -> dict[str, int]:
-    """删除已下线的内置数据源及其绑定连接器，与当前 MAINSTREAM 预设对齐。"""
+    """删除已下线的内置数据源、绑定连接器及对应文章，与当前 MAINSTREAM 预设对齐。"""
     import logging
 
     from sqlalchemy import delete
@@ -301,13 +332,19 @@ def prune_discontinued_bootstrap_admin_sources(db: Session) -> dict[str, int]:
 
     log = logging.getLogger(__name__)
     if not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES:
-        return {"connectors_deleted": 0, "admin_sources_deleted": 0}
+        return {"connectors_deleted": 0, "admin_sources_deleted": 0, "articles_deleted": 0}
     keys = tuple(DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES)
+    n_art = prune_articles_for_admin_source_keys(db, keys)
     rc = db.execute(delete(ProductConnector).where(ProductConnector.admin_source_key.in_(keys)))
     ra = db.execute(delete(AdminSourceConfig).where(AdminSourceConfig.source.in_(keys)))
     db.commit()
     n_c = int(rc.rowcount) if rc.rowcount is not None and rc.rowcount >= 0 else 0
     n_a = int(ra.rowcount) if ra.rowcount is not None and ra.rowcount >= 0 else 0
-    if n_c or n_a:
-        log.info("pruned discontinued bootstrap sources: connectors=%s admin_sources=%s", n_c, n_a)
-    return {"connectors_deleted": n_c, "admin_sources_deleted": n_a}
+    if n_c or n_a or n_art:
+        log.info(
+            "pruned discontinued bootstrap sources: connectors=%s admin_sources=%s articles=%s",
+            n_c,
+            n_a,
+            n_art,
+        )
+    return {"connectors_deleted": n_c, "admin_sources_deleted": n_a, "articles_deleted": n_art}

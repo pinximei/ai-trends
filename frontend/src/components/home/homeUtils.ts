@@ -4,20 +4,33 @@ import { formatStarCount } from "@/articleCardVisual";
 export const HOME_SOURCE_ORDER = [
   "github",
   "product_hunt",
-  "huggingface_spaces",
   "hacker_news",
-  "arxiv",
+  "newsapi",
+  "thenewsapi",
 ] as const;
 
 export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], string> = {
-  github: "GitHub",
+  github: "GitHub（客户端）",
   product_hunt: "Product Hunt",
-  huggingface_spaces: "Hugging Face Spaces",
   hacker_news: "Hacker News",
-  arxiv: "arXiv",
+  newsapi: "NewsAPI",
+  thenewsapi: "TheNewsAPI",
 };
 
 export type HeatTier = "blazing" | "hot" | "fresh";
+
+const REPLICATION_TIER_LABEL: Record<string, string> = {
+  S: "易复刻",
+  A: "可抄",
+  B: "中等",
+  C: "难抄",
+};
+
+/** 列表卡片复刻难度徽章文案；无档位时返回 null。 */
+export function replicationTierLabel(tier: string | null | undefined): string | null {
+  const k = (tier || "").trim().toUpperCase();
+  return REPLICATION_TIER_LABEL[k] ?? null;
+}
 
 export function heatTier(heat: number | undefined): HeatTier | null {
   const h = heat ?? 0;
@@ -33,11 +46,13 @@ export function platformAccent(key: string): { ring: string; badge: string; dot:
     return { ring: "ring-slate-700/20", badge: "bg-slate-800 text-white", dot: "bg-slate-700", border: "border-l-slate-700" };
   if (k === "product_hunt")
     return { ring: "ring-orange-300/50", badge: "bg-orange-500 text-white", dot: "bg-orange-500", border: "border-l-orange-500" };
-  if (k === "huggingface_spaces")
-    return { ring: "ring-amber-300/50", badge: "bg-amber-500 text-white", dot: "bg-amber-500", border: "border-l-amber-500" };
   if (k === "hacker_news")
     return { ring: "ring-orange-400/40", badge: "bg-orange-600 text-white", dot: "bg-orange-600", border: "border-l-orange-600" };
-  if (k === "arxiv")
+  if (k === "newsapi")
+    return { ring: "ring-sky-300/50", badge: "bg-sky-600 text-white", dot: "bg-sky-600", border: "border-l-sky-600" };
+  if (k === "thenewsapi")
+    return { ring: "ring-blue-300/50", badge: "bg-blue-700 text-white", dot: "bg-blue-700", border: "border-l-blue-700" };
+  if (k === "arxiv" || k === "huggingface_spaces")
     return { ring: "ring-red-300/40", badge: "bg-red-600 text-white", dot: "bg-red-600", border: "border-l-red-600" };
   return { ring: "ring-violet-300/40", badge: "bg-violet-600 text-white", dot: "bg-violet-500", border: "border-l-violet-500" };
 }

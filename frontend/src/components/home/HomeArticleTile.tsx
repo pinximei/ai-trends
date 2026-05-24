@@ -4,7 +4,7 @@ import type { ArticleFeedCard } from "@/api/public";
 import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
 import { useI18n } from "@/i18n";
 import { HomeHeatBadge } from "./HomeHeatBadge";
-import { itemBlurb, itemEngagementLine, platformAccent } from "./homeUtils";
+import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel } from "./homeUtils";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "—";
@@ -63,11 +63,18 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
   const { t } = useI18n();
   const accent = platformAccent(item.admin_source_key || "");
   const engagement = itemEngagementLine(item);
+  const tierLabel = replicationTierLabel(item.replication_tier);
+  const tier = (item.replication_tier || "").trim().toUpperCase();
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
       <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${accent.badge}`}>
         {item.platform_label || t("source")}
       </span>
+      {tierLabel ? (
+        <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800" title={`复刻难度 ${tier}`}>
+          {tierLabel}
+        </span>
+      ) : null}
       <HomeHeatBadge heat={item.heat_score} />
       {engagement ? <span className="font-semibold tabular-nums text-amber-700">{engagement}</span> : null}
       <span className="tabular-nums text-slate-400">{timeAgo(item.published_at)}</span>

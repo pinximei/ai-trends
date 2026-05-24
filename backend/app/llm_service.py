@@ -117,11 +117,6 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
             "【Product Hunt 上架稿】「描述」按：产品是什么 → 解决什么问题 → 目标用户；"
             "「数据支撑」表格列：产品名、投票/热度、话题标签、官网、发布日期等可核对字段。"
         )
-    if k == "huggingface_spaces":
-        return (
-            "【Hugging Face Space 稿】「描述」按：Space 用途 → 交互方式 → 典型场景；"
-            "「数据支撑」列：Space 名、作者/组织、trendingScore、点赞、运行环境、外链等。"
-        )
     if k == "hacker_news":
         return (
             "【Hacker News 社区帖】「描述」按：帖子主题 → 讨论背景 → 对 AI/技术读者的意义；"
@@ -132,7 +127,7 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
             "【arXiv 论文稿】「描述」按：研究问题 → 方法/贡献 → 对 AI 从业者的意义；"
             "「数据支撑」表格列：论文标题、arXiv ID、作者、发表/更新日期、abs 链接、PDF 链接、学科分类。"
         )
-    if k in ("newsapi", "finnhub", "youtube_data", "mapbox"):
+    if k in ("newsapi", "thenewsapi", "finnhub", "youtube_data", "mapbox"):
         return (
             "【资讯/API 快讯稿】「描述」按：谁 → 发生了什么 → 影响/结论；"
             "「数据支撑」表格列：报道主体、时间、来源、关键数字、原文链接。"
@@ -156,7 +151,12 @@ def _describe_polish_reject(data: dict) -> str:
         return f"summary_too_short len={len(summary)} need>=36"
     cats = data.get("categories")
     clean_cats = [str(x).strip() for x in cats if str(x).strip()] if isinstance(cats, list) else []
-    if len(clean_cats) != 1 or clean_cats[0] not in FACET_ALL_LABELS:
+    from .domain.articles import FACET_ALL_LABELS, _LEGACY_CATEGORY_ALIASES
+
+    if len(clean_cats) != 1:
+        return f"bad_categories got={clean_cats!r}"
+    rc = clean_cats[0]
+    if rc not in FACET_ALL_LABELS and rc not in _LEGACY_CATEGORY_ALIASES:
         return f"bad_categories got={clean_cats!r}"
     fk = str(data.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
@@ -217,49 +217,52 @@ def polish_connector_article(
     # 指纹与解析在 article_ingest 使用完整片段；模型侧仅取前段以控制 token。
     snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
     category_rule = (
-        "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列 **11** 个固定大类中选其一（禁止自造近义词）："
-        "大模型、开源工具、应用产品、数据算力、安全合规、政策市场、论文研究、平台API、Agent、多模态、其他。"
-        "选最能概括本条的那一个；不要输出多条。"
+        "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列固定大类中选其一（禁止自造近义词）："
+        "模型层(谨慎)、开源客户端(好抄)、应用产品、易复刻、已验证变现、变现案例、"
+        "数据算力、安全合规、政策市场、Agent、多模态、其他。"
+        "独立开发者视角优先：能抄客户端选「开源客户端(好抄)」或「易复刻」；明确营收/并购线索选「变现案例」或「已验证变现」。"
+    )
+    commercial_hint = (
+        "你是「独立开发者复刻与商业灵感库」主编。读者要回答三件事：① 能否在 1～4 周内复刻（技术栈、人力）；"
+        "② 怎么赚钱（定价、渠道、目标用户）；③ 风险与差异化。"
+        "语气务实、可执行，避免空泛「颠覆行业」。"
     )
     if fk == "apps":
         stream_hint = (
-            "当前条目归类为 **AI 应用** 泳道：面向可运行产品、工具发布与能力更新；语气偏产品速递，让读者一眼知道「这是什么、能干什么」。"
+            f"{commercial_hint}"
+            "当前条目归类为 **应用/产品** 泳道：侧重可运行产品、上架工具与变现灵感。"
             f"{category_rule}"
         )
         structure_hint = (
-            "【应用稿结构】列表卡片只展示「描述」与「数据支撑」两段。"
-            "tabs **必须恰好 2 个**，label 按顺序只能是「描述」「数据支撑」（禁止其它 tab 名）。"
-            "「描述」：summary 写 5～7 句完整叙述（不少于 120 汉字）；body_md 写清背景与定位（不少于 180 汉字），"
-            "段落之间用空行分隔，禁止粘贴 ```json 代码块或英文字段名堆砌。"
-            "「数据支撑」：summary 宜短（1～2 句）；body_md 用 **中文表头** 的 Markdown 表格呈现可核对事实，"
-            "表头建议为 | 指标 | 数值/事实 | 说明 |，行内写 star 数、版本、链接、发布时间等（字段名可译成中文列名）；"
-            "若无表格数据则用 4～6 条中文列表。禁止输出英文 JSON 代码块。"
-            "列表卡片以「描述」tab 的 summary 为主；「数据支撑」tab 的 summary 供卡片短摘要。"
+            "【应用稿结构】tabs **必须恰好 2 个**，label 只能是「描述」「数据支撑」。"
+            "「描述」summary≥120 字：产品是什么、解决谁的问题、为何值得抄；body_md≥180 字写复刻切入点（技术栈、MVP 范围）。"
+            "「数据支撑」：用中文表格写可核对指标（链接、star、定价、ARR 等）；禁止 ```json。"
         )
     else:
         stream_hint = (
-            "当前条目归类为 **AI 资讯** 泳道：面向行业动态、论文、社区与技术新闻；语气偏信息报道，让读者一眼知道「发生了什么事」。"
+            f"{commercial_hint}"
+            "当前条目归类为 **资讯/社区** 泳道：侧重动态、讨论与行业信号，仍须点出对独立开发者的行动启示。"
             f"{category_rule}"
         )
         structure_hint = (
-            "【资讯稿结构】列表卡片只展示「描述」与「数据支撑」两段。"
-            "tabs **必须恰好 2 个**，label 按顺序只能是「描述」「数据支撑」。"
-            "「描述」：5～7 句讲清主体、事件与结论（summary 不少于 120 汉字）；body_md 分段叙述（空行分段），禁止 ```json。"
-            "「数据支撑」：summary 宜短；body_md 用中文表头 Markdown 表格或列表写关键数字、来源、时间线，禁止英文 JSON 块。"
-            "body_md 总览区不少于 400 汉字，与 tabs 互补勿整段复制。"
+            "【资讯稿结构】tabs 只能是「描述」「数据支撑」。"
+            "「描述」summary≥120 字；body_md 分段写事件与启示。"
+            "「数据支撑」用表格/列表写关键数字与链接。"
         )
     system = (
-        "你是 AI 行业「趋势雷达」资深编辑。只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL。"
+        "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL。"
         "若片段信息不足，用「原文未提供」说明缺口，但仍须把已有字段写全。"
         f"{stream_hint}"
         f"{structure_hint}"
         f"{_source_detail_structure_hint(admin_source_key)}"
-        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, tabs。"
+        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, replication_tier, tabs。"
+        "replication_tier 只能是 S、A、B、C 之一：S=1～2 周可抄的客户端/小工具，A=1 月内 MVP，"
+        "B=需明显工程投入，C=模型/基础设施/强依赖大厂 API 难抄。"
         "title：单行中文标题，含主体名，避免「同步资源·板块·连接器」类占位风格。"
         "summary：列表卡片与详情页首屏用，信息密度高，不可与 title 重复同一句。"
         "body_md：详情页「总览」区 Markdown，须含二级标题，与 tabs 内容互补（总览讲脉络，tabs 讲展开），勿整段复制 tabs。"
-        "categories 为恰好 1 个元素的字符串数组，元素必须是上述 11 字面值之一；"
-        'feed_kind 只能为 "news" 或 "apps"。'
+        "categories 为恰好 1 个元素的字符串数组，元素必须是上述规范大类之一；"
+        'feed_kind 只能为 "news" 或 "apps"；replication_tier 必须为 S/A/B/C 之一。'
         "tabs：恰好 2 个；label 见上文结构要求；每项含 summary、body_md（Markdown）。"
         "若片段为 JSON/数组，须翻译成中文叙述或表格/列表，保留 repo 名、版本号、star、链接等可核对信息；"
         "禁止在 body_md 或 tabs 中输出 ```json 代码块或整段原始 API 响应。"
@@ -342,12 +345,16 @@ def polish_connector_article(
                     norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
         if len(norm_tabs) < 2:
             return None, f"tabs_incomplete parsed={len(norm_tabs)} raw_tabs={len(raw_tabs) if isinstance(raw_tabs, list) else 0}"
+        from .domain.articles import normalize_replication_tier
+
+        tier = normalize_replication_tier(data.get("replication_tier"))
         out = {
             "title": title,
             "summary": summary,
             "body_md": body_md or summary,
             "categories": cats,
             "feed_kind": out_fk,
+            "replication_tier": tier,
             "tabs": norm_tabs,
         }
         if not validate_llm_polish_for_publish(out):

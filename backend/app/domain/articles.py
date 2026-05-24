@@ -170,7 +170,7 @@ def _extract_url_from_json_obj(obj: object) -> str | None:
     return None
 
 
-COVER_IMAGE_SOURCE_KEYS = frozenset({"product_hunt", "huggingface_spaces"})
+COVER_IMAGE_SOURCE_KEYS = frozenset({"product_hunt", "huggingface_spaces", "newsapi", "thenewsapi"})
 _COVER_URL_MAX = 2048
 
 
@@ -237,6 +237,16 @@ def extract_cover_image_url(admin_source_key: str, snippet: str) -> str | None:
                 str(card.get("thumbnail") or ""),
                 space_id=str(payload.get("id") or ""),
             )
+        return None
+
+    if k == "newsapi":
+        u = _normalize_http_cover_url(str(payload.get("urlToImage") or ""))
+        return u
+
+    if k == "thenewsapi":
+        u = _normalize_http_cover_url(str(payload.get("image_url") or ""))
+        return u
+
     return None
 
 
@@ -411,6 +421,18 @@ def extract_connector_detail_link_rows(admin_source_key: str, snippet: str) -> l
                 add(label, u)
         return rows
 
+    if k == "taaft":
+        u = str(payload.get("url") or payload.get("listing_url") or "").strip()
+        if u.startswith(("http://", "https://")):
+            add("TAAFT", u)
+        return rows
+
+    if k == "acquire":
+        u = str(payload.get("url") or "").strip()
+        if u.startswith(("http://", "https://")):
+            add("Acquire 列表", u)
+        return rows
+
     if k == "huggingface_spaces":
         sid = str(payload.get("id") or "").strip().strip("/")
         if sid:
@@ -534,33 +556,66 @@ VALUE_SCORE_MIN = 38.0
 
 # 前台筛选与入库：固定 10 个大类 + 「其他」，每篇文章只展示/归入其中一类（合并细标签）
 FACET_PRIMARY_CATEGORIES: tuple[str, ...] = (
-    "大模型",
-    "开源工具",
+    "模型层(谨慎)",
+    "开源客户端(好抄)",
     "应用产品",
+    "易复刻",
+    "已验证变现",
+    "变现案例",
     "数据算力",
     "安全合规",
     "政策市场",
-    "论文研究",
-    "平台API",
     "Agent",
     "多模态",
 )
+
+# 历史 LLM/库内标签 → 当前规范大类
+_LEGACY_CATEGORY_ALIASES: dict[str, str] = {
+    "大模型": "模型层(谨慎)",
+    "开源工具": "开源客户端(好抄)",
+    "论文研究": "模型层(谨慎)",
+}
+
+REPLICATION_TIER_ALLOWED: frozenset[str] = frozenset({"S", "A", "B", "C"})
+
+
+def normalize_replication_tier(raw: object) -> str | None:
+    """LLM 复刻难度档位：S=极易 … C=难；兼容中文别名。"""
+    s = str(raw or "").strip().upper()
+    if not s:
+        return None
+    alias = {
+        "易": "S",
+        "易复刻": "S",
+        "极易": "S",
+        "A级": "A",
+        "B级": "B",
+        "难": "C",
+        "困难": "C",
+    }
+    s = alias.get(s, s)
+    if s in REPLICATION_TIER_ALLOWED:
+        return s
+    if s and s[0] in REPLICATION_TIER_ALLOWED:
+        return s[0]
+    return None
 FACET_CATEGORY_OTHER = "其他"
 FACET_ALL_LABELS: frozenset[str] = frozenset((*FACET_PRIMARY_CATEGORIES, FACET_CATEGORY_OTHER))
 FACET_DISPLAY_ORDER: tuple[str, ...] = (*FACET_PRIMARY_CATEGORIES, FACET_CATEGORY_OTHER)
 
 # (canonical, keyword_substrings) — 按顺序匹配，专用规则在前
 _CATEGORY_KEYWORD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("变现案例", ("acquire", "并购", "出售", "arr", "mrr", "估值", "退出")),
+    ("已验证变现", ("付费", "订阅", "营收", "变现", "商业化", "saas 收入")),
+    ("易复刻", ("复刻", "克隆", "mvp", "一周", "独立开发", "side project")),
     ("Agent", ("agent", "智能体", "工作流", "自动化")),
-    ("平台API", ("api", "sdk", "开发者", "云平台", "接口")),
-    ("论文研究", ("论文", "研究", "学术", "arxiv")),
-    ("政策市场", ("政策", "监管", "市场", "融资", "并购")),
+    ("政策市场", ("政策", "监管", "市场", "融资")),
     ("安全合规", ("安全", "对齐", "合规", "隐私", "风险")),
     ("数据算力", ("数据", "算力", "芯片", "训练", "gpu", "集群")),
-    ("应用产品", ("应用", "产品", "发布", "上架", "product")),
-    ("开源工具", ("开源", "工具", "生态", "仓库")),
+    ("应用产品", ("应用", "产品", "发布", "上架", "product", "launch")),
+    ("开源客户端(好抄)", ("开源", "客户端", "desktop", "electron", "tauri", "flutter", "chrome")),
     ("多模态", ("多模态", "图像", "语音", "视频", "生成")),
-    ("大模型", ("大模型", "推理", "模型", "llm", "基座")),
+    ("模型层(谨慎)", ("大模型", "推理", "模型", "llm", "基座", "论文", "研究")),
 )
 
 
@@ -569,6 +624,8 @@ def map_raw_label_to_canonical(raw: str) -> str:
     s = normalize_ws(raw)
     if not s:
         return FACET_CATEGORY_OTHER
+    if s in _LEGACY_CATEGORY_ALIASES:
+        return _LEGACY_CATEGORY_ALIASES[s]
     if s in FACET_ALL_LABELS:
         return s
     low = s.lower()
@@ -815,6 +872,17 @@ def unified_connector_heat(
         )
     elif k == "arxiv":
         eng = 380.0 * _heat_log_norm(sig["views"], cap=500_000.0)
+    elif k == "taaft":
+        eng = 360.0 * _heat_log_norm(sig["views"], cap=2_000_000.0) + 140.0 * _heat_log_norm(sig["likes"], cap=50_000.0)
+    elif k == "acquire":
+        arr = 0.0
+        try:
+            root = json.loads((snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS])
+            if isinstance(root, dict) and root.get("arr_usd") is not None:
+                arr = float(root.get("arr_usd") or 0)
+        except Exception:
+            arr = 0.0
+        eng = 400.0 * _heat_log_norm(max(0.0, arr), cap=100_000.0)
     else:
         eng = 540.0 * max(
             _heat_log_norm(sig["stars"], cap=120_000.0),
@@ -865,6 +933,7 @@ def ingest_duplicate_by_source_external_id_exists(
 FEED_NEWS_KEYS = frozenset(
     {
         "newsapi",
+        "thenewsapi",
         "youtube_data",
         "finnhub",
         "mapbox",
@@ -877,7 +946,7 @@ FEED_NEWS_KEYS = frozenset(
     }
 )
 # 应用：来自下列数据源的条目经 ``feed_lane_for_article`` 二次判别后进 apps；
-# Agent / 大模型主类与正文中的模型/Agent 信号仍一律视为 news。
+# Agent / 模型层主类与正文中的模型/Agent 信号仍一律视为 news。
 FEED_APPS_KEYS = frozenset(
     {
         "product_hunt",
@@ -889,14 +958,12 @@ FEED_APPS_KEYS = frozenset(
 _FEED_PRIMARY_FORCE_NEWS: frozenset[str] = frozenset(
     {
         "Agent",
-        "大模型",
-        "论文研究",
-        "平台API",
-        "开源工具",
+        "模型层(谨慎)",
         "数据算力",
         "安全合规",
         "政策市场",
         "多模态",
+        "变现案例",
     }
 )
 
@@ -1125,6 +1192,7 @@ _DETAIL_PROFILE_BY_SOURCE: dict[str, str] = {
     "huggingface_spaces": DETAIL_PROFILE_AI_SPACE,
     "github": DETAIL_PROFILE_OPEN_SOURCE,
     "newsapi": DETAIL_PROFILE_NEWS_WIRE,
+    "thenewsapi": DETAIL_PROFILE_NEWS_WIRE,
     "finnhub": DETAIL_PROFILE_NEWS_WIRE,
     "youtube_data": DETAIL_PROFILE_NEWS_WIRE,
     "mapbox": DETAIL_PROFILE_NEWS_WIRE,
@@ -1179,7 +1247,8 @@ def validate_llm_polish_for_publish(data: dict) -> bool:
     clean_cats = [str(x).strip() for x in cats if str(x).strip()]
     if len(clean_cats) != 1:
         return False
-    if clean_cats[0] not in FACET_ALL_LABELS:
+    raw_cat = clean_cats[0]
+    if raw_cat not in FACET_ALL_LABELS and raw_cat not in _LEGACY_CATEGORY_ALIASES:
         return False
     fk = str(data.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):

@@ -23,6 +23,8 @@ export type ArticleCard = {
   /** Product Hunt / HF Spaces 等封面图 */
   cover_image_url?: string | null;
   categories?: string[];
+  /** LLM 复刻难度 S/A/B/C（S 最易抄） */
+  replication_tier?: string | null;
 };
 
 export type ArticleTabSummary = { label: string; summary: string };

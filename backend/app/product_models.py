@@ -102,6 +102,8 @@ class Article(Base):
     ai_tabs_json: Mapped[str] = mapped_column(Text, default="[]")
     # 公共站泳道：news=资讯、apps=应用（入库时由数据源决定，供筛选与统计）
     feed_kind: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    # LLM 复刻难度：S/A/B/C（S=易复刻客户端向，C=模型/基础设施向）
+    replication_tier: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
     # 可更新热度（应用泳道按日列表内优先排序）；连接器入库与后台均可改写。
     heat_score: Mapped[float] = mapped_column(Float, default=0.0)
     # GitHub 等连接器重复同步时刷新：总 star、今日 star 增速（Trending 页解析）

@@ -1,4 +1,4 @@
-"""首页五源雷达：无文章时仍返回五路占位。"""
+"""首页四路雷达：无文章时仍返回四路占位。"""
 from __future__ import annotations
 
 from backend.app.application.home_public import _group_source_lanes, HOME_MAIN_SOURCE_KEYS
@@ -22,7 +22,7 @@ def test_group_source_lanes_with_one_source() -> None:
             }
         ]
     )
-    assert len(lanes) == 5
+    assert len(lanes) == len(HOME_MAIN_SOURCE_KEYS)
     gh = next(x for x in lanes if x["source_key"] == "github")
     assert len(gh["items"]) == 1
     hn = next(x for x in lanes if x["source_key"] == "hacker_news")

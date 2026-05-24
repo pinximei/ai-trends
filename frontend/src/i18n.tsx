@@ -61,7 +61,7 @@ const STRINGS: Record<string, string> = {
   homeStatTrendSum: "近 14 日合计",
   homeStatTrendPeak: "单日峰值",
   homeStatPerSource: "各源贡献（30 日）",
-  homeSourceRadar: "五源雷达",
+  homeSourceRadar: "五路雷达",
   homeSourceRadarSub: "GitHub · Product Hunt · Hugging Face · Hacker News · arXiv 各平台当前最热一条",
   homeSourceRadarNoData: "近 30 天暂无内容，请在后台检查该源 URL 与连接器同步",
   homeNewsWall: "资讯情报墙",
