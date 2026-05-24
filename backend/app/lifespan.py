@@ -24,7 +24,6 @@ def _startup_sync() -> None:
     from . import product_models  # noqa: F401
 
     t0 = time.perf_counter()
-    logger.info("startup: database %s", engine.url.render_as_string(hide_password=True))
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:
@@ -32,7 +31,6 @@ def _startup_sync() -> None:
             "无法连接数据库。请确认 PostgreSQL 已启动（如 docker compose up -d），"
             "且 backend/.env 中 AITRENDS_DATABASE_URL / AISOU_DB_URL_TEST 正确。"
         ) from e
-    logger.info("startup: schema ready (%.1fs)", time.perf_counter() - t0)
     ensure_schema_compatibility()
     db = SessionLocal()
     try:
@@ -64,14 +62,14 @@ def _startup_sync() -> None:
         t_prune = time.perf_counter()
         pr = prune_discontinued_bootstrap_admin_sources(db)
         if any(pr.values()):
-            logger.info("startup: pruned discontinued sources %s (%.1fs)", pr, time.perf_counter() - t_prune)
+            logger.debug("startup: pruned discontinued sources %s", pr)
         prune_admin_sources_outside_mainstream(db)
         prune_disabled_admin_sources(db)
         ensure_mainstream_admin_sources(db)
         sync_catalog_preset_metadata(db)
         n_fl = repair_mainstream_fetch_limits(db)
         if n_fl:
-            logger.info("startup: repaired mainstream fetch_limit rows=%s", n_fl)
+            logger.debug("startup: repaired mainstream fetch_limit rows=%s", n_fl)
         repair_github_admin_source_if_still_zen(db)
         repair_mainstream_heat_fetch_admin_sources(db)
         repair_short_probe_admin_sources(db)
@@ -101,7 +99,7 @@ def _startup_sync() -> None:
         ensure_newsletter_settings_row(db)
         ntok = backfill_newsletter_unsubscribe_tokens(db)
         if ntok:
-            logger.info("newsletter: backfilled %s unsubscribe tokens", ntok)
+            logger.debug("newsletter: backfilled %s unsubscribe tokens", ntok)
         from .taxonomy_from_sources import sync_product_taxonomy_from_admin_sources
 
         sync_product_taxonomy_from_admin_sources(db)
@@ -124,7 +122,6 @@ def _job_scheduled_hot() -> None:
         from .hot_service import rebuild_hot_snapshot
 
         rebuild_hot_snapshot(db, trigger="three_day_cron")
-        logger.info("scheduled hot snapshot ok (3-day interval)")
     except Exception as e:
         logger.exception("scheduled hot snapshot failed: %s", e)
     finally:
@@ -136,8 +133,7 @@ def _job_anomaly() -> None:
     try:
         from .anomaly_service import compute_anomalies
 
-        n = compute_anomalies(db)
-        logger.info("anomaly scan created %s events", n)
+        compute_anomalies(db)
     except Exception as e:
         logger.exception("anomaly failed: %s", e)
     finally:
@@ -185,7 +181,6 @@ def _job_connector_sync_gate() -> None:
 
         rows = db.scalars(select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)).all()
         if not rows:
-            logger.info("scheduled connector batch: no enabled connectors")
             return
 
         ok = 0
@@ -212,7 +207,8 @@ def _job_connector_sync_gate() -> None:
 
         if ok > 0:
             set_last_connector_batch_at(db, datetime.utcnow())
-            logger.info("scheduled connector batch finished: ok=%s fail=%s total=%s", ok, fail, len(rows))
+            if fail > 0:
+                logger.warning("scheduled connector batch: ok=%s fail=%s total=%s", ok, fail, len(rows))
         else:
             logger.warning(
                 "scheduled connector batch: all failed (ok=0), not advancing last_connector_batch_at — will retry on next gate",
@@ -249,8 +245,7 @@ def _job_newsletter_daily() -> None:
         slot_end = slot_start + timedelta(minutes=5)
         if not (slot_start <= now < slot_end):
             return
-        out = run_daily_newsletter_digest_job(db=db, settings=s)
-        logger.info("newsletter daily job: %s", out)
+        run_daily_newsletter_digest_job(db=db, settings=s)
     except Exception as e:
         logger.exception("newsletter daily job failed: %s", e)
     finally:
@@ -274,9 +269,6 @@ def _start_scheduler() -> None:
         _job_newsletter_daily,
         IntervalTrigger(minutes=5),
         id="newsletter_daily_digest",
-    )
-    logger.info(
-        "connector sync gate every 15m (calendar slots from Asia/Shanghai 00:00); newsletter digest every 5m",
     )
     _scheduler.start()
 

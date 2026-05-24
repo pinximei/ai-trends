@@ -481,8 +481,10 @@ def _connector_req_diag(
 ) -> None:
     if db is None:
         return
-    from ..sync_diagnostic_log import commit_diagnostics, get_current_run_id, write
+    from ..sync_diagnostic_log import commit_diagnostics, get_current_run_id, should_persist_diagnostic, write
 
+    if not should_persist_diagnostic(level=level, step=step):
+        return
     write(
         db,
         run_id=get_current_run_id(),
@@ -770,21 +772,6 @@ def run_connector_sync(
     status_code, snippet = _run_connector_request(
         cfg, db, connector_id=c.id, source_key=ask or ask_preview,
     )
-    snip_len = len(snippet or "")
-    pack_n = len(parse_connector_sync_item_snippets((snippet or "")[:120000]) or [])
-    diag_write(
-        db,
-        step="http_done",
-        message=(
-            f"HTTP {status_code or '—'} 响应长度={snip_len} "
-            f"connector_sync_items={pack_n if pack_n else '非多段/整段'} "
-            f"{_snippet_pack_diag(snippet or '')}"
-            + (f" 预览: {(snippet or '')[:160].replace(chr(10), ' ')}" if snippet and not pack_n else "")
-        ),
-        connector_id=c.id,
-        source_key=ask or None,
-    )
-    commit_diagnostics(db)
     rows_ingested = 0
     articles_created = 0
     err = None
@@ -803,13 +790,6 @@ def run_connector_sync(
                     source_key=ask,
                 )
             else:
-                diag_write(
-                    db,
-                    step="ingest_start",
-                    message=f"解析到 {len(targets)} 个板块，开始入库（需 LLM 润色）",
-                    connector_id=c.id,
-                    source_key=ask,
-                )
                 articles_created = create_published_articles_for_connector_targets(
                     db,
                     connector_id=c.id,
@@ -941,58 +921,39 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
     from ..product_connectors_bootstrap import audit_mainstream_connector_paths
 
     bad_urls = [r for r in audit_mainstream_connector_paths(db) if not r.get("heat_fetch_url_ok")]
-    if n_repair or bad_urls:
+    if bad_urls:
         diag_write(
             db,
             run_id=run_id,
-            level="warn" if bad_urls else "info",
+            level="warn",
             step="source_url_audit",
             message=(
-                f"已修复主流源 api_base {n_repair} 处；连接器 URL 对齐 {n_url} 个。"
-                + (
-                    " 仍异常: "
-                    + ", ".join(f"{r['source']}({r.get('api_base', '')[:48]})" for r in bad_urls)
-                    if bad_urls
-                    else " 三路 URL 均已匹配热度打包路径。"
-                )
+                f"已修复主流源 api_base {n_repair} 处；连接器 URL 对齐 {n_url} 个。仍异常: "
+                + ", ".join(f"{r['source']}({r.get('api_base', '')[:48]})" for r in bad_urls)
             ),
         )
-    commit_diagnostics(db)
+        commit_diagnostics(db)
     tnorm = (theme or "").strip() or None
     details: list[dict] = []
     ok_n = 0
     fail_n = 0
     rows: list[ProductConnector] = []
     try:
-        if tnorm:
-            diag_write(db, run_id=run_id, step="theme_kw", message=f"本次 URL 搜索词 q={tnorm!r}")
-            commit_diagnostics(db)
-        diag_write(db, run_id=run_id, step="taxonomy_sync", message="正在同步数据源领域 → 行业/板块…")
-        commit_diagnostics(db)
-        n_tax = sync_product_taxonomy_from_admin_sources(db, commit=False)
-        diag_write(
-            db,
-            run_id=run_id,
-            step="taxonomy",
-            message=f"已同步数据源领域 → 行业/板块（约新增 {n_tax} 行）"
-            + (f"；已对齐连接器 URL {n_url} 个" if n_url else ""),
-        )
-        commit_diagnostics(db)
+        sync_product_taxonomy_from_admin_sources(db, commit=False)
         _llm_base, llm_key, _llm_model = resolve_llm_http_config(db)
         llm_ok = bool((llm_key or "").strip())
-        diag_write(
-            db,
-            run_id=run_id,
-            level="info" if llm_ok else "error",
-            step="llm_config",
-            message="LLM API Key 已配置，可润色入库" if llm_ok else "未配置 LLM：拉取成功也不会生成文章，请在「AI 资讯与数据」配置 DeepSeek",
-        )
-        commit_diagnostics(db)
+        if not llm_ok:
+            diag_write(
+                db,
+                run_id=run_id,
+                level="error",
+                step="llm_config",
+                message="未配置 LLM：拉取成功也不会生成文章，请在「AI 资讯与数据」配置 DeepSeek",
+            )
+            commit_diagnostics(db)
         rows = db.scalars(
             select(ProductConnector).where(ProductConnector.enabled.is_(True)).order_by(ProductConnector.id)
         ).all()
-        diag_write(db, run_id=run_id, step="connectors", message=f"将同步已启用连接器 {len(rows)} 个")
-        commit_diagnostics(db)
     except Exception as e:
         log.exception("theme_fetch_batch early phase failed run_id=%s", run_id)
         diag_write(
@@ -1058,20 +1019,14 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
             )
             details.append({"connector_id": c.id, "name": c.name, "error": str(e)[:240]})
     articles_total = sum(int(d.get("articles_created") or 0) for d in details)
-    diag_write(
-        db,
-        run_id=run_id,
-        level="info" if articles_total else "warn",
-        step="batch_articles",
-        message=(
-            f"本批新建文章合计 {articles_total} 篇（GitHub 等进前台「资讯」/news，Product Hunt 进「应用」/apps）。"
-            + (
-                " 若为 0：请看上方 llm_config、各连接器 http_done / skip_llm / skip_score。"
-                if not articles_total
-                else ""
-            )
-        ),
-    )
+    if not articles_total:
+        diag_write(
+            db,
+            run_id=run_id,
+            level="warn",
+            step="batch_articles",
+            message="本批新建文章 0 篇：请查看各连接器 connector_done、skip_llm / skip_score 等告警或错误行。",
+        )
     end_run(db, run_id=run_id, ok=ok_n, fail=fail_n, total=len(rows))
     commit_diagnostics(db)
     audit(db, actor=actor, action="product.ingest.theme_fetch", detail=f"theme={tnorm!r}, ok={ok_n}, fail={fail_n}")

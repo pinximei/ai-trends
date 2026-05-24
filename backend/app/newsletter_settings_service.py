@@ -101,6 +101,16 @@ def ensure_newsletter_settings_row(db: Session) -> None:
     db.commit()
 
 
+def _sync_push_channel_flags(cur: dict[str, Any]) -> None:
+    """任一推送渠道开启时自动打开生成与定时；全关则关闭（运营端只需勾选邮件/飞书）。"""
+    email_on = bool(cur.get("send_enabled"))
+    feishu_on = bool(cur.get("feishu_enabled"))
+    any_on = email_on or feishu_on
+    cur["cron_enabled"] = any_on
+    cur["generate_enabled"] = any_on
+    cur["daily_digest_job_enabled"] = any_on
+
+
 def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
     """patch 中空字符串的 smtp_password 表示不修改已存密码。"""
     row = db.get(ProductSetting, NEWSLETTER_KEY)
@@ -153,6 +163,10 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         nw = str(patch["feishu_webhook_url"]).strip()
         if nw:
             cur["feishu_webhook_url"] = nw
+    if "send_enabled" in patch or "feishu_enabled" in patch:
+        _sync_push_channel_flags(cur)
+    if "smtp_port" in patch and "smtp_use_tls" not in patch:
+        cur["smtp_use_tls"] = int(cur.get("smtp_port") or 465) != 465
     row.value_json = _normalize_merged(cur)
     row.updated_at = datetime.utcnow()
     db.commit()

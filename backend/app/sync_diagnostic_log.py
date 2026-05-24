@@ -6,7 +6,25 @@ import uuid
 from datetime import datetime
 
 # 写入 batch_start 消息，便于确认线上是否已部署最新诊断提交逻辑。
-DIAG_PIPELINE_VERSION = "4"
+DIAG_PIPELINE_VERSION = "5"
+
+# 仅保留关键 info（批次/连接器起止）；warn/error 始终入库。
+_KEY_INFO_STEPS: frozenset[str] = frozenset(
+    {
+        "batch_start",
+        "batch_done",
+        "connector_start",
+        "connector_done",
+    }
+)
+
+
+def should_persist_diagnostic(*, level: str, step: str) -> bool:
+    lv = (level or "info").strip().lower()
+    if lv in ("error", "warn"):
+        return True
+    st = (step or "log").strip().lower()
+    return lv == "info" and st in _KEY_INFO_STEPS
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -75,6 +93,8 @@ def write(
     connector_id: int | None = None,
     source_key: str | None = None,
 ) -> None:
+    if not should_persist_diagnostic(level=level, step=step):
+        return
     from .product_models import ProductSyncDiagnosticLog
 
     rid = (run_id or _current_run_id.get() or "").strip() or uuid.uuid4().hex[:16]

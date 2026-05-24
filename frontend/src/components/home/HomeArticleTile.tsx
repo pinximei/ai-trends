@@ -4,7 +4,7 @@ import type { ArticleFeedCard } from "@/api/public";
 import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
 import { useI18n } from "@/i18n";
 import { HomeHeatBadge } from "./HomeHeatBadge";
-import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel } from "./homeUtils";
+import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel, showReplicationTierOnCard } from "./homeUtils";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "—";
@@ -63,14 +63,15 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
   const { t } = useI18n();
   const accent = platformAccent(item.admin_source_key || "");
   const engagement = itemEngagementLine(item);
-  const tierLabel = replicationTierLabel(item.replication_tier);
+  const showTier = showReplicationTierOnCard(item.feed_kind);
+  const tierLabel = showTier ? replicationTierLabel(item.replication_tier) : null;
   const tier = (item.replication_tier || "").trim().toUpperCase();
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
       <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${accent.badge}`}>
         {item.platform_label || t("source")}
       </span>
-      {tierLabel ? (
+      {showTier && tierLabel ? (
         <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800" title={`可复刻性 ${tier} 档`}>
           {tierLabel}
         </span>

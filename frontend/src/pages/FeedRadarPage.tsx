@@ -630,7 +630,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                     const displayIso = a.published_at;
                     const starsTotal = a.engagement_stars_total;
                     const starsToday = a.engagement_stars_today;
-                    const tierBadge = replicationTierLabel(a.replication_tier);
+                    const tierBadge =
+                      mode === "apps" ? replicationTierLabel(a.replication_tier) : null;
                     return (
                       <Link
                         key={a.id}
