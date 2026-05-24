@@ -30,7 +30,7 @@ def test_polish_connector_article_returns_none_without_api_key() -> None:
         "backend.app.llm_service.resolve_llm_http_config",
         return_value=("https://api.deepseek.com/v1", "", "deepseek-chat"),
     ):
-        out = polish_connector_article(
+        out, err = polish_connector_article(
             db,
             snippet="x" * 500,
             connector_name="t",
@@ -43,6 +43,7 @@ def test_polish_connector_article_returns_none_without_api_key() -> None:
             feed_kind="news",
         )
     assert out is None
+    assert err == "no_llm_key"
 
 
 def test_chat_completion_raises_when_no_api_key() -> None:

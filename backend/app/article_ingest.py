@@ -293,7 +293,7 @@ def _create_one_published_article_from_connector_targets(
         )
         return 0
 
-    polished = polish_connector_article(
+    polished, polish_err = polish_connector_article(
         db,
         snippet=safe,
         connector_name=connector_name,
@@ -309,8 +309,9 @@ def _create_one_published_article_from_connector_targets(
         _diag(
             "error",
             "skip_llm_polish",
-            "跳过：LLM 润色失败（DeepSeek 调用异常、返回非 JSON、标题/摘要为空，或 tabs 缺字段）。"
-            " 与 GitHub/PH 等同一把 Key；请查看同步诊断里的 llm_config 是否为「已配置」，并查 LlmUsageLog 是否 article_ingest_polish 报错",
+            f"跳过：LLM 润色失败 [{polish_err or 'unknown'}]。"
+            " Product Hunt 等源需 DeepSeek 返回合规 JSON（描述 tab summary≥72 字、body≥120 字）。"
+            " 请查管理端 LlmUsageLog（scenario=article_ingest_polish）或重试同步。",
         )
         return 0
     if not validate_llm_polish_for_publish(polished):

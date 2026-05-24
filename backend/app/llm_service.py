@@ -7,7 +7,12 @@ import re
 import httpx
 from sqlalchemy.orm import Session
 
-from .domain.articles import CONNECTOR_LLM_SNIPPET_MAX_CHARS, validate_llm_polish_for_publish
+from .domain.articles import (
+    CONNECTOR_LLM_SNIPPET_MAX_CHARS,
+    FACET_ALL_LABELS,
+    required_feed_card_tab_labels,
+    validate_llm_polish_for_publish,
+)
 from .llm_settings_service import resolve_llm_http_config
 from .product_models import LlmUsageLog
 
@@ -140,6 +145,51 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
     return ""
 
 
+def _describe_polish_reject(data: dict) -> str:
+    """润色结果未通过发布校验时的可读原因（供同步诊断）。"""
+    title = str(data.get("title") or "").strip()
+    summary = str(data.get("summary") or "").strip()
+    body_md = str(data.get("body_md") or "").strip()
+    if not title or not summary:
+        return f"title_or_summary_empty title={bool(title)} summary_len={len(summary)}"
+    if len(summary) < 36:
+        return f"summary_too_short len={len(summary)} need>=36"
+    cats = data.get("categories")
+    clean_cats = [str(x).strip() for x in cats if str(x).strip()] if isinstance(cats, list) else []
+    if len(clean_cats) != 1 or clean_cats[0] not in FACET_ALL_LABELS:
+        return f"bad_categories got={clean_cats!r}"
+    fk = str(data.get("feed_kind") or "news").strip().lower()
+    if fk not in ("news", "apps"):
+        fk = "news"
+    need_desc, need_hi = required_feed_card_tab_labels(fk)
+    tabs = data.get("tabs")
+    if not isinstance(tabs, list) or len(tabs) != 2:
+        return f"tabs_count={len(tabs) if isinstance(tabs, list) else 'not_list'} need=2"
+    labels: list[str] = []
+    for t in tabs:
+        if not isinstance(t, dict):
+            return "tab_not_object"
+        lab = str(t.get("label") or "").strip()
+        summ = str(t.get("summary") or "").strip()
+        body = str(t.get("body_md") or "").strip()
+        labels.append(lab)
+        min_summ = 72 if lab == need_desc else 12
+        min_body = 120 if lab == need_desc else 60
+        if len(summ) < min_summ:
+            return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
+        if len(body) < min_body:
+            return f"tab_{lab}_body_short len={len(body)} need>={min_body}"
+    legacy_ok = labels == [need_desc, "功能亮点"] if fk == "apps" else labels == [need_desc, "要点"]
+    if labels != [need_desc, need_hi] and not legacy_ok:
+        return f"tab_labels={labels!r} need={[need_desc, need_hi]!r}"
+    tab_body_total = sum(len(str(t.get("body_md") or "")) for t in tabs if isinstance(t, dict))
+    if tab_body_total < 280:
+        return f"tab_body_total_short len={tab_body_total} need>=280"
+    if len(body_md) < 120 and tab_body_total < 500:
+        return f"body_md_short body={len(body_md)} tabs_total={tab_body_total}"
+    return "validate_unknown"
+
+
 def polish_connector_article(
     db: Session,
     *,
@@ -152,14 +202,15 @@ def polish_connector_article(
     value_score: float,
     ref_id: str,
     feed_kind: str = "news",
-) -> dict | None:
+) -> tuple[dict | None, str]:
     """
     仅在高价值已确认后调用：必须用模型重写全文并分类；输出含多 tab（概要 + 详情 Markdown）。
     feed_kind 为 news（资讯）或 apps（应用），决定文风与 categories 侧重。
-    校验失败或未配置 Key 时返回 None；调用方不得再落规则快照稿。
+    返回 (结果, 失败原因)；成功时原因为空串。未配置 Key / 校验失败时结果为 None。
     """
-    if not resolve_llm_http_config(db)[1]:
-        return None
+    _base, _key, _model = resolve_llm_http_config(db)
+    if not (_key or "").strip():
+        return None, "no_llm_key"
     fk = (feed_kind or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
@@ -223,6 +274,7 @@ def polish_connector_article(
         f"占位摘要: {rule_summary}\n\n"
         f"原始片段:\n```\n{snippet_cut}\n```"
     )
+    model = _model or "deepseek-chat"
     try:
         try:
             raw, _, _ = chat_completion(
@@ -235,26 +287,42 @@ def polish_connector_article(
                 response_json=True,
                 max_tokens=8192,
             )
-        except Exception:
-            raw, _, _ = chat_completion(
-                db,
-                system=system + " 请只输出一个 JSON 对象，不要其它文字。",
-                user=user,
-                scenario="article_ingest_polish",
-                ref_type="connector_article",
-                ref_id=ref_id[:64],
-                response_json=False,
-                max_tokens=8192,
-            )
+        except Exception as e1:
+            try:
+                raw, _, _ = chat_completion(
+                    db,
+                    system=system + " 请只输出一个 JSON 对象，不要其它文字。",
+                    user=user,
+                    scenario="article_ingest_polish",
+                    ref_type="connector_article",
+                    ref_id=ref_id[:64],
+                    response_json=False,
+                    max_tokens=8192,
+                )
+            except Exception as e2:
+                err = f"{type(e2).__name__}: {str(e2)[:240]}"
+                _log_usage(
+                    db,
+                    "article_ingest_polish",
+                    model,
+                    0,
+                    0,
+                    False,
+                    "connector_article",
+                    ref_id[:64],
+                    err=err,
+                )
+                return None, f"llm_http_failed retry_after_json_mode failed={type(e1).__name__}; {err}"
         data = _extract_json_object(raw)
         if not data:
-            return None
+            preview = (raw or "").strip().replace("\n", " ")[:120]
+            return None, f"json_parse_failed raw_preview={preview!r}"
         title = str(data.get("title") or "").strip()
         summary = str(data.get("summary") or "").strip()
         body_md = str(data.get("body_md") or "").strip()
         cats = data.get("categories")
         if not title or not summary:
-            return None
+            return None, f"empty_title_or_summary title={bool(title)} summary_len={len(summary)}"
         if not isinstance(cats, list):
             cats = []
         else:
@@ -272,6 +340,8 @@ def polish_connector_article(
                 bd = str(t.get("body_md") or "").strip()
                 if lab and sm and bd:
                     norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
+        if len(norm_tabs) < 2:
+            return None, f"tabs_incomplete parsed={len(norm_tabs)} raw_tabs={len(raw_tabs) if isinstance(raw_tabs, list) else 0}"
         out = {
             "title": title,
             "summary": summary,
@@ -281,10 +351,25 @@ def polish_connector_article(
             "tabs": norm_tabs,
         }
         if not validate_llm_polish_for_publish(out):
-            return None
-        return out
-    except Exception:
-        return None
+            return None, _describe_polish_reject(out)
+        return out, ""
+    except Exception as e:
+        err = f"{type(e).__name__}: {str(e)[:240]}"
+        try:
+            _log_usage(
+                db,
+                "article_ingest_polish",
+                model,
+                0,
+                0,
+                False,
+                "connector_article",
+                ref_id[:64],
+                err=err,
+            )
+        except Exception:
+            pass
+        return None, f"unexpected: {err}"
 
 
 def generate_inspiration_body(
