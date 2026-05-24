@@ -33,9 +33,25 @@ function friendlyErr(msg: string): string {
   return msg;
 }
 
-/** 复制同步日志到剪贴板时压成单行（去掉换行，便于粘贴到聊天/工单）。 */
-function flattenDiagLogForClipboard(text: string): string {
-  return text.replace(/\r\n|\n|\r/g, " ").replace(/\s+/g, " ").trim();
+function buildDiagLogClipboardText(
+  logs: Array<{
+    created_at?: string | null;
+    level?: string;
+    step?: string;
+    message?: string;
+    connector_id?: number | null;
+    source_key?: string | null;
+  }>,
+  opts?: { runId?: string; diagVersion?: string },
+): string {
+  const head = [
+    `# AiTrends 同步诊断日志`,
+    opts?.diagVersion ? `# diag_v=${opts.diagVersion}` : "",
+    opts?.runId ? `# run_id=${opts.runId}` : "",
+    `# lines=${logs.length}`,
+    "",
+  ].filter(Boolean);
+  return [...head, ...logs.map((r) => formatDiagLogLine(r))].join("\n");
 }
 
 function formatDiagLogLine(r: {
@@ -357,6 +373,8 @@ export function App() {
   const [diagRunIds, setDiagRunIds] = useState<string[]>([]);
   const [diagRunFilter, setDiagRunFilter] = useState("");
   const [diagLoading, setDiagLoading] = useState(false);
+  const [diagPipelineVersion, setDiagPipelineVersion] = useState("");
+  const [diagCopyOk, setDiagCopyOk] = useState(false);
   /** 与公开接口同源：便于核对后台看到的后端是否为当前部署 */
   const [publicApiRelease, setPublicApiRelease] = useState<string | null>(null);
 
@@ -520,6 +538,7 @@ export function App() {
       const d = await adminApi.syncDiagnosticLogs({ run_id: runId, limit: 800 });
       setDiagLogs(d.items ?? []);
       setDiagRunIds(d.recent_run_ids ?? []);
+      setDiagPipelineVersion(d.diag_pipeline_version ?? "");
       if (runId) setDiagRunFilter(runId);
     } catch (e) {
       setErr(friendlyErr(e instanceof Error ? e.message : "load diagnostic logs failed"));
@@ -958,6 +977,30 @@ export function App() {
     }
   }
 
+  async function copyDiagnosticLogsToClipboard() {
+    const runId = diagRunFilter.trim();
+    try {
+      let text: string;
+      if (runId) {
+        try {
+          text = await adminApi.exportSyncDiagnosticLogs(runId, 800);
+        } catch {
+          text = buildDiagLogClipboardText(diagLogs, {
+            runId,
+            diagVersion: diagPipelineVersion || undefined,
+          });
+        }
+      } else {
+        text = buildDiagLogClipboardText(diagLogs, { diagVersion: diagPipelineVersion || undefined });
+      }
+      await navigator.clipboard.writeText(text);
+      setDiagCopyOk(true);
+      window.setTimeout(() => setDiagCopyOk(false), 2500);
+    } catch (e) {
+      setErr(friendlyErr(e instanceof Error ? e.message : "复制失败"));
+    }
+  }
+
   async function onThemeFetch() {
     if (!canManageSettings) return;
     setThemeFetchBusy(true);
@@ -973,8 +1016,23 @@ export function App() {
         setTab("logs");
       }
       await loadAdminData();
+      const failed = (r.details ?? []).filter((d) => d.error);
+      const summary = `拉取完成：成功 ${r.ok}/${r.connectors_total}，新建文章合计 ${(r.details ?? []).reduce((n, d) => n + (d.articles_created ?? 0), 0)}。`;
+      if (r.fail > 0 || failed.length > 0) {
+        const lines = failed
+          .map((d) => `· ${d.name ?? d.connector_id}: ${d.error ?? "失败"}`)
+          .join("\n");
+        setErr(
+          `${summary}\n${lines}\n\n${r.log_hint ?? "请到「同步日志」复制本批日志发给运维。"}`,
+        );
+      } else if (r.log_hint) {
+        window.alert(`${summary}\n\n${r.log_hint}`);
+      }
     } catch (error) {
-      setErr(friendlyErr(error instanceof Error ? error.message : "theme fetch failed"));
+      const msg = friendlyErr(error instanceof Error ? error.message : "theme fetch failed");
+      setErr(`${msg}\n\n拉取可能已部分执行：请到顶部「同步日志」查看最新 run_id 并复制日志。`);
+      setTab("logs");
+      await loadDiagnosticLogs(diagRunFilter || undefined);
     } finally {
       setThemeFetchBusy(false);
     }
@@ -2530,7 +2588,14 @@ export function App() {
                 同步诊断日志
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.65 }}>
-                记录「拉取全部数据」与各连接器同步的每一步。拉取完成后会自动打开本页；请点「复制日志」发运维排查。
+                记录「拉取全部数据」与各连接器同步的每一步（含 HTTP 路径、pack 条数、LLM 跳过原因等）。拉取完成后会自动打开本页；报错时请在下拉框选中对应{" "}
+                <strong>run_id</strong>，点「复制本批日志」整段发给运维排查。
+                {diagPipelineVersion ? (
+                  <>
+                    {" "}
+                    当前诊断版本 <code className="inline-code">diag_v={diagPipelineVersion}</code>
+                  </>
+                ) : null}
               </p>
               <div className="row wrap" style={{ marginTop: 12, gap: 8, alignItems: "flex-end" }}>
                 <div className="form-field" style={{ minWidth: 200, flex: 1 }}>
@@ -2554,15 +2619,8 @@ export function App() {
                 <button type="button" onClick={() => void loadDiagnosticLogs(diagRunFilter || undefined)} disabled={diagLoading}>
                   {diagLoading ? "刷新中…" : "刷新"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = diagLogs.map((r) => flattenDiagLogForClipboard(formatDiagLogLine(r))).join("");
-                    void navigator.clipboard.writeText(text);
-                  }}
-                  disabled={!diagLogs.length}
-                >
-                  复制日志
+                <button type="button" onClick={() => void copyDiagnosticLogsToClipboard()} disabled={!diagLogs.length}>
+                  {diagCopyOk ? "已复制" : diagRunFilter ? "复制本批日志" : "复制日志"}
                 </button>
                 {canManageSettings ? (
                   <button

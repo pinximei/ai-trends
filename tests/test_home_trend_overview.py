@@ -26,6 +26,25 @@ def test_home_dashboard_shape(client: TestClient) -> None:
     assert isinstance(data["top_categories"], list)
 
 
+def test_format_logs_for_export_multiline() -> None:
+    from backend.app.sync_diagnostic_log import format_logs_for_export
+
+    items = [
+        {
+            "created_at": "2026-01-01T00:00:00Z",
+            "level": "error",
+            "step": "http_fail",
+            "message": "HTTP 0",
+            "connector_id": 3,
+            "source_key": "arxiv",
+        }
+    ]
+    text = format_logs_for_export(items, run_id="abc123")
+    assert "run_id=abc123" in text
+    assert "[arxiv]" in text
+    assert "http_fail" in text
+
+
 def test_select_home_picks_backfills_when_quality_filter_empty() -> None:
     from backend.app.application.home_public import _select_home_picks
 

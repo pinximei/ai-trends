@@ -63,15 +63,41 @@ def get_sync_diagnostic_logs(
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("viewer")),
 ):
-    from ..sync_diagnostic_log import list_logs, list_recent_run_ids
+    from ..sync_diagnostic_log import DIAG_PIPELINE_VERSION, list_logs, list_recent_run_ids
 
+    rid = (run_id or "").strip() or None
+    items = list_logs(db, run_id=rid, limit=limit)
     return ok(
         {
-            "items": list_logs(db, run_id=run_id, limit=limit),
+            "items": items,
             "recent_run_ids": list_recent_run_ids(db),
-            "run_id": (run_id or "").strip() or None,
+            "run_id": rid,
+            "diag_pipeline_version": DIAG_PIPELINE_VERSION,
         }
     )
+
+
+@router.get("/product/sync-diagnostic-logs/export")
+def export_sync_diagnostic_logs(
+    run_id: str,
+    limit: int = 800,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    """纯文本导出，便于复制到聊天/工单。"""
+    from fastapi.responses import PlainTextResponse
+
+    from ..sync_diagnostic_log import format_logs_for_export, list_logs
+
+    _ = session
+    rid = (run_id or "").strip()
+    if not rid:
+        from fastapi import HTTPException
+
+        raise HTTPException(400, "run_id required")
+    items = list_logs(db, run_id=rid, limit=limit)
+    body = format_logs_for_export(items, run_id=rid)
+    return PlainTextResponse(body, media_type="text/plain; charset=utf-8")
 
 
 @router.delete("/product/sync-diagnostic-logs")

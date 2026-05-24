@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 # 写入 batch_start 消息，便于确认线上是否已部署最新诊断提交逻辑。
-DIAG_PIPELINE_VERSION = "3"
+DIAG_PIPELINE_VERSION = "4"
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -26,8 +26,30 @@ def begin_run(db: Session, *, actor: str, kind: str = "theme_fetch") -> str:
         run_id=run_id,
         level="info",
         step="batch_start",
-        message=f"开始整批拉取（{kind}）操作者={actor} diag_v={DIAG_PIPELINE_VERSION}",
+        message=f"开始拉取（{kind}）操作者={actor} diag_v={DIAG_PIPELINE_VERSION}",
     )
+    commit_diagnostics(db)
+    return run_id
+
+
+def begin_connector_run(db: Session, *, actor: str, connector_id: int, source_key: str = "") -> str:
+    """单连接器手动同步：独立 run_id，便于在「同步日志」页筛选复制。"""
+    run_id = uuid.uuid4().hex[:16]
+    _current_run_id.set(run_id)
+    sk = (source_key or "").strip().lower()
+    write(
+        db,
+        run_id=run_id,
+        level="info",
+        step="batch_start",
+        message=(
+            f"开始单连接器同步 #{connector_id} source={sk or '—'} "
+            f"操作者={actor} diag_v={DIAG_PIPELINE_VERSION}"
+        ),
+        connector_id=connector_id,
+        source_key=sk or None,
+    )
+    commit_diagnostics(db)
     return run_id
 
 
@@ -120,6 +142,30 @@ def list_recent_run_ids(db: Session, *, limit: int = 30) -> list[str]:
         if len(seen) >= max(1, min(limit, 100)):
             break
     return seen
+
+
+def format_logs_for_export(items: list[dict], *, run_id: str | None = None) -> str:
+    """供管理端「复制日志」：保留换行，便于粘贴到工单/聊天排查。"""
+    lines = [
+        f"# AiTrends 同步诊断日志 diag_v={DIAG_PIPELINE_VERSION}",
+        f"# run_id={run_id or '(mixed)'}",
+        f"# lines={len(items)}",
+        "",
+    ]
+    for r in items:
+        ts = r.get("created_at") or ""
+        lvl = r.get("level") or "info"
+        step = r.get("step") or ""
+        cid = r.get("connector_id")
+        sk = r.get("source_key") or ""
+        meta = ""
+        if cid is not None:
+            meta += f" #{cid}"
+        if sk:
+            meta += f" [{sk}]"
+        msg = (r.get("message") or "").replace("\r\n", "\n")
+        lines.append(f"[{ts}] [{lvl}] [{step}]{meta} {msg}")
+    return "\n".join(lines).strip() + "\n"
 
 
 def clear_all(db: Session) -> int:

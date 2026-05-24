@@ -121,6 +121,7 @@ export type ThemeFetchResult = {
   ok: number;
   fail: number;
   details: ThemeFetchConnectorDetail[];
+  log_hint?: string;
 };
 
 export type SyncDiagnosticLogItem = {
@@ -206,7 +207,20 @@ export const adminApi = {
       items: SyncDiagnosticLogItem[];
       recent_run_ids: string[];
       run_id: string | null;
+      diag_pipeline_version?: string;
     }>(`/api/admin/v1/product/sync-diagnostic-logs${q ? `?${q}` : ""}`);
+  },
+  exportSyncDiagnosticLogs: (runId: string, limit = 800) => {
+    const sp = new URLSearchParams();
+    sp.set("run_id", runId);
+    sp.set("limit", String(limit));
+    return fetch(`/api/admin/v1/product/sync-diagnostic-logs/export?${sp.toString()}`, {
+      credentials: "include",
+    }).then(async (res) => {
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+      return text;
+    });
   },
   clearSyncDiagnosticLogs: () =>
     request<{ deleted: number }>("/api/admin/v1/product/sync-diagnostic-logs", { method: "DELETE" }),
