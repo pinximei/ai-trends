@@ -32,6 +32,7 @@ const STRINGS: Record<string, string> = {
   homeTrendChartTitle: "近 14 日入库活跃度",
   homeTrendDataNote: "基于已发布文章统计（非演示数据）",
   homeTrendYUnit: "篇/日",
+  homeTrendXAxis: "日期",
   homeTrendUnitShort: "篇",
   homeTrendLegend: "纵轴为当日新发布文章总数（资讯+应用）；横轴为日期。鼠标移入圆点可查看具体数值。",
   homeTrendFootSum: "14 日合计",
