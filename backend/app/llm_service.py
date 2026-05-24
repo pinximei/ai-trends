@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .domain.articles import (
     CONNECTOR_LLM_SNIPPET_MAX_CHARS,
     FACET_ALL_LABELS,
+    primary_canonical_from_raw_labels,
     required_feed_card_tab_labels,
     validate_llm_polish_for_publish,
 )
@@ -129,8 +130,10 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
         )
     if k in ("newsapi", "thenewsapi", "finnhub", "youtube_data", "mapbox"):
         return (
-            "【资讯/API 快讯稿】「描述」按：谁 → 发生了什么 → 影响/结论；"
-            "「数据支撑」表格列：报道主体、时间、来源、关键数字、原文链接。"
+            "【资讯/API 快讯稿】原文 description 可能很短，须结合 title、url、source_name 扩写，禁止只复述一句。"
+            "「描述」tab：summary 至少 80 汉字、body_md 至少 150 汉字（分 2～3 段）。"
+            "「数据支撑」tab：用 Markdown 表格列：标题、来源、发布时间、原文链接(url)、摘要要点；"
+            "categories 必须从系统给定大类中选 1 个（资讯类常用「政策市场」「应用产品」「模型层(谨慎)」「其他」）。"
         )
     if k in ("openai", "google_gemini", "mcp_skills"):
         return (
@@ -138,6 +141,83 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
             "「数据支撑」列：产品/接口名、版本、配额或定价线索、文档链接。"
         )
     return ""
+
+
+def _coerce_polish_output(out: dict) -> dict:
+    """将模型输出规整为可发布形态：单合法大类、tab 名为「描述」「数据支撑」。"""
+    fk = str(out.get("feed_kind") or "news").strip().lower()
+    if fk not in ("news", "apps"):
+        fk = "news"
+    out["feed_kind"] = fk
+    cats = out.get("categories")
+    raw_labels = [str(x).strip() for x in cats if str(x).strip()] if isinstance(cats, list) else []
+    if not raw_labels:
+        raw_labels = [str(out.get("title") or "").strip() or "其他"]
+    out["categories"] = [primary_canonical_from_raw_labels(raw_labels)]
+    need_desc, need_hi = required_feed_card_tab_labels(fk)
+    tabs = out.get("tabs")
+    pieces: list[dict[str, str]] = []
+    if isinstance(tabs, list):
+        for t in tabs:
+            if not isinstance(t, dict):
+                continue
+            sm = str(t.get("summary") or "").strip()
+            bd = str(t.get("body_md") or "").strip()
+            if sm and bd:
+                pieces.append({"summary": sm, "body_md": bd})
+    if len(pieces) >= 2:
+        out["tabs"] = [
+            {"label": need_desc, **pieces[0]},
+            {"label": need_hi, **pieces[1]},
+        ]
+    return out
+
+
+def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | None, str]:
+    """从模型原文解析润色 JSON；失败时返回 (None, 原因)。"""
+    data = _extract_json_object(raw)
+    if not data:
+        preview = (raw or "").strip().replace("\n", " ")[:120]
+        return None, f"json_parse_failed raw_preview={preview!r}"
+    title = str(data.get("title") or "").strip()
+    summary = str(data.get("summary") or "").strip()
+    body_md = str(data.get("body_md") or "").strip()
+    if not title or not summary:
+        return None, f"empty_title_or_summary title={bool(title)} summary_len={len(summary)}"
+    cats = data.get("categories")
+    if not isinstance(cats, list):
+        cats = []
+    else:
+        cats = [str(x).strip() for x in cats if str(x).strip()]
+    fk_ai = str(data.get("feed_kind") or "").strip().lower()
+    fk = default_feed_kind if fk_ai not in ("news", "apps") else fk_ai
+    raw_tabs = data.get("tabs")
+    norm_tabs: list[dict[str, str]] = []
+    if isinstance(raw_tabs, list):
+        for t in raw_tabs[:6]:
+            if not isinstance(t, dict):
+                continue
+            lab = str(t.get("label") or "").strip()
+            sm = str(t.get("summary") or "").strip()
+            bd = str(t.get("body_md") or "").strip()
+            if lab and sm and bd:
+                norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
+    if len(norm_tabs) < 2:
+        n_raw = len(raw_tabs) if isinstance(raw_tabs, list) else 0
+        return None, f"tabs_incomplete parsed={len(norm_tabs)} raw_tabs={n_raw}"
+    from .domain.articles import normalize_replication_tier
+
+    tier = normalize_replication_tier(data.get("replication_tier"))
+    out = {
+        "title": title,
+        "summary": summary,
+        "body_md": body_md or summary,
+        "categories": cats,
+        "feed_kind": fk,
+        "replication_tier": tier,
+        "tabs": norm_tabs,
+    }
+    return _coerce_polish_output(out), ""
 
 
 def _describe_polish_reject(data: dict) -> str:
@@ -317,50 +397,37 @@ def polish_connector_article(
                     err=err,
                 )
                 return None, f"llm_http_failed retry_after_json_mode failed={type(e1).__name__}; {err}"
-        data = _extract_json_object(raw)
-        if not data:
-            preview = (raw or "").strip().replace("\n", " ")[:120]
-            return None, f"json_parse_failed raw_preview={preview!r}"
-        title = str(data.get("title") or "").strip()
-        summary = str(data.get("summary") or "").strip()
-        body_md = str(data.get("body_md") or "").strip()
-        cats = data.get("categories")
-        if not title or not summary:
-            return None, f"empty_title_or_summary title={bool(title)} summary_len={len(summary)}"
-        if not isinstance(cats, list):
-            cats = []
-        else:
-            cats = [str(x).strip() for x in cats if str(x).strip()]
-        fk_ai = str(data.get("feed_kind") or "").strip().lower()
-        out_fk = fk if fk_ai not in ("news", "apps") else fk_ai
-        raw_tabs = data.get("tabs")
-        norm_tabs: list[dict[str, str]] = []
-        if isinstance(raw_tabs, list):
-            for t in raw_tabs[:6]:
-                if not isinstance(t, dict):
-                    continue
-                lab = str(t.get("label") or "").strip()
-                sm = str(t.get("summary") or "").strip()
-                bd = str(t.get("body_md") or "").strip()
-                if lab and sm and bd:
-                    norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
-        if len(norm_tabs) < 2:
-            return None, f"tabs_incomplete parsed={len(norm_tabs)} raw_tabs={len(raw_tabs) if isinstance(raw_tabs, list) else 0}"
-        from .domain.articles import normalize_replication_tier
-
-        tier = normalize_replication_tier(data.get("replication_tier"))
-        out = {
-            "title": title,
-            "summary": summary,
-            "body_md": body_md or summary,
-            "categories": cats,
-            "feed_kind": out_fk,
-            "replication_tier": tier,
-            "tabs": norm_tabs,
-        }
-        if not validate_llm_polish_for_publish(out):
-            return None, _describe_polish_reject(out)
-        return out, ""
+        out, parse_err = _parse_polish_response(raw, default_feed_kind=fk)
+        if not out:
+            return None, parse_err
+        if validate_llm_polish_for_publish(out):
+            return out, ""
+        reject = _describe_polish_reject(out)
+        repair_user = (
+            f"{user}\n\n【上次输出未通过校验】{reject}\n"
+            "请重新输出完整 JSON：tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
+            "「描述」summary≥80 字、body_md≥150 字；「数据支撑」summary≥12 字、body_md≥60 字；"
+            f"categories 为恰好 1 个元素的数组，元素必须是下列之一：{', '.join(sorted(FACET_ALL_LABELS))}。"
+        )
+        try:
+            raw2, _, _ = chat_completion(
+                db,
+                system=system + " 请只输出一个 JSON 对象，不要其它文字。",
+                user=repair_user,
+                scenario="article_ingest_polish",
+                ref_type="connector_article",
+                ref_id=(ref_id[:60] + ":r1")[:64],
+                response_json=False,
+                max_tokens=8192,
+            )
+        except Exception as e2:
+            return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
+        out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
+        if not out2:
+            return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
+        if validate_llm_polish_for_publish(out2):
+            return out2, ""
+        return None, f"validate_failed_after_retry: {_describe_polish_reject(out2)}"
     except Exception as e:
         err = f"{type(e).__name__}: {str(e)[:240]}"
         try:

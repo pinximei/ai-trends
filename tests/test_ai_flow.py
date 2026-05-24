@@ -7,7 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.domain import articles as art
-from backend.app.llm_service import chat_completion, generate_inspiration_body, polish_connector_article
+from backend.app.llm_service import (
+    _coerce_polish_output,
+    chat_completion,
+    generate_inspiration_body,
+    polish_connector_article,
+)
 from backend.app.main import app
 
 
@@ -22,6 +27,23 @@ def _admin_login(c: TestClient) -> None:
     assert r.status_code == 200
     body = r.json()
     assert body.get("code") == 0, body
+
+
+def test_coerce_polish_output_maps_category_and_tab_labels() -> None:
+    out = {
+        "title": "OpenAI 发布新功能",
+        "summary": "x" * 40,
+        "body_md": "y" * 130,
+        "categories": ["科技新闻"],
+        "feed_kind": "news",
+        "tabs": [
+            {"label": "要点", "summary": "a" * 80, "body_md": "b" * 130},
+            {"label": "亮点", "summary": "c" * 20, "body_md": "d" * 80},
+        ],
+    }
+    fixed = _coerce_polish_output(out)
+    assert fixed["categories"][0] in art.FACET_ALL_LABELS
+    assert [t["label"] for t in fixed["tabs"]] == ["描述", "数据支撑"]
 
 
 def test_polish_connector_article_returns_none_without_api_key() -> None:

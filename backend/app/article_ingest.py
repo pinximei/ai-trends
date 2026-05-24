@@ -310,9 +310,9 @@ def _create_one_published_article_from_connector_targets(
         _diag(
             "error",
             "skip_llm_polish",
-            f"跳过：LLM 润色失败 [{polish_err or 'unknown'}]。"
-            " Product Hunt 等源需 DeepSeek 返回合规 JSON（描述 tab summary≥72 字、body≥120 字）。"
-            " 请查管理端 LlmUsageLog（scenario=article_ingest_polish）或重试同步。",
+            f"跳过：LLM 润色失败 — {polish_err or 'unknown'}。"
+            " 常见：DeepSeek 超时/余额、JSON 解析失败、tab 过短或 categories 不在合法大类。"
+            " 请查「AI 资讯」LLM 配置与 LlmUsageLog（scenario=article_ingest_polish），修正后重试同步。",
         )
         return 0
     if not validate_llm_polish_for_publish(polished):
