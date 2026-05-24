@@ -51,7 +51,7 @@ function CoverFrame({
         title={item.title || ""}
         seed={seed}
         fallbackMode={fallbackMode}
-        fallbackClassName="absolute inset-0"
+        fallbackClassName="absolute inset-0 h-full w-full"
         imgClassName="absolute inset-0 h-full w-full object-cover"
         initialClassName={initialClassName}
       />
@@ -117,16 +117,16 @@ export function HomeArticleTile({ item, variant, rank }: Props) {
     );
   } else if (variant === "tile") {
     inner = (
-      <div className="flex h-full flex-col overflow-hidden sm:flex-row">
+      <div className="flex min-h-[6.75rem] flex-col overflow-hidden sm:flex-row sm:items-stretch">
         <CoverFrame
           item={item}
           seed={`tile-${item.id}`}
-          className="shrink-0 ring-0 sm:w-32 md:w-36"
-          aspectClass="aspect-[16/10] w-full sm:aspect-auto sm:h-auto sm:min-h-[6.5rem] sm:self-stretch"
+          className="relative h-36 w-full shrink-0 ring-0 sm:h-auto sm:min-h-[6.75rem] sm:w-36 sm:self-stretch md:w-40"
+          aspectClass="h-full w-full sm:aspect-auto"
           fallbackMode="initial"
-          initialClassName="select-none text-2xl font-black text-white drop-shadow-md"
+          initialClassName="select-none text-3xl font-black text-white drop-shadow-md sm:text-4xl"
         />
-        <div className="flex min-w-0 flex-1 flex-col gap-2 p-3.5 sm:p-4">
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-2 p-3.5 sm:p-4">
           <MetaRow item={item} />
           <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">{item.title}</h3>
           <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-slate-600">{itemBlurb(item, 120)}</p>
