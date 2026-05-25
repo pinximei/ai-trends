@@ -514,6 +514,7 @@ export function HomePage() {
         news_limit: 8,
         apps_limit: 10,
         replicable_apps_limit: 4,
+        monetization_apps_limit: 4,
         published_within_days: 30,
       })
       .then(async (data) => {

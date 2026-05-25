@@ -125,6 +125,7 @@ export const publicApi = {
     news_limit?: number;
     apps_limit?: number;
     replicable_apps_limit?: number;
+    monetization_apps_limit?: number;
     published_within_days?: number;
   }) => {
     const sp = new URLSearchParams();
@@ -132,6 +133,7 @@ export const publicApi = {
     if (opts?.news_limit != null) sp.set("news_limit", String(opts.news_limit));
     if (opts?.apps_limit != null) sp.set("apps_limit", String(opts.apps_limit));
     if (opts?.replicable_apps_limit != null) sp.set("replicable_apps_limit", String(opts.replicable_apps_limit));
+    if (opts?.monetization_apps_limit != null) sp.set("monetization_apps_limit", String(opts.monetization_apps_limit));
     if (opts?.published_within_days != null) sp.set("published_within_days", String(opts.published_within_days));
     const qs = sp.toString();
     return publicGet<{

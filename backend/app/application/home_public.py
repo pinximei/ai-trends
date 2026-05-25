@@ -13,6 +13,7 @@ from ..product_models import Article, Industry
 # 首页「亮点应用」：S/A 优先展示；不足时用 B 档补足条数（见 list_highlight_replicable_apps）
 HOME_REPLICABLE_TIERS: tuple[str, ...] = ("S", "A")
 HOME_REPLICABLE_HIGHLIGHT_DEFAULT = 4
+HOME_MONETIZATION_HIGHLIGHT_DEFAULT = 4
 
 
 def _industry_article_ids(db: Session, *, industry_slug: str) -> list[int]:
@@ -460,36 +461,47 @@ def list_highlight_replicable_apps(
     return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 
 
-def list_highlight_monetization_apps(
+def _monetization_highlight_rank(a: Article) -> int:
+    """变现线索展示优先级：变现案例 > 已验证变现 > 变现源站 > 其它变现信号。"""
+    raw = str(getattr(a, "ai_categories_json", None) or "")
+    cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    if cats and cats[0] == "变现案例":
+        return 0
+    if cats and cats[0] == "已验证变现":
+        return 1
+    if '"变现案例"' in raw:
+        return 1
+    if '"已验证变现"' in raw:
+        return 2
+    if art.admin_source_key(a.third_party_source) in art.MONETIZATION_SOURCE_KEYS:
+        return 3
+    return 4
+
+
+def _eligible_monetization_highlight(a: Article) -> bool:
+    """首页变现线索入池：应用泳道 + 变现类/源站；JSON 含变现标签但主类为应用产品时也纳入。"""
+    from .article_public import _article_matches_public_feed, _monetization_counts_as_apps_feed
+
+    if not _article_matches_public_feed(a, "apps"):
+        return False
+    if _monetization_counts_as_apps_feed(a):
+        return True
+    raw = str(getattr(a, "ai_categories_json", None) or "")
+    if '"变现案例"' in raw or '"已验证变现"' in raw:
+        return True
+    return art.admin_source_key(a.third_party_source) in art.MONETIZATION_SOURCE_KEYS
+
+
+def _pick_highlight_monetization_articles(
     db: Session,
     *,
-    industry_slug: str = "ai",
-    limit: int = 4,
-    published_within_days: int = 30,
-) -> list[dict]:
-    """首页变现线索：应用泳道内变现类 / Acquire / TAAFT，变现案例优先。"""
-    from ..domain.articles import MONETIZATION_APPS_CATEGORIES
-    from .article_public import (
-        _admin_source_label_by_key,
-        _article_matches_public_feed,
-        _feed_card_from_article,
-        _monetization_counts_as_apps_feed,
-    )
-
-    lim = max(1, min(int(limit), 8))
-    days = max(1, min(int(published_within_days), 120))
-    industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
-    if not industry_ids:
-        return []
-
-    since = datetime.utcnow() - timedelta(days=days)
+    industry_ids: list[int],
+    since: datetime,
+    limit: int,
+) -> list[Article]:
+    """分档拉取变现线索，优先不同数据源，凑满首页展示条数。"""
     fe = art.article_freshness_sql_expr()
-    cat_rank = case(
-        (Article.ai_categories_json.like('%"变现案例"%'), 0),
-        (Article.ai_categories_json.like('%"已验证变现"%'), 1),
-        else_=2,
-    )
-    scan_lim = max(lim * 12, 32)
+    scan_lim = max(limit * 15, 48)
     candidates = list(
         db.scalars(
             select(Article)
@@ -501,12 +513,12 @@ def list_highlight_monetization_apps(
                 (
                     Article.ai_categories_json.like('%"变现案例"%')
                     | Article.ai_categories_json.like('%"已验证变现"%')
+                    | Article.ai_categories_json.like("%变现%")
                     | Article.third_party_source.ilike("acquire%")
                     | Article.third_party_source.ilike("taaft%")
                 ),
             )
             .order_by(
-                cat_rank,
                 desc(Article.heat_score),
                 desc(fe),
                 desc(Article.id),
@@ -514,25 +526,72 @@ def list_highlight_monetization_apps(
             .limit(scan_lim)
         ).all()
     )
+    pool = [a for a in candidates if _eligible_monetization_highlight(a)]
+    pool.sort(
+        key=lambda a: (
+            _monetization_highlight_rank(a),
+            -(float(a.heat_score or 0)),
+            -(art.article_freshness_for_row(a) or since).timestamp(),
+            -int(a.id),
+        )
+    )
+
     picked: list[Article] = []
-    seen: set[int] = set()
-    for a in candidates:
-        if not _article_matches_public_feed(a, "apps") or not _monetization_counts_as_apps_feed(a):
-            continue
-        sk = art.admin_source_key(a.third_party_source)
-        cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-        if sk not in art.MONETIZATION_SOURCE_KEYS and (
-            not cats or cats[0] not in MONETIZATION_APPS_CATEGORIES
-        ):
-            continue
-        if a.id in seen:
-            continue
-        seen.add(a.id)
-        picked.append(a)
-        if len(picked) >= lim:
+    seen_ids: set[int] = set()
+    used_sources: set[str] = set()
+    ranks_present = sorted({_monetization_highlight_rank(a) for a in pool})
+
+    for rank in ranks_present:
+        if len(picked) >= limit:
             break
+        tier_pool = [a for a in pool if _monetization_highlight_rank(a) == rank and a.id not in seen_ids]
+        for pass_diverse in (True, False):
+            if len(picked) >= limit:
+                break
+            for a in tier_pool:
+                if len(picked) >= limit:
+                    break
+                if a.id in seen_ids:
+                    continue
+                sk = art.admin_source_key(a.third_party_source)
+                if pass_diverse and sk and sk in used_sources:
+                    continue
+                picked.append(a)
+                seen_ids.add(a.id)
+                if sk:
+                    used_sources.add(sk)
+
+    if len(picked) < limit:
+        for a in pool:
+            if len(picked) >= limit:
+                break
+            if a.id in seen_ids:
+                continue
+            picked.append(a)
+            seen_ids.add(a.id)
+    return picked
+
+
+def list_highlight_monetization_apps(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    limit: int = HOME_MONETIZATION_HIGHLIGHT_DEFAULT,
+    published_within_days: int = 30,
+) -> list[dict]:
+    """首页变现线索：变现案例优先，不足时按档位与热度补足（默认 4 条，多数据源）。"""
+    from .article_public import _admin_source_label_by_key, _feed_card_from_article
+
+    lim = max(1, min(int(limit), 8))
+    days = max(1, min(int(published_within_days), 120))
+    industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
+    if not industry_ids:
+        return []
+
+    since = datetime.utcnow() - timedelta(days=days)
+    rows = _pick_highlight_monetization_articles(db, industry_ids=industry_ids, since=since, limit=lim)
     label_by_key = _admin_source_label_by_key(db)
-    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in picked]
+    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 
 
 def get_home_dashboard(
@@ -542,7 +601,7 @@ def get_home_dashboard(
     news_limit: int = 8,
     apps_limit: int = 10,
     replicable_apps_limit: int = HOME_REPLICABLE_HIGHLIGHT_DEFAULT,
-    monetization_apps_limit: int = 4,
+    monetization_apps_limit: int = HOME_MONETIZATION_HIGHLIGHT_DEFAULT,
     published_within_days: int = 30,
 ) -> dict:
     """
