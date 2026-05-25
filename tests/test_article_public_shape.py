@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from backend.app.domain import articles as art
+from backend.app.domain.replication_analysis import FEED_CARD_TAB_REPLICATION
 
 _VALID_SUMMARY = "OpenAI 发布新模型系列，面向多模态与代码场景；核心提升上下文与推理能力；适合开发者与产品团队跟进。"
 _VALID_BODY = "## 一句话看懂\n\n" + "背景与进展说明。" * 40
@@ -29,12 +30,36 @@ def _valid_tabs_news() -> list[dict]:
     ]
 
 
+def _valid_replication_analysis() -> dict:
+    return {
+        "verdict": "值得复刻",
+        "worth_score": 8,
+        "difficulty": "低",
+        "estimated_hours": {"mvp_min": 40, "mvp_max": 120, "prod_min": 200, "prod_max": 600},
+        "tier_rationale": "产品边界清晰，可用 React + FastAPI 快速搭 MVP。",
+        "value_summary": "垂直场景明确，适合独立开发者验证。",
+        "tech_stack": ["React", "FastAPI"],
+        "implementation_plan": ["搭前后端骨架", "接支付与登录"],
+        "implementation_details": ["用户体系用 JWT"],
+        "open_source": {
+            "has_support": True,
+            "projects": [{"name": "FastAPI", "url": "https://fastapi.tiangolo.com", "role": "API 框架"}],
+        },
+        "risks": ["竞品多"],
+    }
+
+
 def _valid_tabs_apps() -> list[dict]:
     return [
         {
             "label": "描述",
             "summary": _VALID_DESC_SUMMARY,
             "body_md": "## 描述\n\n" + "产品定位与使用场景说明。" * 28,
+        },
+        {
+            "label": FEED_CARD_TAB_REPLICATION,
+            "summary": "复刻评估 tab：值得复刻，技术栈常见，两周内可搭 MVP 验证核心流程；含工时、开源引用与主要风险，满足发布校验字数。",
+            "body_md": "## 复刻评估\n\n" + "实现步骤与开源引用说明。" * 24,
         },
         {
             "label": "数据支撑",
@@ -81,6 +106,7 @@ def test_validate_llm_polish_accepts_apps_tabs() -> None:
         "categories": ["应用产品"],
         "feed_kind": "apps",
         "tabs": _valid_tabs_apps(),
+        "replication_analysis": _valid_replication_analysis(),
     }
     assert art.validate_llm_polish_for_publish(data) is True
 

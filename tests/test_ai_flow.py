@@ -37,8 +37,8 @@ def test_coerce_polish_output_maps_category_and_tab_labels() -> None:
         "categories": ["科技新闻"],
         "feed_kind": "news",
         "tabs": [
-            {"label": "要点", "summary": "a" * 80, "body_md": "b" * 130},
-            {"label": "亮点", "summary": "c" * 20, "body_md": "d" * 80},
+            {"label": "描述", "summary": "a" * 80, "body_md": "b" * 130},
+            {"label": "数据支撑", "summary": "c" * 20, "body_md": "d" * 80},
         ],
     }
     fixed = _coerce_polish_output(out)
