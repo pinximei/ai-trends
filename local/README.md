@@ -7,6 +7,8 @@ copy local\credentials.example local\credentials
 # 编辑 local\credentials（已 gitignore，勿提交）
 ```
 
+**切勿**在 `*.example` 或任何会提交的文件里填写真实 Key；仅编辑已 gitignore 的 `local/credentials`。
+
 `local/credentials` 包含：
 
 - **LLM**：`AITRENDS_LLM_API_KEY`（或 `AISOU_LLM_*`）
