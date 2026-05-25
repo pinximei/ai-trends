@@ -271,29 +271,24 @@ def _home_radar_lanes_for_feed(
     published_within_days: int,
     exclude_ids: set[int],
 ) -> list[dict]:
-    """首页七路雷达：按 admin_source_key 单独查热度 Top1，避免精选区吸走唯一稿件后该路显示空。"""
-    from .article_public import _admin_source_label_by_key, list_articles_feed_by_heat_top
+    """首页七路雷达：按连接器源查热度 Top1（不按 apps/news 泳道规则），避免 GitHub 等仅有 news 泳道稿时显示空。"""
+    from .article_public import _admin_source_label_by_key, list_articles_home_radar_source_top
 
     keys = [k for k in HOME_MAIN_SOURCE_KEYS if k in (HOME_RADAR_NEWS_KEYS if feed == "news" else HOME_RADAR_APPS_KEYS)]
     label_by_key = _admin_source_label_by_key(db)
     skip = exclude_ids or set()
     lanes: list[dict] = []
     for k in keys:
-        raw = list_articles_feed_by_heat_top(
+        candidates = list_articles_home_radar_source_top(
             db,
-            feed=feed,
             industry_slug=industry_slug,
-            segment_id=None,
-            segment_ids=None,
+            source_key=k,
             published_within_days=published_within_days,
             published_on_latest_day=False,
-            source=k,
-            heat_offset=0,
-            heat_page_size=4,
-            heat_max_ranked=24,
+            limit=16,
         )
         picked: list[dict] = []
-        for it in raw.get("items") or []:
+        for it in candidates:
             aid = it.get("id")
             if aid is None or int(aid) in skip:
                 continue

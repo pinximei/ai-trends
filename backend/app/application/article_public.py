@@ -194,6 +194,77 @@ def _build_feed_fingerprint_winner_ids(
     return frozenset(winner_by_fp.values())
 
 
+def _build_radar_source_fingerprint_winner_ids(
+    db: Session,
+    base_q: Select,
+    *,
+    source_key: str,
+    max_scan_rows: int = 24_000,
+    batch: int = 500,
+) -> frozenset[int]:
+    """首页雷达：按连接器源聚合，不按 apps/news 泳道规则过滤（GitHub 等默认在 news 泳道仍有稿）。"""
+    sk = (source_key or "").strip().lower()
+    if not sk:
+        return frozenset()
+    winner_by_fp: dict[str, int] = {}
+    internal: tuple[datetime, int] | None = None
+    scanned = 0
+    while scanned < max_scan_rows:
+        q2 = _apply_published_keyset(base_q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        rows = db.scalars(q2.limit(batch)).all()
+        if not rows:
+            break
+        for a in rows:
+            scanned += 1
+            if scanned > max_scan_rows:
+                break
+            if art.admin_source_key(a.third_party_source) != sk:
+                continue
+            fp = art.display_fingerprint(a.title, a.summary or "")
+            if fp not in winner_by_fp:
+                winner_by_fp[fp] = a.id
+        last = rows[-1]
+        internal = (last.published_at, last.id)
+        if len(rows) < batch or scanned >= max_scan_rows:
+            break
+    return frozenset(winner_by_fp.values())
+
+
+def list_articles_home_radar_source_top(
+    db: Session,
+    *,
+    industry_slug: str,
+    source_key: str,
+    published_within_days: int,
+    published_on_latest_day: bool = False,
+    limit: int = 12,
+) -> list[dict]:
+    """首页七路雷达：该数据源时间窗内热度 Top（与列表泳道规则解耦）。"""
+    sk = normalize_source_filter(source_key)
+    if not sk:
+        return []
+    lim = max(1, min(int(limit), 24))
+    ind, q = _base_article_query_for_scope(
+        db,
+        industry_slug=industry_slug,
+        segment_id=None,
+        segment_ids=None,
+        published_within_days=published_within_days,
+        published_on_latest_day=published_on_latest_day,
+    )
+    if not ind:
+        return []
+    q = q.where(Article.third_party_source.ilike(f"{sk}%"))
+    winner_ids = _build_radar_source_fingerprint_winner_ids(db, q, source_key=sk)
+    if not winner_ids:
+        return []
+    label_by_key = _admin_source_label_by_key(db)
+    rows = db.scalars(
+        select(Article).where(Article.id.in_(winner_ids)).order_by(*_heat_order_by()).limit(lim)
+    ).all()
+    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
+
+
 def _public_industry_ids_for_slug(db: Session, ind: Industry) -> list[int]:
     """前台 industry_slug=ai 时同时收录 taxonomy「domains」下连接器入库文章。"""
     ids = [ind.id]
