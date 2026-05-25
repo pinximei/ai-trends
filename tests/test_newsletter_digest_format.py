@@ -85,6 +85,10 @@ def test_delivery_texts_have_section_headers() -> None:
     assert "【亮点资讯】" in email
     assert "📬 AiTrends" in feishu
     assert "应用 1 条" in feishu
+    assert "【亮点应用】" in feishu
+    assert "━━━━━━━━" not in feishu
+    assert "1. 测试产品" in feishu
+    assert "  介绍：" in feishu
 
 
 def test_format_digest_for_delivery() -> None:
@@ -100,3 +104,5 @@ def test_format_digest_for_delivery() -> None:
     assert "/resources/3" in md
     assert "【亮点应用】" in email
     assert len(feishu) > 20
+    assert "━━━━━━━━" not in feishu
+    assert "【亮点应用】" in feishu

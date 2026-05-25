@@ -247,17 +247,57 @@ def enrich_digest_read_links(
     return "\n".join(lines)
 
 
+def _strip_md_inline(text: str) -> str:
+    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", text or "")
+    t = re.sub(r"`([^`]+)`", r"\1", t)
+    return t.strip()
+
+
 def digest_md_to_plain_email(body_md: str, *, subject: str, digest_date: str) -> str:
     """邮件纯文本：保留分栏与条目层级。"""
     t = normalize_digest_body_md(body_md, apps_count=0, news_count=0)
     # 保留统计引用块，转为普通行
     t = re.sub(r"^>\s*", "▸ ", t, flags=re.MULTILINE)
-    t = re.sub(r"^##\s+(.+)$", r"\n━━━━━━━━━━━━━━━━\n【\1】\n━━━━━━━━━━━━━━━━", t, flags=re.MULTILINE)
+    t = re.sub(r"^##\s+(.+)$", r"\n——— 【\1】 ———", t, flags=re.MULTILINE)
     t = re.sub(r"^###\s+(\d+\.\s*.+)$", r"\n\1", t, flags=re.MULTILINE)
     t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)
     t = re.sub(r"`([^`]+)`", r"\1", t)
     head = f"AiTrends 每日精选 · {digest_date}\n主题：{subject.strip()}\n"
     return _collapse_blank_lines(head + "\n" + t)
+
+
+def _digest_md_lines_to_feishu_body(body_md: str) -> str:
+    """飞书纯文本：不用宽字符「图表线」，用【分栏】+ 缩进列表（Webhook 仅支持 text）。"""
+    lines_out: list[str] = []
+    for raw in normalize_digest_body_md(body_md, apps_count=0, news_count=0).splitlines():
+        ln = raw.rstrip()
+        if not ln:
+            if lines_out and lines_out[-1] != "":
+                lines_out.append("")
+            continue
+        if ln.startswith("## "):
+            title = _strip_md_inline(ln[3:].strip())
+            if lines_out:
+                lines_out.append("")
+            lines_out.append(f"【{title}】")
+            continue
+        if ln.startswith("### "):
+            if lines_out and lines_out[-1] != "":
+                lines_out.append("")
+            lines_out.append(_strip_md_inline(ln[4:].strip()))
+            continue
+        if ln.startswith("> "):
+            lines_out.append(f"▸ {_strip_md_inline(ln[2:])}")
+            continue
+        if ln.startswith("- "):
+            item = _strip_md_inline(ln[2:])
+            if item.startswith("介绍：") or item.startswith("为何关注：") or item.startswith("站内阅读："):
+                lines_out.append(f"  {item}")
+            else:
+                lines_out.append(f"• {item}")
+            continue
+        lines_out.append(_strip_md_inline(ln))
+    return _collapse_blank_lines("\n".join(lines_out))
 
 
 def digest_md_to_feishu_text(
@@ -269,16 +309,15 @@ def digest_md_to_feishu_text(
     news_count: int,
     public_site_base_url: str,
 ) -> str:
-    """飞书文本：分栏符号 + 层级缩进。"""
-    plain = digest_md_to_plain_email(
-        normalize_digest_body_md(body_md, apps_count=apps_count, news_count=news_count),
-        subject=subject,
-        digest_date=digest_date,
-    )
+    """飞书文本：独立排版，避免邮件用的宽分隔线在手机端错位成「乱表」。"""
+    body = _digest_md_lines_to_feishu_body(body_md)
     base = (public_site_base_url or "").strip().rstrip("/")
     tail = f"\n\n🔗 完整站点：{base}" if base else ""
-    meta = f"（应用 {apps_count} 条 · 资讯 {news_count} 条）\n" if (apps_count or news_count) else "\n"
-    return f"📬 AiTrends 每日精选 · {digest_date}{meta}\n{plain}{tail}"[:4000]
+    meta = f"（应用 {apps_count} 条 · 资讯 {news_count} 条）" if (apps_count or news_count) else ""
+    head = f"📬 AiTrends 每日精选 · {digest_date}\n主题：{_strip_md_inline(subject)}"
+    if meta:
+        head = f"{head}\n{meta}"
+    return _collapse_blank_lines(f"{head}\n\n{body}{tail}")[:4000]
 
 
 def digest_delivery_texts(
