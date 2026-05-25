@@ -590,7 +590,12 @@ def run_daily_newsletter_digest_job(
         if feishu_on:
             db.expire_all()
             row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
-            if row and row.feishu_sent_at is None:
+            already_feishu = bool(row and row.feishu_sent_at is not None)
+            should_send_feishu = row and (row.feishu_sent_at is None or manual_run)
+            if should_send_feishu:
+                if manual_run and already_feishu:
+                    row.feishu_sent_at = None
+                    db.commit()
                 try:
                     send_digest_to_feishu(
                         db,
@@ -600,11 +605,14 @@ def run_daily_newsletter_digest_job(
                         news_count=news_count,
                     )
                     out["feishu_sent"] = True
+                    if manual_run and already_feishu:
+                        out["feishu_resent"] = True
                     logger.info(
-                        "newsletter daily feishu sent digest_date=%s apps=%s news=%s",
+                        "newsletter daily feishu sent digest_date=%s apps=%s news=%s manual=%s",
                         digest_key,
                         apps_count,
                         news_count,
+                        manual_run,
                     )
                 except Exception as e:
                     logger.exception("newsletter daily feishu send failed: %s", e)
@@ -614,8 +622,13 @@ def run_daily_newsletter_digest_job(
                         r2.error_message = f"{prev}; feishu: {e}"[:2000].strip("; ")
                         db.commit()
                     return {**out, "ok": False, "error": str(e)}
-            else:
+            elif already_feishu:
                 out["feishu_sent"] = True
+                out["feishu_skipped"] = "already_sent"
+            elif not row or not (row.body_md or "").strip():
+                return {**out, "ok": False, "error": "今日摘要无正文，无法推送飞书"}
+        elif settings.get("feishu_enabled", False):
+            out["feishu_skip"] = "no_webhook"
 
         out["sent"] = bool(out.get("email_sent")) or bool(out.get("feishu_sent"))
         return out

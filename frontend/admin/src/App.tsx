@@ -855,10 +855,22 @@ export function App() {
         const msg = (out as { message?: string }).message;
         setErr(msg || (reason ? `已跳过：${reason}` : "今日摘要任务已跳过"));
       } else if (!ok) {
-        setErr(typeof (out as { error?: string }).error === "string" ? (out as { error: string }).error : "摘要任务未完全成功");
+        const errMsg = (out as { error?: string }).error;
+        const feishuSkip = (out as { feishu_skip?: string }).feishu_skip;
+        setErr(
+          typeof errMsg === "string"
+            ? errMsg
+            : feishuSkip === "no_webhook"
+              ? "摘要已处理，但未配置飞书 Webhook，飞书未推送。请先保存 Webhook 后再点「立即推送」。"
+              : "摘要任务未完全成功",
+        );
       } else {
-        const msg = (out as { message?: string }).message;
-        if (msg) setErr("");
+        const feishuSkip = (out as { feishu_skip?: string }).feishu_skip;
+        if (feishuSkip === "no_webhook") {
+          setErr("摘要已生成/沿用库内稿，但未配置飞书 Webhook，飞书未推送。请填写 Webhook 并「保存推送配置」。");
+        } else {
+          setErr("");
+        }
       }
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "digest run failed"));
@@ -2485,7 +2497,7 @@ export function App() {
                 按<strong>美东（America/New_York）当天</strong>已发布应用/资讯拼一篇摘要，写入{" "}
                 <code className="inline-code">newsletter_daily_digests</code>（每天一篇）。
                 连接器在<strong>美东当日 23:00–24:00</strong>整批拉取（便于对齐 NewsAPI 等按 US 日切分的数据）；摘要默认定时{" "}
-                <strong>23:50</strong> 美东（可在配置中改）。库中已有今日摘要时「立即推送」只发不重生成。
+                <strong>23:50</strong> 美东（可在配置中改）。「立即推送」：无今日摘要则先从库内文章生成再推；已有摘要则直接推飞书/邮件（可重复推飞书）。不是单篇新文章，是当日精选摘要。
               </p>
               {canOperate ? (
                 <form className="newsletter-push-form" onSubmit={onSaveNewsletter}>
