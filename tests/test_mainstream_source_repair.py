@@ -24,6 +24,12 @@ from backend.app.services import ensure_mainstream_admin_sources
 @pytest.fixture()
 def db():
     url = os.getenv("AITRENDS_DATABASE_URL", "sqlite:///./_pytest_mainstream_repair.db")
+    if url.startswith("sqlite:///./_pytest"):
+        path = url.replace("sqlite:///", "")
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     if url.startswith("sqlite"):
         from backend.app.db import Base, engine
 
@@ -50,7 +56,11 @@ def test_mainstream_url_ok_matrix() -> None:
     )
     assert not mainstream_heat_fetch_url_ok("hacker_news", "https://hacker-news.firebaseio.com/v0/topstories.json")
     assert not mainstream_heat_fetch_url_ok("github", "https://api.github.com/zen")
-    assert not mainstream_heat_fetch_url_ok("taaft", "https://theresanaiforthat.com/new/")
+    assert mainstream_heat_fetch_url_ok("taaft", "https://theresanaiforthat.com/new/")
+    assert mainstream_heat_fetch_url_ok(
+        "acquire", "https://us-central1-microacquire.cloudfunctions.net/v1-search"
+    )
+    assert not mainstream_heat_fetch_url_ok("taaft", "https://theresanaiforthat.com/")
 
 
 def test_repair_hn_url(db) -> None:
