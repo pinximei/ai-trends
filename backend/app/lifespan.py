@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .admin_auth import ensure_default_admin
@@ -344,30 +345,68 @@ def _job_custom_source_sync_gate() -> None:
         db.close()
 
 
+def _newsletter_digest_schedule(db) -> tuple[int, int]:
+    from .newsletter_settings_service import get_newsletter_settings_merged
+
+    s = get_newsletter_settings_merged(db)
+    h = max(0, min(23, int(s.get("daily_hour", 9))))
+    m = max(0, min(59, int(s.get("daily_minute", 0))))
+    return h, m
+
+
+def _newsletter_digest_cron_trigger(db) -> CronTrigger:
+    """美东每日定点；misfire_grace_time 允许重启后补跑，避免 5 分钟轮询窗口错过。"""
+    from .us_content_calendar import US_CONTENT_TZ
+
+    h, m = _newsletter_digest_schedule(db)
+    return CronTrigger(hour=h, minute=m, timezone=US_CONTENT_TZ)
+
+
 def _job_newsletter_daily() -> None:
     db = SessionLocal()
     try:
         from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
         from .newsletter_settings_service import get_newsletter_settings_merged
-        from .us_content_calendar import US_CONTENT_TZ
 
         s = get_newsletter_settings_merged(db)
         if not s.get("daily_digest_job_enabled", True):
             return
         if not s.get("cron_enabled", True):
             return
-        now = datetime.now(US_CONTENT_TZ)
-        h = int(s.get("daily_hour", 9))
-        m = int(s.get("daily_minute", 0))
-        slot_start = now.replace(hour=h, minute=m, second=0, microsecond=0)
-        slot_end = slot_start + timedelta(minutes=5)
-        if not (slot_start <= now < slot_end):
-            return
-        run_daily_newsletter_digest_job(db=db, settings=s)
+        out = run_daily_newsletter_digest_job(db=db, settings=s)
+        logger.info("newsletter daily cron finished: %s", out)
     except Exception as e:
         logger.exception("newsletter daily job failed: %s", e)
     finally:
         db.close()
+
+
+def reschedule_newsletter_digest_job() -> None:
+    """后台修改推送时刻后无需重启进程即可更新 Cron。"""
+    global _scheduler
+    if _scheduler is None:
+        return
+    db = SessionLocal()
+    try:
+        trigger = _newsletter_digest_cron_trigger(db)
+    finally:
+        db.close()
+    kwargs = dict(
+        trigger=trigger,
+        misfire_grace_time=7200,
+        coalesce=True,
+        max_instances=1,
+    )
+    if _scheduler.get_job("newsletter_daily_digest"):
+        _scheduler.reschedule_job("newsletter_daily_digest", **kwargs)
+    else:
+        _scheduler.add_job(_job_newsletter_daily, id="newsletter_daily_digest", **kwargs)
+    db2 = SessionLocal()
+    try:
+        h, m = _newsletter_digest_schedule(db2)
+    finally:
+        db2.close()
+    logger.info("newsletter digest cron rescheduled (America/New_York %s:%02d)", h, m)
 
 
 def _start_scheduler() -> None:
@@ -388,12 +427,30 @@ def _start_scheduler() -> None:
         IntervalTrigger(minutes=15),
         id="custom_source_sync_gate",
     )
+    db = SessionLocal()
+    try:
+        digest_trigger = _newsletter_digest_cron_trigger(db)
+    finally:
+        db.close()
     _scheduler.add_job(
         _job_newsletter_daily,
-        IntervalTrigger(minutes=5),
+        digest_trigger,
         id="newsletter_daily_digest",
+        misfire_grace_time=7200,
+        coalesce=True,
+        max_instances=1,
     )
     _scheduler.start()
+    db2 = SessionLocal()
+    try:
+        h, m = _newsletter_digest_schedule(db2)
+    finally:
+        db2.close()
+    logger.info(
+        "newsletter digest cron started (America/New_York %s:%02d, misfire_grace=7200s)",
+        h,
+        m,
+    )
 
 
 def _shutdown_scheduler() -> None:

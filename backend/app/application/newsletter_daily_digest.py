@@ -600,6 +600,12 @@ def run_daily_newsletter_digest_job(
                         news_count=news_count,
                     )
                     out["feishu_sent"] = True
+                    logger.info(
+                        "newsletter daily feishu sent digest_date=%s apps=%s news=%s",
+                        digest_key,
+                        apps_count,
+                        news_count,
+                    )
                 except Exception as e:
                     logger.exception("newsletter daily feishu send failed: %s", e)
                     r2 = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))

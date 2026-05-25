@@ -1,12 +1,15 @@
 """邮件订阅日报：配置存 product_settings_kv.newsletter；发信参数可脱敏读写（运行以库为准）。`backend/.env` 中的 NEWSLETTER_* / AITRENDS_PUBLIC_BASE_URL 可继续保留作备份，库内为空时启动会一次性迁入。"""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from .product_models import ProductSetting
+
+logger = logging.getLogger(__name__)
 
 NEWSLETTER_KEY = "newsletter"
 
@@ -170,4 +173,18 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
     row.value_json = _normalize_merged(cur)
     row.updated_at = datetime.utcnow()
     db.commit()
+    if patch.keys() & {
+        "daily_hour",
+        "daily_minute",
+        "cron_enabled",
+        "daily_digest_job_enabled",
+        "send_enabled",
+        "feishu_enabled",
+    }:
+        try:
+            from .lifespan import reschedule_newsletter_digest_job
+
+            reschedule_newsletter_digest_job()
+        except Exception:
+            logger.exception("reschedule newsletter digest cron after settings patch failed")
     return get_newsletter_settings_public(db)
