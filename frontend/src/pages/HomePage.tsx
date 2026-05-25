@@ -465,6 +465,7 @@ export function HomePage() {
     Array<{ key: string; label: string; news_count: number; apps_count: number }>
   >([]);
   const [topCategories, setTopCategories] = useState<Array<{ label: string; count: number }>>([]);
+  const [activeSourceCount, setActiveSourceCount] = useState(7);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -541,6 +542,7 @@ export function HomePage() {
         setAppsLanes(data.apps_source_lanes ?? []);
         setSourceFacets(data.source_facets ?? []);
         setTopCategories(data.top_categories ?? []);
+        setActiveSourceCount(data.active_source_count ?? 7);
         setTrendOverview(data.trend ?? null);
       })
       .catch(async () => {
@@ -613,6 +615,21 @@ export function HomePage() {
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
             {t("homeMainHeroDesc")}
           </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+            <Link
+              to="/apps"
+              state={{ replicationFilter: "sa" }}
+              className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
+            >
+              {t("homeMainHeroCta2")}
+            </Link>
+            <Link
+              to="/news"
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              {t("homeMainHeroCta1")}
+            </Link>
+          </div>
         </div>
         <div className="flex min-w-0 items-center justify-center px-2 py-2 sm:px-4 lg:px-6">
           <div className="w-full max-w-[min(100%,380px)] shrink-0 sm:max-w-[400px]">
@@ -665,7 +682,7 @@ export function HomePage() {
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80">{t("homeStatSources")}</p>
                   <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
                     {sourceFacets.length}
-                    <span className="text-sm font-semibold text-slate-400">/5</span>
+                    <span className="text-sm font-semibold text-slate-400">/{activeSourceCount}</span>
                   </p>
                 </div>
                 {sparkSummary ? (
