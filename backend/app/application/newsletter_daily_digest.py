@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..application.article_public import _public_industry_ids_for_slug
+from ..application.article_public import _article_matches_public_feed, _public_industry_ids_for_slug
 from ..db import SessionLocal
 from ..llm_service import chat_completion
 from ..llm_settings_service import resolve_llm_http_config
@@ -61,7 +61,7 @@ def _fetch_articles_for_day_lane(
         return []
     lim = max(1, min(40, int(limit)))
     fk = (feed_kind or "news").strip().lower()
-    q = (
+    base = (
         select(Article)
         .where(
             Article.industry_id.in_(industry_ids),
@@ -69,12 +69,18 @@ def _fetch_articles_for_day_lane(
             Article.published_at.is_not(None),
             Article.published_at >= start_utc,
             Article.published_at < end_utc,
-            Article.feed_kind == fk,
         )
         .order_by(Article.heat_score.desc(), Article.published_at.desc())
-        .limit(lim)
     )
-    return list(db.scalars(q).all())
+    if fk == "apps":
+        q = base.where(
+            (Article.feed_kind == "apps") | (Article.third_party_source.ilike("github%")),
+        ).limit(max(lim * 4, 24))
+        rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "apps")]
+        return rows[:lim]
+    q = base.where(Article.feed_kind == "news").limit(max(lim * 4, 24))
+    rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "news")]
+    return rows[:lim]
 
 
 def fetch_articles_for_shanghai_day(db: Session, d: date, *, limit: int) -> list[Article]:

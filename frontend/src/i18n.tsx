@@ -144,8 +144,9 @@ const STRINGS: Record<string, string> = {
   resourcesReplicationAll: "全部档位",
   resourcesReplicationSa: "S + A（推荐）",
   resourcesReplicationS: "仅 S 档",
-  resourcesReplicationHint: "开启后按 S→A 优先排序，并只显示所选档位；不参与整批资讯逻辑。",
-  resourcesAppsCloneCategories: "抄应用常用类",
+  resourcesReplicationHint:
+    "开启后按 S→A 优先排序，并只显示所选档位；应用列表含 Product Hunt 与 GitHub 客户端 Trending（S/A 或「开源客户端」类）。",
+  resourcesAppsCloneCategories: "抄应用 / 变现常用类",
   resourcesLoading: "加载资源…",
   resourcesEmptyTopic: "当前筛选下暂无文章。",
   resourcesEmptySearch: "没有匹配该关键词的文章，可换个词或清空搜索。",

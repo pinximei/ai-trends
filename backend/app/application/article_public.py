@@ -54,6 +54,32 @@ def _tier_filter_from_csv(raw: str | None) -> frozenset[str] | None:
     return frozenset(tiers)
 
 
+GITHUB_CLONE_APPS_CATEGORY = "开源客户端(好抄)"
+
+
+def _github_counts_as_apps_feed(a: Article) -> bool:
+    """GitHub 客户端 Trending：公开「应用」泳道纳入 S/A 或「开源客户端(好抄)」类条目。"""
+    if art.admin_source_key(a.third_party_source) != "github":
+        return False
+    cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    if cats and cats[0] == GITHUB_CLONE_APPS_CATEGORY:
+        return True
+    tier = (getattr(a, "replication_tier", None) or "").strip().upper()
+    return tier in ("S", "A")
+
+
+def _article_matches_public_feed(a: Article, feed: str) -> bool:
+    """公开 feed=apps/news 泳道：apps 含可抄 GitHub 客户端；news 与之去重。"""
+    lane = _row_feed_lane(a)
+    if feed == "apps":
+        return lane == "apps" or _github_counts_as_apps_feed(a)
+    if feed == "news":
+        if _github_counts_as_apps_feed(a):
+            return False
+        return lane == "news"
+    return lane == feed
+
+
 def _feed_row_matches_list_filters(
     a: Article,
     *,
@@ -64,7 +90,7 @@ def _feed_row_matches_list_filters(
     tier_filter: frozenset[str] | None = None,
 ) -> bool:
     """与公开列表一致的泳道 / 类别 / 数据源 / 搜索 / 可复刻档位筛选。"""
-    if _row_feed_lane(a) != feed:
+    if not _article_matches_public_feed(a, feed):
         return False
     if source_filter and art.admin_source_key(a.third_party_source) != source_filter:
         return False

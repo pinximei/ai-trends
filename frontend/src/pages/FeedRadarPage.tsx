@@ -90,7 +90,13 @@ function isHeatFeedResponse(d: unknown): d is ArticlesFeedHeatResponse {
 type ListDisplayMode = "date" | "heat";
 type ReplicationTierFilter = "all" | "sa" | "s";
 
-const CLONE_APP_CATEGORIES = ["开源客户端(好抄)", "应用产品", "高可复刻"] as const;
+const CLONE_APP_CATEGORIES = [
+  "开源客户端(好抄)",
+  "应用产品",
+  "高可复刻",
+  "已验证变现",
+  "变现案例",
+] as const;
 
 function replicationTierApiParams(
   feedMode: "news" | "apps",

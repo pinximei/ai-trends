@@ -347,7 +347,10 @@ def list_highlight_replicable_apps(
         (func.upper(Article.replication_tier) == "A", 1),
         else_=2,
     )
-    rows = list(
+    from .article_public import _article_matches_public_feed
+
+    scan_lim = max(lim * 12, 48)
+    candidates = list(
         db.scalars(
             select(Article)
             .where(
@@ -355,7 +358,6 @@ def list_highlight_replicable_apps(
                 Article.status == "published",
                 Article.published_at.is_not(None),
                 Article.published_at >= since,
-                Article.feed_kind == "apps",
                 func.upper(Article.replication_tier).in_(tier_set),
             )
             .order_by(
@@ -364,9 +366,10 @@ def list_highlight_replicable_apps(
                 desc(Article.published_at),
                 desc(Article.id),
             )
-            .limit(lim)
+            .limit(scan_lim)
         ).all()
     )
+    rows = [a for a in candidates if _article_matches_public_feed(a, "apps")][:lim]
     label_by_key = _admin_source_label_by_key(db)
     return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 

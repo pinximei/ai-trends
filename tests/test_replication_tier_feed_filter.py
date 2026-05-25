@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app import models as _admin_models  # noqa: F401
 from backend.app.application import article_public as ap
+from backend.app.application.article_public import _article_matches_public_feed, _github_counts_as_apps_feed
+from backend.app.application.home_public import list_highlight_replicable_apps
 from backend.app.db import Base
 from backend.app.domain import articles as art
 from backend.app.product_models import Article, Industry, Segment
@@ -51,6 +53,21 @@ def test_feed_row_matches_tier_filter() -> None:
         )
         is True
     )
+
+
+def test_github_s_tier_counts_as_apps_feed() -> None:
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="Client repo",
+        status="published",
+        feed_kind="news",
+        third_party_source="github / trending",
+        replication_tier="S",
+    )
+    assert _github_counts_as_apps_feed(a) is True
+    assert _article_matches_public_feed(a, "apps") is True
+    assert _article_matches_public_feed(a, "news") is False
 
 
 def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
@@ -124,3 +141,64 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
     titles = [x["title"] for x in out["items"]]
     assert titles == ["Tier S cold", "Tier A hot"]
     assert out["total"] == 2
+
+    db.add(
+        Article(
+            industry_id=ind.id,
+            segment_id=seg.id,
+            title="GitHub client S",
+            summary="electron app",
+            status="published",
+            feed_kind="news",
+            third_party_source="github / trending",
+            ai_categories_json='["开源客户端(好抄)"]',
+            replication_tier="S",
+            heat_score=50.0,
+            published_at=now,
+        )
+    )
+    db.commit()
+    out2 = ap.list_articles_feed_by_heat_top(
+        db,
+        feed="apps",
+        industry_slug="ai",
+        segment_id=None,
+        segment_ids=None,
+        published_within_days=30,
+        published_on_latest_day=False,
+        replication_tiers="S,A",
+        sort_replicable=True,
+        heat_offset=0,
+        heat_page_size=10,
+        heat_max_ranked=50,
+    )
+    gh_titles = [x["title"] for x in out2["items"] if "GitHub" in x["title"]]
+    assert "GitHub client S" in gh_titles
+
+
+def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
+    db = _session()
+    ind = Industry(slug="ai", name="AI")
+    db.add(ind)
+    db.flush()
+    seg = Segment(industry_id=ind.id, slug="general", name="General")
+    db.add(seg)
+    db.flush()
+    now = datetime.utcnow()
+    db.add(
+        Article(
+            industry_id=ind.id,
+            segment_id=seg.id,
+            title="GH highlight",
+            summary="tauri",
+            status="published",
+            feed_kind="news",
+            third_party_source="github / trending",
+            replication_tier="S",
+            heat_score=10.0,
+            published_at=now,
+        )
+    )
+    db.commit()
+    items = list_highlight_replicable_apps(db, industry_slug="ai", limit=6, published_within_days=30)
+    assert any(x["title"] == "GH highlight" for x in items)
