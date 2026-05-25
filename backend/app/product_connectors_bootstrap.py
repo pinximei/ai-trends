@@ -300,6 +300,36 @@ def ensure_core_admin_connectors(db: Session) -> None:
     db.commit()
 
 
+def repair_auto_enable_builtin_sources(db: Session) -> dict[str, int]:
+    """预置为 enabled 的内置源：对齐 admin/连接器开关（升级后旧库可能仍为关闭）。"""
+    import logging
+
+    log = logging.getLogger(__name__)
+    n_src = 0
+    n_conn = 0
+    for key in AUTO_ENABLE_PULL_SOURCE_KEYS:
+        src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == key))
+        if src and not src.enabled:
+            src.enabled = True
+            src.updated_at = datetime.utcnow()
+            n_src += 1
+        for c in db.scalars(
+            select(ProductConnector).where(ProductConnector.admin_source_key == key)
+        ).all():
+            if not c.enabled:
+                c.enabled = True
+                n_conn += 1
+    if n_src or n_conn:
+        db.commit()
+        log.info(
+            "repaired builtin source enable flags: admin_sources=%s connectors=%s keys=%s",
+            n_src,
+            n_conn,
+            sorted(AUTO_ENABLE_PULL_SOURCE_KEYS),
+        )
+    return {"admin_sources_enabled": n_src, "connectors_enabled": n_conn}
+
+
 def enable_auto_pull_admin_sources_and_connectors(db: Session) -> dict[str, int]:
     """将内置主流数据源与绑定连接器设为启用（新建与已有库均生效）。"""
     import logging

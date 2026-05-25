@@ -128,7 +128,19 @@ HOME_MAIN_SOURCE_KEYS: tuple[str, ...] = (
     "hacker_news",
     "newsapi",
     "thenewsapi",
+    "taaft",
+    "acquire",
 )
+
+HOME_MAIN_SOURCE_PRESET_LABELS: dict[str, str] = {
+    "github": "GitHub（客户端）",
+    "product_hunt": "Product Hunt",
+    "hacker_news": "Hacker News",
+    "newsapi": "NewsAPI",
+    "thenewsapi": "TheNewsAPI",
+    "taaft": "TAAFT（新工具）",
+    "acquire": "Acquire（AI 资产）",
+}
 
 
 def _home_pick_quality_ok(item: dict) -> bool:
@@ -271,20 +283,13 @@ def _group_source_lanes(
         if k in HOME_MAIN_SOURCE_KEYS and k not in label_by_key:
             label_by_key[k] = (it.get("platform_label") or "").strip() or k.replace("_", " ").title()
 
-    preset_labels = {
-        "github": "GitHub（客户端）",
-        "product_hunt": "Product Hunt",
-        "hacker_news": "Hacker News",
-        "newsapi": "NewsAPI",
-        "thenewsapi": "TheNewsAPI",
-    }
     lanes: list[dict] = []
     for k in HOME_MAIN_SOURCE_KEYS:
         picked = buckets[k]
         lanes.append(
             {
                 "source_key": k,
-                "source_label": label_by_key.get(k) or preset_labels.get(k, k.replace("_", " ").title()),
+                "source_label": label_by_key.get(k) or HOME_MAIN_SOURCE_PRESET_LABELS.get(k, k.replace("_", " ").title()),
                 "items": picked,
             }
         )

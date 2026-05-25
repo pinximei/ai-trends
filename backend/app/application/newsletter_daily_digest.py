@@ -13,7 +13,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..application.article_public import _article_matches_public_feed, _public_industry_ids_for_slug
+from ..application.article_public import _article_matches_public_feed, _monetization_counts_as_apps_feed, _public_industry_ids_for_slug
+from ..domain import articles as art
 from ..db import SessionLocal
 from ..llm_service import chat_completion
 from ..llm_settings_service import resolve_llm_http_config
@@ -74,10 +75,13 @@ def _fetch_articles_for_day_lane(
     )
     if fk == "apps":
         q = base.where(
-            (Article.feed_kind == "apps") | (Article.third_party_source.ilike("github%")),
-        ).limit(max(lim * 4, 24))
+            (Article.feed_kind == "apps")
+            | (Article.third_party_source.ilike("github%"))
+            | (Article.third_party_source.ilike("taaft%"))
+            | (Article.third_party_source.ilike("acquire%"))
+        ).limit(max(lim * 4, 32))
         rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "apps")]
-        return rows[:lim]
+        return _prioritize_digest_apps(rows)[:lim]
     q = base.where(Article.feed_kind == "news").limit(max(lim * 4, 24))
     rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "news")]
     return rows[:lim]
@@ -94,6 +98,23 @@ def fetch_articles_for_shanghai_day(db: Session, d: date, *, limit: int) -> list
     merged = apps + news
     merged.sort(key=lambda a: (a.published_at or datetime.min), reverse=True)
     return merged[: max(1, min(80, int(limit)))]
+
+
+def _prioritize_digest_apps(articles: list[Article]) -> list[Article]:
+    """邮件摘要应用栏：变现案例 / Acquire·TAAFT / S 档优先，再按热度。"""
+
+    def _rank(a: Article) -> tuple[int, int, float, int]:
+        cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+        primary = cats[0] if cats else ""
+        mon_src = 0 if art.admin_source_key(a.third_party_source) in art.MONETIZATION_SOURCE_KEYS else 1
+        mon_cat = 0 if primary in art.MONETIZATION_APPS_CATEGORIES else 1
+        tier = (getattr(a, "replication_tier", None) or "").strip().upper()
+        tier_rank = {"S": 0, "A": 1, "B": 2, "C": 3}.get(tier, 4)
+        heat = -float(getattr(a, "heat_score", None) or 0.0)
+        aid = -int(a.id or 0)
+        return (mon_src, mon_cat, tier_rank, heat, aid)
+
+    return sorted(articles, key=_rank)
 
 
 def fetch_articles_for_shanghai_day_split(
@@ -300,11 +321,15 @@ def generate_digest_content(
     public_base = str(settings.get("public_site_base_url") or "").strip()
     hl_apps = max(0, min(8, int(settings.get("llm_apps_limit", 3))))
     hl_news = max(0, min(8, int(settings.get("llm_news_limit", 3))))
+    mon_apps = [a for a in apps if _monetization_counts_as_apps_feed(a)]
+    reg_apps = [a for a in apps if a not in mon_apps]
     body_md = build_digest_body_from_articles(
         apps,
         news,
         highlight_apps=hl_apps,
         highlight_news=hl_news,
+        monetization_apps=mon_apps,
+        regular_apps=reg_apps,
     )
     subject = build_digest_subject_default(digest_date, apps, news)
     it, ot = 0, 0

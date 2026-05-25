@@ -49,6 +49,7 @@ def _startup_sync() -> None:
 
         from .product_connectors_bootstrap import (
             enable_auto_pull_admin_sources_and_connectors,
+            repair_auto_enable_builtin_sources,
             ensure_core_admin_connectors,
             prune_admin_sources_outside_mainstream,
             prune_disabled_admin_sources,
@@ -66,6 +67,7 @@ def _startup_sync() -> None:
         prune_admin_sources_outside_mainstream(db)
         prune_disabled_admin_sources(db)
         ensure_mainstream_admin_sources(db)
+        repair_auto_enable_builtin_sources(db)
         sync_catalog_preset_metadata(db)
         n_fl = repair_mainstream_fetch_limits(db)
         if n_fl:

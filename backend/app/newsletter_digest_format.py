@@ -152,15 +152,32 @@ def build_digest_body_from_articles(
     *,
     highlight_apps: int = 3,
     highlight_news: int = 3,
+    monetization_apps: list[Any] | None = None,
+    regular_apps: list[Any] | None = None,
 ) -> str:
     """正文：亮点条目单独介绍，其余简明列表（均用站内已发布摘要，不二次 LLM）。"""
+    if monetization_apps is not None and regular_apps is not None:
+        mon_lane, app_lane = monetization_apps, regular_apps
+    else:
+        mon_lane, app_lane = [], list(apps)
     parts: list[str] = [
         "> 收录范围：美东（America/New_York）摘要日当天已发布内容；数据源在当日 23:00 后整批拉取入库。",
         "",
     ]
+    if mon_lane:
+        parts.extend(
+            _lane_body(
+                mon_lane,
+                feed_kind="apps",
+                highlight_title="变现线索",
+                more_title="更多变现向",
+                kind_note="（并购 / 订阅收入 / Acquire·TAAFT）",
+                highlight_n=min(highlight_apps, len(mon_lane)),
+            )
+        )
     parts.extend(
         _lane_body(
-            apps,
+            app_lane,
             feed_kind="apps",
             highlight_title="亮点应用",
             more_title="更多应用",
