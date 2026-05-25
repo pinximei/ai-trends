@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Info } from "lucide-react";
+import { Github, Info } from "lucide-react";
 import { publicApi } from "@/api/public";
 import { useI18n } from "@/i18n";
+import { SITE_GITHUB_REPO_URL } from "@/siteLinks";
 
 const HUB_GRID =
   "grid gap-6 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,300px)_1fr]";
@@ -56,7 +57,18 @@ export function AboutSitePage() {
   );
 
   const leftMeta = (
-    <div className="ui-card p-4 text-xs leading-relaxed text-slate-500 sm:p-5">{t("aboutPageIntro")}</div>
+    <div className="ui-card space-y-4 p-4 text-xs leading-relaxed text-slate-500 sm:p-5">
+      <p>{t("aboutPageIntro")}</p>
+      <a
+        href={SITE_GITHUB_REPO_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800"
+      >
+        <Github className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+        {t("aboutGithubCta")}
+      </a>
+    </div>
   );
 
   const leftRail = (

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Github } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
+import { SITE_GITHUB_REPO_URL } from "@/siteLinks";
 
 function apiBasePrefix(): string {
   return (import.meta.env.VITE_API_BASE || "").trim().replace(/\/$/, "");
@@ -100,7 +102,17 @@ export function Layout() {
             })}
           </nav>
 
-          <div className="order-1 flex w-full min-w-0 shrink-0 items-center justify-center md:order-none md:w-auto md:max-w-[14rem] md:justify-end">
+          <div className="order-1 flex w-full min-w-0 shrink-0 items-center justify-center gap-2 md:order-none md:w-auto md:max-w-[18rem] md:justify-end">
+            <a
+              href={SITE_GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-white text-slate-600 shadow-sm transition-colors hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+              title={t("footerGithub")}
+              aria-label={t("footerGithub")}
+            >
+              <Github className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </a>
             <span
               className="max-w-full truncate rounded-lg border border-violet-200/90 bg-violet-50/90 px-2.5 py-1.5 text-[10px] font-semibold leading-none text-violet-800 shadow-sm tabular-nums ring-1 ring-white/80"
               title="前端构建版本（部署后看此处是否变化）"
@@ -177,6 +189,16 @@ export function Layout() {
             className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-slate-600"
             aria-label={t("navAbout")}
           >
+            <a
+              href={SITE_GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-violet-700"
+              title={SITE_GITHUB_REPO_URL}
+            >
+              <Github className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+              {t("footerGithub")}
+            </a>
             <Link to="/about" className="hover:text-violet-600">
               {t("footerPrivacy")}
             </Link>

@@ -1,150 +1,119 @@
-# aitrends
+# AI Trends · 资讯与应用聚合
 
-单仓双目录架构：
+[![Live site](https://img.shields.io/badge/站点-ai--trends.news-violet?style=flat-square)](https://www.ai-trends.news)
+[![GitHub](https://img.shields.io/badge/GitHub-pinximei%2Faisoul-181717?style=flat-square&logo=github)](https://github.com/pinximei/aisoul)
 
-- `frontend/`：前端应用目录
-  - `frontend/`（公开前台，默认端口 `5172`）
-  - `frontend/admin/`（后台管理端，端口 `5174`）
-- `backend/`：后端 API（FastAPI，端口 `8000`）
+从 Product Hunt、GitHub Trending、Hacker News、NewsAPI 等连接器拉取内容，经规则与 LLM 润色后，在公开站展示 **AI 应用** 与 **AI 资讯** 双泳道；后台可配置数据源与调度。
 
-## 线上体验
+---
 
-公开站点可直接访问：**[https://www.ai-trends.news](https://www.ai-trends.news)**（同域 `/api` 提供公开 JSON API）。页面为 AI 应用与资讯聚合展示；欢迎试用与反馈 Issue。
+## 在线访问
 
-后台管理路径为 **`/admin/`**，不向访客开放账号；如需自建实例见下文「本地运行」与 `docs/deploy-tencent-cvm.md`。
+| 入口 | 地址 |
+|------|------|
+| 公开站 | **[https://www.ai-trends.news](https://www.ai-trends.news)** |
+| 开源仓库 | **[github.com/pinximei/aisoul](https://github.com/pinximei/aisoul)** |
+| 后台管理 | 同域 **`/admin/`**（不向访客开放，自建见下文） |
 
-**外部 Agent（含飞书机器人）接续开发**：请先阅读 **`docs/HANDOFF_AGENT_FEISHU.md`**（业务、路由、API、调度与部署导航）。
+欢迎试用与反馈 [Issue](https://github.com/pinximei/aisoul/issues)。
 
-## 产品需求与实现设计
+---
 
-- 需求主文档：`docs/requirements-master-v1.md`（含 **项目定位**：学习向、可全量重写、部署后议）
-- API / 数据库 / 安全：`docs/implementation-architecture-api-db-security-v1.md`
+## 仓库结构
 
-当前仓库中的运行方式以 `docs/` 中部署与需求文档为准。
+```
+aisoul/
+├── frontend/          # 公开站（Vite + React，默认 :5172）
+│   └── admin/         # 管理端（:5174）
+├── backend/           # API（FastAPI，:8000）
+├── docs/              # 需求、部署、Agent 交接文档
+└── docker-compose*.yml
+```
 
-### 公开 API（已实现）
+---
 
-- 前缀：`/api/public/v1`（免登录 JSON：`{ code, message, data }`）
-- 前台路由：`/`、`/apps`、`/news`、`/resources/:id`、`/downloads`、`/about`
-- 腾讯云部署参考：`docs/deploy-tencent-cvm.md`
+## 本地快速启动
 
-## 本地运行
+### 方式 A · Docker 一键（推荐预览）
 
-**0) Docker 一键预览（在你自己的电脑上执行；无需单独安装 Python / Node）**
+安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/) 后，在仓库根目录：
 
-安装并启动 [Docker Desktop](https://www.docker.com/products/docker-desktop/)，在仓库根目录执行：
-
-```text
+```bash
 docker compose -f docker-compose.local.yml up --build
 ```
 
-- 公开站：<http://127.0.0.1:5172>
-- 管理端：<http://127.0.0.1:5174>
-- API 文档：<http://127.0.0.1:8000/docs>
+| 服务 | 地址 |
+|------|------|
+| 公开站 | http://127.0.0.1:5172 |
+| 管理端 | http://127.0.0.1:5174 |
+| API | http://127.0.0.1:8000 |
 
-停止（保留数据库卷）：`docker compose -f docker-compose.local.yml down`  
-若本机已在运行其它占用 `5432` / `8000` / `5172` / `5174` 的服务，请先停止或修改 `docker-compose.local.yml` 中的端口映射。
+停止：`docker compose -f docker-compose.local.yml down`
 
-**1) PostgreSQL（默认，必需）**
+### 方式 B · 本机开发
 
-```text
+**1. 数据库（PostgreSQL）**
+
+```bash
 docker compose up -d
 ```
 
-默认账号库：`postgresql+psycopg://aitrends:aitrends@127.0.0.1:5432/aitrends`（见 `backend/.env.example`）。
+默认连接串见 `backend/.env.example`。
 
-**2) 后端 API**
+**2. 后端**
 
-```text
-py -m pip install -e .
-py -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+```bash
+pip install -e .
+uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-- API 文档：<http://127.0.0.1:8000/docs>
+**3. 公开前台**
 
-**3) 公开前台（另开终端）**
-
-```text
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5172
+```bash
+cd frontend && npm install && npm run dev -- --host 127.0.0.1 --port 5172
 ```
 
-- 打开：<http://127.0.0.1:5172>
+**4. 管理端**（另开终端）
 
-**4) 后台前端（再开一个终端）**
-
-```text
-cd frontend/admin
-npm install
-npm run dev -- --host 127.0.0.1 --port 5174
+```bash
+cd frontend/admin && npm install && npm run dev -- --host 127.0.0.1 --port 5174
 ```
 
-- 打开：<http://127.0.0.1:5174>
-- 默认管理员（首次自动种子）：
-  - `username: admin`
-  - `password: admin123456`
-  - 建议上线前立即修改
+首次种子管理员：`admin` / `admin123456`（上线前请修改）。
 
-## 测试/正式数据库切换
+---
 
-- **默认使用 PostgreSQL**，不再默认 SQLite。本地推荐 `docker compose up -d`。
-- 默认使用测试库模式：`AITRENDS_DB_MODE=test`
-- 切到正式库模式：`AITRENDS_DB_MODE=prod`
-- 一条 URL 覆盖：`AITRENDS_DATABASE_URL=postgresql+psycopg://用户:密码@主机:5432/库名`
-- 或分别指定：`AITRENDS_DB_URL_TEST` / `AITRENDS_DB_URL_PROD`（默认见 `backend/app/db.py`）
-- 仅在明确需要时可通过 `AITRENDS_DATABASE_URL=sqlite:///...` 使用 SQLite（不推荐）
-- 修改后需重启后端生效
+## 配置说明
 
-## API 分层与鉴权
+| 变量 | 说明 |
+|------|------|
+| `AITRENDS_DATABASE_URL` | 数据库连接（默认 PostgreSQL） |
+| `AITRENDS_DB_MODE` | `test` / `prod` 库切换 |
+| `AITRENDS_ALLOW_INSECURE_LOCALHOST` | 本地允许 HTTP |
 
-### Public API（公开业务接口）
+更多环境项见 `backend/.env.example`。
 
-- 前缀：`/api/public/v1/*`
-- 鉴权：无（HTTPS 由网关/环境保证；本地可设 `AITRENDS_ALLOW_INSECURE_LOCALHOST=true`）
+---
 
-### Admin API（后台管理接口）
+## 文档
 
-- 前缀：`/api/admin/v1/*`
-- 鉴权：`Session/Cookie + RBAC`
-- 登录接口：
-  - `POST /api/admin/v1/auth/login`
-  - `GET /api/admin/v1/auth/me`
-  - `POST /api/admin/v1/auth/logout`
-- 常用管理接口：
-  - `GET /api/admin/v1/overview`
-  - `GET/POST /api/admin/v1/sources`
-  - `GET/POST /api/admin/v1/settings`
-  - `GET/POST /api/admin/v1/users` / `POST /api/admin/v1/users/{username}`
-  - `GET /api/admin/v1/health`
-  - `GET /api/admin/v1/system/db-info`（查看当前数据库模式）
-  - `POST /api/admin/v1/bootstrap/seed-demo`（初始化模拟数据）
-  - `POST /api/admin/v1/bootstrap/clear-demo`（清空业务测试数据，仅 admin 可调用）
+- 产品需求：`docs/requirements-master-v1.md`
+- 腾讯云部署：`docs/deploy-tencent-cvm.md`
+- 飞书 / 外部 Agent 接续：`docs/HANDOFF_AGENT_FEISHU.md`
+- 架构与安全（开发参考）：`docs/implementation-architecture-api-db-security-v1.md`
 
-### 数据库访问统一收口
-
-- 所有 DB 访问集中在 `backend/app/data_api_service.py`（Data API 服务层）
-- 对外接口通过 `main.py` 调用该服务层，不允许前端直连数据库
-- 轻量兼容迁移（PostgreSQL / 可选 SQLite）：`backend/app/db.py::ensure_schema_compatibility`
-
-## HTTPS 强制要求
-
-- 默认强制 HTTPS：`AITRENDS_REQUIRE_HTTPS=true`
-- 本地允许 HTTP：`AITRENDS_ALLOW_INSECURE_LOCALHOST=true`
-- 生产建议：
-  - `AITRENDS_REQUIRE_HTTPS=true`
-  - `AITRENDS_ALLOW_INSECURE_LOCALHOST=false`
+---
 
 ## 验证
 
-- 后端测试（需本机 PostgreSQL 已启动，连接串与默认一致或已设 `AITRENDS_DATABASE_URL`）：`py -m pytest tests/ -q`
-- 后端语法：`py -m py_compile backend/app/main.py backend/app/admin_auth.py backend/app/data_api_service.py`
-- 公开前台构建：`cd frontend && npm run build`
-- 后台前端构建：`cd frontend/admin && npm run build`
-- 后台链路冒烟（登录+会话+管理接口）：
-  - `POST /api/admin/v1/auth/login`
-  - `GET /api/admin/v1/auth/me`
-  - `GET /api/admin/v1/overview`
-  - `GET /api/admin/v1/users`
-  - `GET /api/admin/v1/settings`
-  - `GET /api/admin/v1/health`
+```bash
+pytest tests/ -q
+cd frontend && npm run build
+cd frontend/admin && npm run build
+```
+
+---
+
+## 许可与说明
+
+本项目用于 **学习参考与信息聚合演示**。连接器内容版权归各平台所有；部署生产环境请自行完成备案与合规配置。

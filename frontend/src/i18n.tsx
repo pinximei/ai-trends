@@ -102,7 +102,9 @@ const STRINGS: Record<string, string> = {
   footerPrivacy: "隐私政策",
   footerTerms: "使用条款",
   footerContact: "联系我们",
+  footerGithub: "GitHub 开源",
   footerIcpNote: "备案及主体信息请以实际上线版本为准",
+  aboutGithubCta: "在 GitHub 查看源码与贡献",
 
   newsletterCta: "把握 AI 浪潮，订阅精选更新",
   newsletterPlaceholder: "请输入邮箱",
