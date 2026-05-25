@@ -13,6 +13,8 @@ export type ArticleCard = {
   /** 连接器解析的主链接（GitHub 仓库页、HN 讨论帖等） */
   source_original_url?: string | null;
   published_at: string | null;
+  /** 列表/雷达展示用时间：max(updated_at, published_at)，重复同步后仍排在前面 */
+  display_at?: string | null;
   /** 可更新热度；应用泳道按日列表内优先于发布时间排序 */
   heat_score?: number;
   updated_at?: string | null;

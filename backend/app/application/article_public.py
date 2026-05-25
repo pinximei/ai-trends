@@ -115,7 +115,16 @@ def _feed_row_matches_list_filters(
     return True
 
 
+def _freshness_expr():
+    return art.article_freshness_sql_expr()
+
+
+def _freshness_at(a: Article) -> datetime:
+    return art.article_freshness_for_row(a) or datetime.utcnow()
+
+
 def _heat_order_by(*, sort_replicable: bool = False, sort_monetization: bool = False):
+    fe = _freshness_expr()
     order: list = []
     if sort_monetization:
         order.append(
@@ -134,14 +143,7 @@ def _heat_order_by(*, sort_replicable: bool = False, sort_monetization: bool = F
                 else_=3,
             )
         )
-    order.extend(
-        (
-            desc(Article.heat_score),
-            desc(Article.updated_at),
-            desc(Article.published_at),
-            desc(Article.id),
-        )
-    )
+    order.extend((desc(Article.heat_score), desc(fe), desc(Article.id)))
     return tuple(order)
 
 
@@ -167,7 +169,7 @@ def _build_feed_fingerprint_winner_ids(
     internal: tuple[datetime, int] | None = None
     scanned = 0
     while scanned < max_scan_rows:
-        q2 = _apply_published_keyset(base_q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        q2 = _apply_freshness_keyset(base_q, internal).order_by(desc(_freshness_expr()), desc(Article.id))
         rows = db.scalars(q2.limit(batch)).all()
         if not rows:
             break
@@ -188,7 +190,7 @@ def _build_feed_fingerprint_winner_ids(
             if fp not in winner_by_fp:
                 winner_by_fp[fp] = a.id
         last = rows[-1]
-        internal = (last.published_at, last.id)
+        internal = (_freshness_at(last), last.id)
         if len(rows) < batch or scanned >= max_scan_rows:
             break
     return frozenset(winner_by_fp.values())
@@ -210,7 +212,7 @@ def _build_radar_source_fingerprint_winner_ids(
     internal: tuple[datetime, int] | None = None
     scanned = 0
     while scanned < max_scan_rows:
-        q2 = _apply_published_keyset(base_q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        q2 = _apply_freshness_keyset(base_q, internal).order_by(desc(_freshness_expr()), desc(Article.id))
         rows = db.scalars(q2.limit(batch)).all()
         if not rows:
             break
@@ -224,7 +226,7 @@ def _build_radar_source_fingerprint_winner_ids(
             if fp not in winner_by_fp:
                 winner_by_fp[fp] = a.id
         last = rows[-1]
-        internal = (last.published_at, last.id)
+        internal = (_freshness_at(last), last.id)
         if len(rows) < batch or scanned >= max_scan_rows:
             break
     return frozenset(winner_by_fp.values())
@@ -328,8 +330,7 @@ def _base_article_query_for_scope(
     if published_within_days is not None:
         since_pub = datetime.utcnow() - timedelta(days=published_within_days)
     elif published_on_latest_day:
-        # 「最新一日」= 自然日「今天」（UTC），与入库 published_at（naive UTC）一致。
-        # 旧实现用 max(日历日) 会变成「库里最新一篇是哪天就筛哪天」，易把 2025-06 等旧稿当成「今日」。
+        # 「最新一日」= 自然日「今天」（UTC），按展示时效（入库/最近同步）而非仅源站发布时间。
         now = datetime.utcnow()
         utc_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         utc_day_end = utc_day_start + timedelta(days=1)
@@ -337,38 +338,41 @@ def _base_article_query_for_scope(
     article_industry_ids = (
         _public_industry_ids_for_slug(db, ind) if segment_id is None and segment_ids is None else [ind.id]
     )
+    fe = _freshness_expr()
     q = select(Article).where(
         Article.industry_id.in_(article_industry_ids),
         Article.status == "published",
-        Article.published_at.isnot(None),
+        fe.isnot(None),
     )
     if segment_id is not None:
         q = q.where(Article.segment_id == segment_id)
     elif segment_ids is not None:
         q = q.where(Article.segment_id.in_(segment_ids))
     if since_pub is not None:
-        q = q.where(Article.published_at >= since_pub)
+        q = q.where(fe >= since_pub)
     elif utc_day_start is not None and utc_day_end is not None:
-        q = q.where(Article.published_at >= utc_day_start, Article.published_at < utc_day_end)
+        q = q.where(fe >= utc_day_start, fe < utc_day_end)
 
     return ind, q
 
 
 def _feed_day_inner_order_by(feed: str):
-    """按 UTC 日分页时，**同一天内**条目的 SQL 排序（不改变按 published_at 收集日历日的扫描逻辑）。"""
+    """按 UTC 日分页时，**同一天内**条目的 SQL 排序（日历日收集亦按展示时效）。"""
+    fe = _freshness_expr()
     if feed == "apps":
-        return (desc(Article.heat_score), desc(Article.updated_at), desc(Article.published_at), desc(Article.id))
-    return (desc(Article.published_at), desc(Article.id))
+        return (desc(Article.heat_score), desc(fe), desc(Article.id))
+    return (desc(fe), desc(Article.id))
 
 
-def _apply_published_keyset(stmt: Select, pos: tuple[datetime, int] | None) -> Select:
+def _apply_freshness_keyset(stmt: Select, pos: tuple[datetime, int] | None) -> Select:
     if not pos:
         return stmt
-    pub_c, id_c = pos
+    fresh_c, id_c = pos
+    fe = _freshness_expr()
     return stmt.where(
         or_(
-            Article.published_at < pub_c,
-            and_(Article.published_at == pub_c, Article.id < id_c),
+            fe < fresh_c,
+            and_(fe == fresh_c, Article.id < id_c),
         )
     )
 
@@ -394,6 +398,7 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
                 card_highlights = sm[:200]
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     fp = art.display_fingerprint(a.title, a.summary or "")
+    display_dt = art.article_freshness_for_row(a)
     return {
         "id": a.id,
         "slug": a.slug,
@@ -406,6 +411,7 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
         "source_external_id": getattr(a, "source_external_id", None),
         "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
         "updated_at": a.updated_at.isoformat() + "Z" if a.updated_at else None,
+        "display_at": display_dt.isoformat() + "Z" if display_dt else None,
         "engagement_stars_total": getattr(a, "engagement_stars_total", None),
         "engagement_stars_today": getattr(a, "engagement_stars_today", None),
         "heat_score": float(getattr(a, "heat_score", 0.0) or 0.0),
@@ -435,14 +441,14 @@ def _collect_ordered_days_for_feed(
     max_scan: int = 40000,
     batch: int = 400,
 ) -> tuple[list[date], bool]:
-    """按 published_at 从新到旧扫描，收集首次出现的 UTC 日历日（仅统计通过泳道/类别/搜索筛选的文章）。"""
+    """按展示时效从新到旧扫描，收集首次出现的 UTC 日历日（仅统计通过泳道/类别/搜索筛选的文章）。"""
     ordered_days: list[date] = []
     seen: set[date] = set()
     internal: tuple[datetime, int] | None = None
     scanned = 0
 
     while scanned < max_scan:
-        q2 = _apply_published_keyset(base_q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        q2 = _apply_freshness_keyset(base_q, internal).order_by(desc(_freshness_expr()), desc(Article.id))
         rows = db.scalars(q2.limit(batch)).all()
         if not rows:
             break
@@ -459,14 +465,15 @@ def _collect_ordered_days_for_feed(
                 continue
             if a.id not in winner_ids:
                 continue
-            d = a.published_at.date()
+            fresh = _freshness_at(a)
+            d = fresh.date()
             if d not in seen:
                 seen.add(d)
                 ordered_days.append(d)
             if scanned >= max_scan:
                 break
         last = rows[-1]
-        internal = (last.published_at, last.id)
+        internal = (_freshness_at(last), last.id)
         if len(rows) < batch:
             break
         if scanned >= max_scan:
@@ -571,7 +578,8 @@ def list_articles_feed_by_day_page(
     day_start = datetime.combine(oldest_day, datetime.min.time())
     day_end = datetime.combine(newest_day, datetime.min.time()) + timedelta(days=1)
 
-    q_day = q.where(Article.published_at >= day_start, Article.published_at < day_end)
+    fe = _freshness_expr()
+    q_day = q.where(fe >= day_start, fe < day_end)
     rows = db.scalars(q_day.order_by(*_feed_day_inner_order_by(feed))).all()
 
     seen_fp: set[str] = set()
@@ -749,7 +757,7 @@ def list_article_category_facets(
         search_n=n,
         tier_filter=tier_filter,
     )
-    rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
+    rows = db.scalars(q.order_by(desc(_freshness_expr()), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
         if not _feed_row_matches_list_filters(
@@ -807,7 +815,7 @@ def list_article_source_facets(
         search_n=n,
         tier_filter=tier_filter,
     )
-    rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
+    rows = db.scalars(q.order_by(desc(_freshness_expr()), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
         if not _feed_row_matches_list_filters(
@@ -885,13 +893,13 @@ def list_articles_feed(
     has_more = False
 
     while len(out) < page_size:
-        q2 = _apply_published_keyset(q, internal).order_by(desc(Article.published_at), desc(Article.id))
+        q2 = _apply_freshness_keyset(q, internal).order_by(desc(_freshness_expr()), desc(Article.id))
         rows = db.scalars(q2.limit(scan_limit)).all()
         if not rows:
             break
         has_more = len(rows) >= scan_limit
         for a in rows:
-            last_scanned = (a.published_at, a.id)
+            last_scanned = (_freshness_at(a), a.id)
             if not _feed_row_matches_list_filters(
                 a,
                 feed=feed,
@@ -956,6 +964,7 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "third_party_source": a.third_party_source,
         "published_at": a.published_at.isoformat() + "Z" if a.published_at else None,
         "updated_at": a.updated_at.isoformat() + "Z" if a.updated_at else None,
+        "display_at": (lambda _d: _d.isoformat() + "Z" if _d else None)(art.article_freshness_for_row(a)),
         "engagement_stars_total": getattr(a, "engagement_stars_total", None),
         "engagement_stars_today": getattr(a, "engagement_stars_today", None),
         "heat_score": float(getattr(a, "heat_score", 0.0) or 0.0),

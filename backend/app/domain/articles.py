@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from typing import Iterator
 from urllib.parse import urlparse
 
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import Date, and_, case, cast, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..product_models import Article
 
@@ -1404,7 +1405,42 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     return True
 
 
+def article_freshness_datetime(
+    *,
+    published_at: datetime | None,
+    updated_at: datetime | None,
+) -> datetime | None:
+    """公开列表排序/时间窗：以最近入库或连接器刷新为准，避免上游旧 ``published_at`` 把稿挤出窗口。"""
+    if published_at is None:
+        return updated_at
+    if updated_at is None:
+        return published_at
+    return updated_at if updated_at > published_at else published_at
+
+
+def article_freshness_for_row(a: Article) -> datetime | None:
+    return article_freshness_datetime(published_at=a.published_at, updated_at=a.updated_at)
+
+
+def article_freshness_sql_expr() -> ColumnElement:
+    """SQL 版 ``article_freshness_datetime``，供筛选与 ORDER BY。"""
+    return case(
+        (
+            and_(
+                Article.published_at.isnot(None),
+                Article.updated_at.isnot(None),
+                Article.updated_at > Article.published_at,
+            ),
+            Article.updated_at,
+        ),
+        (Article.published_at.isnot(None), Article.published_at),
+        else_=Article.updated_at,
+    )
+
+
 def published_calendar_day(db: Session):
+    """按 UTC 日历日分组公开 feed（与列表 ``display_at`` 一致，用展示时效而非仅源站发布时间）。"""
+    fe = article_freshness_sql_expr()
     if db.get_bind().dialect.name == "sqlite":
-        return func.strftime("%Y-%m-%d", Article.published_at)
-    return cast(Article.published_at, Date)
+        return func.strftime("%Y-%m-%d", fe)
+    return cast(fe, Date)

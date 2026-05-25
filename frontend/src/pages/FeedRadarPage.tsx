@@ -64,12 +64,16 @@ function formatFeedDateLabel(isoDay: string): string {
   return d.toLocaleDateString("zh-CN", { dateStyle: "long", timeZone: "UTC" });
 }
 
-/** 列表分组与卡片角标均用 ``published_at`` 的 UTC 日历日，与后端按日分页一致。 */
-function articleGroupDay(a: { published_at?: string | null }): string {
-  return (a.published_at || "").slice(0, 10) || "_";
+/** 列表分组与卡片角标用 ``display_at``（入库/最近同步），与后端按日分页一致。 */
+function articleListDisplayIso(a: { display_at?: string | null; published_at?: string | null }): string {
+  return a.display_at ?? a.published_at ?? "";
 }
 
-function articleDisplayDay(a: { published_at?: string | null }): string {
+function articleGroupDay(a: { display_at?: string | null; published_at?: string | null }): string {
+  return articleListDisplayIso(a).slice(0, 10) || "_";
+}
+
+function articleDisplayDay(a: { display_at?: string | null; published_at?: string | null }): string {
   return articleGroupDay(a);
 }
 
@@ -723,7 +727,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                 >
                   {rows.map((a) => {
                     const displayDay = articleDisplayDay(a);
-                    const displayIso = a.published_at;
+                    const displayIso = articleListDisplayIso(a);
                     const starsTotal = a.engagement_stars_total;
                     const starsToday = a.engagement_stars_today;
                     const tierBadge =

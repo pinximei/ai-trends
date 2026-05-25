@@ -78,7 +78,7 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
       ) : null}
       <HomeHeatBadge heat={item.heat_score} />
       {engagement ? <span className="font-semibold tabular-nums text-amber-700">{engagement}</span> : null}
-      <span className="tabular-nums text-slate-400">{timeAgo(item.published_at)}</span>
+      <span className="tabular-nums text-slate-400">{timeAgo(item.display_at ?? item.published_at)}</span>
     </div>
   );
 }

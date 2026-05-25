@@ -65,17 +65,18 @@ def get_home_trend_overview(
         return empty
 
     now = datetime.utcnow()
+    fe = art.article_freshness_sql_expr()
     base = and_(
         Article.industry_id.in_(industry_ids),
         Article.status == "published",
-        Article.published_at.isnot(None),
+        fe.isnot(None),
     )
 
     spark_since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    day_col = func.date(Article.published_at)
+    day_col = art.published_calendar_day(db)
     rows = db.execute(
         select(day_col.label("d"), func.count(Article.id))
-        .where(base, Article.published_at >= spark_since)
+        .where(base, fe >= spark_since)
         .group_by(day_col)
         .order_by(day_col)
     ).all()
@@ -87,8 +88,7 @@ def get_home_trend_overview(
 
     def _count(extra) -> int:
         return int(
-            db.scalar(select(func.count()).select_from(Article).where(base, extra, Article.published_at >= cur_since))
-            or 0
+            db.scalar(select(func.count()).select_from(Article).where(base, extra, fe >= cur_since)) or 0
         )
 
     def _count_prev(extra) -> int:
@@ -97,8 +97,8 @@ def get_home_trend_overview(
                 select(func.count()).select_from(Article).where(
                     base,
                     extra,
-                    Article.published_at >= prev_since,
-                    Article.published_at < cur_since,
+                    fe >= prev_since,
+                    fe < cur_since,
                 )
             )
             or 0
@@ -392,6 +392,7 @@ def list_highlight_replicable_apps(
         return []
 
     since = datetime.utcnow() - timedelta(days=days)
+    fe = art.article_freshness_sql_expr()
     tier_rank = case(
         (func.upper(Article.replication_tier) == "S", 0),
         (func.upper(Article.replication_tier) == "A", 1),
@@ -406,14 +407,14 @@ def list_highlight_replicable_apps(
             .where(
                 Article.industry_id.in_(industry_ids),
                 Article.status == "published",
-                Article.published_at.is_not(None),
-                Article.published_at >= since,
+                fe.isnot(None),
+                fe >= since,
                 func.upper(Article.replication_tier).in_(tier_set),
             )
             .order_by(
                 tier_rank,
                 desc(Article.heat_score),
-                desc(Article.published_at),
+                desc(fe),
                 desc(Article.id),
             )
             .limit(scan_lim)
@@ -447,6 +448,7 @@ def list_highlight_monetization_apps(
         return []
 
     since = datetime.utcnow() - timedelta(days=days)
+    fe = art.article_freshness_sql_expr()
     cat_rank = case(
         (Article.ai_categories_json.like('%"变现案例"%'), 0),
         (Article.ai_categories_json.like('%"已验证变现"%'), 1),
@@ -459,8 +461,8 @@ def list_highlight_monetization_apps(
             .where(
                 Article.industry_id.in_(industry_ids),
                 Article.status == "published",
-                Article.published_at.is_not(None),
-                Article.published_at >= since,
+                fe.isnot(None),
+                fe >= since,
                 (
                     Article.ai_categories_json.like('%"变现案例"%')
                     | Article.ai_categories_json.like('%"已验证变现"%')
@@ -471,7 +473,7 @@ def list_highlight_monetization_apps(
             .order_by(
                 cat_rank,
                 desc(Article.heat_score),
-                desc(Article.published_at),
+                desc(fe),
                 desc(Article.id),
             )
             .limit(scan_lim)
