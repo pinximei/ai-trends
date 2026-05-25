@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
+from ..domain import articles as art
 from ..domain.articles import FEED_APPS_KEYS
 from ..product_models import Article, Industry
 
@@ -374,6 +375,80 @@ def list_highlight_replicable_apps(
     return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 
 
+def list_highlight_monetization_apps(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    limit: int = 4,
+    published_within_days: int = 30,
+) -> list[dict]:
+    """首页变现线索：应用泳道内变现类 / Acquire / TAAFT，变现案例优先。"""
+    from ..domain.articles import MONETIZATION_APPS_CATEGORIES
+    from .article_public import (
+        _admin_source_label_by_key,
+        _article_matches_public_feed,
+        _feed_card_from_article,
+        _monetization_counts_as_apps_feed,
+    )
+
+    lim = max(1, min(int(limit), 8))
+    days = max(1, min(int(published_within_days), 120))
+    industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
+    if not industry_ids:
+        return []
+
+    since = datetime.utcnow() - timedelta(days=days)
+    cat_rank = case(
+        (Article.ai_categories_json.like('%"变现案例"%'), 0),
+        (Article.ai_categories_json.like('%"已验证变现"%'), 1),
+        else_=2,
+    )
+    scan_lim = max(lim * 12, 32)
+    candidates = list(
+        db.scalars(
+            select(Article)
+            .where(
+                Article.industry_id.in_(industry_ids),
+                Article.status == "published",
+                Article.published_at.is_not(None),
+                Article.published_at >= since,
+                (
+                    Article.ai_categories_json.like('%"变现案例"%')
+                    | Article.ai_categories_json.like('%"已验证变现"%')
+                    | Article.third_party_source.ilike("acquire%")
+                    | Article.third_party_source.ilike("taaft%")
+                ),
+            )
+            .order_by(
+                cat_rank,
+                desc(Article.heat_score),
+                desc(Article.published_at),
+                desc(Article.id),
+            )
+            .limit(scan_lim)
+        ).all()
+    )
+    picked: list[Article] = []
+    seen: set[int] = set()
+    for a in candidates:
+        if not _article_matches_public_feed(a, "apps") or not _monetization_counts_as_apps_feed(a):
+            continue
+        sk = art.admin_source_key(a.third_party_source)
+        cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+        if sk not in art.MONETIZATION_SOURCE_KEYS and (
+            not cats or cats[0] not in MONETIZATION_APPS_CATEGORIES
+        ):
+            continue
+        if a.id in seen:
+            continue
+        seen.add(a.id)
+        picked.append(a)
+        if len(picked) >= lim:
+            break
+    label_by_key = _admin_source_label_by_key(db)
+    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in picked]
+
+
 def get_home_dashboard(
     db: Session,
     *,
@@ -381,6 +456,7 @@ def get_home_dashboard(
     news_limit: int = 8,
     apps_limit: int = 10,
     replicable_apps_limit: int = 6,
+    monetization_apps_limit: int = 4,
     published_within_days: int = 30,
 ) -> dict:
     """
@@ -436,7 +512,13 @@ def get_home_dashboard(
         limit=replicable_apps_limit,
         published_within_days=days,
     )
-    highlight_ids = _article_ids(highlight_replicable_apps)
+    highlight_monetization_apps = list_highlight_monetization_apps(
+        db,
+        industry_slug=industry_slug,
+        limit=monetization_apps_limit,
+        published_within_days=days,
+    )
+    highlight_ids = _article_ids(highlight_replicable_apps) | _article_ids(highlight_monetization_apps)
 
     news_items = _select_home_picks(news_raw_items, nl)
     news_pick_ids = _article_ids(news_items)
@@ -463,6 +545,7 @@ def get_home_dashboard(
         "news": news_items,
         "apps": apps_items,
         "highlight_replicable_apps": highlight_replicable_apps,
+        "highlight_monetization_apps": highlight_monetization_apps,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
         "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",

@@ -22,9 +22,15 @@ from .connector_heat_fetch import (
 )
 from .scope_labels_util import get_scope_labels_from_source
 from .connector_sync_policy import CUSTOM_SYNC_MIN_INTERVAL_SECONDS
-from .services import MAINSTREAM_ADMIN_SOURCE_KEYS, MAINSTREAM_ADMIN_SOURCE_PRESETS
+from .services import (
+    BUILTIN_ADMIN_SOURCE_KEYS,
+    BUILTIN_ADMIN_SOURCE_PRESETS,
+    MAINSTREAM_ADMIN_SOURCE_KEYS,
+    MAINSTREAM_ADMIN_SOURCE_PRESETS,
+    OPTIONAL_MONETIZATION_SOURCE_KEYS,
+)
 
-_CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
+_CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
 
 # 启动时默认启用拉取（参与定时连接器批量同步）；与 MAINSTREAM 内置源一致（3 路）。
 # 扩容：每增加一个 key 前须本地 verify_source_local.py 通过，见 docs/DATA_SOURCE_ONBOARDING.md。
@@ -72,6 +78,14 @@ def mainstream_heat_fetch_url_ok(source: str, url: str) -> bool:
         return arxiv_api_is_query_url(u)
     if src == "huggingface_spaces":
         return huggingface_api_spaces_is_list_index(u)
+    if src == "taaft":
+        from .connector_heat_fetch import taaft_list_is_new_tools_url
+
+        return taaft_list_is_new_tools_url(u)
+    if src == "acquire":
+        from .connector_heat_fetch import acquire_portal_is_list_url
+
+        return acquire_portal_is_list_url(u)
     return False
 
 
@@ -168,7 +182,7 @@ def audit_mainstream_connector_paths(db: Session) -> list[dict]:
     from .source_segment_resolve import resolve_admin_source_key_to_segments
 
     out: list[dict] = []
-    for preset in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+    for preset in BUILTIN_ADMIN_SOURCE_PRESETS:
         src = preset["source"]
         row = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == src))
         api_base = (row.api_base or "").strip() if row else ""
@@ -200,6 +214,8 @@ def audit_mainstream_connector_paths(db: Session) -> list[dict]:
                     "hacker_news": "hn.algolia.com/api/v1/search?tags=front_page",
                     "newsapi": NEWSAPI_TOP_HEADLINES_DEFAULT,
                     "thenewsapi": THENEWSAPI_TOP_DEFAULT,
+                    "taaft": "https://theresanaiforthat.com/new/",
+                    "acquire": "https://us-central1-microacquire.cloudfunctions.net/v1-search",
                 }.get(src, ""),
             }
         )
@@ -316,7 +332,7 @@ def enable_auto_pull_admin_sources_and_connectors(db: Session) -> dict[str, int]
 
 
 def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
-    """删除库中一切不在当前 MAINSTREAM 预置列表内的 admin 数据源及其绑定连接器。
+    """删除库中一切不在当前内置预置列表内的 admin 数据源及其绑定连接器。
 
     自定义标识、旧版预置残留等都会被清掉；随后 ``ensure_mainstream_admin_sources`` 会补回内置行。
     """
@@ -325,9 +341,9 @@ def prune_admin_sources_outside_mainstream(db: Session) -> dict[str, int]:
     from sqlalchemy import delete
 
     log = logging.getLogger(__name__)
-    if not MAINSTREAM_ADMIN_SOURCE_KEYS:
+    if not BUILTIN_ADMIN_SOURCE_KEYS:
         return {"connectors_deleted": 0, "admin_sources_deleted": 0}
-    keys = tuple(MAINSTREAM_ADMIN_SOURCE_KEYS)
+    keys = tuple(BUILTIN_ADMIN_SOURCE_KEYS)
     n_c = _delete_product_connectors_where(
         db,
         ProductConnector.admin_source_key.isnot(None),
@@ -351,7 +367,12 @@ def prune_disabled_admin_sources(db: Session) -> dict[str, int]:
     from sqlalchemy import delete
 
     log = logging.getLogger(__name__)
-    rows = db.scalars(select(AdminSourceConfig).where(AdminSourceConfig.enabled.is_(False))).all()
+    rows = db.scalars(
+        select(AdminSourceConfig).where(
+            AdminSourceConfig.enabled.is_(False),
+            ~AdminSourceConfig.source.in_(tuple(OPTIONAL_MONETIZATION_SOURCE_KEYS)),
+        )
+    ).all()
     if not rows:
         return {"connectors_deleted": 0, "admin_sources_deleted": 0}
     keys = tuple({r.source.strip().lower() for r in rows if (r.source or "").strip()})

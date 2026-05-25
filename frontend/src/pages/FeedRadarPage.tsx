@@ -98,6 +98,8 @@ const CLONE_APP_CATEGORIES = [
   "变现案例",
 ] as const;
 
+const MONETIZATION_CATEGORIES = new Set<string>(["已验证变现", "变现案例"]);
+
 function replicationTierApiParams(
   feedMode: "news" | "apps",
   filter: ReplicationTierFilter,
@@ -144,22 +146,32 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     mode === "apps" ? "sa" : "all",
   );
 
-  const tierApi = useMemo(
-    () => replicationTierApiParams(mode, replicationFilter),
-    [mode, replicationFilter],
-  );
+  const listApiParams = useMemo(() => {
+    const base = replicationTierApiParams(mode, replicationFilter);
+    if (mode === "apps" && categoryKey && MONETIZATION_CATEGORIES.has(categoryKey)) {
+      return { ...base, sort_monetization: true };
+    }
+    return base;
+  }, [mode, replicationFilter, categoryKey]);
 
   useEffect(() => {
-    const raw = location.state as { q?: string; replicationFilter?: ReplicationTierFilter } | undefined;
+    const raw = location.state as {
+      q?: string;
+      replicationFilter?: ReplicationTierFilter;
+      category?: string;
+    } | undefined;
     const q = raw?.q?.trim();
     if (raw?.replicationFilter && mode === "apps") {
       setReplicationFilter(raw.replicationFilter);
+    }
+    if (raw?.category && mode === "apps") {
+      setCategoryKey(raw.category);
     }
     if (q) {
       setSearchDraft(q);
       setSearchQ(q);
     }
-    if (q || raw?.replicationFilter) {
+    if (q || raw?.replicationFilter || raw?.category) {
       navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, location.search, navigate, mode]);
@@ -199,7 +211,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         ...timeParams,
         source: sourceKey,
         q: searchQ || null,
-        ...tierApi,
+        ...listApiParams,
       })
       .then((rows) => {
         if (!cancelled) setCategoryOptions(rows);
@@ -210,7 +222,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeParams, searchQ, sourceKey, tierApi]);
+  }, [mode, timeParams, searchQ, sourceKey, listApiParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,7 +233,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         ...timeParams,
         category: categoryKey,
         q: searchQ || null,
-        ...tierApi,
+        ...listApiParams,
       })
       .then((rows) => {
         if (!cancelled) setSourceOptions(rows);
@@ -232,7 +244,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeParams, searchQ, categoryKey, tierApi]);
+  }, [mode, timeParams, searchQ, categoryKey, listApiParams]);
 
   useEffect(() => {
     if (categoryKey && !categoryOptions.some((x) => x.label === categoryKey)) {
@@ -257,9 +269,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       category: categoryKey,
       source: sourceKey,
       q: searchQ || null,
-      ...tierApi,
+      ...listApiParams,
     }),
-    [mode, timeParams, categoryKey, sourceKey, searchQ, tierApi],
+    [mode, timeParams, categoryKey, sourceKey, searchQ, listApiParams],
   );
 
   const loadMoreHeat = useCallback(async () => {
@@ -307,7 +319,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         category: categoryKey,
         source: sourceKey,
         q: searchQ || null,
-        ...tierApi,
+        ...listApiParams,
       })
       .then((d) => {
         if (cancelled || reqGen !== dayFeedFetchGenRef.current) return;
@@ -342,7 +354,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [listDisplayMode, mode, timeParams, categoryKey, sourceKey, searchQ, feedPage, tierApi]);
+  }, [listDisplayMode, mode, timeParams, categoryKey, sourceKey, searchQ, feedPage, listApiParams]);
 
   useEffect(() => {
     if (listDisplayMode !== "heat") return;

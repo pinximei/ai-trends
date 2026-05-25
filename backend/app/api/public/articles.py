@@ -172,6 +172,10 @@ def list_articles_feed(
         False,
         description="When true, order heat pool by tier S→A→B→C then heat_score (抄应用优先).",
     ),
+    sort_monetization: bool = Query(
+        False,
+        description="When true, order heat pool by 变现案例→已验证变现 then heat (apps 变现优先).",
+    ),
     db: Session = Depends(get_db),
 ):
     segment_ids_parsed = parse_segment_ids_csv(segment_ids)
@@ -211,6 +215,7 @@ def list_articles_feed(
                 heat_max_ranked=heat_max_ranked,
                 replication_tiers=replication_tiers,
                 sort_replicable=sort_replicable,
+                sort_monetization=sort_monetization,
             )
         else:
             data = article_app.list_articles_feed(

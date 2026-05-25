@@ -57,6 +57,15 @@ def _tier_filter_from_csv(raw: str | None) -> frozenset[str] | None:
 GITHUB_CLONE_APPS_CATEGORY = "开源客户端(好抄)"
 
 
+def _monetization_counts_as_apps_feed(a: Article) -> bool:
+    """变现案例 / 已验证变现类，以及 Acquire、TAAFT 源条目纳入应用泳道展示。"""
+    sk = art.admin_source_key(a.third_party_source)
+    if sk in art.MONETIZATION_SOURCE_KEYS:
+        return True
+    cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    return bool(cats and cats[0] in art.MONETIZATION_APPS_CATEGORIES)
+
+
 def _github_counts_as_apps_feed(a: Article) -> bool:
     """GitHub 客户端 Trending：公开「应用」泳道纳入 S/A 或「开源客户端(好抄)」类条目。"""
     if art.admin_source_key(a.third_party_source) != "github":
@@ -69,12 +78,12 @@ def _github_counts_as_apps_feed(a: Article) -> bool:
 
 
 def _article_matches_public_feed(a: Article, feed: str) -> bool:
-    """公开 feed=apps/news 泳道：apps 含可抄 GitHub 客户端；news 与之去重。"""
+    """公开 feed=apps/news 泳道：apps 含可抄 GitHub 与变现向条目；news 与之去重。"""
     lane = _row_feed_lane(a)
     if feed == "apps":
-        return lane == "apps" or _github_counts_as_apps_feed(a)
+        return lane == "apps" or _github_counts_as_apps_feed(a) or _monetization_counts_as_apps_feed(a)
     if feed == "news":
-        if _github_counts_as_apps_feed(a):
+        if _github_counts_as_apps_feed(a) or _monetization_counts_as_apps_feed(a):
             return False
         return lane == "news"
     return lane == feed
@@ -106,27 +115,34 @@ def _feed_row_matches_list_filters(
     return True
 
 
-def _heat_order_by(*, sort_replicable: bool):
-    if sort_replicable:
-        tier_rank = case(
-            (func.upper(Article.replication_tier) == "S", 0),
-            (func.upper(Article.replication_tier) == "A", 1),
-            (func.upper(Article.replication_tier) == "B", 2),
-            else_=3,
+def _heat_order_by(*, sort_replicable: bool = False, sort_monetization: bool = False):
+    order: list = []
+    if sort_monetization:
+        order.append(
+            case(
+                (Article.ai_categories_json.like('%"变现案例"%'), 0),
+                (Article.ai_categories_json.like('%"已验证变现"%'), 1),
+                else_=2,
+            )
         )
-        return (
-            tier_rank,
+    if sort_replicable:
+        order.append(
+            case(
+                (func.upper(Article.replication_tier) == "S", 0),
+                (func.upper(Article.replication_tier) == "A", 1),
+                (func.upper(Article.replication_tier) == "B", 2),
+                else_=3,
+            )
+        )
+    order.extend(
+        (
             desc(Article.heat_score),
             desc(Article.updated_at),
             desc(Article.published_at),
             desc(Article.id),
         )
-    return (
-        desc(Article.heat_score),
-        desc(Article.updated_at),
-        desc(Article.published_at),
-        desc(Article.id),
     )
+    return tuple(order)
 
 
 def _build_feed_fingerprint_winner_ids(
@@ -538,6 +554,7 @@ def list_articles_feed_by_heat_top(
     heat_max_ranked: int = HEAT_FEED_MAX,
     replication_tiers: str | None = None,
     sort_replicable: bool = False,
+    sort_monetization: bool = False,
 ) -> dict:
     """
     与「按日」相同的时间窗与筛选；在展示指纹胜者集合内排序（可选 S/A 优先），
@@ -548,6 +565,7 @@ def list_articles_feed_by_heat_top(
     n = normalize_feed_search(search)
     tier_filter = _tier_filter_from_csv(replication_tiers)
     sort_rep = bool(sort_replicable or tier_filter)
+    sort_mon = bool(sort_monetization or (cat_filter in art.MONETIZATION_APPS_CATEGORIES))
     ps = max(1, min(int(heat_page_size or HEAT_PAGE_DEFAULT), HEAT_PAGE_MAX))
     off = max(0, int(heat_offset or 0))
     cap = max(1, min(int(heat_max_ranked or HEAT_FEED_MAX), HEAT_FEED_MAX))
@@ -590,7 +608,7 @@ def list_articles_feed_by_heat_top(
     ranked_pool = (
         select(Article.id.label("rid"))
         .where(pool_where)
-        .order_by(*_heat_order_by(sort_replicable=sort_rep))
+        .order_by(*_heat_order_by(sort_replicable=sort_rep, sort_monetization=sort_mon))
         .limit(cap)
         .subquery()
     )

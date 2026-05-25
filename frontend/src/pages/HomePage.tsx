@@ -1,7 +1,7 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Brain, Flame, Mail, Radar, Sparkles, Wrench } from "lucide-react";
+import { Brain, Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
@@ -458,6 +458,7 @@ export function HomePage() {
   const [news, setNews] = useState<ArticleFeedCard[]>([]);
   const [apps, setApps] = useState<ArticleFeedCard[]>([]);
   const [highlightApps, setHighlightApps] = useState<ArticleFeedCard[]>([]);
+  const [highlightMonetization, setHighlightMonetization] = useState<ArticleFeedCard[]>([]);
   const [newsLanes, setNewsLanes] = useState<SourceLane[]>([]);
   const [appsLanes, setAppsLanes] = useState<SourceLane[]>([]);
   const [sourceFacets, setSourceFacets] = useState<
@@ -535,6 +536,7 @@ export function HomePage() {
         setNews(nextNews);
         setApps(nextApps);
         setHighlightApps(data.highlight_replicable_apps ?? []);
+        setHighlightMonetization(data.highlight_monetization_apps ?? []);
         setNewsLanes(data.news_source_lanes ?? []);
         setAppsLanes(data.apps_source_lanes ?? []);
         setSourceFacets(data.source_facets ?? []);
@@ -777,6 +779,31 @@ export function HomePage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {highlightApps.map((item) => (
+              <HomeArticleTile key={item.id} item={item} variant="tile" />
+            ))}
+          </div>
+        )}
+      </HomeSection>
+
+      <HomeSection
+        title={t("homeHighlightMonetizationApps")}
+        subtitle={t("homeHighlightMonetizationAppsSub")}
+        icon={<TrendingUp className="h-5 w-5 text-emerald-600" strokeWidth={2} />}
+        action={{
+          label: t("homeHighlightMonetizationAppsCta"),
+          to: "/apps",
+          state: { category: "变现案例" },
+        }}
+      >
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : highlightMonetization.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-8 text-center text-sm text-slate-600">
+            {t("homeHighlightMonetizationAppsEmpty")}
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {highlightMonetization.map((item) => (
               <HomeArticleTile key={item.id} item={item} variant="tile" />
             ))}
           </div>

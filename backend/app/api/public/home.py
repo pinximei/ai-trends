@@ -32,6 +32,7 @@ def home_dashboard(
     news_limit: int = 8,
     apps_limit: int = 10,
     replicable_apps_limit: int = 6,
+    monetization_apps_limit: int = 4,
     published_within_days: int = 30,
     db: Session = Depends(get_db),
 ):
@@ -42,6 +43,7 @@ def home_dashboard(
         news_limit=news_limit,
         apps_limit=apps_limit,
         replicable_apps_limit=replicable_apps_limit,
+        monetization_apps_limit=monetization_apps_limit,
         published_within_days=published_within_days,
     )
     return success(data)

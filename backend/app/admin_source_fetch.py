@@ -13,6 +13,8 @@ PRESET_FETCH_LIMIT: dict[str, int] = {
     "hacker_news": 10,
     "newsapi": 20,
     "thenewsapi": 10,
+    "taaft": 15,
+    "acquire": 10,
 }
 
 

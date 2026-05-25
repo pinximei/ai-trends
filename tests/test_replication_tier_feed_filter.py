@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app import models as _admin_models  # noqa: F401
 from backend.app.application import article_public as ap
-from backend.app.application.article_public import _article_matches_public_feed, _github_counts_as_apps_feed
+from backend.app.application.article_public import (
+    _article_matches_public_feed,
+    _github_counts_as_apps_feed,
+    _monetization_counts_as_apps_feed,
+)
 from backend.app.application.home_public import list_highlight_replicable_apps
 from backend.app.db import Base
 from backend.app.domain import articles as art
@@ -53,6 +57,21 @@ def test_feed_row_matches_tier_filter() -> None:
         )
         is True
     )
+
+
+def test_monetization_category_counts_as_apps_feed() -> None:
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="SaaS sold",
+        status="published",
+        feed_kind="news",
+        ai_categories_json='["变现案例"]',
+        replication_tier="A",
+    )
+    assert _monetization_counts_as_apps_feed(a) is True
+    assert _article_matches_public_feed(a, "apps") is True
+    assert _article_matches_public_feed(a, "news") is False
 
 
 def test_github_s_tier_counts_as_apps_feed() -> None:

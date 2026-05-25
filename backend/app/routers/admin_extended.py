@@ -733,10 +733,49 @@ def _run_connector_request(
                     source_key=sk,
                 )
                 return code, out
-            from ..product_connectors_bootstrap import mainstream_heat_fetch_url_ok
-            from ..services import MAINSTREAM_ADMIN_SOURCE_KEYS
+            from ..connector_heat_fetch import (
+                acquire_portal_is_list_url,
+                sync_acquire_top_details,
+                sync_taaft_top_details,
+                taaft_list_is_new_tools_url,
+            )
 
-            if source_key in MAINSTREAM_ADMIN_SOURCE_KEYS and not mainstream_heat_fetch_url_ok(source_key, url):
+            if source_key == "taaft" and taaft_list_is_new_tools_url(url):
+                _connector_req_diag(
+                    db, level="info", step="heat_path", message="走 TAAFT 新工具列表热度打包",
+                    connector_id=connector_id, source_key=sk,
+                )
+                code, text = sync_taaft_top_details(url, headers)
+                out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+                _connector_req_diag(
+                    db,
+                    level="info" if code and 200 <= code < 300 else "error",
+                    step="heat_done",
+                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
+                    connector_id=connector_id,
+                    source_key=sk,
+                )
+                return code, out
+            if source_key == "acquire" and acquire_portal_is_list_url(url):
+                _connector_req_diag(
+                    db, level="info", step="heat_path", message="走 Acquire v1-search 热度打包",
+                    connector_id=connector_id, source_key=sk,
+                )
+                code, text = sync_acquire_top_details(url, headers)
+                out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+                _connector_req_diag(
+                    db,
+                    level="info" if code and 200 <= code < 300 else "error",
+                    step="heat_done",
+                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
+                    connector_id=connector_id,
+                    source_key=sk,
+                )
+                return code, out
+            from ..product_connectors_bootstrap import mainstream_heat_fetch_url_ok
+            from ..services import BUILTIN_ADMIN_SOURCE_KEYS
+
+            if source_key in BUILTIN_ADMIN_SOURCE_KEYS and not mainstream_heat_fetch_url_ok(source_key, url):
                 msg = (
                     f"数据源 {source_key} 的 URL 未匹配热度打包路径，请使用后台预设 api_base 或执行修复。"
                     f" 当前: {url[:240]}"

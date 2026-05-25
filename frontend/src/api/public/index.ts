@@ -64,6 +64,7 @@ export const publicApi = {
     q?: string | null;
     replication_tiers?: string | null;
     sort_replicable?: boolean;
+    sort_monetization?: boolean;
   }) => {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
@@ -84,6 +85,7 @@ export const publicApi = {
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
     if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
     if (opts.sort_replicable) sp.set("sort_replicable", "true");
+    if (opts.sort_monetization) sp.set("sort_monetization", "true");
     return publicGet<ArticlesFeedResponse>(`/api/public/v1/articles/feed?${sp.toString()}`);
   },
   article: (id: number) => publicGet<ArticleDetail>(`/api/public/v1/articles/${id}`),
@@ -136,6 +138,7 @@ export const publicApi = {
       news: ArticleFeedCard[];
       apps: ArticleFeedCard[];
       highlight_replicable_apps: ArticleFeedCard[];
+      highlight_monetization_apps: ArticleFeedCard[];
       featured_news_id: number | null;
       pick_window_days: number;
       scoring_note: string;

@@ -145,8 +145,12 @@ const STRINGS: Record<string, string> = {
   resourcesReplicationSa: "S + A（推荐）",
   resourcesReplicationS: "仅 S 档",
   resourcesReplicationHint:
-    "开启后按 S→A 优先排序，并只显示所选档位；应用列表含 Product Hunt 与 GitHub 客户端 Trending（S/A 或「开源客户端」类）。",
+    "开启后按 S→A 优先排序，并只显示所选档位；应用列表含 Product Hunt、GitHub 客户端（S/A）及变现类资讯。",
   resourcesAppsCloneCategories: "抄应用 / 变现常用类",
+  homeHighlightMonetizationApps: "变现线索",
+  homeHighlightMonetizationAppsSub: "并购、订阅收入与已验证商业化样本（含 Acquire / TAAFT，需在后台启用数据源）",
+  homeHighlightMonetizationAppsEmpty: "近 30 日暂无变现向内容；可在后台启用 TAAFT 或 Acquire 后同步。",
+  homeHighlightMonetizationAppsCta: "浏览变现类应用",
   resourcesLoading: "加载资源…",
   resourcesEmptyTopic: "当前筛选下暂无文章。",
   resourcesEmptySearch: "没有匹配该关键词的文章，可换个词或清空搜索。",

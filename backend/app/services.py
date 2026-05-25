@@ -81,8 +81,43 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     },
 ]
 
-# 当前产品保留的内置数据源标识（与 MAINSTREAM_ADMIN_SOURCE_PRESETS 一致）；启动时用于删库中「多余」行。
+# 可选变现向数据源：默认关闭，后台卡片手动启用；不参与定时整批拉取。
+OPTIONAL_MONETIZATION_SOURCE_PRESETS: list[dict] = [
+    {
+        "source": "taaft",
+        "preset_label": "TAAFT（新工具）",
+        "enabled": False,
+        "api_base": "https://theresanaiforthat.com/new/",
+        "api_key_masked": "",
+        "scope_label": "AI｜应用发现",
+        "content_role": "app_launches",
+        "notes": "There's An AI For That 新工具列表；无 Key，HTML 解析。启用后在管理后台手动同步或单独频率。",
+        "fetch_limit": 15,
+    },
+    {
+        "source": "acquire",
+        "preset_label": "Acquire（AI 资产）",
+        "enabled": False,
+        "api_base": "https://us-central1-microacquire.cloudfunctions.net/v1-search",
+        "api_key_masked": "",
+        "scope_label": "AI｜变现案例",
+        "content_role": "monetization_listing",
+        "notes": "MicroAcquire v1-search，筛选 AI 相关出售/收购线索；无 Key。默认关闭。",
+        "fetch_limit": 10,
+    },
+]
+
+BUILTIN_ADMIN_SOURCE_PRESETS: list[dict] = MAINSTREAM_ADMIN_SOURCE_PRESETS + OPTIONAL_MONETIZATION_SOURCE_PRESETS
+
+# 当前产品保留的内置数据源标识；启动时用于删库中「多余」行（含可选变现源）。
+BUILTIN_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
+
+# 参与默认定时拉取的 5 路（与 MAINSTREAM 一致）。
 MAINSTREAM_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
+
+OPTIONAL_MONETIZATION_SOURCE_KEYS: frozenset[str] = frozenset(
+    row["source"] for row in OPTIONAL_MONETIZATION_SOURCE_PRESETS
+)
 
 # 历史上由 ensure_mainstream_admin_sources 写入、但已从产品移除的 source；启动时删库内对应行及同 admin_source_key 的连接器。
 # 勿把仍保留在 MAINSTREAM_ADMIN_SOURCE_PRESETS 中的标识放进本集合，否则会误删运营已配置的 Key。
@@ -100,13 +135,11 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "rss_theverge",
         "huggingface_spaces",
         "arxiv",
-        "taaft",
-        "acquire",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
-    {row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS}
-), "DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES overlaps MAINSTREAM_ADMIN_SOURCE_PRESETS"
+    BUILTIN_ADMIN_SOURCE_KEYS
+), "DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES overlaps BUILTIN_ADMIN_SOURCE_PRESETS"
 
 # 后台数据源卡片：下列预置 source 的公开模板可不填 Key 即可拉取；卡片上隐藏「API Key」输入。
 # 其余预置（如 product_hunt）及运营自增的任意标识默认显示密钥框。
@@ -114,6 +147,8 @@ ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
         "hacker_news",
+        "taaft",
+        "acquire",
     }
 )
 
@@ -126,7 +161,7 @@ ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product
 def sync_catalog_preset_metadata(db: Session) -> int:
     """将内置目录中的 preset_label / content_role 写入主流 source，仅当对应列为空（便于运营日后自定义）。"""
     n = 0
-    for row in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+    for row in BUILTIN_ADMIN_SOURCE_PRESETS:
         src = row["source"]
         item = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == src))
         if not item:
@@ -150,7 +185,7 @@ def sync_catalog_preset_metadata(db: Session) -> int:
 def repair_mainstream_fetch_limits(db: Session) -> int:
     """将内置源的 fetch_limit 对齐预设默认（仅当未配置或仍为旧默认 10 且预设非 10）。"""
     n = 0
-    for row in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+    for row in BUILTIN_ADMIN_SOURCE_PRESETS:
         src = row["source"]
         item = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == src))
         if not item:
@@ -166,9 +201,9 @@ def repair_mainstream_fetch_limits(db: Session) -> int:
 
 
 def ensure_mainstream_admin_sources(db: Session) -> int:
-    """补全主流数据源行；已存在的 source 不修改。"""
+    """补全内置数据源行（含默认关闭的变现可选源）；已存在的 source 不修改。"""
     n = 0
-    for row in MAINSTREAM_ADMIN_SOURCE_PRESETS:
+    for row in BUILTIN_ADMIN_SOURCE_PRESETS:
         source = row["source"]
         exists = db.scalar(select(AdminSourceConfig.id).where(AdminSourceConfig.source == source))
         if exists:

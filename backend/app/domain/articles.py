@@ -624,6 +624,10 @@ def extract_source_external_id_from_connector_snippet(snippet: str) -> str | Non
 VALUE_SCORE_MIN = 38.0
 
 # 前台筛选与入库：固定 10 个大类 + 「其他」，每篇文章只展示/归入其中一类（合并细标签）
+# 公开应用泳道额外纳入：变现向主类（原先进资讯泳道）及对应数据源
+MONETIZATION_APPS_CATEGORIES: frozenset[str] = frozenset({"已验证变现", "变现案例"})
+MONETIZATION_SOURCE_KEYS: frozenset[str] = frozenset({"acquire", "taaft"})
+
 FACET_PRIMARY_CATEGORIES: tuple[str, ...] = (
     "模型层(谨慎)",
     "开源客户端(好抄)",
