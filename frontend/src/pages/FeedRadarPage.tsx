@@ -88,6 +88,18 @@ function isHeatFeedResponse(d: unknown): d is ArticlesFeedHeatResponse {
 }
 
 type ListDisplayMode = "date" | "heat";
+type ReplicationTierFilter = "all" | "sa" | "s";
+
+const CLONE_APP_CATEGORIES = ["开源客户端(好抄)", "应用产品", "高可复刻"] as const;
+
+function replicationTierApiParams(
+  feedMode: "news" | "apps",
+  filter: ReplicationTierFilter,
+): { replication_tiers?: string; sort_replicable?: boolean } {
+  if (feedMode !== "apps" || filter === "all") return {};
+  if (filter === "s") return { replication_tiers: "S", sort_replicable: true };
+  return { replication_tiers: "S,A", sort_replicable: true };
+}
 
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t } = useI18n();
@@ -122,15 +134,29 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [sourceOptions, setSourceOptions] = useState<Array<{ key: string; label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
+  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(
+    mode === "apps" ? "sa" : "all",
+  );
+
+  const tierApi = useMemo(
+    () => replicationTierApiParams(mode, replicationFilter),
+    [mode, replicationFilter],
+  );
 
   useEffect(() => {
-    const raw = location.state as { q?: string } | undefined;
+    const raw = location.state as { q?: string; replicationFilter?: ReplicationTierFilter } | undefined;
     const q = raw?.q?.trim();
-    if (!q) return;
-    setSearchDraft(q);
-    setSearchQ(q);
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
-  }, [location.state, location.pathname, location.search, navigate]);
+    if (raw?.replicationFilter && mode === "apps") {
+      setReplicationFilter(raw.replicationFilter);
+    }
+    if (q) {
+      setSearchDraft(q);
+      setSearchQ(q);
+    }
+    if (q || raw?.replicationFilter) {
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, location.search, navigate, mode]);
 
   const timeParams = useMemo(() => timeKeyToArticleParams(timeKey), [timeKey]);
 
@@ -156,7 +182,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
 
   useEffect(() => {
     setFeedPage(1);
-  }, [mode, timeKey, categoryKey, sourceKey, searchQ, listDisplayMode]);
+  }, [mode, timeKey, categoryKey, sourceKey, searchQ, listDisplayMode, replicationFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +193,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         ...timeParams,
         source: sourceKey,
         q: searchQ || null,
+        ...tierApi,
       })
       .then((rows) => {
         if (!cancelled) setCategoryOptions(rows);
@@ -177,7 +204,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeParams, searchQ, sourceKey]);
+  }, [mode, timeParams, searchQ, sourceKey, tierApi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +215,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         ...timeParams,
         category: categoryKey,
         q: searchQ || null,
+        ...tierApi,
       })
       .then((rows) => {
         if (!cancelled) setSourceOptions(rows);
@@ -198,7 +226,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [mode, timeParams, searchQ, categoryKey]);
+  }, [mode, timeParams, searchQ, categoryKey, tierApi]);
 
   useEffect(() => {
     if (categoryKey && !categoryOptions.some((x) => x.label === categoryKey)) {
@@ -223,8 +251,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       category: categoryKey,
       source: sourceKey,
       q: searchQ || null,
+      ...tierApi,
     }),
-    [mode, timeParams, categoryKey, sourceKey, searchQ],
+    [mode, timeParams, categoryKey, sourceKey, searchQ, tierApi],
   );
 
   const loadMoreHeat = useCallback(async () => {
@@ -272,6 +301,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
         category: categoryKey,
         source: sourceKey,
         q: searchQ || null,
+        ...tierApi,
       })
       .then((d) => {
         if (cancelled || reqGen !== dayFeedFetchGenRef.current) return;
@@ -306,7 +336,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     return () => {
       cancelled = true;
     };
-  }, [listDisplayMode, mode, timeParams, categoryKey, sourceKey, searchQ, feedPage]);
+  }, [listDisplayMode, mode, timeParams, categoryKey, sourceKey, searchQ, feedPage, tierApi]);
 
   useEffect(() => {
     if (listDisplayMode !== "heat") return;
@@ -490,6 +520,54 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           ) : null}
         </div>
       </div>
+
+      {mode === "apps" ? (
+        <div className="ui-card p-4 sm:p-4">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            {t("resourcesReplicationFilter")}
+          </span>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(
+              [
+                { key: "sa" as const, label: t("resourcesReplicationSa") },
+                { key: "s" as const, label: t("resourcesReplicationS") },
+                { key: "all" as const, label: t("resourcesReplicationAll") },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setReplicationFilter(f.key)}
+                className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+                  replicationFilter === f.key ? "pill-active shadow-md" : "pill-idle"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <p className="muted tiny mt-2" style={{ lineHeight: 1.5 }}>
+            {t("resourcesReplicationHint")}
+          </p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mt-4">
+            {t("resourcesAppsCloneCategories")}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CLONE_APP_CATEGORIES.map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setCategoryKey(label)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  categoryKey === label ? "pill-active shadow-md" : "pill-idle"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="ui-card p-4 sm:p-4">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{t("resourcesDisplayMode")}</span>

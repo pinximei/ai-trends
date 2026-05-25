@@ -6,7 +6,7 @@ type Props = {
   title: string;
   subtitle?: string;
   icon?: ReactNode;
-  action?: { label: string; to: string };
+  action?: { label: string; to: string; state?: Record<string, unknown> };
   children: ReactNode;
   className?: string;
 };
@@ -25,6 +25,7 @@ export function HomeSection({ title, subtitle, icon, action, children, className
         {action ? (
           <Link
             to={action.to}
+            state={action.state}
             className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-violet-600 hover:underline"
           >
             {action.label}

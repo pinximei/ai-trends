@@ -12,6 +12,7 @@ export const publicApi = {
     published_on_latest_day?: boolean;
     source?: string | null;
     q?: string | null;
+    replication_tiers?: string | null;
   }) => {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
@@ -20,6 +21,7 @@ export const publicApi = {
     if (opts.published_on_latest_day) sp.set("published_on_latest_day", "true");
     if (opts.source) sp.set("source", opts.source);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
+    if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
     return publicGet<Array<{ label: string; count: number }>>(`/api/public/v1/articles/categories?${sp.toString()}`);
   },
   articleSources: (opts: {
@@ -29,6 +31,7 @@ export const publicApi = {
     published_on_latest_day?: boolean;
     category?: string | null;
     q?: string | null;
+    replication_tiers?: string | null;
   }) => {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
@@ -37,6 +40,7 @@ export const publicApi = {
     if (opts.published_on_latest_day) sp.set("published_on_latest_day", "true");
     if (opts.category) sp.set("category", opts.category);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
+    if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
     return publicGet<Array<{ key: string; label: string; count: number }>>(
       `/api/public/v1/articles/sources?${sp.toString()}`,
     );
@@ -58,6 +62,8 @@ export const publicApi = {
     category?: string | null;
     source?: string | null;
     q?: string | null;
+    replication_tiers?: string | null;
+    sort_replicable?: boolean;
   }) => {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
@@ -76,6 +82,8 @@ export const publicApi = {
     if (opts.category) sp.set("category", opts.category);
     if (opts.source) sp.set("source", opts.source);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
+    if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
+    if (opts.sort_replicable) sp.set("sort_replicable", "true");
     return publicGet<ArticlesFeedResponse>(`/api/public/v1/articles/feed?${sp.toString()}`);
   },
   article: (id: number) => publicGet<ArticleDetail>(`/api/public/v1/articles/${id}`),

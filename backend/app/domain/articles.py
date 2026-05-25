@@ -1162,6 +1162,18 @@ def encode_feed_cursor(pub: datetime, aid: int) -> str:
     return raw.rstrip("=")
 
 
+def parse_replication_tiers_csv(raw: str | None) -> list[str] | None:
+    """逗号分隔可复刻档位，如 ``S,A``；非法档位忽略。"""
+    if not raw or not str(raw).strip():
+        return None
+    out: list[str] = []
+    for part in str(raw).split(","):
+        p = part.strip().upper()
+        if p in REPLICATION_TIER_ALLOWED:
+            out.append(p)
+    return out or None
+
+
 def parse_segment_ids_csv(raw: str | None) -> list[int] | None:
     if not raw or not str(raw).strip():
         return None

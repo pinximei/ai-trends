@@ -30,6 +30,10 @@ def list_article_categories(
         None,
         description="Search title and summary (case-insensitive substring); max 80 chars.",
     ),
+    replication_tiers: str | None = Query(
+        None,
+        description="Comma-separated replication tiers S,A,B,C (apps 抄应用筛选).",
+    ),
     db: Session = Depends(get_db),
 ):
     """当前时间/板块下、该泳道文章 AI 返回的 categories 聚合（供前台筛选）。"""
@@ -47,6 +51,7 @@ def list_article_categories(
             published_on_latest_day=published_on_latest_day,
             source=source,
             search=q,
+            replication_tiers=replication_tiers,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -72,6 +77,10 @@ def list_article_sources(
         None,
         description="Search title and summary (case-insensitive substring); max 80 chars.",
     ),
+    replication_tiers: str | None = Query(
+        None,
+        description="Comma-separated replication tiers S,A,B,C.",
+    ),
     db: Session = Depends(get_db),
 ):
     """当前时间/板块下、该泳道文章按数据源聚合（供前台筛选）。"""
@@ -89,6 +98,7 @@ def list_article_sources(
             published_on_latest_day=published_on_latest_day,
             category=category,
             search=q,
+            replication_tiers=replication_tiers,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -154,6 +164,14 @@ def list_articles_feed(
         None,
         description="Search title and summary (case-insensitive substring); max 80 chars.",
     ),
+    replication_tiers: str | None = Query(
+        None,
+        description="Comma-separated replication tiers S,A,B,C (e.g. S,A for clone-friendly apps).",
+    ),
+    sort_replicable: bool = Query(
+        False,
+        description="When true, order heat pool by tier S→A→B→C then heat_score (抄应用优先).",
+    ),
     db: Session = Depends(get_db),
 ):
     segment_ids_parsed = parse_segment_ids_csv(segment_ids)
@@ -174,6 +192,7 @@ def list_articles_feed(
                 source=source,
                 search=q,
                 days_per_page=days_per_page,
+                replication_tiers=replication_tiers,
             )
         elif paginate_by == "heat":
             data = article_app.list_articles_feed_by_heat_top(
@@ -190,6 +209,8 @@ def list_articles_feed(
                 heat_offset=heat_offset,
                 heat_page_size=heat_page_size,
                 heat_max_ranked=heat_max_ranked,
+                replication_tiers=replication_tiers,
+                sort_replicable=sort_replicable,
             )
         else:
             data = article_app.list_articles_feed(
@@ -206,6 +227,7 @@ def list_articles_feed(
                 category=category,
                 source=source,
                 search=q,
+                replication_tiers=replication_tiers,
             )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e

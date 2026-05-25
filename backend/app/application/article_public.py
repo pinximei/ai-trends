@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Select, and_, desc, func, or_, select
+from sqlalchemy import Select, and_, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..domain import articles as art
@@ -47,6 +47,13 @@ def normalize_source_filter(raw: str | None) -> str | None:
     return s or None
 
 
+def _tier_filter_from_csv(raw: str | None) -> frozenset[str] | None:
+    tiers = art.parse_replication_tiers_csv(raw)
+    if not tiers:
+        return None
+    return frozenset(tiers)
+
+
 def _feed_row_matches_list_filters(
     a: Article,
     *,
@@ -54,8 +61,9 @@ def _feed_row_matches_list_filters(
     cat_filter: str | None,
     source_filter: str | None,
     search_n: str | None,
+    tier_filter: frozenset[str] | None = None,
 ) -> bool:
-    """与公开列表一致的泳道 / 类别 / 数据源 / 搜索筛选。"""
+    """与公开列表一致的泳道 / 类别 / 数据源 / 搜索 / 可复刻档位筛选。"""
     if _row_feed_lane(a) != feed:
         return False
     if source_filter and art.admin_source_key(a.third_party_source) != source_filter:
@@ -63,9 +71,36 @@ def _feed_row_matches_list_filters(
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     if cat_filter and cats_list and cats_list[0] != cat_filter:
         return False
+    if tier_filter:
+        t = (getattr(a, "replication_tier", None) or "").strip().upper()
+        if t not in tier_filter:
+            return False
     if search_n and not _article_title_summary_matches(a, search_n):
         return False
     return True
+
+
+def _heat_order_by(*, sort_replicable: bool):
+    if sort_replicable:
+        tier_rank = case(
+            (func.upper(Article.replication_tier) == "S", 0),
+            (func.upper(Article.replication_tier) == "A", 1),
+            (func.upper(Article.replication_tier) == "B", 2),
+            else_=3,
+        )
+        return (
+            tier_rank,
+            desc(Article.heat_score),
+            desc(Article.updated_at),
+            desc(Article.published_at),
+            desc(Article.id),
+        )
+    return (
+        desc(Article.heat_score),
+        desc(Article.updated_at),
+        desc(Article.published_at),
+        desc(Article.id),
+    )
 
 
 def _build_feed_fingerprint_winner_ids(
@@ -76,6 +111,7 @@ def _build_feed_fingerprint_winner_ids(
     cat_filter: str | None,
     source_filter: str | None,
     search_n: str | None,
+    tier_filter: frozenset[str] | None = None,
     max_scan_rows: int = 48_000,
     batch: int = 500,
 ) -> frozenset[int]:
@@ -98,7 +134,12 @@ def _build_feed_fingerprint_winner_ids(
             if scanned > max_scan_rows:
                 break
             if not _feed_row_matches_list_filters(
-                a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=search_n
+                a,
+                feed=feed,
+                cat_filter=cat_filter,
+                source_filter=source_filter,
+                search_n=search_n,
+                tier_filter=tier_filter,
             ):
                 continue
             fp = art.display_fingerprint(a.title, a.summary or "")
@@ -277,6 +318,7 @@ def _collect_ordered_days_for_feed(
     source_filter: str | None,
     search_n: str | None,
     winner_ids: frozenset[int],
+    tier_filter: frozenset[str] | None = None,
     max_scan: int = 40000,
     batch: int = 400,
 ) -> tuple[list[date], bool]:
@@ -294,7 +336,12 @@ def _collect_ordered_days_for_feed(
         for a in rows:
             scanned += 1
             if not _feed_row_matches_list_filters(
-                a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=search_n
+                a,
+                feed=feed,
+                cat_filter=cat_filter,
+                source_filter=source_filter,
+                search_n=search_n,
+                tier_filter=tier_filter,
             ):
                 continue
             if a.id not in winner_ids:
@@ -330,11 +377,13 @@ def list_articles_feed_by_day_page(
     source: str | None = None,
     search: str | None = None,
     days_per_page: int = DAYS_PER_PAGE_DEFAULT,
+    replication_tiers: str | None = None,
 ) -> dict:
     """按 UTC 自然日分页：每页连续 ``days_per_page`` 个有内容的日历日（默认 3），第 1 页为最新一段。"""
     cat_filter = (category or "").strip() or None
     source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
+    tier_filter = _tier_filter_from_csv(replication_tiers)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -363,7 +412,13 @@ def list_articles_feed_by_day_page(
     label_by_key = _admin_source_label_by_key(db)
 
     winner_ids = _build_feed_fingerprint_winner_ids(
-        db, q, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+        db,
+        q,
+        feed=feed,
+        cat_filter=cat_filter,
+        source_filter=source_filter,
+        search_n=n,
+        tier_filter=tier_filter,
     )
 
     ordered_days, truncated = _collect_ordered_days_for_feed(
@@ -374,6 +429,7 @@ def list_articles_feed_by_day_page(
         source_filter=source_filter,
         search_n=n,
         winner_ids=winner_ids,
+        tier_filter=tier_filter,
     )
     n_days = len(ordered_days)
     total_pages = (n_days + dpp - 1) // dpp if n_days else 0
@@ -409,7 +465,12 @@ def list_articles_feed_by_day_page(
     out: list[dict] = []
     for a in rows:
         if not _feed_row_matches_list_filters(
-            a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+            a,
+            feed=feed,
+            cat_filter=cat_filter,
+            source_filter=source_filter,
+            search_n=n,
+            tier_filter=tier_filter,
         ):
             continue
         if a.id not in winner_ids:
@@ -449,14 +510,18 @@ def list_articles_feed_by_heat_top(
     heat_offset: int = 0,
     heat_page_size: int = HEAT_PAGE_DEFAULT,
     heat_max_ranked: int = HEAT_FEED_MAX,
+    replication_tiers: str | None = None,
+    sort_replicable: bool = False,
 ) -> dict:
     """
-    与「按日」相同的时间窗与筛选；在展示指纹胜者集合内按 ``heat_score`` 排序，
-    先截取至多 ``heat_max_ranked`` 条作为热度池，再按 ``heat_offset`` + ``heat_page_size`` 分页返回（供前端触底懒加载）。
+    与「按日」相同的时间窗与筛选；在展示指纹胜者集合内排序（可选 S/A 优先），
+    先截取至多 ``heat_max_ranked`` 条作为热度池，再分页返回。
     """
     cat_filter = (category or "").strip() or None
     source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
+    tier_filter = _tier_filter_from_csv(replication_tiers)
+    sort_rep = bool(sort_replicable or tier_filter)
     ps = max(1, min(int(heat_page_size or HEAT_PAGE_DEFAULT), HEAT_PAGE_MAX))
     off = max(0, int(heat_offset or 0))
     cap = max(1, min(int(heat_max_ranked or HEAT_FEED_MAX), HEAT_FEED_MAX))
@@ -483,7 +548,13 @@ def list_articles_feed_by_heat_top(
 
     label_by_key = _admin_source_label_by_key(db)
     winner_ids = _build_feed_fingerprint_winner_ids(
-        db, q, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+        db,
+        q,
+        feed=feed,
+        cat_filter=cat_filter,
+        source_filter=source_filter,
+        search_n=n,
+        tier_filter=tier_filter,
     )
     if not winner_ids:
         return empty
@@ -493,12 +564,7 @@ def list_articles_feed_by_heat_top(
     ranked_pool = (
         select(Article.id.label("rid"))
         .where(pool_where)
-        .order_by(
-            desc(Article.heat_score),
-            desc(Article.updated_at),
-            desc(Article.published_at),
-            desc(Article.id),
-        )
+        .order_by(*_heat_order_by(sort_replicable=sort_rep))
         .limit(cap)
         .subquery()
     )
@@ -543,8 +609,10 @@ def list_article_category_facets(
     published_on_latest_day: bool,
     source: str | None = None,
     search: str | None = None,
+    replication_tiers: str | None = None,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，由 AI categories 聚合出的可选筛选项。"""
+    tier_filter = _tier_filter_from_csv(replication_tiers)
     ind, q = _base_article_query_for_scope(
         db,
         industry_slug=industry_slug,
@@ -558,13 +626,24 @@ def list_article_category_facets(
     source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
     winner_ids = _build_feed_fingerprint_winner_ids(
-        db, q, feed=feed, cat_filter=None, source_filter=source_filter, search_n=n
+        db,
+        q,
+        feed=feed,
+        cat_filter=None,
+        source_filter=source_filter,
+        search_n=n,
+        tier_filter=tier_filter,
     )
     rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
         if not _feed_row_matches_list_filters(
-            a, feed=feed, cat_filter=None, source_filter=source_filter, search_n=n
+            a,
+            feed=feed,
+            cat_filter=None,
+            source_filter=source_filter,
+            search_n=n,
+            tier_filter=tier_filter,
         ):
             continue
         if a.id not in winner_ids:
@@ -587,8 +666,10 @@ def list_article_source_facets(
     published_on_latest_day: bool,
     category: str | None = None,
     search: str | None = None,
+    replication_tiers: str | None = None,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，按 admin_source_key 聚合的数据源筛选项。"""
+    tier_filter = _tier_filter_from_csv(replication_tiers)
     ind, q = _base_article_query_for_scope(
         db,
         industry_slug=industry_slug,
@@ -603,13 +684,24 @@ def list_article_source_facets(
     n = normalize_feed_search(search)
     label_by_key = _admin_source_label_by_key(db)
     winner_ids = _build_feed_fingerprint_winner_ids(
-        db, q, feed=feed, cat_filter=cat_filter, source_filter=None, search_n=n
+        db,
+        q,
+        feed=feed,
+        cat_filter=cat_filter,
+        source_filter=None,
+        search_n=n,
+        tier_filter=tier_filter,
     )
     rows = db.scalars(q.order_by(desc(Article.published_at), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
     for a in rows:
         if not _feed_row_matches_list_filters(
-            a, feed=feed, cat_filter=cat_filter, source_filter=None, search_n=n
+            a,
+            feed=feed,
+            cat_filter=cat_filter,
+            source_filter=None,
+            search_n=n,
+            tier_filter=tier_filter,
         ):
             continue
         if a.id not in winner_ids:
@@ -640,10 +732,12 @@ def list_articles_feed(
     category: str | None = None,
     source: str | None = None,
     search: str | None = None,
+    replication_tiers: str | None = None,
 ) -> dict:
     scan_limit = 280
     cat_filter = (category or "").strip() or None
     source_filter = normalize_source_filter(source)
+    tier_filter = _tier_filter_from_csv(replication_tiers)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -659,7 +753,13 @@ def list_articles_feed(
     label_by_key = _admin_source_label_by_key(db)
 
     winner_ids = _build_feed_fingerprint_winner_ids(
-        db, q, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+        db,
+        q,
+        feed=feed,
+        cat_filter=cat_filter,
+        source_filter=source_filter,
+        search_n=n,
+        tier_filter=tier_filter,
     )
 
     exclude = art.parse_exclude_fingerprints(exclude_fp)
@@ -678,7 +778,12 @@ def list_articles_feed(
         for a in rows:
             last_scanned = (a.published_at, a.id)
             if not _feed_row_matches_list_filters(
-                a, feed=feed, cat_filter=cat_filter, source_filter=source_filter, search_n=n
+                a,
+                feed=feed,
+                cat_filter=cat_filter,
+                source_filter=source_filter,
+                search_n=n,
+                tier_filter=tier_filter,
             ):
                 continue
             if a.id not in winner_ids:

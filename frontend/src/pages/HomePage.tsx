@@ -762,6 +762,11 @@ export function HomePage() {
         title={t("homeHighlightReplicableApps")}
         subtitle={t("homeHighlightReplicableAppsSub")}
         icon={<Sparkles className="h-5 w-5 text-sky-600" strokeWidth={2} />}
+        action={{
+          label: t("homeHighlightReplicableAppsCta"),
+          to: "/apps",
+          state: { replicationFilter: "sa" },
+        }}
       >
         {loading ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
