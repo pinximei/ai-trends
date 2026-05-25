@@ -118,7 +118,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="SSH 部署 / 远程执行（凭据来自环境或 getpass）")
     ap.add_argument("--host", default=os.environ.get("AITRENDS_DEPLOY_HOST"), help="或设 AITRENDS_DEPLOY_HOST")
     ap.add_argument("--user", default=os.environ.get("AITRENDS_DEPLOY_USER", "ubuntu"))
-    ap.add_argument("--dir", default=os.environ.get("AITRENDS_DEPLOY_DIR", "/opt/aitrends"))
+    ap.add_argument("--dir", default=os.environ.get("AITRENDS_DEPLOY_DIR", "/opt/aisoul"))
     ap.add_argument("--branch", default=os.environ.get("AITRENDS_DEPLOY_GIT_BRANCH", "main"))
     ap.add_argument(
         "--systemd-unit",

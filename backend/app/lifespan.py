@@ -43,6 +43,9 @@ def _startup_sync() -> None:
         ensure_scheduler_settings_row(db)
         ensure_newsletter_settings_row(db)
         seed_product_settings_from_environment(db)
+        from .newsletter_settings_service import repair_newsletter_cn_morning_schedule_once
+
+        repair_newsletter_cn_morning_schedule_once(db)
         refresh_runtime_snapshot(db)
         assert_production_security()
         ensure_default_admin(db)

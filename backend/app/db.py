@@ -90,6 +90,13 @@ engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_engine_kwarg
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _sql_bool_default() -> str:
+    """SQLite 接受 DEFAULT 0；PostgreSQL 布尔列须 DEFAULT false。"""
+    if DATABASE_URL.startswith("postgresql"):
+        return "DEFAULT false"
+    return "DEFAULT 0"
+
+
 def _column_names(conn, table: str) -> set[str]:
     insp = inspect(conn)
     if not insp.has_table(table):
@@ -210,7 +217,9 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN fetch_limit INTEGER DEFAULT 10"))
             if "custom_sync_enabled" not in cols:
                 conn.execute(
-                    text("ALTER TABLE admin_source_configs ADD COLUMN custom_sync_enabled BOOLEAN DEFAULT 0")
+                    text(
+                        f"ALTER TABLE admin_source_configs ADD COLUMN custom_sync_enabled BOOLEAN {_sql_bool_default()}"
+                    )
                 )
             if "custom_sync_interval_hours" not in cols:
                 conn.execute(text("ALTER TABLE admin_source_configs ADD COLUMN custom_sync_interval_hours INTEGER"))
