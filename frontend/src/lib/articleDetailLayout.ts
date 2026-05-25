@@ -11,7 +11,7 @@ export type DetailProfileId =
 
 export type DetailHeroVariant = "product" | "repo" | "news" | "wire" | "platform";
 
-export type DetailSectionKind = "description" | "data";
+export type DetailSectionKind = "description" | "replication" | "data";
 
 export type DetailLayoutConfig = {
   profile: DetailProfileId;
@@ -42,7 +42,9 @@ export type DetailLayoutI18nKeys = {
   detailProfileNews: string;
   detailProfileApp: string;
   detailNavDescription: string;
+  detailNavReplication: string;
   detailNavData: string;
+  detailSectionReplication: string;
   detailMetricStars: string;
   detailMetricHeat: string;
 };
@@ -121,7 +123,7 @@ const PROFILES: Record<DetailProfileId, DetailLayoutConfig> = {
     dataTitleKey: "detailSectionData",
     showMetrics: true,
     metricsMode: "heat",
-    sectionOrder: ["description", "data"],
+    sectionOrder: ["description", "replication", "data"],
     heroAccent: "from-brand-500/90 via-brand-600/88 to-indigo-600/90",
     dataPanelClass: "border-brand-100/80 bg-brand-50/25",
   },
@@ -169,5 +171,7 @@ export function profileBadgeI18nKey(profile: DetailProfileId): keyof DetailLayou
 }
 
 export function sectionDomId(kind: DetailSectionKind): string {
-  return kind === "description" ? "detail-section-desc" : "detail-section-data";
+  if (kind === "description") return "detail-section-desc";
+  if (kind === "replication") return "detail-section-replication";
+  return "detail-section-data";
 }

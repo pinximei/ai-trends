@@ -1311,8 +1311,13 @@ FEED_CARD_TAB_DATA = "数据支撑"
 FEED_CARD_TAB_LEGACY_HIGHLIGHTS = frozenset({"功能亮点", "要点"})
 
 
-def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, str]:
-    del feed_kind  # 应用/资讯统一：描述 + 数据支撑
+def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
+    """应用泳道：描述 + 复刻评估 + 数据支撑；资讯仍为描述 + 数据支撑。"""
+    from .replication_analysis import FEED_CARD_TAB_REPLICATION
+
+    fk = (feed_kind or "news").strip().lower()
+    if fk == "apps":
+        return (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_REPLICATION, FEED_CARD_TAB_DATA)
     return (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_DATA)
 
 
@@ -1335,20 +1340,24 @@ def publish_polish_length_thresholds(admin_source_key: str | None = None) -> dic
         return {
             "desc_summary": 56,
             "desc_body": 96,
+            "repl_summary": 48,
+            "repl_body": 120,
             "hi_summary": 10,
             "hi_body": 48,
-            "tab_body_total": 200,
+            "tab_body_total": 240,
             "body_md_min": 80,
-            "body_md_short_tabs_total": 380,
+            "body_md_short_tabs_total": 420,
         }
     return {
         "desc_summary": 72,
         "desc_body": 120,
+        "repl_summary": 52,
+        "repl_body": 180,
         "hi_summary": 12,
         "hi_body": 60,
-        "tab_body_total": 280,
+        "tab_body_total": 380,
         "body_md_min": 120,
-        "body_md_short_tabs_total": 500,
+        "body_md_short_tabs_total": 600,
     }
 
 
@@ -1376,10 +1385,30 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     fk = str(data.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    need_desc, need_hi = required_feed_card_tab_labels(fk)
+    need_labels = required_feed_card_tab_labels(fk)
+    from .replication_analysis import (
+        FEED_CARD_TAB_REPLICATION,
+        normalize_replication_analysis,
+        validate_replication_analysis_for_publish,
+    )
+
     tabs = data.get("tabs")
-    if not isinstance(tabs, list) or len(tabs) != 2:
+    if not isinstance(tabs, list):
         return False
+    expected_n = len(need_labels)
+    if len(tabs) != expected_n:
+        if fk == "apps" and len(tabs) == 2:
+            legacy_ok = [str(t.get("label") or "").strip() for t in tabs if isinstance(t, dict)] == [
+                need_labels[0],
+                need_labels[-1],
+            ] or [str(t.get("label") or "").strip() for t in tabs if isinstance(t, dict)] == [
+                need_labels[0],
+                "功能亮点",
+            ]
+            if not legacy_ok:
+                return False
+        else:
+            return False
     tab_body_total = 0
     labels: list[str] = []
     for t in tabs:
@@ -1389,13 +1418,23 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
         labels.append(lab)
-        min_summ = th["desc_summary"] if lab == need_desc else th["hi_summary"]
-        min_body = th["desc_body"] if lab == need_desc else th["hi_body"]
+        if lab == need_labels[0]:
+            min_summ, min_body = th["desc_summary"], th["desc_body"]
+        elif lab == FEED_CARD_TAB_REPLICATION:
+            min_summ, min_body = th.get("repl_summary", 64), th.get("repl_body", 180)
+        else:
+            min_summ, min_body = th["hi_summary"], th["hi_body"]
         if len(lab) < 2 or len(summ) < min_summ or len(body) < min_body:
             return False
         tab_body_total += len(body)
-    if labels != [need_desc, need_hi]:
-        legacy_ok = labels == [need_desc, "功能亮点"] if fk == "apps" else labels == [need_desc, "要点"]
+    if fk == "apps" and len(need_labels) == 3:
+        if labels != list(need_labels):
+            return False
+        norm = normalize_replication_analysis(data.get("replication_analysis"))
+        if not validate_replication_analysis_for_publish(norm):
+            return False
+    elif labels != list(need_labels):
+        legacy_ok = labels == [need_labels[0], "功能亮点"] if fk == "apps" else labels == [need_labels[0], "要点"]
         if not legacy_ok:
             return False
     if tab_body_total < th["tab_body_total"]:
@@ -1420,6 +1459,18 @@ def article_freshness_datetime(
 
 def article_freshness_for_row(a: Article) -> datetime | None:
     return article_freshness_datetime(published_at=a.published_at, updated_at=a.updated_at)
+
+
+def parse_replication_analysis_json(raw: str | None):
+    from .replication_analysis import parse_replication_analysis_json as _parse
+
+    return _parse(raw)
+
+
+def estimated_hours_mvp_label(data: dict | None) -> str | None:
+    from .replication_analysis import estimated_hours_mvp_label as _label
+
+    return _label(data)
 
 
 def article_freshness_sql_expr() -> ColumnElement:

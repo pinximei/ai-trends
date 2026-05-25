@@ -104,6 +104,8 @@ class Article(Base):
     feed_kind: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     # LLM 可复刻性：S/A/B/C（S=高可复刻，C=低可复刻）
     replication_tier: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
+    # 应用泳道：复刻评估结构化 JSON（verdict、难度、工时、技术方案、开源支撑等）
+    replication_analysis_json: Mapped[str] = mapped_column(Text, default="{}")
     # 可更新热度（应用泳道按日列表内优先排序）；连接器入库与后台均可改写。
     heat_score: Mapped[float] = mapped_column(Float, default=0.0)
     # GitHub 等连接器重复同步时刷新：总 star、今日 star 增速（Trending 页解析）

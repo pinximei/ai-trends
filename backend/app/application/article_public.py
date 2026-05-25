@@ -385,7 +385,9 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
     tab_summaries = (
         [{"label": x["label"], "summary": (x["summary"] or "")[:420]} for x in tabs_parsed[:6]] if tabs_parsed else []
     )
-    desc_label, hi_label = art.required_feed_card_tab_labels(row_lane)
+    tab_labels = art.required_feed_card_tab_labels(row_lane)
+    desc_label = tab_labels[0]
+    hi_label = tab_labels[-1]
     card_description = (a.summary or "")[:960]
     card_highlights = ""
     if tabs_parsed:
@@ -399,7 +401,7 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     fp = art.display_fingerprint(a.title, a.summary or "")
     display_dt = art.article_freshness_for_row(a)
-    return {
+    card: dict = {
         "id": a.id,
         "slug": a.slug,
         "title": a.title,
@@ -426,6 +428,13 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
         "cover_image_url": (getattr(a, "cover_image_url", None) or "")[:2048] or None,
         "replication_tier": getattr(a, "replication_tier", None),
     }
+    repl = art.parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
+    if repl:
+        from ..domain.replication_analysis import replication_analysis_public_view
+
+        card["replication_analysis"] = replication_analysis_public_view(repl)
+        card["replication_mvp_hours"] = art.estimated_hours_mvp_label(repl)
+    return card
 
 
 def _collect_ordered_days_for_feed(
@@ -953,7 +962,7 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
                 "body_md": (a.body or "").strip(),
             }
         ]
-    return {
+    out: dict = {
         "id": a.id,
         "slug": a.slug,
         "title": a.title,
@@ -978,4 +987,11 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "detail_profile": art.article_detail_profile(ak, lane),
         "cover_image_url": (getattr(a, "cover_image_url", None) or "")[:2048] or None,
         "tabs": tabs,
+        "replication_tier": getattr(a, "replication_tier", None),
     }
+    repl = art.parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
+    if repl:
+        from ..domain.replication_analysis import replication_analysis_public_view
+
+        out["replication_analysis"] = replication_analysis_public_view(repl)
+    return out

@@ -394,6 +394,14 @@ def _create_one_published_article_from_connector_targets(
     from .domain.articles import normalize_replication_tier
 
     replication_tier = normalize_replication_tier(polished.get("replication_tier"))
+    repl_raw = polished.get("replication_analysis")
+    if isinstance(repl_raw, dict):
+        from .domain.replication_analysis import normalize_replication_analysis
+
+        repl_norm = normalize_replication_analysis(repl_raw)
+        replication_analysis_json = json.dumps(repl_norm or {}, ensure_ascii=False)
+    else:
+        replication_analysis_json = "{}"
 
     disp_fp = display_fingerprint(title, summary)
 
@@ -439,6 +447,7 @@ def _create_one_published_article_from_connector_targets(
         ai_tabs_json=ai_tabs_json,
         feed_kind=stored_feed_kind,
         replication_tier=replication_tier,
+        replication_analysis_json=replication_analysis_json,
         heat_score=heat,
         cover_image_url=cover_image_url,
     )

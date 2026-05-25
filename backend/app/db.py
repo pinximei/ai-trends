@@ -162,6 +162,8 @@ def ensure_schema_compatibility() -> None:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN cover_image_url VARCHAR(2048)"))
             if "replication_tier" not in cols:
                 conn.execute(text("ALTER TABLE product_articles ADD COLUMN replication_tier VARCHAR(4)"))
+            if "replication_analysis_json" not in cols:
+                conn.execute(text("ALTER TABLE product_articles ADD COLUMN replication_analysis_json TEXT DEFAULT '{}'"))
         if not _column_names(conn, "product_sync_diagnostic_logs"):
             conn.execute(
                 text(

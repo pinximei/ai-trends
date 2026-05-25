@@ -15,6 +15,7 @@ from .domain.articles import (
     required_feed_card_tab_labels,
     validate_llm_polish_for_publish,
 )
+from .domain.replication_analysis import FEED_CARD_TAB_REPLICATION, normalize_replication_analysis
 from .llm_settings_service import resolve_llm_http_config
 from .product_models import LlmUsageLog
 
@@ -155,22 +156,31 @@ def _coerce_polish_output(out: dict) -> dict:
     if not raw_labels:
         raw_labels = [str(out.get("title") or "").strip() or "其他"]
     out["categories"] = [primary_canonical_from_raw_labels(raw_labels)]
-    need_desc, need_hi = required_feed_card_tab_labels(fk)
+    need_labels = required_feed_card_tab_labels(fk)
     tabs = out.get("tabs")
-    pieces: list[dict[str, str]] = []
+    by_label: dict[str, dict[str, str]] = {}
     if isinstance(tabs, list):
         for t in tabs:
             if not isinstance(t, dict):
                 continue
+            lab = str(t.get("label") or "").strip()
             sm = str(t.get("summary") or "").strip()
             bd = str(t.get("body_md") or "").strip()
-            if sm and bd:
-                pieces.append({"summary": sm, "body_md": bd})
-    if len(pieces) >= 2:
-        out["tabs"] = [
-            {"label": need_desc, **pieces[0]},
-            {"label": need_hi, **pieces[1]},
-        ]
+            if lab and sm and bd:
+                by_label[lab] = {"summary": sm, "body_md": bd}
+    ordered: list[dict[str, str]] = []
+    for lab in need_labels:
+        piece = by_label.get(lab)
+        if piece:
+            ordered.append({"label": lab, **piece})
+    if len(ordered) >= len(need_labels):
+        out["tabs"] = ordered
+    elif len(ordered) >= 2:
+        out["tabs"] = ordered
+    if fk == "apps":
+        norm = normalize_replication_analysis(out.get("replication_analysis"))
+        if norm:
+            out["replication_analysis"] = norm
     return out
 
 
@@ -203,12 +213,14 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
             bd = str(t.get("body_md") or "").strip()
             if lab and sm and bd:
                 norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
-    if len(norm_tabs) < 2:
+    need_n = len(required_feed_card_tab_labels(fk))
+    if len(norm_tabs) < need_n and not (fk == "apps" and len(norm_tabs) >= 2):
         n_raw = len(raw_tabs) if isinstance(raw_tabs, list) else 0
-        return None, f"tabs_incomplete parsed={len(norm_tabs)} raw_tabs={n_raw}"
+        return None, f"tabs_incomplete parsed={len(norm_tabs)} need={need_n} raw_tabs={n_raw}"
     from .domain.articles import normalize_replication_tier
 
     tier = normalize_replication_tier(data.get("replication_tier"))
+    repl_analysis = normalize_replication_analysis(data.get("replication_analysis"))
     out = {
         "title": title,
         "summary": summary,
@@ -218,6 +230,8 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
         "replication_tier": tier,
         "tabs": norm_tabs,
     }
+    if repl_analysis:
+        out["replication_analysis"] = repl_analysis
     return _coerce_polish_output(out), ""
 
 
@@ -243,10 +257,11 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
     fk = str(data.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    need_desc, need_hi = required_feed_card_tab_labels(fk)
+    need_labels = required_feed_card_tab_labels(fk)
     tabs = data.get("tabs")
-    if not isinstance(tabs, list) or len(tabs) != 2:
-        return f"tabs_count={len(tabs) if isinstance(tabs, list) else 'not_list'} need=2"
+    need_n = len(need_labels)
+    if not isinstance(tabs, list) or len(tabs) != need_n:
+        return f"tabs_count={len(tabs) if isinstance(tabs, list) else 'not_list'} need={need_n}"
     labels: list[str] = []
     for t in tabs:
         if not isinstance(t, dict):
@@ -255,15 +270,30 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
         labels.append(lab)
-        min_summ = th["desc_summary"] if lab == need_desc else th["hi_summary"]
-        min_body = th["desc_body"] if lab == need_desc else th["hi_body"]
+        if lab == need_labels[0]:
+            min_summ, min_body = th["desc_summary"], th["desc_body"]
+        elif lab == FEED_CARD_TAB_REPLICATION:
+            min_summ, min_body = th.get("repl_summary", 64), th.get("repl_body", 180)
+        else:
+            min_summ, min_body = th["hi_summary"], th["hi_body"]
         if len(summ) < min_summ:
             return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
         if len(body) < min_body:
             return f"tab_{lab}_body_short len={len(body)} need>={min_body}"
-    legacy_ok = labels == [need_desc, "功能亮点"] if fk == "apps" else labels == [need_desc, "要点"]
-    if labels != [need_desc, need_hi] and not legacy_ok:
-        return f"tab_labels={labels!r} need={[need_desc, need_hi]!r}"
+    legacy_ok = (
+        fk == "apps"
+        and len(need_labels) == 3
+        and labels in ([need_labels[0], need_labels[-1]], [need_labels[0], "功能亮点"])
+    ) or (fk == "news" and labels == [need_labels[0], "要点"])
+    if labels != list(need_labels) and not legacy_ok:
+        return f"tab_labels={labels!r} need={list(need_labels)!r}"
+    if fk == "apps" and len(need_labels) == 3:
+        from .domain.replication_analysis import validate_replication_analysis_for_publish
+
+        if not validate_replication_analysis_for_publish(
+            normalize_replication_analysis(data.get("replication_analysis"))
+        ):
+            return "replication_analysis_invalid"
     tab_body_total = sum(len(str(t.get("body_md") or "")) for t in tabs if isinstance(t, dict))
     if tab_body_total < th["tab_body_total"]:
         return f"tab_body_total_short len={tab_body_total} need>={th['tab_body_total']}"
@@ -316,9 +346,16 @@ def polish_connector_article(
             f"{category_rule}"
         )
         structure_hint = (
-            "【应用稿结构】tabs **必须恰好 2 个**，label 只能是「描述」「数据支撑」。"
-            "「描述」summary≥120 字：产品是什么、解决谁的问题、为何值得抄；body_md≥180 字写复刻切入点（技术栈、MVP 范围）。"
+            "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「复刻评估」「数据支撑」。"
+            "「描述」summary≥120 字：产品是什么、解决谁的问题、目标用户；body_md≥180 字写产品边界与变现线索。"
+            "「复刻评估」summary≥80 字概括结论；body_md≥200 字须含：是否值得复刻、技术栈、实现步骤、开源项目引用（名称+链接+用途）、风险。"
             "「数据支撑」：用中文表格写可核对指标（链接、star、定价、ARR 等）；禁止 ```json。"
+            "另须输出 replication_analysis 对象（与 tabs 一致、可机器解析），键："
+            "verdict（值得复刻|观望|不建议）、worth_score（1-10 整数）、difficulty（低|中|高）、"
+            "estimated_hours（mvp_min/mvp_max/prod_min/prod_max 均为整数小时）、tier_rationale、value_summary、"
+            "tech_stack（字符串数组）、implementation_plan（步骤数组）、implementation_details（细节数组）、"
+            "open_source（has_support 布尔、projects 数组每项 name/url/role、gaps 字符串）、risks（字符串数组）。"
+            "replication_tier 须与 replication_analysis 自洽。"
         )
     else:
         stream_hint = (
@@ -337,7 +374,9 @@ def polish_connector_article(
         f"{stream_hint}"
         f"{structure_hint}"
         f"{_source_detail_structure_hint(admin_source_key)}"
-        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, replication_tier, tabs。"
+        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, replication_tier, tabs"
+        + ('；应用稿另须 replication_analysis 对象（见上文）。' if fk == "apps" else "")
+        + "。"
         "replication_tier 只能是 S、A、B、C 之一，表示可复刻性（非「好不好抄」的口语）："
         "S=高可复刻（边界清晰、常见技术栈、1～2 周可演示 MVP、有明确用户与变现路径），"
         "A=较高可复刻（约 1 月内可验证），B=可复刻性中等，C=低可复刻（基础设施/闭源大模型依赖/团队规模化）。"
@@ -346,7 +385,7 @@ def polish_connector_article(
         "body_md：详情页「总览」区 Markdown，须含二级标题，与 tabs 内容互补（总览讲脉络，tabs 讲展开），勿整段复制 tabs。"
         "categories 为恰好 1 个元素的字符串数组，元素必须是上述规范大类之一；"
         'feed_kind 只能为 "news" 或 "apps"；replication_tier 必须为 S/A/B/C 之一。'
-        "tabs：恰好 2 个；label 见上文结构要求；每项含 summary、body_md（Markdown）。"
+        f"tabs：恰好 {len(required_feed_card_tab_labels(fk))} 个；label 见上文结构要求；每项含 summary、body_md（Markdown）。"
         "若片段为 JSON/数组，须翻译成中文叙述或表格/列表，保留 repo 名、版本号、star、链接等可核对信息；"
         "禁止在 body_md 或 tabs 中输出 ```json 代码块或整段原始 API 响应。"
         "禁止输出空洞 tab（仅重复 summary、无新信息）。"
@@ -420,11 +459,22 @@ def polish_connector_article(
             commit_diagnostics(db)
         except Exception:
             pass
+        tab_hint = (
+            "tabs 恰好 3 个，label 只能是「描述」「复刻评估」「数据支撑」；"
+            f"「描述」summary≥{th['desc_summary']}、body≥{th['desc_body']}；"
+            f"「复刻评估」summary≥{th.get('repl_summary', 64)}、body≥{th.get('repl_body', 180)}；"
+            f"「数据支撑」summary≥{th['hi_summary']}、body≥{th['hi_body']}；"
+            "并含完整 replication_analysis 对象（verdict、worth_score、difficulty、estimated_hours、tech_stack、implementation_plan 等）。"
+            if fk == "apps"
+            else (
+                "tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
+                f"「描述」summary≥{th['desc_summary']} 字、body_md≥{th['desc_body']} 字；"
+                f"「数据支撑」summary≥{th['hi_summary']} 字、body_md≥{th['hi_body']} 字；"
+            )
+        )
         repair_user = (
             f"{user}\n\n【上次输出未通过校验】{reject}\n"
-            "请重新输出完整 JSON：tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
-            f"「描述」summary≥{th['desc_summary']} 字、body_md≥{th['desc_body']} 字；"
-            f"「数据支撑」summary≥{th['hi_summary']} 字、body_md≥{th['hi_body']} 字；"
+            f"请重新输出完整 JSON：{tab_hint}"
             f"categories 为恰好 1 个元素的数组，元素必须是下列之一：{', '.join(sorted(FACET_ALL_LABELS))}。"
         )
         try:

@@ -198,15 +198,18 @@ export function ArticleMarkdownContent({ bodyMd, components }: ArticleMarkdownCo
   );
 }
 
-/** 详情主区：描述 + 数据支撑（兼容旧稿「功能亮点」「要点」） */
+/** 详情主区：描述 + 复刻评估 + 数据支撑（兼容旧稿「功能亮点」「要点」） */
 export const DETAIL_DATA_TAB_LABELS = new Set(["数据支撑", "功能亮点", "要点"]);
+export const DETAIL_REPLICATION_TAB_LABEL = "复刻评估";
 
 export function pickDetailTabs<T extends { label: string }>(tabs: T[]): T[] {
   if (!tabs.length) return [];
   const desc = tabs.find((t) => t.label === "描述");
+  const repl = tabs.find((t) => t.label === DETAIL_REPLICATION_TAB_LABEL);
   const data = tabs.find((t) => DETAIL_DATA_TAB_LABELS.has(t.label));
+  if (desc && repl && data) return [desc, repl, data];
   if (desc && data) return [desc, data];
-  return tabs.slice(0, 2);
+  return tabs.slice(0, 3);
 }
 
 export function displayDetailTabLabel(label: string): string {

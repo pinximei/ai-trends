@@ -27,6 +27,29 @@ export type ArticleCard = {
   categories?: string[];
   /** LLM 可复刻性档位 S/A/B/C（S=高可复刻） */
   replication_tier?: string | null;
+  /** 应用稿：复刻评估结构化字段（入库 LLM 输出） */
+  replication_analysis?: ReplicationAnalysis | null;
+  /** 列表角标：MVP 预估工时文案 */
+  replication_mvp_hours?: string | null;
+};
+
+export type ReplicationAnalysis = {
+  verdict: string;
+  worth_score: number;
+  difficulty: string;
+  estimated_hours: { mvp_min: number; mvp_max: number; prod_min: number; prod_max: number };
+  estimated_hours_label?: { mvp: string; production: string };
+  tier_rationale: string;
+  value_summary: string;
+  tech_stack: string[];
+  implementation_plan: string[];
+  implementation_details: string[];
+  open_source: {
+    has_support: boolean;
+    projects: { name: string; url: string; role: string }[];
+    gaps: string;
+  };
+  risks: string[];
 };
 
 export type ArticleTabSummary = { label: string; summary: string };

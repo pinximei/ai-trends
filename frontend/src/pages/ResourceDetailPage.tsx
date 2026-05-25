@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { publicApi, type ArticleDetail, type ArticleFeedCard } from "@/api/public";
 import { ArticleDetailHero } from "@/components/articleDetail/ArticleDetailHero";
 import { ArticleDetailMetrics } from "@/components/articleDetail/ArticleDetailMetrics";
+import { ArticleReplicationPanel } from "@/components/articleDetail/ArticleReplicationPanel";
 import { ArticleDetailSection } from "@/components/articleDetail/ArticleDetailSection";
 import { ArticleDetailSectionNav } from "@/components/articleDetail/ArticleDetailSectionNav";
 import { useI18n } from "@/i18n";
@@ -11,6 +12,7 @@ import {
   ARTICLE_MD_PROSE_CLASS,
   ArticleMarkdownContent,
   markdownComponentsForBody,
+  DETAIL_REPLICATION_TAB_LABEL,
   pickDetailTabs,
   prepareDetailMarkdown,
 } from "@/lib/articleMarkdown";
@@ -101,6 +103,10 @@ export function ResourceDetailPage() {
     () => detailTabs.find((tab) => tab.label === DESC_TAB_LABEL),
     [detailTabs],
   );
+  const replicationTab = useMemo(
+    () => detailTabs.find((tab) => tab.label === DETAIL_REPLICATION_TAB_LABEL),
+    [detailTabs],
+  );
   const dataTab = useMemo(
     () => detailTabs.find((tab) => DATA_TAB_LABELS.has(tab.label)),
     [detailTabs],
@@ -120,14 +126,19 @@ export function ResourceDetailPage() {
       components: ReturnType<typeof markdownComponentsForBody>;
     };
     if (!layout) {
-      return { description: null as SectionBlock | null, data: null as SectionBlock | null };
+      return {
+        description: null as SectionBlock | null,
+        replication: null as SectionBlock | null,
+        data: null as SectionBlock | null,
+      };
     }
     const build = (tab: typeof descTab, kind: DetailSectionKind): SectionBlock | null => {
       if (!tab?.body_md?.trim()) return null;
       const bodyMd = prepareDetailMarkdown(tab.body_md);
       if (!bodyMd) return null;
-      const title =
-        kind === "description" ? t("detailSectionDescription") : t(layout.dataTitleKey);
+      let title = t(layout.dataTitleKey);
+      if (kind === "description") title = t("detailSectionDescription");
+      if (kind === "replication") title = t("detailSectionReplication");
       return {
         title,
         summary: kind === "description" ? "" : (tab.summary || "").trim(),
@@ -137,9 +148,10 @@ export function ResourceDetailPage() {
     };
     return {
       description: build(descTab, "description"),
+      replication: build(replicationTab, "replication"),
       data: build(dataTab, "data"),
     };
-  }, [layout, descTab, dataTab, t]);
+  }, [layout, descTab, replicationTab, dataTab, t]);
 
   const hasDescTab = Boolean(descTab);
   const fallbackBodyMd = useMemo(
@@ -153,7 +165,11 @@ export function ResourceDetailPage() {
   );
 
   const markdownFingerprint = useMemo(() => {
-    const parts = [sectionContent.description?.bodyMd, sectionContent.data?.bodyMd].filter(Boolean);
+    const parts = [
+      sectionContent.description?.bodyMd,
+      sectionContent.replication?.bodyMd,
+      sectionContent.data?.bodyMd,
+    ].filter(Boolean);
     if (parts.length) return parts.join("\0");
     return fallbackBodyMd;
   }, [sectionContent, fallbackBodyMd]);
@@ -225,6 +241,8 @@ export function ResourceDetailPage() {
   const feedKind: "news" | "apps" = a.feed_kind === "apps" ? "apps" : "news";
   const backTo = feedKind === "apps" ? "/apps" : "/news";
   const profileBadge = t(profileBadgeI18nKey(layout.profile));
+  const showStructuredReplication =
+    feedKind === "apps" && Boolean(a.replication_analysis && a.replication_analysis.verdict);
 
   const categoryTagsEl =
     a.categories && a.categories.length > 0 ? (
@@ -248,6 +266,11 @@ export function ResourceDetailPage() {
       kind: "description" as const,
       label: t("detailNavDescription"),
       present: Boolean(sectionContent.description),
+    },
+    {
+      kind: "replication" as const,
+      label: t("detailNavReplication"),
+      present: Boolean(showStructuredReplication || sectionContent.replication),
     },
     {
       kind: "data" as const,
@@ -369,6 +392,46 @@ export function ResourceDetailPage() {
             <ArticleDetailSectionNav layout={layout} sections={navSections} onJump={scrollToHeading} />
 
             {layout.sectionOrder.map((kind) => {
+              if (kind === "replication") {
+                if (showStructuredReplication && a.replication_analysis) {
+                  return (
+                    <div
+                      key={kind}
+                      id="detail-section-replication"
+                      className="ui-card overflow-hidden border-brand-100/80 p-5 sm:p-8"
+                    >
+                      <h2 className="text-base font-semibold text-slate-900">{t("detailSectionReplication")}</h2>
+                      <div className="mt-4">
+                        <ArticleReplicationPanel
+                          analysis={a.replication_analysis}
+                          replicationTier={a.replication_tier}
+                        />
+                      </div>
+                      {sectionContent.replication ? (
+                        <div className={`mt-6 border-t border-slate-100 pt-6 ${ARTICLE_MD_PROSE_CLASS}`}>
+                          <ArticleMarkdownContent
+                            bodyMd={sectionContent.replication.bodyMd}
+                            components={sectionContent.replication.components}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                }
+                const block = sectionContent.replication;
+                if (!block) return null;
+                return (
+                  <ArticleDetailSection
+                    key={kind}
+                    kind={kind}
+                    layout={layout}
+                    title={block.title}
+                    summary={block.summary}
+                    bodyMd={block.bodyMd}
+                    components={block.components}
+                  />
+                );
+              }
               const block = kind === "description" ? sectionContent.description : sectionContent.data;
               if (!block) return null;
               return (
