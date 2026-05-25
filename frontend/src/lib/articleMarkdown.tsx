@@ -1,4 +1,6 @@
 import type { ComponentProps } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { prefixTocItemIds, parseMarkdownToc, type TocItem } from "@/lib/markdownToc";
 
 /** 详情页不展示连接器原始 JSON / 摘录块 */
@@ -13,20 +15,88 @@ export function sanitizeArticleMarkdown(md: string): string {
   return s.trim();
 }
 
-/** 长段纯叙述无空行时，按句号拆成段落 */
+function isMarkdownTableRow(line: string): boolean {
+  const t = line.trim();
+  return t.length > 0 && t.includes("|") && /^\|?.+\|/.test(t);
+}
+
+function isMarkdownTableSeparatorRow(line: string): boolean {
+  const cells = parseMarkdownTableCells(line);
+  if (!cells.length) return false;
+  return cells.every((c) => /^:?-{3,}:?$/.test(c));
+}
+
+function parseMarkdownTableCells(line: string): string[] {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map((c) => c.trim());
+}
+
+function formatMarkdownTableRow(cells: string[]): string {
+  return `| ${cells.join(" | ")} |`;
+}
+
+/** 修复 LLM 常出的表格：补分隔行、统一列数，供 remark-gfm 正确解析 */
+export function normalizeMarkdownTables(md: string): string {
+  if (!md || !/^\s*\|/m.test(md)) return md;
+  const lines = md.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (!isMarkdownTableRow(lines[i])) {
+      out.push(lines[i]);
+      i += 1;
+      continue;
+    }
+    const block: string[] = [];
+    while (i < lines.length && isMarkdownTableRow(lines[i])) {
+      block.push(lines[i]);
+      i += 1;
+    }
+    out.push(...repairMarkdownTableBlock(block));
+  }
+  return out.join("\n");
+}
+
+function repairMarkdownTableBlock(rows: string[]): string[] {
+  if (!rows.length) return rows;
+  const parsed = rows.map(parseMarkdownTableCells);
+  const fixed: string[][] = parsed.map((r) => [...r]);
+  if (fixed.length === 1 || !isMarkdownTableSeparatorRow(rows[1] ?? "")) {
+    const cols = Math.max(...fixed.map((r) => r.length), 1);
+    fixed.splice(1, 0, Array.from({ length: cols }, () => "---"));
+  }
+  const maxCols = Math.max(...fixed.map((r) => r.length), 1);
+  return fixed.map((cells, idx) => {
+    if (idx === 1 && cells.every((c) => /^:?-{3,}:?$/.test(c) || c === "---")) {
+      return formatMarkdownTableRow(Array.from({ length: maxCols }, () => "---"));
+    }
+    const padded = cells.slice(0, maxCols);
+    while (padded.length < maxCols) padded.push("");
+    return formatMarkdownTableRow(padded);
+  });
+}
+
+/** 长段纯叙述无空行时，按句号拆成段落（跳过含 Markdown 表格的正文） */
 export function ensureParagraphBreaks(md: string): string {
-  const s = sanitizeArticleMarkdown(md);
+  const s = md;
   if (!s || /\n\n/.test(s)) return s;
+  if (/^\s*\|[^\n]+\|/m.test(s)) return s;
   const first = s.split("\n")[0] ?? "";
-  if (/^\s*[-*#|>]/.test(first) || /\|/.test(first)) return s;
+  if (/^\s*[-*#|>]/.test(first)) return s;
   const parts = s.split(/(?<=[。！？])\s+/).map((p) => p.trim()).filter(Boolean);
   if (parts.length <= 2) return s;
   return parts.join("\n\n");
 }
 
 export function prepareDetailMarkdown(md: string): string {
-  return ensureParagraphBreaks(sanitizeArticleMarkdown(md));
+  const cleaned = sanitizeArticleMarkdown(md);
+  const withTables = normalizeMarkdownTables(cleaned);
+  return ensureParagraphBreaks(withTables);
 }
+
+export const ARTICLE_REMARK_PLUGINS = [remarkGfm];
 
 export const ARTICLE_MD_PROSE_CLASS =
   "max-w-none w-full space-y-4 text-slate-600 leading-relaxed " +
@@ -74,8 +144,11 @@ export function createArticleMarkdownComponents(toc: TocItem[]) {
       </p>
     ),
     table: ({ children, ...props }: ComponentProps<"table">) => (
-      <div className="my-4 overflow-x-auto rounded-lg border border-slate-200">
-        <table {...props} className="w-full min-w-[280px] border-collapse text-left text-sm">
+      <div
+        className="my-4 w-full overflow-x-auto rounded-lg border border-slate-200 bg-white"
+        data-testid="article-md-table-wrap"
+      >
+        <table {...props} className="w-full min-w-full table-auto border-collapse text-left text-sm">
           {children}
         </table>
       </div>
@@ -86,17 +159,20 @@ export function createArticleMarkdownComponents(toc: TocItem[]) {
       </thead>
     ),
     th: ({ children, ...props }: ComponentProps<"th">) => (
-      <th {...props} className="border border-slate-200 px-3 py-2 font-semibold text-slate-800">
+      <th
+        {...props}
+        className="whitespace-nowrap border border-slate-200 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-700"
+      >
         {children}
       </th>
     ),
     td: ({ children, ...props }: ComponentProps<"td">) => (
-      <td {...props} className="border border-slate-200 px-3 py-2 align-top text-slate-700">
+      <td {...props} className="break-words border border-slate-200 px-3 py-2 align-top text-slate-700">
         {children}
       </td>
     ),
     tr: ({ children, ...props }: ComponentProps<"tr">) => (
-      <tr {...props} className="even:bg-slate-50/50">
+      <tr {...props} className="even:bg-slate-50/40">
         {children}
       </tr>
     ),
@@ -106,6 +182,20 @@ export function createArticleMarkdownComponents(toc: TocItem[]) {
 export function markdownComponentsForBody(bodyMd: string, prefix: string) {
   const tocItems = prefixTocItemIds(parseMarkdownToc(bodyMd), prefix);
   return createArticleMarkdownComponents(tocItems);
+}
+
+type ArticleMarkdownContentProps = {
+  bodyMd: string;
+  components: ComponentProps<typeof ReactMarkdown>["components"];
+};
+
+/** 详情正文：启用 GFM 表格，避免 | 列 | 被当成普通段落 */
+export function ArticleMarkdownContent({ bodyMd, components }: ArticleMarkdownContentProps) {
+  return (
+    <ReactMarkdown remarkPlugins={ARTICLE_REMARK_PLUGINS} components={components}>
+      {bodyMd}
+    </ReactMarkdown>
+  );
 }
 
 /** 详情主区：描述 + 数据支撑（兼容旧稿「功能亮点」「要点」） */

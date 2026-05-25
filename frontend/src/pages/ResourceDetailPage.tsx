@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { publicApi, type ArticleDetail, type ArticleFeedCard } from "@/api/public";
@@ -10,6 +9,7 @@ import { ArticleDetailSectionNav } from "@/components/articleDetail/ArticleDetai
 import { useI18n } from "@/i18n";
 import {
   ARTICLE_MD_PROSE_CLASS,
+  ArticleMarkdownContent,
   markdownComponentsForBody,
   pickDetailTabs,
   prepareDetailMarkdown,
@@ -388,7 +388,7 @@ export function ResourceDetailPage() {
               <div className="ui-card overflow-hidden p-5 sm:p-8">
                 <h2 className="text-base font-semibold text-slate-900">{t("detailOverview")}</h2>
                 <div className={`mt-4 ${ARTICLE_MD_PROSE_CLASS}`}>
-                  <ReactMarkdown components={fallbackMdComponents}>{fallbackBodyMd}</ReactMarkdown>
+                  <ArticleMarkdownContent bodyMd={fallbackBodyMd} components={fallbackMdComponents} />
                 </div>
               </div>
             ) : null}

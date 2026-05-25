@@ -40,4 +40,16 @@ test.describe("公开站 · 详情 mock（不依赖后端文章 id）", () => {
     await expect(page.getByRole("heading", { name: /Mock 文章 #7/u })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("模拟长文", { exact: false }).first()).toBeVisible();
   });
+
+  test("mock 详情：数据支撑表格渲染为 table 而非乱序纯文本", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/resources/7");
+    const dataSection = page.getByTestId("resource-detail-section-data");
+    await expect(dataSection).toBeVisible({ timeout: 30_000 });
+    const table = dataSection.getByTestId("article-md-table-wrap").locator("table");
+    await expect(table).toBeVisible();
+    await expect(table.locator("th")).toHaveCount(3);
+    await expect(table.getByRole("cell", { name: "指标" })).toBeVisible();
+    await expect(table.getByRole("cell", { name: "MIT" })).toBeVisible();
+  });
 });

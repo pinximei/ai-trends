@@ -1,8 +1,8 @@
-import ReactMarkdown from "react-markdown";
-import { ARTICLE_MD_PROSE_CLASS } from "@/lib/articleMarkdown";
+import { ARTICLE_MD_PROSE_CLASS, ArticleMarkdownContent } from "@/lib/articleMarkdown";
 import type { DetailLayoutConfig, DetailSectionKind } from "@/lib/articleDetailLayout";
 import { sectionDomId } from "@/lib/articleDetailLayout";
 import type { ComponentProps } from "react";
+import type ReactMarkdown from "react-markdown";
 
 type Props = {
   kind: DetailSectionKind;
@@ -37,7 +37,7 @@ export function ArticleDetailSection({ kind, layout, title, summary, bodyMd, com
         {summary ? <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{summary}</p> : null}
       </div>
       <div className={`p-5 sm:p-8 ${ARTICLE_MD_PROSE_CLASS}`}>
-        <ReactMarkdown components={components}>{bodyMd}</ReactMarkdown>
+        <ArticleMarkdownContent bodyMd={bodyMd} components={components} />
       </div>
     </section>
   );

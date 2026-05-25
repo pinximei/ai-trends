@@ -47,8 +47,17 @@ export function buildMockArticleDetail(id: number): ArticleDetail {
     platform_label: feed === "apps" ? "TestFlight" : "RSS",
     categories: ["本地模拟", "滚动测试"],
     tabs: [
-      { label: "概览", summary: "第一段概要", body_md: `## 概览\n\n${LONG_MD(12)}` },
-      { label: "附录", summary: "第二段概要", body_md: `## 附录\n\n${LONG_MD(12)}` },
+      {
+        label: "描述",
+        summary: "产品定位与使用场景说明，用于验证详情页描述区块排版与目录锚点。",
+        body_md: `## 描述\n\n${LONG_MD(4)}`,
+      },
+      {
+        label: "数据支撑",
+        summary: "可核对指标表格（mock）。",
+        body_md:
+          "## 数据支撑\n\n| 指标 | 数值 | 说明 |\n| 仓库 | ★ 1200 | 今日 +12 |\n| 主语言 | TypeScript | 开源 |\n| 许可证 | MIT | 可商用 |",
+      },
     ],
   };
 }
