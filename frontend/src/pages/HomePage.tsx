@@ -513,6 +513,7 @@ export function HomePage() {
         industry_slug: INDUSTRY,
         news_limit: 8,
         apps_limit: 10,
+        replicable_apps_limit: 4,
         published_within_days: 30,
       })
       .then(async (data) => {
@@ -794,7 +795,7 @@ export function HomePage() {
             {t("homeHighlightReplicableAppsEmpty")}
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {highlightApps.map((item) => (
               <HomeArticleTile key={item.id} item={item} variant="tile" />
             ))}

@@ -31,7 +31,7 @@ def home_dashboard(
     industry_slug: str = "ai",
     news_limit: int = 8,
     apps_limit: int = 10,
-    replicable_apps_limit: int = 6,
+    replicable_apps_limit: int = 4,
     monetization_apps_limit: int = 4,
     published_within_days: int = 30,
     db: Session = Depends(get_db),

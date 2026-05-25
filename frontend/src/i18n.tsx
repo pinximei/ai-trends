@@ -69,7 +69,7 @@ const STRINGS: Record<string, string> = {
   homeAppsLeaderboard: "更多高热应用",
   homeAppsLeaderboardSub: "按热度排序，已排除上方「亮点应用」；进入应用雷达可看全部",
   homeHighlightReplicableApps: "亮点应用 · 高可复刻",
-  homeHighlightReplicableAppsSub: "按可复刻性（S/A 档）与热度精选，适合独立开发者跟进的产品样本",
+  homeHighlightReplicableAppsSub: "优先 S/A 档，不足时以 B 档补足，最多展示 4 条不同数据源样本",
   homeHighlightReplicableAppsEmpty: "近 30 日暂无高可复刻应用，请稍后或到应用雷达浏览全部。",
   homeHighlightReplicableAppsCta: "查看全部应用",
   homeGoNewsRadar: "进入资讯雷达",

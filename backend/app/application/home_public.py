@@ -10,8 +10,9 @@ from ..domain import articles as art
 from ..domain.articles import FEED_APPS_KEYS
 from ..product_models import Article, Industry
 
-# 首页「亮点应用」：S=高可复刻优先，不足时用 A=较高可复刻补足
+# 首页「亮点应用」：S/A 优先展示；不足时用 B 档补足条数（见 list_highlight_replicable_apps）
 HOME_REPLICABLE_TIERS: tuple[str, ...] = ("S", "A")
+HOME_REPLICABLE_HIGHLIGHT_DEFAULT = 4
 
 
 def _industry_article_ids(db: Session, *, industry_slug: str) -> list[int]:
@@ -370,57 +371,91 @@ def _merge_source_facets(news_facets: list[dict], apps_facets: list[dict]) -> li
     return out
 
 
+def _pick_highlight_replicable_articles(
+    db: Session,
+    *,
+    industry_ids: list[int],
+    since: datetime,
+    limit: int,
+) -> list[Article]:
+    """S → A → B 分档拉取，优先不同数据源，凑满首页可复刻展示条数。"""
+    from .article_public import _article_matches_public_feed
+
+    fe = art.article_freshness_sql_expr()
+    tier_rank = case(
+        (func.upper(Article.replication_tier) == "S", 0),
+        (func.upper(Article.replication_tier) == "A", 1),
+        (func.upper(Article.replication_tier) == "B", 2),
+        else_=3,
+    )
+    picked: list[Article] = []
+    seen_ids: set[int] = set()
+    used_sources: set[str] = set()
+
+    for tier_group in (("S",), ("A",), ("B",)):
+        if len(picked) >= limit:
+            break
+        tier_set = {t.upper() for t in tier_group}
+        scan_lim = max(limit * 10, 32)
+        candidates = list(
+            db.scalars(
+                select(Article)
+                .where(
+                    Article.industry_id.in_(industry_ids),
+                    Article.status == "published",
+                    fe.isnot(None),
+                    fe >= since,
+                    func.upper(Article.replication_tier).in_(tier_set),
+                )
+                .order_by(
+                    tier_rank,
+                    desc(Article.heat_score),
+                    desc(fe),
+                    desc(Article.id),
+                )
+                .limit(scan_lim)
+            ).all()
+        )
+        pool = [a for a in candidates if _article_matches_public_feed(a, "apps") and a.id not in seen_ids]
+        for pass_diverse in (True, False):
+            if len(picked) >= limit:
+                break
+            for a in pool:
+                if len(picked) >= limit:
+                    break
+                if a.id in seen_ids:
+                    continue
+                sk = art.admin_source_key(a.third_party_source)
+                if pass_diverse and sk and sk in used_sources:
+                    continue
+                picked.append(a)
+                seen_ids.add(a.id)
+                if sk:
+                    used_sources.add(sk)
+    return picked
+
+
 def list_highlight_replicable_apps(
     db: Session,
     *,
     industry_slug: str = "ai",
-    limit: int = 6,
+    limit: int = HOME_REPLICABLE_HIGHLIGHT_DEFAULT,
     published_within_days: int = 30,
-    tiers: tuple[str, ...] = HOME_REPLICABLE_TIERS,
+    tiers: tuple[str, ...] | None = None,
 ) -> list[dict]:
-    """首页亮点应用：feed=apps 且可复刻档位为 S/A，S 优先、再按热度。"""
+    """首页亮点应用：可复刻 S/A 优先，不足用 B 档补足（默认 4 条，多数据源）。"""
+    del tiers  # 保留参数兼容；档位策略见 _pick_highlight_replicable_articles
     from .article_public import _admin_source_label_by_key, _feed_card_from_article
 
     lim = max(1, min(int(limit), 12))
     days = max(1, min(int(published_within_days), 120))
-    tier_set = {str(t).strip().upper() for t in tiers if str(t).strip()}
-    if not tier_set:
-        tier_set = set(HOME_REPLICABLE_TIERS)
 
     industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
     if not industry_ids:
         return []
 
     since = datetime.utcnow() - timedelta(days=days)
-    fe = art.article_freshness_sql_expr()
-    tier_rank = case(
-        (func.upper(Article.replication_tier) == "S", 0),
-        (func.upper(Article.replication_tier) == "A", 1),
-        else_=2,
-    )
-    from .article_public import _article_matches_public_feed
-
-    scan_lim = max(lim * 12, 48)
-    candidates = list(
-        db.scalars(
-            select(Article)
-            .where(
-                Article.industry_id.in_(industry_ids),
-                Article.status == "published",
-                fe.isnot(None),
-                fe >= since,
-                func.upper(Article.replication_tier).in_(tier_set),
-            )
-            .order_by(
-                tier_rank,
-                desc(Article.heat_score),
-                desc(fe),
-                desc(Article.id),
-            )
-            .limit(scan_lim)
-        ).all()
-    )
-    rows = [a for a in candidates if _article_matches_public_feed(a, "apps")][:lim]
+    rows = _pick_highlight_replicable_articles(db, industry_ids=industry_ids, since=since, limit=lim)
     label_by_key = _admin_source_label_by_key(db)
     return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 
@@ -506,7 +541,7 @@ def get_home_dashboard(
     industry_slug: str = "ai",
     news_limit: int = 8,
     apps_limit: int = 10,
-    replicable_apps_limit: int = 6,
+    replicable_apps_limit: int = HOME_REPLICABLE_HIGHLIGHT_DEFAULT,
     monetization_apps_limit: int = 4,
     published_within_days: int = 30,
 ) -> dict:
