@@ -74,6 +74,7 @@ def test_list_highlight_replicable_apps_orders_s_before_a() -> None:
                 replication_tier="S",
                 heat_score=500.0,
                 published_at=now - timedelta(days=60),
+                updated_at=now - timedelta(days=60),
             ),
         ]
     )
