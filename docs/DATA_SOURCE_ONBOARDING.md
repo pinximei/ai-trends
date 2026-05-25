@@ -1,6 +1,6 @@
 # 数据源逐个接入（本地验证门禁）
 
-产品**默认定时拉取 5 个数据源**；另内置 **2 个变现向可选源**（默认关闭，后台卡片启用后手动/单独频率同步）。
+产品**默认定时拉取 7 个内置数据源**（含 2 路变现向，无 Key）。
 
 | source_key | 名称 | 默认定时拉取 | 泳道 | 本地 Key |
 |------------|------|--------------|------|----------|
@@ -9,8 +9,8 @@
 | `hacker_news` | Hacker News | ✅ | 资讯 | 无 |
 | `newsapi` | NewsAPI | ✅ | 资讯 | `local/newsapi.credentials` |
 | `thenewsapi` | TheNewsAPI | ✅ | 资讯 | `local/thenewsapi.credentials` |
-| `taaft` | TAAFT（新工具） | ❌ 默认关 | 应用* | 无 |
-| `acquire` | Acquire（AI 资产） | ❌ 默认关 | 应用* | 无 |
+| `taaft` | TAAFT（新工具） | ✅ | 应用* | 无 |
+| `acquire` | Acquire（AI 资产） | ✅ | 应用* | 无 |
 
 \* 公开 **应用** 列表还纳入：GitHub 客户端 S/A、变现类主类、TAAFT/Acquire 源（与资讯去重）。
 

@@ -7,6 +7,8 @@
   py -3.12 scripts/verify_source_local.py --source hacker_news
   py -3.12 scripts/verify_source_local.py --source newsapi
   py -3.12 scripts/verify_source_local.py --source thenewsapi
+  py -3.12 scripts/verify_source_local.py --source taaft
+  py -3.12 scripts/verify_source_local.py --source acquire
 
 新闻源密钥：``local/newsapi.credentials`` / ``local/thenewsapi.credentials``（见 example）。
 
@@ -23,11 +25,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "backend" / "data" / "_verify_source_local.sqlite3"
 
-VERIFIED_SOURCE_KEYS = frozenset({"github", "product_hunt", "hacker_news", "newsapi", "thenewsapi"})
+VERIFIED_SOURCE_KEYS = frozenset(
+    {"github", "product_hunt", "hacker_news", "newsapi", "thenewsapi", "taaft", "acquire"}
+)
 
 SOURCE_META: dict[str, dict[str, str]] = {
     "github": {
-        "feed": "news",
+        "feed": "apps",
         "like": "%github%",
         "runner": "scripts/run_github_sync_local.py",
     },
@@ -49,6 +53,16 @@ SOURCE_META: dict[str, dict[str, str]] = {
     "thenewsapi": {
         "feed": "news",
         "like": "%thenewsapi%",
+        "runner": "",
+    },
+    "taaft": {
+        "feed": "apps",
+        "like": "%taaft%",
+        "runner": "",
+    },
+    "acquire": {
+        "feed": "apps",
+        "like": "%acquire%",
         "runner": "",
     },
 }

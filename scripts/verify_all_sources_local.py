@@ -1,9 +1,9 @@
 """
-五路本地门禁：各数据源 HTTP 热度拉取 +（mock LLM）连接器同步入库 + 公开 feed 可读。
+内置数据源本地门禁：HTTP 热度拉取 +（mock LLM）连接器同步入库 + 公开 feed 可读。
 
 用法（仓库根目录）:
   py -3.12 scripts/verify_all_sources_local.py
-  py -3.12 scripts/verify_all_sources_local.py --real-llm   # 额外用真实 LLM 跑 github 一条（慢、耗额度）
+  py -3.12 scripts/verify_all_sources_local.py --real-llm   # 额外用真实 LLM 全源（慢、耗额度）
 
 通过 exit 0；任一源失败 exit 1。
 """
@@ -19,22 +19,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "backend" / "data" / "_verify_all_sources.sqlite3"
 
-SOURCES: tuple[str, ...] = (
+BUILTIN_SOURCES: tuple[str, ...] = (
     "github",
     "product_hunt",
     "hacker_news",
     "newsapi",
     "thenewsapi",
-    "arxiv",
-    "huggingface_spaces",
+    "taaft",
+    "acquire",
 )
 
+# 扩展验收（非默认定时拉取，代码仍保留）
+EXTENDED_SOURCES: tuple[str, ...] = ("arxiv", "huggingface_spaces")
+
+SOURCES: tuple[str, ...] = BUILTIN_SOURCES + EXTENDED_SOURCES
+
 SOURCE_META: dict[str, dict[str, str]] = {
-    "github": {"feed": "news", "like": "%github%"},
+    "github": {"feed": "apps", "like": "%github%"},
     "product_hunt": {"feed": "apps", "like": "%product_hunt%"},
     "hacker_news": {"feed": "news", "like": "%hacker_news%"},
     "newsapi": {"feed": "news", "like": "%newsapi%"},
     "thenewsapi": {"feed": "news", "like": "%thenewsapi%"},
+    "taaft": {"feed": "apps", "like": "%taaft%"},
+    "acquire": {"feed": "apps", "like": "%acquire%"},
     "arxiv": {"feed": "news", "like": "%arxiv%"},
     "huggingface_spaces": {"feed": "apps", "like": "%huggingface%"},
 }
@@ -87,6 +94,7 @@ def _fake_polish(
     feed_kind: str = "news",
     ref_id: str = "",
     snippet: str = "",
+    admin_source_key: str = "",
     **_k,
 ) -> tuple[dict, str]:
     tag = (ref_id or "").strip()[-10:] or str(abs(hash((snippet or "")[:200])))[-8:]
@@ -97,7 +105,13 @@ def _fake_polish(
     fk = (feed_kind or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    cat = "应用产品" if fk == "apps" else "模型层(谨慎)"
+    sk = (admin_source_key or "").strip().lower()
+    if sk == "acquire":
+        cat = "变现案例"
+    elif fk == "apps":
+        cat = "应用产品"
+    else:
+        cat = "模型层(谨慎)"
     return (
         {
             "title": f"本地验收 {tag}：五路连接器全流程",
@@ -127,12 +141,14 @@ def _test_heat_fetch(db, key: str) -> tuple[bool, str]:
     from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
     from backend.app.connector_heat_fetch import (
+        sync_acquire_top_details,
         sync_arxiv_top_details,
         sync_github_trending_top_details,
         sync_hacker_news_top_details,
         sync_huggingface_spaces_top_details,
         sync_newsapi_top_headlines,
         sync_product_hunt_top_details,
+        sync_taaft_top_details,
         sync_thenewsapi_top_news,
     )
     from backend.app.models import AdminSourceConfig
@@ -215,6 +231,12 @@ def _test_heat_fetch(db, key: str) -> tuple[bool, str]:
             elif key == "huggingface_spaces":
                 code, body = sync_huggingface_spaces_top_details(url, headers)
                 detail = "hf_spaces"
+            elif key == "taaft":
+                code, body = sync_taaft_top_details(url, headers)
+                detail = "taaft_new_list"
+            elif key == "acquire":
+                code, body = sync_acquire_top_details(url, headers)
+                detail = "acquire_v1_search"
             else:
                 return False, "unknown source"
         except Exception as e:
@@ -418,7 +440,27 @@ def main() -> int:
         print("-" * 60)
 
         if not real_llm_only:
-            for key in SOURCES:
+            for key in BUILTIN_SOURCES:
+                print(f"\n=== {key} ===")
+                heat_ok, heat_msg = _test_heat_fetch(db, key)
+                skip_no_key = key in SOURCES_REQUIRE_API_KEY and heat_msg.startswith("skip:")
+                if skip_no_key:
+                    heat_ok = True
+                print(f"  heat_fetch: {'OK' if heat_ok else 'FAIL'} — {heat_msg}")
+                skip_ingest = (key == "github" and "packs=0" in heat_msg) or skip_no_key
+                if skip_ingest:
+                    if skip_no_key:
+                        print("  ingest(mock LLM): SKIP — 未配置 NewsAPI / TheNewsAPI Key")
+                    else:
+                        print("  ingest(mock LLM): SKIP — GitHub 榜单未拉到 repo 详情（请为数据源配置 api_key）")
+                    ingest_ok = True
+                    ingest_msg = "skipped"
+                else:
+                    ingest_ok, ingest_msg = _test_ingest(db, key, use_real_llm=False)
+                    print(f"  ingest(mock LLM): {'OK' if ingest_ok else 'FAIL'} — {ingest_msg}")
+                if not heat_ok or not ingest_ok:
+                    failed += 1
+            for key in EXTENDED_SOURCES:
                 print(f"\n=== {key} ===")
                 heat_ok, heat_msg = _test_heat_fetch(db, key)
                 skip_no_key = key in SOURCES_REQUIRE_API_KEY and heat_msg.startswith("skip:")
@@ -474,9 +516,11 @@ def main() -> int:
     if failed:
         print(f"FAILED: {failed} source(s)")
         return 1
-    n = len(SOURCES)
+    n = len(BUILTIN_SOURCES)
     tail = "heat_fetch + ingest(mock LLM)" + (" + real-llm all sources" if use_real_llm else "")
-    print(f"ALL OK: {n} sources {tail}")
+    print(f"ALL OK: {n} builtin sources {tail}")
+    if EXTENDED_SOURCES:
+        print(f"  (extended checked separately: {', '.join(EXTENDED_SOURCES)})")
     return 0
 
 

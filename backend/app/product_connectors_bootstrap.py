@@ -23,6 +23,7 @@ from .connector_heat_fetch import (
 from .scope_labels_util import get_scope_labels_from_source
 from .connector_sync_policy import CUSTOM_SYNC_MIN_INTERVAL_SECONDS
 from .services import (
+    AUTO_ENABLE_PULL_SOURCE_KEYS,
     BUILTIN_ADMIN_SOURCE_KEYS,
     BUILTIN_ADMIN_SOURCE_PRESETS,
     MAINSTREAM_ADMIN_SOURCE_KEYS,
@@ -32,9 +33,7 @@ from .services import (
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
 
-# 启动时默认启用拉取（参与定时连接器批量同步）；与 MAINSTREAM 内置源一致（3 路）。
-# 扩容：每增加一个 key 前须本地 verify_source_local.py 通过，见 docs/DATA_SOURCE_ONBOARDING.md。
-AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = MAINSTREAM_ADMIN_SOURCE_KEYS
+# 启动时默认启用拉取：见 services.AUTO_ENABLE_PULL_SOURCE_KEYS（当前为 enabled 的内置 7 路）。
 
 
 def repair_github_admin_source_if_still_zen(db: Session) -> None:

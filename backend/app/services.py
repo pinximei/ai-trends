@@ -81,29 +81,29 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     },
 ]
 
-# 可选变现向数据源：默认关闭，后台卡片手动启用；不参与定时整批拉取。
+# 变现向内置 2 路（无 Key；参与默认定时整批同步）
 OPTIONAL_MONETIZATION_SOURCE_PRESETS: list[dict] = [
     {
         "source": "taaft",
         "preset_label": "TAAFT（新工具）",
-        "enabled": False,
+        "enabled": True,
         "api_base": "https://theresanaiforthat.com/new/",
         "api_key_masked": "",
         "scope_label": "AI｜应用发现",
         "content_role": "app_launches",
-        "notes": "There's An AI For That 新工具列表；无 Key，HTML 解析。启用后在管理后台手动同步或单独频率。",
-        "fetch_limit": 15,
+        "notes": "There's An AI For That 新工具列表；无 Key，HTML 解析。",
+        "fetch_limit": PRESET_FETCH_LIMIT["taaft"],
     },
     {
         "source": "acquire",
         "preset_label": "Acquire（AI 资产）",
-        "enabled": False,
+        "enabled": True,
         "api_base": "https://us-central1-microacquire.cloudfunctions.net/v1-search",
         "api_key_masked": "",
         "scope_label": "AI｜变现案例",
         "content_role": "monetization_listing",
-        "notes": "MicroAcquire v1-search，筛选 AI 相关出售/收购线索；无 Key。默认关闭。",
-        "fetch_limit": 10,
+        "notes": "MicroAcquire v1-search，筛选 AI 相关出售/收购线索；无 Key。",
+        "fetch_limit": PRESET_FETCH_LIMIT["acquire"],
     },
 ]
 
@@ -112,11 +112,15 @@ BUILTIN_ADMIN_SOURCE_PRESETS: list[dict] = MAINSTREAM_ADMIN_SOURCE_PRESETS + OPT
 # 当前产品保留的内置数据源标识；启动时用于删库中「多余」行（含可选变现源）。
 BUILTIN_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
 
-# 参与默认定时拉取的 5 路（与 MAINSTREAM 一致）。
+# 参与默认定时拉取的内置源（enabled=True 的预置，当前为 7 路）。
 MAINSTREAM_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
 
 OPTIONAL_MONETIZATION_SOURCE_KEYS: frozenset[str] = frozenset(
     row["source"] for row in OPTIONAL_MONETIZATION_SOURCE_PRESETS
+)
+
+AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = frozenset(
+    row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS if row.get("enabled")
 )
 
 # 历史上由 ensure_mainstream_admin_sources 写入、但已从产品移除的 source；启动时删库内对应行及同 admin_source_key 的连接器。
@@ -152,7 +156,7 @@ ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     }
 )
 
-# 凭据形态：当前内置 5 路；旧预置已进 DISCONTINUED 并由启动任务删库。
+# 凭据形态：当前内置 7 路（含 TAAFT / Acquire）；旧预置已进 DISCONTINUED 并由启动任务删库。
 # 后台第二输入框「APP Secret」仅对 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD 为真时展示（当前仅 product_hunt）。
 # 后台卡片在「Bearer Access Token」之外另展示「OAuth Client Secret」输入的预置（Developer OAuth 换 token 用）。
 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product_hunt"})
