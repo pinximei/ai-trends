@@ -142,6 +142,9 @@ HOME_MAIN_SOURCE_PRESET_LABELS: dict[str, str] = {
     "acquire": "Acquire（AI 资产）",
 }
 
+HOME_RADAR_APPS_KEYS: frozenset[str] = frozenset({"github", "product_hunt", "taaft", "acquire"})
+HOME_RADAR_NEWS_KEYS: frozenset[str] = frozenset({"hacker_news", "newsapi", "thenewsapi"})
+
 
 def _home_pick_quality_ok(item: dict) -> bool:
     title = str(item.get("title") or "").strip()
@@ -260,13 +263,59 @@ def get_home_editorial_picks(
     }
 
 
+def _home_radar_lanes_for_feed(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    published_within_days: int,
+    exclude_ids: set[int],
+) -> list[dict]:
+    """首页七路雷达：按 admin_source_key 单独查热度 Top1，避免精选区吸走唯一稿件后该路显示空。"""
+    from .article_public import _admin_source_label_by_key, list_articles_feed_by_heat_top
+
+    keys = [k for k in HOME_MAIN_SOURCE_KEYS if k in (HOME_RADAR_NEWS_KEYS if feed == "news" else HOME_RADAR_APPS_KEYS)]
+    label_by_key = _admin_source_label_by_key(db)
+    skip = exclude_ids or set()
+    lanes: list[dict] = []
+    for k in keys:
+        raw = list_articles_feed_by_heat_top(
+            db,
+            feed=feed,
+            industry_slug=industry_slug,
+            segment_id=None,
+            segment_ids=None,
+            published_within_days=published_within_days,
+            published_on_latest_day=False,
+            source=k,
+            heat_offset=0,
+            heat_page_size=4,
+            heat_max_ranked=24,
+        )
+        picked: list[dict] = []
+        for it in raw.get("items") or []:
+            aid = it.get("id")
+            if aid is None or int(aid) in skip:
+                continue
+            picked.append(it)
+            break
+        lanes.append(
+            {
+                "source_key": k,
+                "source_label": label_by_key.get(k) or HOME_MAIN_SOURCE_PRESET_LABELS.get(k, k),
+                "items": picked,
+            }
+        )
+    return lanes
+
+
 def _group_source_lanes(
     items: list[dict],
     *,
     per_source: int = 1,
     exclude_ids: set[int] | None = None,
 ) -> list[dict]:
-    """按内置主数据源各取热度最高的一条，供首页「多源雷达」展示；可跳过已在它区展示的文章。"""
+    """从已有 feed 卡片列表按源分桶（测试/兼容）；首页仪表盘请用 ``_home_radar_lanes_for_feed``。"""
     skip = exclude_ids or set()
     buckets: dict[str, list[dict]] = {k: [] for k in HOME_MAIN_SOURCE_KEYS}
     for it in items:
@@ -465,9 +514,9 @@ def get_home_dashboard(
     published_within_days: int = 30,
 ) -> dict:
     """
-    首页一站式数据：亮点应用、资讯/应用精选、五路雷达、趋势与统计。
+    首页一站式数据：亮点应用、资讯/应用精选、七路雷达、趋势与统计。
 
-    各区块互斥：亮点应用 id 不出现在热力榜与雷达应用源；资讯精选 id 不出现在雷达资讯源。
+    雷达与精选区互斥 article id；每路按源单独查询，避免 NewsAPI/TheNewsAPI 等仅 1 篇且在精选时雷达误显空。
     """
     from .article_public import (
         list_article_category_facets,
@@ -532,9 +581,6 @@ def get_home_dashboard(
     apps_pick_ids = _article_ids(apps_items)
     apps_radar_skip = highlight_ids | apps_pick_ids
 
-    news_pool = _exclude_article_ids(news_raw_items, news_pick_ids)
-    apps_pool = _exclude_article_ids(apps_raw_items, apps_radar_skip)
-
     facet_kw = dict(
         industry_slug=industry_slug,
         segment_id=None,
@@ -555,11 +601,23 @@ def get_home_dashboard(
         "pick_window_days": days,
         "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
         "trend": trend,
-        "news_source_lanes": _group_source_lanes(news_pool, exclude_ids=news_pick_ids),
-        "apps_source_lanes": _group_source_lanes(apps_pool, exclude_ids=apps_radar_skip),
+        "news_source_lanes": _home_radar_lanes_for_feed(
+            db,
+            feed="news",
+            industry_slug=industry_slug,
+            published_within_days=days,
+            exclude_ids=news_pick_ids,
+        ),
+        "apps_source_lanes": _home_radar_lanes_for_feed(
+            db,
+            feed="apps",
+            industry_slug=industry_slug,
+            published_within_days=days,
+            exclude_ids=apps_radar_skip,
+        ),
         "source_facets": _merge_source_facets(news_sources, apps_sources),
         "top_categories": top_categories,
-        "active_source_count": len(_merge_source_facets(news_sources, apps_sources)),
+        "active_source_count": len(HOME_MAIN_SOURCE_KEYS),
     }
 
 

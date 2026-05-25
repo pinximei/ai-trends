@@ -835,7 +835,7 @@ export function HomePage() {
         {loading ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
             {mergedLanes.map((lane) => {
               const item = lane.items[0];
               const accent = platformAccent(lane.source_key);

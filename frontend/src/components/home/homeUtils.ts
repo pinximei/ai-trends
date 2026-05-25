@@ -7,6 +7,8 @@ export const HOME_SOURCE_ORDER = [
   "hacker_news",
   "newsapi",
   "thenewsapi",
+  "taaft",
+  "acquire",
 ] as const;
 
 export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], string> = {
@@ -15,6 +17,8 @@ export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], stri
   hacker_news: "Hacker News",
   newsapi: "NewsAPI",
   thenewsapi: "TheNewsAPI",
+  taaft: "TAAFT（新工具）",
+  acquire: "Acquire（AI 资产）",
 };
 
 export type HeatTier = "blazing" | "hot" | "fresh";
@@ -57,6 +61,10 @@ export function platformAccent(key: string): { ring: string; badge: string; dot:
     return { ring: "ring-sky-300/50", badge: "bg-sky-600 text-white", dot: "bg-sky-600", border: "border-l-sky-600" };
   if (k === "thenewsapi")
     return { ring: "ring-blue-300/50", badge: "bg-blue-700 text-white", dot: "bg-blue-700", border: "border-l-blue-700" };
+  if (k === "taaft")
+    return { ring: "ring-fuchsia-300/50", badge: "bg-fuchsia-600 text-white", dot: "bg-fuchsia-600", border: "border-l-fuchsia-600" };
+  if (k === "acquire")
+    return { ring: "ring-emerald-300/50", badge: "bg-emerald-700 text-white", dot: "bg-emerald-700", border: "border-l-emerald-700" };
   if (k === "arxiv" || k === "huggingface_spaces")
     return { ring: "ring-red-300/40", badge: "bg-red-600 text-white", dot: "bg-red-600", border: "border-l-red-600" };
   return { ring: "ring-violet-300/40", badge: "bg-violet-600 text-white", dot: "bg-violet-500", border: "border-l-violet-500" };
@@ -91,9 +99,7 @@ export type SourceLane = {
 export function mergeSourceLanes(newsLanes: SourceLane[], appsLanes: SourceLane[]): SourceLane[] {
   const byKey = new Map<string, SourceLane>();
   for (const lane of newsLanes) byKey.set(lane.source_key, lane);
-  for (const lane of appsLanes) {
-    if (!byKey.has(lane.source_key)) byKey.set(lane.source_key, lane);
-  }
+  for (const lane of appsLanes) byKey.set(lane.source_key, lane);
   return HOME_SOURCE_ORDER.map((k) => {
     const hit = byKey.get(k);
     if (hit) return hit;

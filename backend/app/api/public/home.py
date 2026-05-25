@@ -36,7 +36,7 @@ def home_dashboard(
     published_within_days: int = 30,
     db: Session = Depends(get_db),
 ):
-    """首页仪表盘：热度精选 + 亮点高可复刻应用 + 趋势 + 五路雷达（单次请求）。"""
+    """首页仪表盘：热度精选 + 亮点高可复刻应用 + 趋势 + 七路雷达（单次请求）。"""
     data = get_home_dashboard(
         db,
         industry_slug=industry_slug,
