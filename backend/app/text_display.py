@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Literal
+
+TabTextRole = Literal["description", "replication", "data"]
 
 
 def repair_utf8_mojibake(text: str) -> str:
@@ -271,7 +274,32 @@ def is_degraded_data_tab_body(body: str) -> bool:
     return False
 
 
-def _strip_junk_from_data_tab_body(body: str) -> str:
+_TAB_SECTION_HEADING_RE = re.compile(
+    r"(?m)^##\s*(数据支撑|功能亮点|要点|报道依据|描述|复刻评估)\s*\n+"
+)
+
+
+def tab_text_role_from_label(label: str) -> TabTextRole | None:
+    """规范 Tab label → 文案处理角色（与详情 i18n 标题无关，如「报道依据」仍走 data）。"""
+    from .domain.articles import (
+        FEED_CARD_TAB_DESCRIPTION,
+        canonical_feed_card_tab_label,
+        feed_card_highlights_tab_label,
+    )
+    from .domain.replication_analysis import FEED_CARD_TAB_REPLICATION
+
+    lab = canonical_feed_card_tab_label((label or "").strip())
+    if lab == FEED_CARD_TAB_DESCRIPTION:
+        return "description"
+    if lab == FEED_CARD_TAB_REPLICATION:
+        return "replication"
+    if feed_card_highlights_tab_label(lab):
+        return "data"
+    return None
+
+
+def _strip_tab_markdown_junk(body: str) -> str:
+    """各 Tab 通用：去 JSON 块、连接器快照、英文 key 行等。"""
     s = sanitize_stored_text_field(body)
     s = re.sub(r"```json\s*[\s\S]*?```", "", s, flags=re.IGNORECASE)
     s = re.sub(r"<details>[\s\S]*?</details>", "", s, flags=re.IGNORECASE)
@@ -287,6 +315,58 @@ def _strip_junk_from_data_tab_body(body: str) -> str:
     out = "\n".join(kept)
     out = re.sub(r"\n{4,}", "\n\n\n", out).strip()
     return out
+
+
+def _strip_tab_section_headings(body: str) -> str:
+    return _TAB_SECTION_HEADING_RE.sub("", (body or "").strip()).strip()
+
+
+def _ensure_paragraph_breaks(md: str) -> str:
+    s = (md or "").strip()
+    if not s or re.search(r"\n\n", s):
+        return s
+    if re.search(r"^\s*\|", s, re.MULTILINE):
+        return s
+    first = (s.split("\n")[0] or "").strip()
+    if re.match(r"^[-*#|>]", first):
+        return s
+    parts = [p.strip() for p in re.split(r"(?<=[。！？])\s+", s) if p.strip()]
+    if len(parts) <= 2:
+        return s
+    return "\n\n".join(parts)
+
+
+def prepare_description_tab_body(body_md: str, *, admin_source_key: str = "") -> str:
+    """描述 Tab：去残渣、修表格与段落，避免混入连接器 JSON。"""
+    _ = admin_source_key
+    raw = sanitize_stored_text_field(body_md)
+    if not raw.strip():
+        return ""
+    cleaned = _strip_tab_markdown_junk(raw)
+    cleaned = _strip_tab_section_headings(cleaned)
+    if is_degraded_data_tab_body(cleaned) and len(re.findall(r"[\u4e00-\u9fff]", cleaned)) < 24:
+        rows = _extract_rows_from_degraded_body(cleaned)
+        if rows:
+            return "\n\n".join(f"**{lab}**：{val}" for lab, val in rows[:10])
+    cleaned = _normalize_markdown_tables(cleaned)
+    cleaned = _ensure_paragraph_breaks(cleaned)
+    return cleaned or raw
+
+
+def prepare_replication_tab_body(body_md: str) -> str:
+    """复刻评估 Tab：去 JSON/英文 key，保留列表与段落结构。"""
+    raw = sanitize_stored_text_field(body_md)
+    if not raw.strip():
+        return ""
+    cleaned = _strip_tab_markdown_junk(raw)
+    cleaned = _strip_tab_section_headings(cleaned)
+    cleaned = _normalize_markdown_tables(cleaned)
+    cleaned = _ensure_paragraph_breaks(cleaned)
+    return cleaned or raw
+
+
+def _strip_junk_from_data_tab_body(body: str) -> str:
+    return _strip_tab_markdown_junk(body)
 
 
 def _normalize_markdown_tables(md: str) -> str:
@@ -336,7 +416,7 @@ def _normalize_markdown_tables(md: str) -> str:
     return "\n".join(out)
 
 
-def prepare_detail_data_tab_body(
+def prepare_data_tab_body(
     body_md: str,
     *,
     admin_source_key: str = "",
@@ -344,7 +424,7 @@ def prepare_detail_data_tab_body(
     snippet: str = "",
 ) -> str:
     """
-    详情页「数据支撑」：修复乱码、去掉英文 key 行与 JSON 残渣，必要时重建 GFM 表格。
+    数据类 Tab（数据支撑 / 报道依据 / 旧「要点」等）：修复乱码、重建 GFM 表格。
     """
     from .domain.articles import build_connector_data_tab_markdown
 
@@ -371,7 +451,70 @@ def prepare_detail_data_tab_body(
 
     cleaned = _strip_junk_from_data_tab_body(raw)
     cleaned = _normalize_markdown_tables(cleaned)
-    cleaned = re.sub(r"(?m)^##\s*数据支撑\s*\n+", "", cleaned).strip()
+    cleaned = _strip_tab_section_headings(cleaned)
     if cleaned and not cleaned.lstrip().startswith("##"):
         cleaned = f"## 数据支撑\n\n{cleaned}"
     return cleaned or raw
+
+
+prepare_detail_data_tab_body = prepare_data_tab_body
+
+
+def normalize_tab_for_display(
+    tab: dict,
+    *,
+    admin_source_key: str = "",
+    source_original_url: str = "",
+    snippet: str = "",
+) -> dict[str, str] | None:
+    """单 Tab 读出/展示前统一规范化（label 已规范名）。"""
+    from .domain.articles import canonical_feed_card_tab_label
+
+    if not isinstance(tab, dict):
+        return None
+    label = canonical_feed_card_tab_label(str(tab.get("label") or "").strip())
+    role = tab_text_role_from_label(label)
+    if not role:
+        return None
+    body_in = str(tab.get("body_md") or "")
+    summary_in = str(tab.get("summary") or "")
+    if role == "data":
+        body_md = prepare_data_tab_body(
+            body_in,
+            admin_source_key=admin_source_key,
+            source_original_url=source_original_url,
+            snippet=snippet,
+        )
+        summary = markdown_to_plain_preview(summary_in or body_md, max_len=400)
+    elif role == "description":
+        body_md = prepare_description_tab_body(body_in, admin_source_key=admin_source_key)
+        summary = markdown_to_plain_preview(summary_in or body_md, max_len=512)
+    else:
+        body_md = prepare_replication_tab_body(body_in)
+        summary = markdown_to_plain_preview(summary_in or body_md, max_len=512)
+    if not (summary.strip() and body_md.strip()):
+        return None
+    return {"label": label, "summary": summary[:2000], "body_md": body_md[:50000]}
+
+
+def normalize_article_tabs_for_display(
+    tabs: list,
+    *,
+    admin_source_key: str = "",
+    source_original_url: str = "",
+    snippet: str = "",
+) -> list[dict[str, str]]:
+    """列表卡片 / 详情页 / 入库前：统一处理全部 Tab 正文与摘要。"""
+    out: list[dict[str, str]] = []
+    for item in tabs:
+        if not isinstance(item, dict):
+            continue
+        row = normalize_tab_for_display(
+            item,
+            admin_source_key=admin_source_key,
+            source_original_url=source_original_url,
+            snippet=snippet,
+        )
+        if row:
+            out.append(row)
+    return out

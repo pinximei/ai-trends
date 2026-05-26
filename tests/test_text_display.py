@@ -3,8 +3,12 @@ from backend.app.text_display import (
     format_connector_snippet_plain,
     is_degraded_data_tab_body,
     markdown_to_plain_preview,
+    normalize_article_tabs_for_display,
+    prepare_data_tab_body,
+    prepare_description_tab_body,
     prepare_detail_data_tab_body,
     repair_utf8_mojibake,
+    tab_text_role_from_label,
 )
 from backend.app.domain.articles import build_connector_data_tab_markdown
 
@@ -62,3 +66,50 @@ def test_prepare_detail_data_tab_from_json_block() -> None:
     md = prepare_detail_data_tab_body(body, admin_source_key="github")
     assert "a/b" in md
     assert "```" not in md
+
+
+def test_tab_text_role_maps_wire_display_to_data() -> None:
+    assert tab_text_role_from_label("数据支撑") == "data"
+    assert tab_text_role_from_label("要点") == "data"
+    assert tab_text_role_from_label("描述") == "description"
+
+
+def test_normalize_article_tabs_news_wire_junk() -> None:
+    tabs = [
+        {
+            "label": "描述",
+            "summary": "事件概述与影响分析。" * 3,
+            "body_md": "## 描述\n\ntitle: Breaking news\n\n一段中文说明。",
+        },
+        {
+            "label": "数据支撑",
+            "summary": "| 字段 | 内容 |",
+            "body_md": (
+                "url: https://example.com/a\n"
+                "title: Headline\n"
+                "| 字段 | 内容 |\n| --- | --- |\n"
+                "| 指标 | 数值 |\n"
+            ),
+        },
+    ]
+    out = normalize_article_tabs_for_display(
+        tabs,
+        admin_source_key="newsapi",
+        source_original_url="https://example.com/a",
+    )
+    assert len(out) == 2
+    data = next(t for t in out if t["label"] == "数据支撑")
+    assert "url:" not in data["body_md"]
+    assert "| 指标 | 内容 |" in data["body_md"]
+    assert "Headline" in data["body_md"] or "example.com" in data["body_md"]
+    desc = next(t for t in out if t["label"] == "描述")
+    assert "title:" not in desc["body_md"]
+    assert "一段中文说明" in desc["body_md"]
+
+
+def test_prepare_description_strips_connector_snapshot() -> None:
+    raw = "## 连接器同步快照\n\nfoo: bar\n\n## 描述\n\n正常段落。"
+    md = prepare_description_tab_body(raw)
+    assert "连接器同步快照" not in md
+    assert "foo:" not in md
+    assert "正常段落" in md

@@ -74,21 +74,23 @@ def _ensure_markdown_paragraphs(text: str) -> str:
     return "\n\n".join(parts)
 
 
-def _normalize_polish_tabs(tabs: list) -> None:
-    from .domain.articles import FEED_CARD_TAB_DATA, FEED_CARD_TAB_LEGACY_HIGHLIGHTS
-    from .text_display import markdown_to_plain_preview, sanitize_stored_text_field
+def _normalize_polish_tabs(
+    tabs: list,
+    *,
+    admin_source_key: str = "",
+    source_original_url: str = "",
+    snippet: str = "",
+) -> None:
+    from .text_display import normalize_article_tabs_for_display
 
-    for t in tabs:
-        if not isinstance(t, dict):
-            continue
-        lab = str(t.get("label") or "").strip()
-        if lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS:
-            t["label"] = FEED_CARD_TAB_DATA
-        t["body_md"] = _ensure_markdown_paragraphs(sanitize_stored_text_field(str(t.get("body_md") or "")))
-        sm = sanitize_stored_text_field(str(t.get("summary") or ""))
-        if str(t.get("label") or "").strip() == FEED_CARD_TAB_DATA:
-            sm = markdown_to_plain_preview(sm, max_len=512) or sm
-        t["summary"] = sm
+    norm = normalize_article_tabs_for_display(
+        tabs,
+        admin_source_key=admin_source_key,
+        source_original_url=source_original_url,
+        snippet=snippet,
+    )
+    tabs.clear()
+    tabs.extend(norm)
 
 
 def _render_readable_snapshot(snippet: str) -> tuple[str, str]:
@@ -370,8 +372,14 @@ def _create_one_published_article_from_connector_targets(
     polished = ready
 
     tabs = polished.get("tabs") or []
+    source_original_url = extract_connector_primary_url(src_tag, safe)
     if isinstance(tabs, list):
-        _normalize_polish_tabs(tabs)
+        _normalize_polish_tabs(
+            tabs,
+            admin_source_key=src_tag,
+            source_original_url=source_original_url or "",
+            snippet=safe,
+        )
         ensure_connector_links_in_polish_tabs(src_tag, safe, tabs)
 
     title = (polished.get("title") or "")[:500]
@@ -443,7 +451,6 @@ def _create_one_published_article_from_connector_targets(
             return 0
 
     cover_image_url = extract_cover_image_url(src_tag, safe)
-    source_original_url = extract_connector_primary_url(src_tag, safe)
     published_at = connector_snippet_published_at_utc(safe) or now
     art = Article(
         title=title,

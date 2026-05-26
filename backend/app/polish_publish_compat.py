@@ -385,7 +385,14 @@ def repair_polish_for_publish(
         piece["summary"] = new_sum[:512]
         piece["body_md"] = new_body
 
-    out["tabs"] = [{"label": lab, **by_label[lab]} for lab in need_labels if lab in by_label]
+    from .text_display import normalize_article_tabs_for_display
+
+    tabs_list = [{"label": lab, **by_label[lab]} for lab in need_labels if lab in by_label]
+    out["tabs"] = normalize_article_tabs_for_display(
+        tabs_list,
+        admin_source_key=sk_low,
+        snippet=snippet,
+    )
 
     body_md = str(out.get("body_md") or "").strip()
     joined = "\n\n".join(

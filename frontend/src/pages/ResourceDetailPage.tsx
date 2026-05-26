@@ -11,11 +11,11 @@ import { useI18n } from "@/i18n";
 import {
   ARTICLE_MD_PROSE_CLASS,
   ArticleMarkdownContent,
-  markdownComponentsForBody,
+  DETAIL_DATA_TAB_LABELS,
   DETAIL_REPLICATION_TAB_LABEL,
+  markdownComponentsForBody,
   pickDetailTabs,
-  prepareDataTabMarkdown,
-  prepareDetailMarkdown,
+  prepareArticleTabMarkdown,
 } from "@/lib/articleMarkdown";
 import {
   getDetailLayout,
@@ -25,8 +25,6 @@ import {
 import { pushRecentArticle } from "@/lib/recentArticles";
 
 const INDUSTRY = "ai";
-
-const DATA_TAB_LABELS = new Set(["数据支撑", "功能亮点", "要点"]);
 const DESC_TAB_LABEL = "描述";
 
 export function ResourceDetailPage() {
@@ -109,7 +107,7 @@ export function ResourceDetailPage() {
     [detailTabs],
   );
   const dataTab = useMemo(
-    () => detailTabs.find((tab) => DATA_TAB_LABELS.has(tab.label)),
+    () => detailTabs.find((tab) => DETAIL_DATA_TAB_LABELS.has(tab.label)),
     [detailTabs],
   );
 
@@ -135,8 +133,7 @@ export function ResourceDetailPage() {
     }
     const build = (tab: typeof descTab, kind: DetailSectionKind): SectionBlock | null => {
       if (!tab?.body_md?.trim()) return null;
-      const bodyMd =
-        kind === "data" ? prepareDataTabMarkdown(tab.body_md) : prepareDetailMarkdown(tab.body_md);
+      const bodyMd = prepareArticleTabMarkdown(tab.body_md, kind);
       if (!bodyMd) return null;
       let title = t(layout.dataTitleKey);
       if (kind === "description") title = t("detailSectionDescription");
@@ -157,7 +154,7 @@ export function ResourceDetailPage() {
 
   const hasDescTab = Boolean(descTab);
   const fallbackBodyMd = useMemo(
-    () => (a?.body ? prepareDetailMarkdown(a.body) : ""),
+    () => (a?.body ? prepareArticleTabMarkdown(a.body, "description") : ""),
     [a?.body],
   );
   const showFallbackBody = !hasDescTab && fallbackBodyMd.length > 60;

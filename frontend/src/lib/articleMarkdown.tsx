@@ -126,23 +126,45 @@ export function markdownToPlainPreview(md: string, maxLen = 500): string {
   return out;
 }
 
-/** 详情「数据支撑」：去掉英文 key 行等残渣后再规范化表格 */
-export function prepareDataTabMarkdown(md: string): string {
-  const cleaned = sanitizeArticleMarkdown(md);
-  const lines = cleaned.split("\n").filter((line) => {
-    const t = line.trim();
-    if (!t) return true;
-    return !/^[a-zA-Z_][a-zA-Z0-9_]*\s*[:：]\s*.+/.test(t);
-  });
-  const body = lines.join("\n").replace(/\n{4,}/g, "\n\n\n").trim();
-  const withTables = normalizeMarkdownTables(body);
+/** 与后端 TabTextRole 对齐：描述 / 复刻评估 / 数据类（含报道依据等 i18n 标题） */
+export type ArticleTabRenderRole = "description" | "replication" | "data";
+
+const TAB_SECTION_HEADING_RE = /^##\s*(数据支撑|功能亮点|要点|报道依据|描述|复刻评估)\s*$/gm;
+
+function stripEnglishKeyLines(md: string): string {
+  return md
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return true;
+      return !/^[a-zA-Z_][a-zA-Z0-9_]*\s*[:：]\s*.+/.test(t);
+    })
+    .join("\n");
+}
+
+function stripTabSectionHeadings(md: string): string {
+  return md.replace(TAB_SECTION_HEADING_RE, "").replace(/\n{4,}/g, "\n\n\n").trim();
+}
+
+/** 详情各区块统一 Markdown 预处理（后端已规范化时作二次兜底） */
+export function prepareArticleTabMarkdown(md: string, role: ArticleTabRenderRole): string {
+  let cleaned = sanitizeArticleMarkdown(md);
+  cleaned = stripEnglishKeyLines(cleaned);
+  if (role === "data" || role === "description") {
+    cleaned = stripTabSectionHeadings(cleaned);
+  }
+  const withTables = normalizeMarkdownTables(cleaned);
   return ensureParagraphBreaks(withTables);
 }
 
+/** @deprecated 使用 prepareArticleTabMarkdown(md, "data") */
+export function prepareDataTabMarkdown(md: string): string {
+  return prepareArticleTabMarkdown(md, "data");
+}
+
+/** @deprecated 使用 prepareArticleTabMarkdown(md, "description") */
 export function prepareDetailMarkdown(md: string): string {
-  const cleaned = sanitizeArticleMarkdown(md);
-  const withTables = normalizeMarkdownTables(cleaned);
-  return ensureParagraphBreaks(withTables);
+  return prepareArticleTabMarkdown(md, "description");
 }
 
 export const ARTICLE_REMARK_PLUGINS = [remarkGfm];

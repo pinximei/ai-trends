@@ -382,12 +382,20 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
     row_lane = _row_feed_lane(a)
     plat = label_by_key.get(ak) or (ak.replace("_", " ").title() if ak else "")
     tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
+    src_url_card = (getattr(a, "source_original_url", None) or "")[:2048]
+    if tabs_parsed:
+        from ..text_display import normalize_article_tabs_for_display
+
+        tabs_parsed = normalize_article_tabs_for_display(
+            tabs_parsed,
+            admin_source_key=ak,
+            source_original_url=src_url_card,
+        )
     tab_summaries = (
         [{"label": x["label"], "summary": (x["summary"] or "")[:420]} for x in tabs_parsed[:6]] if tabs_parsed else []
     )
     tab_labels = art.required_feed_card_tab_labels(row_lane)
     desc_label = tab_labels[0]
-    hi_label = tab_labels[-1]
     from ..text_display import markdown_to_plain_preview
 
     card_description = markdown_to_plain_preview((a.summary or "")[:960], max_len=960)
@@ -396,11 +404,10 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
         for x in tabs_parsed:
             lab = (x.get("label") or "").strip()
             sm = (x.get("summary") or "").strip()
-            body_plain = markdown_to_plain_preview((x.get("body_md") or "")[:400], max_len=200)
             if lab == desc_label and sm:
-                card_description = markdown_to_plain_preview(sm, max_len=960) or body_plain
+                card_description = markdown_to_plain_preview(sm, max_len=960)
             elif art.feed_card_highlights_tab_label(lab):
-                card_highlights = markdown_to_plain_preview(sm, max_len=200) or body_plain
+                card_highlights = markdown_to_plain_preview(sm, max_len=200)
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     fp = art.display_fingerprint(a.title, a.summary or "")
     display_dt = art.article_freshness_for_row(a)
@@ -958,23 +965,13 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
             admin_source_key=ak,
         )
     if tabs:
-        from ..text_display import markdown_to_plain_preview, prepare_detail_data_tab_body
+        from ..text_display import normalize_article_tabs_for_display
 
-        fixed_tabs: list[dict] = []
-        for t in tabs:
-            if not isinstance(t, dict):
-                continue
-            row = dict(t)
-            lab = str(row.get("label") or "").strip()
-            if art.feed_card_highlights_tab_label(lab):
-                row["body_md"] = prepare_detail_data_tab_body(
-                    str(row.get("body_md") or ""),
-                    admin_source_key=ak,
-                    source_original_url=src_url or "",
-                )
-                row["summary"] = markdown_to_plain_preview(str(row.get("summary") or ""), max_len=400)
-            fixed_tabs.append(row)
-        tabs = fixed_tabs
+        tabs = normalize_article_tabs_for_display(
+            tabs,
+            admin_source_key=ak,
+            source_original_url=src_url or "",
+        )
     if not tabs and (a.body or "").strip():
         tabs = [
             {
