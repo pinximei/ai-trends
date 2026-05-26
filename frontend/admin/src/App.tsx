@@ -93,7 +93,7 @@ function formatDiagLogBlock(
 ): string {
   const ts = (r.created_at ?? "").replace("T", " ").replace("Z", " UTC");
   const step = (r.step ?? "").trim();
-  const stepZh = DIAG_STEP_LABELS_ZH[step] ?? (step || "未知步骤");
+  const stepZh = DIAG_STEP_LABELS_ZH[step] || step || "未知步骤";
   const sk = (r.source_key ?? "").trim();
   const lines = [
     `【${index}】${ts}`,
@@ -106,7 +106,8 @@ function formatDiagLogBlock(
     if (r.connector_id != null) parts.push(`连接器=#${r.connector_id}`);
     lines.push(`  关联: ${parts.join(" | ")}`);
   }
-  lines.push(`  原因: ${(r.message ?? "").trim() || "（无详情）"}`);
+  const reason = String(r.message ?? "").trim();
+  lines.push(`  原因: ${reason || "（无详情）"}`);
   return lines.join("\n");
 }
 
