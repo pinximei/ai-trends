@@ -1,4 +1,5 @@
 from backend.app.connector_heat_fetch import (
+    _github_backfill_payloads_from_ranked,
     github_trending_is_discovery_url,
     parse_github_trending_repos,
 )
@@ -31,3 +32,16 @@ def test_parse_github_trending_repos() -> None:
     assert rows[0]["stars_today"] == 2500
     assert rows[1]["full_name"] == "owner-two/repo-beta"
     assert rows[1]["stars_today"] == 120
+
+
+def test_github_backfill_when_filter_thins_pack() -> None:
+    payloads: list[dict] = [{"full_name": "a/b", "name": "b"}]
+    ranked = [
+        {"full_name": "a/b", "rank": 1},
+        {"full_name": "x/y", "rank": 2, "description": "desktop electron client"},
+        {"full_name": "p/q", "rank": 3, "description": "cli tool"},
+    ]
+    _github_backfill_payloads_from_ranked(payloads, ranked, n=3, since="daily", discovery_url="https://github.com/trending")
+    assert len(payloads) == 3
+    assert payloads[-1].get("full_name") == "p/q"
+    assert payloads[-1].get("_aisoul_trending", {}).get("filter_fallback") is True

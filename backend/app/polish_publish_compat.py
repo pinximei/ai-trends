@@ -287,6 +287,19 @@ def repair_polish_for_publish(
         )[:512]
         fixes.append("summary_padded")
 
+    sk_low = (admin_source_key or "").strip().lower()
+    if sk_low == "github":
+        out["feed_kind"] = "apps"
+        fk = "apps"
+        need_labels = required_feed_card_tab_labels(fk)
+        from .domain.articles import normalize_replication_tier
+
+        out["categories"] = [primary_canonical_from_raw_labels(["开源客户端(好抄)"])]
+        tier = normalize_replication_tier(out.get("replication_tier"))
+        if tier not in ("S", "A"):
+            out["replication_tier"] = "A"
+        fixes.append("github_apps_defaults")
+
     cats = out.get("categories")
     if not isinstance(cats, list) or len([c for c in cats if str(c).strip()]) != 1:
         default_cat = "应用产品" if fk == "apps" else "其他"

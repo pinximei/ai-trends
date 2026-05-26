@@ -290,7 +290,9 @@ def polish_connector_article(
     if not (_key or "").strip():
         return None, "no_llm_key"
     fk = (feed_kind or "news").strip().lower()
-    if fk not in ("news", "apps"):
+    if (admin_source_key or "").strip().lower() == "github":
+        fk = "apps"
+    elif fk not in ("news", "apps"):
         fk = "news"
     th_gate = publish_polish_length_thresholds(admin_source_key)
     # 指纹与解析在 article_ingest 使用完整片段；模型侧仅取前段以控制 token。

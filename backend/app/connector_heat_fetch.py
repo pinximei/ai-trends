@@ -73,6 +73,22 @@ GITHUB_CLIENT_KEYWORDS: tuple[str, ...] = (
     "wpf",
     "qt",
     "gtk",
+    "cli",
+    "copilot",
+    "cursor",
+    "claude",
+    "codex",
+    "plugin",
+    "plugins",
+    "extension",
+    "terminal",
+    "ide",
+    "agent",
+    "mcp",
+    "sdk",
+    "open-source",
+    "opensource",
+    "app",
 )
 
 TAAFT_NEW_DEFAULT = "https://theresanaiforthat.com/new/"
@@ -213,6 +229,36 @@ def _github_trending_chunk_description(chunk: str) -> str:
     if not p:
         return ""
     return re.sub(r"\s+", " ", p.group(1)).strip()
+
+
+def _github_backfill_payloads_from_ranked(
+    payloads: list[dict[str, Any]],
+    ranked: list[dict[str, Any]],
+    *,
+    n: int,
+    since: str,
+    discovery_url: str,
+) -> None:
+    """客户端关键词过滤后不足 N 条时，用 Trending 榜单顺序回填（避免今日 GitHub 几乎无入库）。"""
+    have = {str(p.get("full_name") or "").strip() for p in payloads}
+    for row in ranked:
+        if len(payloads) >= n:
+            break
+        slug = str(row.get("full_name") or "").strip()
+        if not slug or slug in have:
+            continue
+        repo = _github_minimal_repo_from_trending_row(row)
+        extra: dict[str, Any] = {
+            "since": since,
+            "rank": row.get("rank"),
+            "discovery_url": discovery_url,
+            "filter_fallback": True,
+        }
+        repo["_aisoul_trending"] = extra
+        if row.get("stars_today") is not None:
+            repo["trending_stars_today"] = row["stars_today"]
+        payloads.append(repo)
+        have.add(slug)
 
 
 def _github_minimal_repo_from_trending_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -360,16 +406,10 @@ def sync_github_trending_top_details(
                     repo["trending_stars_today"] = row["stars_today"]
                 _attach_github_readme(client, api_url, api_headers, repo)
                 payloads.append(repo)
-            if not payloads and ranked:
-                for row in ranked[:n]:
-                    repo = _github_minimal_repo_from_trending_row(row)
-                    extra = {"since": since, "rank": row.get("rank"), "discovery_url": url, "filter_fallback": True}
-                    repo["_aisoul_trending"] = extra
-                    if row.get("stars_today") is not None:
-                        repo["trending_stars_today"] = row["stars_today"]
-                    payloads.append(repo)
-                    if len(payloads) >= n:
-                        break
+            if len(payloads) < n and ranked:
+                _github_backfill_payloads_from_ranked(
+                    payloads, ranked, n=n, since=since, discovery_url=url
+                )
             if not payloads:
                 return r.status_code, json.dumps(
                     {"connector_sync_items_v1": [], "note": "repo_api_empty", "since": since},

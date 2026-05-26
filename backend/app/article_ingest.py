@@ -282,6 +282,8 @@ def _create_one_published_article_from_connector_targets(
         return 0
 
     fk = feed_lane(src_tag)
+    if src_tag.lower() == "github":
+        fk = "apps"
     slug = f"sync-c{connector_id}-s{segment_id}-{uuid.uuid4().hex[:16]}"[:128]
     rule_title = f"同步资源 · {label} · {connector_name}"[:500]
     rule_body = (
