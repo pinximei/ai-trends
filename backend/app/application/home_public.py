@@ -296,6 +296,11 @@ def _home_radar_lanes_for_feed(
                 continue
             picked.append(it)
             break
+        # 该源在库内仅有 1 条且已被首页亮点占用时，仍展示于本路雷达，避免「有 PH 稿但 PH 列为空」
+        if not picked and candidates:
+            first = candidates[0]
+            if first.get("id") is not None:
+                picked.append(first)
         lanes.append(
             {
                 "source_key": k,

@@ -120,3 +120,55 @@ def test_home_radar_github_includes_news_lane_without_sa_tier() -> None:
     gh = next(x for x in lanes if x["source_key"] == "github")
     assert len(gh["items"]) == 1
     db.close()
+
+
+def test_home_radar_lane_fallback_when_top_candidate_excluded() -> None:
+    """唯一一篇 PH 已被首页亮点占用时，PH 雷达列仍应展示该条。"""
+    from datetime import datetime
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.app.application.home_public import _home_radar_lanes_for_feed
+    from backend.app.product_models import Article, Industry, Segment
+
+    engine = create_engine("sqlite:///:memory:")
+    from backend.app.db import Base
+
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    ind = Industry(slug="ai", name="AI")
+    db.add(ind)
+    db.flush()
+    seg = Segment(industry_id=ind.id, slug="general", name="General")
+    db.add(seg)
+    db.flush()
+    now = datetime.utcnow()
+    art = Article(
+        industry_id=ind.id,
+        segment_id=seg.id,
+        title="Only PH launch",
+        summary="A product launch on Product Hunt with enough summary text for picks.",
+        status="published",
+        feed_kind="apps",
+        third_party_source="product_hunt / daily",
+        ai_categories_json='["应用产品"]',
+        replication_tier="A",
+        heat_score=200.0,
+        published_at=now,
+    )
+    db.add(art)
+    db.commit()
+    db.refresh(art)
+
+    lanes = _home_radar_lanes_for_feed(
+        db,
+        feed="apps",
+        industry_slug="ai",
+        published_within_days=30,
+        exclude_ids={int(art.id)},
+    )
+    ph = next(x for x in lanes if x["source_key"] == "product_hunt")
+    assert len(ph["items"]) == 1
+    assert ph["items"][0]["title"] == "Only PH launch"
+    db.close()
