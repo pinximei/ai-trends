@@ -10,6 +10,31 @@ DIAG_PIPELINE_VERSION = "10"
 
 # 管理端「同步日志」默认只展示 error：每条失败必须有明确原因（拉取 / 鉴权 / 入库 / LLM 校验）。
 
+# step → 中文说明（导出/后台展示用；未知 step 仍显示英文代号）
+STEP_LABELS_ZH: dict[str, str] = {
+    "http_fail": "HTTP 请求失败",
+    "http_exception": "网络或解析异常",
+    "http_fallback": "备用请求失败",
+    "auth_missing": "缺少 API Key / Token",
+    "ph_auth": "Product Hunt 鉴权失败",
+    "rate_limit": "上游限流",
+    "url_invalid": "数据源 URL 不符合内置模板",
+    "fetch_empty": "拉取成功但无可用条目",
+    "news_fetch_empty": "新闻源拉取为空",
+    "heat_done": "热度打包失败",
+    "ingest_pack_empty": "入库打包为空",
+    "llm_polish_retry": "LLM 润色未通过发布校验",
+    "llm_config": "LLM 未配置或 Key 无效",
+    "connector_done": "连接器同步结束（未新建文章）",
+    "connector_fail": "连接器同步失败",
+    "connector_aborted": "连接器同步中断",
+    "segments": "行业/板块配置错误",
+    "batch_done": "整批同步结束（含失败）",
+    "batch_fatal": "整批同步致命错误",
+    "batch_articles": "整批入库统计",
+    "source_url_audit": "数据源 URL 审计",
+}
+
 
 def should_persist_diagnostic(*, level: str, step: str) -> bool:
     del step
@@ -143,17 +168,55 @@ def list_recent_run_ids(db: Session, *, limit: int = 30) -> list[str]:
     return seen
 
 
+def step_label_zh(step: str) -> str:
+    s = (step or "").strip()
+    if not s:
+        return "未知步骤"
+    return STEP_LABELS_ZH.get(s, s)
+
+
+def format_log_entry_human(r: dict, *, index: int | None = None) -> str:
+    """单条错误：分层展示，便于非开发阅读。"""
+    ts = (r.get("created_at") or "").replace("T", " ").replace("Z", " UTC")
+    step = (r.get("step") or "").strip()
+    step_zh = step_label_zh(step)
+    lvl = (r.get("level") or "error").strip().upper()
+    cid = r.get("connector_id")
+    sk = (r.get("source_key") or "").strip()
+    msg = (r.get("message") or "").strip().replace("\r\n", "\n")
+    head = f"【{index}】{ts}" if index is not None else f"【{ts}】"
+    lines = [head, f"  级别: {lvl}", f"  步骤: {step_zh} ({step})" if step else f"  步骤: {step_zh}"]
+    if sk or cid is not None:
+        parts = []
+        if sk:
+            parts.append(f"数据源={sk}")
+        if cid is not None:
+            parts.append(f"连接器=#{cid}")
+        lines.append(f"  关联: {' | '.join(parts)}")
+    lines.append(f"  原因: {msg or '（无详情）'}")
+    return "\n".join(lines)
+
+
 def format_logs_for_export(items: list[dict], *, run_id: str | None = None) -> str:
-    """供管理端「复制日志」：保留换行，便于粘贴到工单/聊天排查。"""
+    """供管理端「复制日志」：中文分层说明，便于粘贴到工单/聊天排查。"""
     lines = [
-        f"# AiTrends 同步诊断日志 diag_v={DIAG_PIPELINE_VERSION}",
-        f"# run_id={run_id or '(mixed)'}",
-        f"# lines={len(items)}",
+        "=== AiTrends 同步诊断（仅错误）===",
+        f"诊断版本: diag_v={DIAG_PIPELINE_VERSION}",
+        f"批次 run_id: {run_id or '(未指定，混合最近错误)'}",
+        f"共 {len(items)} 条",
+        "",
+        "说明: 每条 = 一次未入库/拉取失败；请从上到下对照后台数据源与连接器配置。",
         "",
     ]
+    if not items:
+        lines.append("（本批无错误记录：可能全部入库成功，或尚未执行同步）")
+        lines.append("")
+    for i, r in enumerate(items, start=1):
+        lines.append(format_log_entry_human(r, index=i))
+        lines.append("")
+    lines.append("--- 技术简表（可选对照）---")
     for r in items:
         ts = r.get("created_at") or ""
-        lvl = r.get("level") or "info"
         step = r.get("step") or ""
         cid = r.get("connector_id")
         sk = r.get("source_key") or ""
@@ -162,8 +225,8 @@ def format_logs_for_export(items: list[dict], *, run_id: str | None = None) -> s
             meta += f" #{cid}"
         if sk:
             meta += f" [{sk}]"
-        msg = (r.get("message") or "").replace("\r\n", "\n")
-        lines.append(f"[{ts}] [{lvl}] [{step}]{meta} {msg}")
+        msg = (r.get("message") or "").replace("\r\n", " ").replace("\n", " ")
+        lines.append(f"[{ts}] [{r.get('level') or 'error'}] [{step}]{meta} {msg[:500]}")
     return "\n".join(lines).strip() + "\n"
 
 

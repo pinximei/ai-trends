@@ -40,9 +40,10 @@ def test_format_logs_for_export_multiline() -> None:
         }
     ]
     text = format_logs_for_export(items, run_id="abc123")
-    assert "run_id=abc123" in text
-    assert "[arxiv]" in text
-    assert "http_fail" in text
+    assert "abc123" in text
+    assert "数据源=arxiv" in text or "[arxiv]" in text
+    assert "HTTP 请求失败" in text or "http_fail" in text
+    assert "原因: HTTP 0" in text
 
 
 def test_select_home_picks_backfills_when_quality_filter_empty() -> None:

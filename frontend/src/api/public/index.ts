@@ -156,6 +156,7 @@ export const publicApi = {
       source_facets: Array<{ key: string; label: string; news_count: number; apps_count: number }>;
       top_categories: Array<{ label: string; count: number }>;
       active_source_count: number;
+      active_source_keys: string[];
     }>(`/api/public/v1/home/dashboard${qs ? `?${qs}` : ""}`);
   },
   homeEditorialPicks: (opts?: {

@@ -36,6 +36,23 @@ function friendlyErr(msg: string): string {
   return msg;
 }
 
+const DIAG_STEP_LABELS_ZH: Record<string, string> = {
+  http_fail: "HTTP 请求失败",
+  http_exception: "网络或解析异常",
+  auth_missing: "缺少 API Key / Token",
+  ph_auth: "Product Hunt 鉴权失败",
+  rate_limit: "上游限流",
+  url_invalid: "数据源 URL 不符合内置模板",
+  fetch_empty: "拉取成功但无可用条目",
+  news_fetch_empty: "新闻源拉取为空",
+  llm_polish_retry: "LLM 润色未通过发布校验",
+  connector_done: "连接器同步结束（未新建文章）",
+  connector_fail: "连接器同步失败",
+  connector_aborted: "连接器同步中断",
+  batch_done: "整批同步结束（含失败）",
+  batch_fatal: "整批同步致命错误",
+};
+
 function buildDiagLogClipboardText(
   logs: Array<{
     created_at?: string | null;
@@ -48,27 +65,49 @@ function buildDiagLogClipboardText(
   opts?: { runId?: string; diagVersion?: string },
 ): string {
   const head = [
-    `# AiTrends 同步诊断日志`,
-    opts?.diagVersion ? `# diag_v=${opts.diagVersion}` : "",
-    opts?.runId ? `# run_id=${opts.runId}` : "",
-    `# lines=${logs.length}`,
+    "=== AiTrends 同步诊断（仅错误）===",
+    opts?.diagVersion ? `诊断版本: diag_v=${opts.diagVersion}` : "",
+    opts?.runId ? `批次 run_id: ${opts.runId}` : "",
+    `共 ${logs.length} 条`,
+    "",
+    "说明: 每条 = 一次未入库/拉取失败；请对照后台「数据源」与「连接器」。",
     "",
   ].filter(Boolean);
-  return [...head, ...logs.map((r) => formatDiagLogLine(r))].join("\n");
+  if (!logs.length) {
+    return [...head, "（暂无错误记录）", ""].join("\n");
+  }
+  const body = logs.map((r, i) => formatDiagLogBlock(r, i + 1));
+  return [...head, ...body, ""].join("\n");
 }
 
-function formatDiagLogLine(r: {
-  created_at?: string | null;
-  level?: string;
-  step?: string;
-  message?: string;
-  connector_id?: number | null;
-  source_key?: string | null;
-}): string {
-  const head = `[${r.created_at ?? ""}] [${r.level}] [${r.step}]`;
-  const meta =
-    (r.connector_id != null ? ` #${r.connector_id}` : "") + (r.source_key ? ` ${r.source_key}` : "");
-  return `${head}${meta} ${r.message ?? ""}`;
+function formatDiagLogBlock(
+  r: {
+    created_at?: string | null;
+    level?: string;
+    step?: string;
+    message?: string;
+    connector_id?: number | null;
+    source_key?: string | null;
+  },
+  index: number,
+): string {
+  const ts = (r.created_at ?? "").replace("T", " ").replace("Z", " UTC");
+  const step = (r.step ?? "").trim();
+  const stepZh = DIAG_STEP_LABELS_ZH[step] ?? step || "未知步骤";
+  const sk = (r.source_key ?? "").trim();
+  const lines = [
+    `【${index}】${ts}`,
+    `  级别: ${(r.level ?? "error").toUpperCase()}`,
+    `  步骤: ${stepZh}${step ? ` (${step})` : ""}`,
+  ];
+  if (sk || r.connector_id != null) {
+    const parts: string[] = [];
+    if (sk) parts.push(`数据源=${sk}`);
+    if (r.connector_id != null) parts.push(`连接器=#${r.connector_id}`);
+    lines.push(`  关联: ${parts.join(" | ")}`);
+  }
+  lines.push(`  原因: ${(r.message ?? "").trim() || "（无详情）"}`);
+  return lines.join("\n");
 }
 
 /** 与后端 ``FEED_APPS_KEYS`` 对齐：仅下列标识默认进前台「应用」Feed。 */
@@ -2974,12 +3013,10 @@ export function App() {
                 {diagLoading
                   ? "加载中…"
                   : diagLogs.length
-                    ? diagLogs
-                        .map((r) => {
-                          const head = `[${r.created_at ?? ""}] [${r.level}] [${r.step}]${r.connector_id != null ? ` #${r.connector_id}` : ""}${r.source_key ? ` ${r.source_key}` : ""}`;
-                          return `${head}\n  ${r.message ?? ""}`;
-                        })
-                        .join("\n\n")
+                    ? buildDiagLogClipboardText(diagLogs, {
+                        runId: diagRunFilter || undefined,
+                        diagVersion: diagPipelineVersion,
+                      })
                     : "（暂无错误日志：可能本批全部入库成功，或尚未拉取）"}
               </pre>
             </div>

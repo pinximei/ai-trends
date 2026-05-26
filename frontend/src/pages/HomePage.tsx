@@ -5,7 +5,7 @@ import { Brain, Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
-import { HOME_SOURCE_LABELS, mergeSourceLanes, platformAccent, type SourceLane } from "@/components/home/homeUtils";
+import { mergeSourceLanes, platformAccent, radarGridClass, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
 
@@ -465,7 +465,8 @@ export function HomePage() {
     Array<{ key: string; label: string; news_count: number; apps_count: number }>
   >([]);
   const [topCategories, setTopCategories] = useState<Array<{ label: string; count: number }>>([]);
-  const [activeSourceCount, setActiveSourceCount] = useState(7);
+  const [activeSourceCount, setActiveSourceCount] = useState(6);
+  const [activeSourceKeys, setActiveSourceKeys] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -490,7 +491,11 @@ export function HomePage() {
     };
   }, [trendOverview]);
 
-  const mergedLanes = useMemo(() => mergeSourceLanes(newsLanes, appsLanes), [newsLanes, appsLanes]);
+  const mergedLanes = useMemo(
+    () => mergeSourceLanes(newsLanes, appsLanes, activeSourceKeys.length ? activeSourceKeys : undefined),
+    [newsLanes, appsLanes, activeSourceKeys],
+  );
+  const radarCount = mergedLanes.length || activeSourceCount;
 
   useEffect(() => {
     let cancelled = false;
@@ -544,7 +549,8 @@ export function HomePage() {
         setAppsLanes(data.apps_source_lanes ?? []);
         setSourceFacets(data.source_facets ?? []);
         setTopCategories(data.top_categories ?? []);
-        setActiveSourceCount(data.active_source_count ?? 7);
+        setActiveSourceCount(data.active_source_count ?? data.active_source_keys?.length ?? 6);
+        setActiveSourceKeys(data.active_source_keys ?? []);
         setTrendOverview(data.trend ?? null);
       })
       .catch(async () => {
@@ -718,10 +724,7 @@ export function HomePage() {
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {sourceFacets.map((f) => {
                       const accent = platformAccent(f.key);
-                      const label =
-                        f.label ||
-                        HOME_SOURCE_LABELS[f.key as keyof typeof HOME_SOURCE_LABELS] ||
-                        f.key;
+                      const label = f.label || f.key;
                       const total = f.news_count + f.apps_count;
                       return (
                         <div
@@ -830,14 +833,18 @@ export function HomePage() {
       </HomeSection>
 
       <HomeSection
-        title={t("homeSourceRadar")}
-        subtitle={t("homeSourceRadarSub")}
+        title={radarCount > 0 ? `${radarCount}路雷达` : t("homeSourceRadar")}
+        subtitle={
+          radarCount > 0
+            ? `${radarCount} 路已配置数据源各 1 条（与上方精选区不重复 id，按源单独取热度最高）`
+            : t("homeSourceRadarSub")
+        }
         icon={<Radar className="h-5 w-5" strokeWidth={2} />}
       >
         {loading ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          <div className={radarGridClass(radarCount)}>
             {mergedLanes.map((lane) => {
               const item = lane.items[0];
               const accent = platformAccent(lane.source_key);

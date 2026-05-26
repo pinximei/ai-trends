@@ -1,7 +1,8 @@
 import type { ArticleFeedCard } from "@/api/public";
 import { formatStarCount } from "@/articleCardVisual";
 
-export const HOME_SOURCE_ORDER = [
+/** 与后端 ACTIVE_ADMIN_SOURCE_KEYS 默认顺序一致；无 API 列表时的兜底 */
+export const HOME_SOURCE_ORDER_DEFAULT = [
   "github",
   "product_hunt",
   "hacker_news",
@@ -10,7 +11,7 @@ export const HOME_SOURCE_ORDER = [
   "acquire",
 ] as const;
 
-export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], string> = {
+const HOME_SOURCE_LABELS: Record<string, string> = {
   github: "GitHub（客户端）",
   product_hunt: "Product Hunt",
   hacker_news: "Hacker News",
@@ -18,6 +19,22 @@ export const HOME_SOURCE_LABELS: Record<(typeof HOME_SOURCE_ORDER)[number], stri
   thenewsapi: "TheNewsAPI",
   acquire: "Acquire（AI 资产）",
 };
+
+/** 首页雷达网格：列数随已配置源数量自适应（避免写死 7 列留白） */
+export function radarGridClass(sourceCount: number): string {
+  const n = Math.max(1, Math.min(sourceCount, 8));
+  const map: Record<number, string> = {
+    1: "grid gap-3 grid-cols-1",
+    2: "grid gap-3 grid-cols-1 sm:grid-cols-2",
+    3: "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3",
+    4: "grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
+    5: "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5",
+    6: "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6",
+    7: "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7",
+    8: "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8",
+  };
+  return map[n] ?? map[6];
+}
 
 export type HeatTier = "blazing" | "hot" | "fresh";
 
@@ -90,16 +107,28 @@ export type SourceLane = {
   items: ArticleFeedCard[];
 };
 
-export function mergeSourceLanes(newsLanes: SourceLane[], appsLanes: SourceLane[]): SourceLane[] {
+export function mergeSourceLanes(
+  newsLanes: SourceLane[],
+  appsLanes: SourceLane[],
+  sourceOrder?: string[],
+): SourceLane[] {
   const byKey = new Map<string, SourceLane>();
-  for (const lane of newsLanes) byKey.set(lane.source_key, lane);
-  for (const lane of appsLanes) byKey.set(lane.source_key, lane);
-  return HOME_SOURCE_ORDER.map((k) => {
+  for (const lane of newsLanes) {
+    const prev = byKey.get(lane.source_key);
+    if (!prev || (!prev.items.length && lane.items.length)) byKey.set(lane.source_key, lane);
+  }
+  for (const lane of appsLanes) {
+    const prev = byKey.get(lane.source_key);
+    if (!prev || (!prev.items.length && lane.items.length)) byKey.set(lane.source_key, lane);
+  }
+  const order =
+    sourceOrder?.length ? sourceOrder : byKey.size ? [...byKey.keys()] : [...HOME_SOURCE_ORDER_DEFAULT];
+  return order.map((k) => {
     const hit = byKey.get(k);
     if (hit) return hit;
     return {
       source_key: k,
-      source_label: HOME_SOURCE_LABELS[k],
+      source_label: HOME_SOURCE_LABELS[k] ?? k.replace(/_/g, " "),
       items: [],
     };
   });

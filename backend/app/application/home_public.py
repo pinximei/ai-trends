@@ -707,6 +707,7 @@ def get_home_dashboard(
         "source_facets": _merge_source_facets(news_sources, apps_sources),
         "top_categories": top_categories,
         "active_source_count": len(HOME_MAIN_SOURCE_KEYS),
+        "active_source_keys": list(HOME_MAIN_SOURCE_KEYS),
     }
 
 
