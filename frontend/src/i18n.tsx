@@ -8,6 +8,14 @@ export const UI_LANG: Lang = "zh";
 const STRINGS: Record<string, string> = {
   brand: "AI 资讯站",
   tagline: "发现 AI 的无限可能",
+  seoDefaultDescription:
+    "聚合 Product Hunt、GitHub Trending、Hacker News 等源的 AI 应用与资讯，结构化呈现趋势与可复刻评估。",
+  seoHomeDescription:
+    "洞察 AI 前沿动态：聚合全球模型发布、产品迭代与产业信号，用结构化信息流节省筛选时间。",
+  seoNewsDescription: "AI 产业资讯雷达：跨源热度排序、要点摘要与报道依据，按日浏览全球 AI 动态。",
+  seoAppsDescription: "AI 工具与应用雷达：Product Hunt、GitHub 等源聚合，含可复刻性评估与技术要点。",
+  seoDownloadsDescription: "AI 相关软件安装包与版本下载列表。",
+  seoAboutDescription: "关于 AI 资讯站：站点介绍、数据来源与使用说明。",
   navHome: "首页",
   navApps: "AI 工具",
   navNews: "AI 资讯",

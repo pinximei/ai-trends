@@ -17,6 +17,8 @@
 
 欢迎试用与反馈 [Issue](https://github.com/pinximei/aisoul/issues)。
 
+**搜索引擎收录**：站点提供 [`/robots.txt`](https://www.ai-trends.news/robots.txt) 与动态 [`/sitemap.xml`](https://www.ai-trends.news/sitemap.xml)（含已发布文章）。请在 [Google Search Console](https://search.google.com/search-console) 验证域名并提交站点地图；环境变量 `AITRENDS_PUBLIC_BASE_URL` 与前台 `VITE_PUBLIC_SITE_URL` 建议设为 `https://www.ai-trends.news`。
+
 ---
 
 ## 仓库结构

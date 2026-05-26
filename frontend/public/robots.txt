@@ -1,0 +1,7 @@
+# https://www.ai-trends.news — 允许搜索引擎抓取公开站
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/internal/
+
+Sitemap: https://www.ai-trends.news/sitemap.xml

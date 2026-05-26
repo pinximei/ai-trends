@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Github } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
+import { SITE_NAME, usePageSeo } from "@/lib/seo";
 import { SITE_GITHUB_REPO_URL } from "@/siteLinks";
 
 function apiBasePrefix(): string {
@@ -56,6 +57,38 @@ export function Layout() {
       cancelled = true;
     };
   }, []);
+
+  const pageSeo = useMemo(() => {
+    if (isResourceDetail) return null;
+    const brand = t("brand");
+    const map: Record<string, { title: string; description: string }> = {
+      "/": {
+        title: `${brand} · ${t("tagline")}`,
+        description: t("seoHomeDescription"),
+      },
+      "/news": {
+        title: `${t("navNews")} · ${brand}`,
+        description: t("seoNewsDescription"),
+      },
+      "/apps": {
+        title: `${t("navApps")} · ${brand}`,
+        description: t("seoAppsDescription"),
+      },
+      "/downloads": {
+        title: `${t("navDownloads")} · ${brand}`,
+        description: t("seoDownloadsDescription"),
+      },
+      "/about": {
+        title: `${t("navAbout")} · ${brand}`,
+        description: t("seoAboutDescription"),
+      },
+    };
+    const hit = map[path];
+    if (hit) return { ...hit, path };
+    return { title: brand, description: t("seoDefaultDescription"), path };
+  }, [path, t, isResourceDetail]);
+
+  usePageSeo(pageSeo ?? { title: SITE_NAME });
 
   const shell = contentShellClass(useWideShell);
 

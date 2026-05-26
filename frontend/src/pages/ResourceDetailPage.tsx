@@ -23,6 +23,7 @@ import {
   type DetailSectionKind,
 } from "@/lib/articleDetailLayout";
 import { pushRecentArticle } from "@/lib/recentArticles";
+import { usePageSeo } from "@/lib/seo";
 
 const INDUSTRY = "ai";
 const DESC_TAB_LABEL = "描述";
@@ -62,6 +63,19 @@ export function ResourceDetailPage() {
       feed: a.feed_kind === "apps" ? "apps" : "news",
     });
   }, [a]);
+
+  const seoDescription = useMemo(() => {
+    if (!a) return "";
+    const raw = (a.card_description || a.summary || "").trim();
+    return raw.length > 160 ? `${raw.slice(0, 157)}…` : raw;
+  }, [a]);
+
+  usePageSeo({
+    title: a?.title ? `${a.title} · ${t("brand")}` : t("brand"),
+    description: seoDescription || undefined,
+    path: id ? `/resources/${id}` : undefined,
+    image: a?.cover_image_url,
+  });
 
   useEffect(() => {
     if (!a) return;
