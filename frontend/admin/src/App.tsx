@@ -413,7 +413,15 @@ export function App() {
   const [digestPreview, setDigestPreview] = useState<{
     digest_date: string;
     active_subscribers: number;
-    digest: { subject: string; body_md: string; status: string; sent_at: string | null; feishu_sent_at: string | null; error_message: string | null } | null;
+    digest: {
+      subject: string;
+      body_md: string;
+      status: string;
+      sent_at: string | null;
+      feishu_sent_at: string | null;
+      error_message: string | null;
+      article_ids?: { apps?: number[]; news?: number[] } | unknown;
+    } | null;
   } | null>(null);
   const [digestRunBusy, setDigestRunBusy] = useState(false);
   const [clearIngestBusy, setClearIngestBusy] = useState(false);
@@ -2344,7 +2352,7 @@ export function App() {
                                 api_key: sourceForm.api_key,
                               },
                               "form:draft",
-                              formTestAuth,
+                              { auth_mode: formTestAuth },
                             )
                           }
                         >

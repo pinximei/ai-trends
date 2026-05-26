@@ -42,12 +42,21 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       # Service postgres is already waited by Actions (Docker healthcheck) before steps run; no apt/postgresql-client.
 
       - name: Install dependencies & run tests
         run: |
           pip install -e .
           python -m pytest tests/ -q
+
+      - name: Build frontends (catch VM deploy compile errors early)
+        run: |
+          (cd frontend && npm ci --no-fund --no-audit && npm run build)
+          (cd frontend/admin && npm ci --no-fund --no-audit && npm run build)
 
       # HOST/USER 可读 Variables 或 Secrets；认证须二选一：Secret 私钥，或 Secret 密码（勿把密码放在 Variables，会在界面明文展示）。
       - name: Detect deploy credentials
