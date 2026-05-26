@@ -1,6 +1,6 @@
 # 数据源逐个接入（本地验证门禁）
 
-产品**默认定时拉取 7 个内置数据源**（含 2 路变现向，无 Key）。
+产品**默认定时拉取 6 个内置数据源**（5 路主流 + Acquire 变现向）。
 
 | source_key | 名称 | 默认定时拉取 | 泳道 | 本地 Key |
 |------------|------|--------------|------|----------|
@@ -9,24 +9,25 @@
 | `hacker_news` | Hacker News | ✅ | 资讯 | 无 |
 | `newsapi` | NewsAPI | ✅ | 资讯 | `local/newsapi.credentials` |
 | `thenewsapi` | TheNewsAPI | ✅ | 资讯 | `local/thenewsapi.credentials` |
-| `taaft` | TAAFT（新工具） | ✅ | 应用* | 无 |
 | `acquire` | Acquire（AI 资产） | ✅ | 应用* | 无 |
 
-\* 公开 **应用** 列表还纳入：GitHub 客户端 S/A、变现类主类、TAAFT/Acquire 源（与资讯去重）。
+\* 公开 **应用** 列表还纳入：GitHub 客户端 S/A 或「开源客户端(好抄)」、Acquire 变现源（与资讯去重）。
+
+**已下架（启动时自动删库配置与连接器）**：`taaft`（Cloudflare 403）、`arxiv`、`huggingface_spaces` 等，见 `DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES`。
 
 ```powershell
 py -3.12 scripts/verify_all_sources_local.py
 ```
 
-**NewsAPI 说明：** 免费 Developer 档约 100 次/天；默认 `v2/everything`（`top-headlines`+复杂筛选在免费档常返回 0 条，代码会自动回退 everything）。
+**NewsAPI 说明：** 免费 Developer 档约 100 次/天；默认 `top-headlines`；若条数偏少请检查 Key 与配额。
 
 ---
 
 ## 单源验收
 
 ```powershell
+py -3.12 scripts/verify_source_local.py --source github
 py -3.12 scripts/verify_source_local.py --source newsapi
-py -3.12 scripts/verify_source_local.py --source thenewsapi
 ```
 
 默认 **mock LLM**；真实润色加 `--real-llm`。
@@ -37,6 +38,6 @@ py -3.12 scripts/verify_source_local.py --source thenewsapi
 
 | 现象 | 原因 |
 |------|------|
-| NewsAPI packs=0 | 未配 Key；或 URL 仍是旧 top-headlines（重启后会修复为 everything） |
-| NewsAPI 429 | 免费档日限额用尽 |
-| TheNewsAPI 401 | token 无效 |
+| NewsAPI packs=0 | 未配 Key；或配额用尽 |
+| GitHub packs=0 | Trending 解析失败或未配 `GITHUB_TOKEN`（建议配置 PAT 提高 API 限额） |
+| 后台仍看到 TAAFT 卡片 | 需重启后端执行 `prune_discontinued_bootstrap_admin_sources` |

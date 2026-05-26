@@ -241,7 +241,7 @@ def list_articles_home_radar_source_top(
     published_on_latest_day: bool = False,
     limit: int = 12,
 ) -> list[dict]:
-    """首页七路雷达：该数据源时间窗内热度 Top（与列表泳道规则解耦）。"""
+    """首页六路雷达：该数据源时间窗内热度 Top（与列表泳道规则解耦）。"""
     sk = normalize_source_filter(source_key)
     if not sk:
         return []

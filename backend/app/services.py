@@ -81,19 +81,8 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
     },
 ]
 
-# 变现向内置 2 路（无 Key；参与默认定时整批同步）
+# 变现向内置 1 路（无 Key；参与默认定时整批同步）
 OPTIONAL_MONETIZATION_SOURCE_PRESETS: list[dict] = [
-    {
-        "source": "taaft",
-        "preset_label": "TAAFT（新工具）",
-        "enabled": True,
-        "api_base": "https://theresanaiforthat.com/new/",
-        "api_key_masked": "",
-        "scope_label": "AI｜应用发现",
-        "content_role": "app_launches",
-        "notes": "There's An AI For That 新工具列表；无 Key，HTML 解析。",
-        "fetch_limit": PRESET_FETCH_LIMIT["taaft"],
-    },
     {
         "source": "acquire",
         "preset_label": "Acquire（AI 资产）",
@@ -112,8 +101,13 @@ BUILTIN_ADMIN_SOURCE_PRESETS: list[dict] = MAINSTREAM_ADMIN_SOURCE_PRESETS + OPT
 # 当前产品保留的内置数据源标识；启动时用于删库中「多余」行（含可选变现源）。
 BUILTIN_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
 
-# 参与默认定时拉取的内置源（enabled=True 的预置，当前为 7 路）。
+# 参与默认定时拉取的内置源（enabled=True 的预置，当前为 6 路）。
 MAINSTREAM_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in MAINSTREAM_ADMIN_SOURCE_PRESETS)
+
+# 产品对外承诺可拉取的数据源（须通过 scripts/verify_all_sources_local.py）。
+ACTIVE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(
+    row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS if row.get("enabled")
+)
 
 OPTIONAL_MONETIZATION_SOURCE_KEYS: frozenset[str] = frozenset(
     row["source"] for row in OPTIONAL_MONETIZATION_SOURCE_PRESETS
@@ -139,6 +133,7 @@ DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES: frozenset[str] = frozenset(
         "rss_theverge",
         "huggingface_spaces",
         "arxiv",
+        "taaft",
     }
 )
 assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
@@ -151,12 +146,11 @@ ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
         "github",
         "hacker_news",
-        "taaft",
         "acquire",
     }
 )
 
-# 凭据形态：当前内置 7 路（含 TAAFT / Acquire）；旧预置已进 DISCONTINUED 并由启动任务删库。
+# 凭据形态：当前内置 6 路（含 Acquire）；不可用源已进 DISCONTINUED 并由启动任务删库。
 # 后台第二输入框「APP Secret」仅对 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD 为真时展示（当前仅 product_hunt）。
 # 后台卡片在「Bearer Access Token」之外另展示「OAuth Client Secret」输入的预置（Developer OAuth 换 token 用）。
 ADMIN_SOURCE_PRESETS_SHOW_APP_SECRET_FIELD: frozenset[str] = frozenset({"product_hunt"})

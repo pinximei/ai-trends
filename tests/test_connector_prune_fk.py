@@ -12,7 +12,7 @@ from backend.app.models import AdminSourceConfig
 from backend.app.product_connectors_bootstrap import prune_discontinued_bootstrap_admin_sources
 from backend.app.product_models import Base, ProductConnector, ProductConnectorLog
 
-# 历史上已下架、启动时会 prune 的 source（勿用仍在内置预置中的 taaft/acquire）。
+# 历史上已下架、启动时会 prune 的 source（勿用仍在内置预置中的 acquire）。
 _DISCONTINUED_SAMPLE = "mcp_skills"
 
 

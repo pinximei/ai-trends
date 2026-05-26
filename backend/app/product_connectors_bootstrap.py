@@ -33,7 +33,7 @@ from .services import (
 
 _CORE_ADMIN_SOURCE_KEYS: tuple[str, ...] = tuple(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
 
-# 启动时默认启用拉取：见 services.AUTO_ENABLE_PULL_SOURCE_KEYS（当前为 enabled 的内置 7 路）。
+# 启动时默认启用拉取：见 services.AUTO_ENABLE_PULL_SOURCE_KEYS（当前为 enabled 的内置 6 路）。
 
 
 def repair_github_admin_source_if_still_zen(db: Session) -> None:
@@ -213,7 +213,6 @@ def audit_mainstream_connector_paths(db: Session) -> list[dict]:
                     "hacker_news": "hn.algolia.com/api/v1/search?tags=front_page",
                     "newsapi": NEWSAPI_TOP_HEADLINES_DEFAULT,
                     "thenewsapi": THENEWSAPI_TOP_DEFAULT,
-                    "taaft": "https://theresanaiforthat.com/new/",
                     "acquire": "https://us-central1-microacquire.cloudfunctions.net/v1-search",
                 }.get(src, ""),
             }

@@ -124,15 +124,9 @@ HOME_PICKS_MIN_TITLE_LEN = 6
 HOME_PICKS_MIN_SUMMARY_LEN = 36
 HOME_PICKS_MIN_HEAT = 72.0
 
-HOME_MAIN_SOURCE_KEYS: tuple[str, ...] = (
-    "github",
-    "product_hunt",
-    "hacker_news",
-    "newsapi",
-    "thenewsapi",
-    "taaft",
-    "acquire",
-)
+from ..services import ACTIVE_ADMIN_SOURCE_KEYS
+
+HOME_MAIN_SOURCE_KEYS: tuple[str, ...] = ACTIVE_ADMIN_SOURCE_KEYS
 
 HOME_MAIN_SOURCE_PRESET_LABELS: dict[str, str] = {
     "github": "GitHub（客户端）",
@@ -140,11 +134,10 @@ HOME_MAIN_SOURCE_PRESET_LABELS: dict[str, str] = {
     "hacker_news": "Hacker News",
     "newsapi": "NewsAPI",
     "thenewsapi": "TheNewsAPI",
-    "taaft": "TAAFT（新工具）",
     "acquire": "Acquire（AI 资产）",
 }
 
-HOME_RADAR_APPS_KEYS: frozenset[str] = frozenset({"github", "product_hunt", "taaft", "acquire"})
+HOME_RADAR_APPS_KEYS: frozenset[str] = frozenset({"github", "product_hunt", "acquire"})
 HOME_RADAR_NEWS_KEYS: frozenset[str] = frozenset({"hacker_news", "newsapi", "thenewsapi"})
 
 
@@ -273,7 +266,7 @@ def _home_radar_lanes_for_feed(
     published_within_days: int,
     exclude_ids: set[int],
 ) -> list[dict]:
-    """首页七路雷达：按连接器源查热度 Top1（不按 apps/news 泳道规则），避免 GitHub 等仅有 news 泳道稿时显示空。"""
+    """首页六路雷达：按连接器源查热度 Top1（不按 apps/news 泳道规则），避免 GitHub 等仅有 news 泳道稿时显示空。"""
     from .article_public import _admin_source_label_by_key, list_articles_home_radar_source_top
 
     keys = [k for k in HOME_MAIN_SOURCE_KEYS if k in (HOME_RADAR_NEWS_KEYS if feed == "news" else HOME_RADAR_APPS_KEYS)]
@@ -610,7 +603,7 @@ def get_home_dashboard(
     published_within_days: int = 30,
 ) -> dict:
     """
-    首页一站式数据：亮点应用、资讯/应用精选、七路雷达、趋势与统计。
+    首页一站式数据：亮点应用、资讯/应用精选、六路雷达、趋势与统计。
 
     雷达与精选区互斥 article id；每路按源单独查询，避免 NewsAPI/TheNewsAPI 等仅 1 篇且在精选时雷达误显空。
     """

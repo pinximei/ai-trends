@@ -56,11 +56,9 @@ def test_mainstream_url_ok_matrix() -> None:
     )
     assert not mainstream_heat_fetch_url_ok("hacker_news", "https://hacker-news.firebaseio.com/v0/topstories.json")
     assert not mainstream_heat_fetch_url_ok("github", "https://api.github.com/zen")
-    assert mainstream_heat_fetch_url_ok("taaft", "https://theresanaiforthat.com/new/")
     assert mainstream_heat_fetch_url_ok(
         "acquire", "https://us-central1-microacquire.cloudfunctions.net/v1-search"
     )
-    assert not mainstream_heat_fetch_url_ok("taaft", "https://theresanaiforthat.com/")
 
 
 def test_repair_hn_url(db) -> None:

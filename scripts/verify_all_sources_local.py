@@ -19,20 +19,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "backend" / "data" / "_verify_all_sources.sqlite3"
 
+# 与 backend.app.services.ACTIVE_ADMIN_SOURCE_KEYS 一致；不可用源已下架，勿加入此列表。
 BUILTIN_SOURCES: tuple[str, ...] = (
     "github",
     "product_hunt",
     "hacker_news",
     "newsapi",
     "thenewsapi",
-    "taaft",
     "acquire",
 )
 
-# 扩展验收（非默认定时拉取，代码仍保留）
-EXTENDED_SOURCES: tuple[str, ...] = ("arxiv", "huggingface_spaces")
-
-SOURCES: tuple[str, ...] = BUILTIN_SOURCES + EXTENDED_SOURCES
+SOURCES: tuple[str, ...] = BUILTIN_SOURCES
 
 SOURCE_META: dict[str, dict[str, str]] = {
     "github": {"feed": "apps", "like": "%github%"},
@@ -40,54 +37,10 @@ SOURCE_META: dict[str, dict[str, str]] = {
     "hacker_news": {"feed": "news", "like": "%hacker_news%"},
     "newsapi": {"feed": "news", "like": "%newsapi%"},
     "thenewsapi": {"feed": "news", "like": "%thenewsapi%"},
-    "taaft": {"feed": "apps", "like": "%taaft%"},
     "acquire": {"feed": "apps", "like": "%acquire%"},
-    "arxiv": {"feed": "news", "like": "%arxiv%"},
-    "huggingface_spaces": {"feed": "apps", "like": "%huggingface%"},
 }
 
 SOURCES_REQUIRE_API_KEY = frozenset({"newsapi", "thenewsapi"})
-
-def _ensure_extended_admin_sources(db) -> None:
-    """验收库补全 arXiv / HF（不在 MAINSTREAM 五路预置内，但连接器代码仍支持）。"""
-    from sqlalchemy import select
-
-    from backend.app.connector_heat_fetch import ARXIV_API_QUERY_DEFAULT
-    from backend.app.models import AdminSourceConfig
-    from backend.app.product_models import ProductConnector
-    from backend.app.scope_labels_util import apply_scope_labels_to_row
-
-    extended = {
-        "arxiv": ARXIV_API_QUERY_DEFAULT,
-        "huggingface_spaces": "https://huggingface.co/api/spaces?trending=true&limit=30",
-    }
-    for key, api_base in extended.items():
-        row = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == key))
-        if not row:
-            row = AdminSourceConfig(source=key, enabled=True, frequency="scheduled", api_base=api_base)
-            apply_scope_labels_to_row(row, ["AI｜扩展"])
-            db.add(row)
-        else:
-            if not (row.api_base or "").strip():
-                row.api_base = api_base
-            row.enabled = True
-        conn = db.scalar(
-            select(ProductConnector).where(ProductConnector.admin_source_key == key).order_by(ProductConnector.id)
-        )
-        if not conn:
-            db.add(
-                ProductConnector(
-                    name=f"{key} 拉取",
-                    provider_name=key,
-                    type="api",
-                    config_json={"method": "GET", "url": api_base},
-                    enabled=True,
-                    min_interval_seconds=0,
-                    admin_source_key=key,
-                )
-            )
-    db.commit()
-
 
 def _fake_polish(
     *_a,
@@ -142,13 +95,10 @@ def _test_heat_fetch(db, key: str) -> tuple[bool, str]:
 
     from backend.app.connector_heat_fetch import (
         sync_acquire_top_details,
-        sync_arxiv_top_details,
         sync_github_trending_top_details,
         sync_hacker_news_top_details,
-        sync_huggingface_spaces_top_details,
         sync_newsapi_top_headlines,
         sync_product_hunt_top_details,
-        sync_taaft_top_details,
         sync_thenewsapi_top_news,
     )
     from backend.app.models import AdminSourceConfig
@@ -225,15 +175,6 @@ def _test_heat_fetch(db, key: str) -> tuple[bool, str]:
                 url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
                 code, body = sync_thenewsapi_top_news(url, headers)
                 detail = "thenewsapi"
-            elif key == "arxiv":
-                code, body = sync_arxiv_top_details(url, headers)
-                detail = "arxiv_atom"
-            elif key == "huggingface_spaces":
-                code, body = sync_huggingface_spaces_top_details(url, headers)
-                detail = "hf_spaces"
-            elif key == "taaft":
-                code, body = sync_taaft_top_details(url, headers)
-                detail = "taaft_new_list"
             elif key == "acquire":
                 code, body = sync_acquire_top_details(url, headers)
                 detail = "acquire_v1_search"
@@ -433,7 +374,6 @@ def main() -> int:
     failed = 0
     try:
         seeded = seed_all_local_credentials(db)
-        _ensure_extended_admin_sources(db)
         print(f"seed_all_local_credentials: {seeded}")
         _b, lk, lm = resolve_llm_http_config(db)
         print(f"LLM in DB: model={lm} key={'set' if lk else 'missing'}")
@@ -441,26 +381,6 @@ def main() -> int:
 
         if not real_llm_only:
             for key in BUILTIN_SOURCES:
-                print(f"\n=== {key} ===")
-                heat_ok, heat_msg = _test_heat_fetch(db, key)
-                skip_no_key = key in SOURCES_REQUIRE_API_KEY and heat_msg.startswith("skip:")
-                if skip_no_key:
-                    heat_ok = True
-                print(f"  heat_fetch: {'OK' if heat_ok else 'FAIL'} — {heat_msg}")
-                skip_ingest = (key == "github" and "packs=0" in heat_msg) or skip_no_key
-                if skip_ingest:
-                    if skip_no_key:
-                        print("  ingest(mock LLM): SKIP — 未配置 NewsAPI / TheNewsAPI Key")
-                    else:
-                        print("  ingest(mock LLM): SKIP — GitHub 榜单未拉到 repo 详情（请为数据源配置 api_key）")
-                    ingest_ok = True
-                    ingest_msg = "skipped"
-                else:
-                    ingest_ok, ingest_msg = _test_ingest(db, key, use_real_llm=False)
-                    print(f"  ingest(mock LLM): {'OK' if ingest_ok else 'FAIL'} — {ingest_msg}")
-                if not heat_ok or not ingest_ok:
-                    failed += 1
-            for key in EXTENDED_SOURCES:
                 print(f"\n=== {key} ===")
                 heat_ok, heat_msg = _test_heat_fetch(db, key)
                 skip_no_key = key in SOURCES_REQUIRE_API_KEY and heat_msg.startswith("skip:")
@@ -518,9 +438,7 @@ def main() -> int:
         return 1
     n = len(BUILTIN_SOURCES)
     tail = "heat_fetch + ingest(mock LLM)" + (" + real-llm all sources" if use_real_llm else "")
-    print(f"ALL OK: {n} builtin sources {tail}")
-    if EXTENDED_SOURCES:
-        print(f"  (extended checked separately: {', '.join(EXTENDED_SOURCES)})")
+    print(f"ALL OK: {n} active sources {tail}")
     return 0
 
 
