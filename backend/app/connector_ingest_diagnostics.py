@@ -37,6 +37,8 @@ def _phase_label(phase: str) -> str:
         return "第 2 次自动修复后"
     if p == "final":
         return "最终入库前"
+    if p == "compat_exhausted":
+        return "规则兼容修复后仍无法入库"
     return phase or "校验"
 
 

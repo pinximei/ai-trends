@@ -4,7 +4,7 @@ from backend.app.connector_ingest_diagnostics import (
     explain_polish_error,
     format_fetch_empty_message,
 )
-from backend.app.llm_service import _coerce_polish_output
+from backend.app.polish_publish_compat import coerce_polish_output
 from backend.app.sync_diagnostic_log import should_persist_diagnostic
 
 
@@ -66,7 +66,7 @@ def test_coerce_maps_legacy_highlight_tab():
             "implementation_plan": ["step1"],
         },
     }
-    out = _coerce_polish_output(raw)
+    out = coerce_polish_output(raw)
     labels = [t["label"] for t in out["tabs"]]
     assert "数据支撑" in labels
     assert "功能亮点" not in labels

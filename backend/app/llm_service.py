@@ -11,11 +11,11 @@ from .domain.articles import (
     CONNECTOR_LLM_SNIPPET_MAX_CHARS,
     FACET_ALL_LABELS,
     canonical_feed_card_tab_label,
-    primary_canonical_from_raw_labels,
     publish_polish_length_thresholds,
     required_feed_card_tab_labels,
     validate_llm_polish_for_publish,
 )
+from .polish_publish_compat import coerce_polish_output, ensure_publishable_polish
 from .domain.replication_analysis import FEED_CARD_TAB_REPLICATION, normalize_replication_analysis
 from .llm_settings_service import resolve_llm_http_config
 from .product_models import LlmUsageLog
@@ -146,52 +146,6 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
     return ""
 
 
-def _coerce_polish_output(out: dict) -> dict:
-    """将模型输出规整为可发布形态：单合法大类、tab 名为「描述」「数据支撑」。"""
-    fk = str(out.get("feed_kind") or "news").strip().lower()
-    if fk not in ("news", "apps"):
-        fk = "news"
-    out["feed_kind"] = fk
-    cats = out.get("categories")
-    raw_labels = [str(x).strip() for x in cats if str(x).strip()] if isinstance(cats, list) else []
-    if not raw_labels:
-        raw_labels = [str(out.get("title") or "").strip() or "其他"]
-    out["categories"] = [primary_canonical_from_raw_labels(raw_labels)]
-    need_labels = required_feed_card_tab_labels(fk)
-    tabs = out.get("tabs")
-    by_label: dict[str, dict[str, str]] = {}
-    if isinstance(tabs, list):
-        for t in tabs:
-            if not isinstance(t, dict):
-                continue
-            lab = canonical_feed_card_tab_label(str(t.get("label") or ""))
-            sm = str(t.get("summary") or "").strip()
-            bd = str(t.get("body_md") or "").strip()
-            if not lab or not (sm or bd):
-                continue
-            piece = {"summary": sm, "body_md": bd}
-            prev = by_label.get(lab)
-            if prev and len(prev.get("body_md") or "") >= len(bd):
-                if len(sm) > len(prev.get("summary") or ""):
-                    prev["summary"] = sm
-            else:
-                by_label[lab] = piece
-    ordered: list[dict[str, str]] = []
-    for lab in need_labels:
-        piece = by_label.get(lab)
-        if piece:
-            ordered.append({"label": lab, **piece})
-    if len(ordered) >= len(need_labels):
-        out["tabs"] = ordered
-    elif len(ordered) >= 2:
-        out["tabs"] = ordered
-    if fk == "apps":
-        norm = normalize_replication_analysis(out.get("replication_analysis"))
-        if norm:
-            out["replication_analysis"] = norm
-    return out
-
-
 def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | None, str]:
     """从模型原文解析润色 JSON；失败时返回 (None, 原因)。"""
     data = _extract_json_object(raw)
@@ -222,9 +176,9 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
             if lab and (sm or bd):
                 norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
     need_n = len(required_feed_card_tab_labels(fk))
-    if len(norm_tabs) < need_n and not (fk == "apps" and len(norm_tabs) >= 2):
+    if len(norm_tabs) == 0 and not body_md:
         n_raw = len(raw_tabs) if isinstance(raw_tabs, list) else 0
-        return None, f"tabs_incomplete parsed={len(norm_tabs)} need={need_n} raw_tabs={n_raw}"
+        return None, f"tabs_incomplete parsed=0 need={need_n} raw_tabs={n_raw}"
     from .domain.articles import normalize_replication_tier
 
     tier = normalize_replication_tier(data.get("replication_tier"))
@@ -240,7 +194,7 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
     }
     if repl_analysis:
         out["replication_analysis"] = repl_analysis
-    return _coerce_polish_output(out), ""
+    return coerce_polish_output(out), ""
 
 
 def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) -> str:
@@ -296,11 +250,10 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
     if labels != list(need_labels) and not legacy_ok:
         return f"tab_labels={labels!r} need={list(need_labels)!r}"
     if fk == "apps" and len(need_labels) == 3:
-        from .domain.replication_analysis import validate_replication_analysis_for_publish
-
         from .domain.replication_analysis import (
             describe_replication_analysis_reject,
             normalize_replication_analysis,
+            validate_replication_analysis_for_publish,
         )
 
         norm_ra = normalize_replication_analysis(data.get("replication_analysis"))
@@ -455,9 +408,17 @@ def polish_connector_article(
         out, parse_err = _parse_polish_response(raw, default_feed_kind=fk)
         if not out:
             return None, parse_err
-        if validate_llm_polish_for_publish(out, admin_source_key=admin_source_key):
-            return out, ""
-        reject = _describe_polish_reject(out, admin_source_key=admin_source_key)
+        out_parsed = out
+        out_ready = ensure_publishable_polish(
+            out_parsed,
+            admin_source_key=admin_source_key,
+            snippet=snippet_cut,
+            rule_title=rule_title,
+            rule_summary=rule_summary,
+        )
+        if out_ready:
+            return out_ready, ""
+        reject = _describe_polish_reject(out_parsed, admin_source_key=admin_source_key)
         try:
             from .connector_ingest_diagnostics import diagnose_polish_failure
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
@@ -485,8 +446,8 @@ def polish_connector_article(
             if fk == "apps"
             else (
                 "tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
-                f"「描述」summary≥{th['desc_summary']} 字、body_md≥{th['desc_body']} 字；"
-                f"「数据支撑」summary≥{th['hi_summary']} 字、body_md≥{th['hi_body']} 字；"
+                f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
+                f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字；"
             )
         )
         repair_user = (
@@ -510,9 +471,18 @@ def polish_connector_article(
         out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
         if not out2:
             return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
-        if validate_llm_polish_for_publish(out2, admin_source_key=admin_source_key):
-            return out2, ""
-        reject2 = _describe_polish_reject(out2, admin_source_key=admin_source_key)
+        out2_parsed = out2
+        out2_ready = ensure_publishable_polish(
+            out2_parsed,
+            admin_source_key=admin_source_key,
+            snippet=snippet_cut,
+            rule_title=rule_title,
+            rule_summary=rule_summary,
+        )
+        if out2_ready:
+            return out2_ready, ""
+        reject2 = _describe_polish_reject(out2_parsed, admin_source_key=admin_source_key)
+        out3_parsed = None
         # 仅差若干字时再做一次极短修复（避免 deepseek 等模型反复输出 68 字而门槛 72）
         if "_short" in reject2:
             repair2_user = (
@@ -532,13 +502,33 @@ def polish_connector_article(
                     response_json=False,
                     max_tokens=8192,
                 )
-                out3, parse_err3 = _parse_polish_response(raw3, default_feed_kind=fk)
-                if out3 and validate_llm_polish_for_publish(out3, admin_source_key=admin_source_key):
-                    return out3, ""
-                if out3:
-                    reject2 = _describe_polish_reject(out3, admin_source_key=admin_source_key)
+                out3_parsed, parse_err3 = _parse_polish_response(raw3, default_feed_kind=fk)
+                if out3_parsed:
+                    out3_ready = ensure_publishable_polish(
+                        out3_parsed,
+                        admin_source_key=admin_source_key,
+                        snippet=snippet_cut,
+                        rule_title=rule_title,
+                        rule_summary=rule_summary,
+                    )
+                    if out3_ready:
+                        return out3_ready, ""
+                    reject2 = _describe_polish_reject(out3_parsed, admin_source_key=admin_source_key)
             except Exception:
                 pass
+        # 最后一层：对已有解析结果做规则兼容，避免丢弃
+        for candidate in (out3_parsed, out2_parsed, out_parsed):
+            if not candidate:
+                continue
+            fixed = ensure_publishable_polish(
+                candidate,
+                admin_source_key=admin_source_key,
+                snippet=snippet_cut,
+                rule_title=rule_title,
+                rule_summary=rule_summary,
+            )
+            if fixed:
+                return fixed, ""
         return None, f"validate_failed_after_retry: {reject2}"
     except Exception as e:
         err = f"{type(e).__name__}: {str(e)[:240]}"

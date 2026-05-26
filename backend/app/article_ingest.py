@@ -30,7 +30,6 @@ from .domain.articles import (
     primary_canonical_from_raw_labels,
     rule_value_score,
     unified_connector_heat,
-    validate_llm_polish_for_publish,
     FACET_ALL_LABELS,
 )
 from .product_models import Article
@@ -324,36 +323,45 @@ def _create_one_published_article_from_connector_targets(
         ref_id=f"c{connector_id}:{ing_fp[:12]}",
         feed_kind=fk,
     )
-    if not polished:
+    from .polish_publish_compat import ensure_publishable_polish
+
+    ready = ensure_publishable_polish(
+        polished,
+        admin_source_key=admin_source_key,
+        snippet=safe,
+        rule_title=rule_title,
+        rule_summary=summary_base,
+    )
+    if not ready:
         from .connector_ingest_diagnostics import diagnose_polish_failure
+        from .llm_service import _describe_polish_reject
 
         item_ref = (
             f"pack {connector_rank + 1}/{connector_pool_size}："
             if connector_pool_size > 1
             else ""
         )
-        explain = diagnose_polish_failure(
-            None,
-            "",
-            admin_source_key=admin_source_key,
-            polish_err=polish_err or "",
-            phase="final",
-        )
-        _diag("error", "skip_llm_polish", f"{item_ref}「{title_prev}」{explain}")
+        if polished:
+            reject = _describe_polish_reject(polished, admin_source_key=admin_source_key)
+            explain = diagnose_polish_failure(
+                polished,
+                reject,
+                admin_source_key=admin_source_key,
+                phase="compat_exhausted",
+            )
+            step = "skip_llm_shape"
+        else:
+            explain = diagnose_polish_failure(
+                None,
+                "",
+                admin_source_key=admin_source_key,
+                polish_err=polish_err or "",
+                phase="final",
+            )
+            step = "skip_llm_polish"
+        _diag("error", step, f"{item_ref}「{title_prev}」{explain}")
         return 0
-    if not validate_llm_polish_for_publish(polished, admin_source_key=admin_source_key):
-        from .connector_ingest_diagnostics import diagnose_polish_failure
-        from .llm_service import _describe_polish_reject
-
-        reject = _describe_polish_reject(polished, admin_source_key=admin_source_key)
-        explain = diagnose_polish_failure(
-            polished,
-            reject,
-            admin_source_key=admin_source_key,
-            phase="final",
-        )
-        _diag("error", "skip_llm_shape", f"「{title_prev}」{explain}")
-        return 0
+    polished = ready
 
     tabs = polished.get("tabs") or []
     if isinstance(tabs, list):
