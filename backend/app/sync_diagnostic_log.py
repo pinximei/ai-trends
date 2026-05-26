@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 # 写入 batch_start 消息，便于确认线上是否已部署最新诊断提交逻辑。
-DIAG_PIPELINE_VERSION = "8"
+DIAG_PIPELINE_VERSION = "9"
 
 # 管理端「同步日志」默认只展示 error：每条失败必须有明确原因（拉取 / 鉴权 / 入库 / LLM 校验）。
 

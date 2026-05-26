@@ -325,27 +325,34 @@ def _create_one_published_article_from_connector_targets(
         feed_kind=fk,
     )
     if not polished:
-        from .connector_ingest_diagnostics import explain_polish_error
+        from .connector_ingest_diagnostics import diagnose_polish_failure
 
         item_ref = (
             f"pack {connector_rank + 1}/{connector_pool_size}："
             if connector_pool_size > 1
             else ""
         )
-        explain = explain_polish_error(polish_err or "", admin_source_key=admin_source_key)
-        _diag("error", "skip_llm_polish", f"{item_ref}{explain}")
+        explain = diagnose_polish_failure(
+            None,
+            "",
+            admin_source_key=admin_source_key,
+            polish_err=polish_err or "",
+            phase="final",
+        )
+        _diag("error", "skip_llm_polish", f"{item_ref}「{title_prev}」{explain}")
         return 0
     if not validate_llm_polish_for_publish(polished, admin_source_key=admin_source_key):
-        from .connector_ingest_diagnostics import explain_polish_reject
+        from .connector_ingest_diagnostics import diagnose_polish_failure
         from .llm_service import _describe_polish_reject
 
         reject = _describe_polish_reject(polished, admin_source_key=admin_source_key)
-        explain = explain_polish_reject(reject, admin_source_key=admin_source_key)
-        _diag(
-            "error",
-            "skip_llm_shape",
-            f"「{title_prev}」{explain}（校验码:{reject}）",
+        explain = diagnose_polish_failure(
+            polished,
+            reject,
+            admin_source_key=admin_source_key,
+            phase="final",
         )
+        _diag("error", "skip_llm_shape", f"「{title_prev}」{explain}")
         return 0
 
     tabs = polished.get("tabs") or []

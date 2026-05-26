@@ -120,6 +120,35 @@ def parse_replication_analysis_json(raw: str | None) -> dict[str, Any] | None:
     return normalize_replication_analysis(data)
 
 
+def describe_replication_analysis_reject(data: dict | None) -> str:
+    """未通过 validate_replication_analysis_for_publish 时的分项原因（供同步诊断）。"""
+    if not data:
+        return "对象缺失或无法解析"
+    parts: list[str] = []
+    tr = _clip(data.get("tier_rationale"), 2000)
+    if len(tr) < 20:
+        parts.append(f"tier_rationale={len(tr)}字(需≥20)")
+    vs = _clip(data.get("value_summary"), 2000)
+    if len(vs) < 16:
+        parts.append(f"value_summary={len(vs)}字(需≥16)")
+    hours = data.get("estimated_hours") or {}
+    if not isinstance(hours, dict):
+        parts.append("estimated_hours非对象")
+    else:
+        mvp_max = _as_int(hours.get("mvp_max"))
+        prod_max = _as_int(hours.get("prod_max"))
+        if mvp_max < 8 and prod_max < 40:
+            parts.append(f"工时不足(mvp_max={mvp_max},prod_max={prod_max},需mvp_max≥8或prod_max≥40)")
+    plan = data.get("implementation_plan") or []
+    details = data.get("implementation_details") or []
+    if not plan and not details:
+        parts.append("implementation_plan/details均为空")
+    stack = data.get("tech_stack") or []
+    if not stack:
+        parts.append("tech_stack为空")
+    return "；".join(parts) if parts else "未分类"
+
+
 def validate_replication_analysis_for_publish(data: dict | None) -> bool:
     """应用稿：复刻分析须含结论、难度、工时与可执行方案要点。"""
     if not data:

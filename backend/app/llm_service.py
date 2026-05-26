@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .domain.articles import (
     CONNECTOR_LLM_SNIPPET_MAX_CHARS,
     FACET_ALL_LABELS,
+    canonical_feed_card_tab_label,
     primary_canonical_from_raw_labels,
     publish_polish_length_thresholds,
     required_feed_card_tab_labels,
@@ -163,11 +164,18 @@ def _coerce_polish_output(out: dict) -> dict:
         for t in tabs:
             if not isinstance(t, dict):
                 continue
-            lab = str(t.get("label") or "").strip()
+            lab = canonical_feed_card_tab_label(str(t.get("label") or ""))
             sm = str(t.get("summary") or "").strip()
             bd = str(t.get("body_md") or "").strip()
-            if lab and sm and bd:
-                by_label[lab] = {"summary": sm, "body_md": bd}
+            if not lab or not (sm or bd):
+                continue
+            piece = {"summary": sm, "body_md": bd}
+            prev = by_label.get(lab)
+            if prev and len(prev.get("body_md") or "") >= len(bd):
+                if len(sm) > len(prev.get("summary") or ""):
+                    prev["summary"] = sm
+            else:
+                by_label[lab] = piece
     ordered: list[dict[str, str]] = []
     for lab in need_labels:
         piece = by_label.get(lab)
@@ -208,10 +216,10 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
         for t in raw_tabs[:6]:
             if not isinstance(t, dict):
                 continue
-            lab = str(t.get("label") or "").strip()
+            lab = canonical_feed_card_tab_label(str(t.get("label") or ""))
             sm = str(t.get("summary") or "").strip()
             bd = str(t.get("body_md") or "").strip()
-            if lab and sm and bd:
+            if lab and (sm or bd):
                 norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
     need_n = len(required_feed_card_tab_labels(fk))
     if len(norm_tabs) < need_n and not (fk == "apps" and len(norm_tabs) >= 2):
@@ -290,10 +298,15 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
     if fk == "apps" and len(need_labels) == 3:
         from .domain.replication_analysis import validate_replication_analysis_for_publish
 
-        if not validate_replication_analysis_for_publish(
-            normalize_replication_analysis(data.get("replication_analysis"))
-        ):
-            return "replication_analysis_invalid"
+        from .domain.replication_analysis import (
+            describe_replication_analysis_reject,
+            normalize_replication_analysis,
+        )
+
+        norm_ra = normalize_replication_analysis(data.get("replication_analysis"))
+        if not validate_replication_analysis_for_publish(norm_ra):
+            detail = describe_replication_analysis_reject(norm_ra)
+            return f"replication_analysis_invalid:{detail}"
     tab_body_total = sum(len(str(t.get("body_md") or "")) for t in tabs if isinstance(t, dict))
     if tab_body_total < th["tab_body_total"]:
         return f"tab_body_total_short len={tab_body_total} need>={th['tab_body_total']}"
@@ -326,6 +339,7 @@ def polish_connector_article(
     fk = (feed_kind or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
+    th_gate = publish_polish_length_thresholds(admin_source_key)
     # 指纹与解析在 article_ingest 使用完整片段；模型侧仅取前段以控制 token。
     snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
     category_rule = (
@@ -346,10 +360,10 @@ def polish_connector_article(
             f"{category_rule}"
         )
         structure_hint = (
-            "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「复刻评估」「数据支撑」。"
-            "「描述」summary≥120 字：产品是什么、解决谁的问题、目标用户；body_md≥180 字写产品边界与变现线索。"
-            "「复刻评估」summary≥80 字概括结论；body_md≥200 字须含：是否值得复刻、技术栈、实现步骤、开源项目引用（名称+链接+用途）、风险。"
-            "「数据支撑」：用中文表格写可核对指标（链接、star、定价、ARR 等）；禁止 ```json。"
+            "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「复刻评估」「数据支撑」（勿用「功能亮点」等旧名）。"
+            f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字：产品是什么、目标用户与变现线索。"
+            f"「复刻评估」summary≥{th_gate['repl_summary']} 字、body_md≥{th_gate['repl_body']} 字：是否值得复刻、技术栈、步骤、风险。"
+            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字：中文表格写可核对指标（链接、star、定价等）；禁止 ```json。"
             "另须输出 replication_analysis 对象（与 tabs 一致、可机器解析），键："
             "verdict（值得复刻|观望|不建议）、worth_score（1-10 整数）、difficulty（低|中|高）、"
             "estimated_hours（mvp_min/mvp_max/prod_min/prod_max 均为整数小时）、tier_rationale、value_summary、"
@@ -365,8 +379,8 @@ def polish_connector_article(
         )
         structure_hint = (
             "【资讯稿结构】tabs 只能是「描述」「数据支撑」。"
-            "「描述」summary≥120 字；body_md 分段写事件与启示。"
-            "「数据支撑」用表格/列表写关键数字与链接。"
+            f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字，分段写事件与启示。"
+            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字，用表格/列表写关键数字与链接。"
         )
     system = (
         "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL。"
@@ -444,9 +458,8 @@ def polish_connector_article(
         if validate_llm_polish_for_publish(out, admin_source_key=admin_source_key):
             return out, ""
         reject = _describe_polish_reject(out, admin_source_key=admin_source_key)
-        th = publish_polish_length_thresholds(admin_source_key)
         try:
-            from .connector_ingest_diagnostics import explain_polish_reject
+            from .connector_ingest_diagnostics import diagnose_polish_failure
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
 
             diag_write(
@@ -455,8 +468,7 @@ def polish_connector_article(
                 step="llm_polish_retry",
                 message=(
                     f"source={admin_source_key} ref={ref_id[:32]} 首次校验未通过，将自动重试："
-                    f"{explain_polish_reject(reject, admin_source_key=admin_source_key)}"
-                    f"（校验码:{reject}）"
+                    f"{diagnose_polish_failure(out, reject, admin_source_key=admin_source_key, phase='first_pass')}"
                 ),
                 source_key=(admin_source_key or "").strip().lower() or None,
                 run_id=get_current_run_id(),
@@ -466,9 +478,9 @@ def polish_connector_article(
             pass
         tab_hint = (
             "tabs 恰好 3 个，label 只能是「描述」「复刻评估」「数据支撑」；"
-            f"「描述」summary≥{th['desc_summary']}、body≥{th['desc_body']}；"
-            f"「复刻评估」summary≥{th.get('repl_summary', 64)}、body≥{th.get('repl_body', 180)}；"
-            f"「数据支撑」summary≥{th['hi_summary']}、body≥{th['hi_body']}；"
+            f"「描述」summary≥{th_gate['desc_summary']}、body≥{th_gate['desc_body']}；"
+            f"「复刻评估」summary≥{th_gate.get('repl_summary', 64)}、body≥{th_gate.get('repl_body', 180)}；"
+            f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}；"
             "并含完整 replication_analysis 对象（verdict、worth_score、difficulty、estimated_hours、tech_stack、implementation_plan 等）。"
             if fk == "apps"
             else (
@@ -505,8 +517,9 @@ def polish_connector_article(
         if "_short" in reject2:
             repair2_user = (
                 f"{repair_user}\n\n【第二次修复】{reject2}\n"
-                "请在「描述」tab 的 summary 写满至少 80 个汉字（数清楚），body_md 至少 150 字；"
-                "「数据支撑」tab 须有表格与链接。只输出 JSON。"
+                f"请在「描述」summary 写满≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
+                f"「复刻评估」summary≥{th_gate['repl_summary']}、body≥{th_gate['repl_body']}；"
+                f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}（含表格与链接）。只输出 JSON。"
             )
             try:
                 raw3, _, _ = chat_completion(

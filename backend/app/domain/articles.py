@@ -1311,6 +1311,14 @@ FEED_CARD_TAB_DATA = "数据支撑"
 FEED_CARD_TAB_LEGACY_HIGHLIGHTS = frozenset({"功能亮点", "要点"})
 
 
+def canonical_feed_card_tab_label(raw_label: str) -> str:
+    """将模型常用的旧 Tab 名映射为当前规范名，避免解析/规整时丢弃正文。"""
+    lab = (raw_label or "").strip()
+    if lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS:
+        return FEED_CARD_TAB_DATA
+    return lab
+
+
 def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
     """应用泳道：描述 + 复刻评估 + 数据支撑；资讯仍为描述 + 数据支撑。"""
     from .replication_analysis import FEED_CARD_TAB_REPLICATION
