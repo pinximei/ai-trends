@@ -480,6 +480,43 @@ def _snippet_pack_diag(snippet: str) -> str:
     return f"pack_items={n}" + (f" note={note}" if note else "") + diag_s
 
 
+def _connector_log_fetch_outcome(
+    db: Session | None,
+    *,
+    code: int,
+    text: str,
+    connector_id: int | None = None,
+    source_key: str | None = None,
+) -> None:
+    """仅在上游失败或 pack_items=0 时写入 error 诊断。"""
+    if db is None:
+        return
+    out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
+    diag = _snippet_pack_diag(out)
+    sk = (source_key or "").strip().lower()
+    if code and 200 <= code < 300:
+        if "pack_items=0" in diag:
+            from ..connector_ingest_diagnostics import format_fetch_empty_message
+
+            _connector_req_diag(
+                db,
+                level="error",
+                step="fetch_empty",
+                message=f"HTTP {code} {format_fetch_empty_message(diag, source_key=sk)}",
+                connector_id=connector_id,
+                source_key=sk or None,
+            )
+        return
+    _connector_req_diag(
+        db,
+        level="error",
+        step="heat_done",
+        message=f"HTTP {code or '—'} {diag}",
+        connector_id=connector_id,
+        source_key=sk or None,
+    )
+
+
 def _log_news_fetch_stats(
     db: Session,
     *,
@@ -508,13 +545,17 @@ def _log_news_fetch_stats(
                 stats = {str(k): int(v) for k, v in raw_diag.items() if isinstance(v, (int, float))}
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
+    packed = int(stats.get("packed") or 0)
+    if http_status and 200 <= http_status < 300 and packed > 0:
+        return
     msg = f"HTTP {http_status} {_news_fetch_diag_message(sk, note or '—', stats)}"
-    if http_status and 200 <= http_status < 300 and not stats.get("packed"):
+    if http_status and 200 <= http_status < 300 and not packed:
         preview = (snippet or "").replace("\n", " ")[:200]
         msg += f" body_preview={preview!r}"
     diag_write(
         db,
-        step="news_fetch_stats",
+        level="error",
+        step="news_fetch_empty",
         message=msg,
         connector_id=connector_id,
         source_key=sk,
@@ -574,28 +615,12 @@ def _run_connector_request(
         "Accept": "application/json",
     }
     oauth_secret = str((cfg or {}).get("oauth_client_secret") or "").strip()
-    _connector_req_diag(
-        db,
-        level="info",
-        step="http_request",
-        message=f"{method} {url[:280]} source_key={sk or '—'}",
-        connector_id=connector_id,
-        source_key=sk,
-    )
     if source_key == "product_hunt":
         from ..product_hunt_oauth import resolve_product_hunt_bearer
 
         try:
             bearer, _mode = resolve_product_hunt_bearer(api_key=api_key, oauth_client_secret=oauth_secret)
             headers["Authorization"] = f"Bearer {bearer}"
-            _connector_req_diag(
-                db,
-                level="info",
-                step="ph_auth",
-                message=f"Product Hunt 鉴权成功 mode={_mode}",
-                connector_id=connector_id,
-                source_key=sk,
-            )
         except (ValueError, RuntimeError) as e:
             msg = str(e)[:800]
             _connector_req_diag(
@@ -622,115 +647,52 @@ def _run_connector_request(
     try:
         with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             if source_key == "product_hunt":
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 Product Hunt GraphQL 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_product_hunt_top_details(headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "github" and github_trending_is_discovery_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 GitHub Trending 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_github_trending_top_details(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "hacker_news" and hacker_news_algolia_is_search_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 HN Algolia 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_hacker_news_top_details(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "newsapi" and newsapi_is_v2_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 NewsAPI 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_newsapi_top_headlines(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "thenewsapi" and thenewsapi_is_news_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 TheNewsAPI 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_thenewsapi_top_news(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "arxiv" or arxiv_api_is_query_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 arXiv Atom 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_arxiv_top_details(url, headers)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "huggingface_spaces" and huggingface_api_spaces_is_list_index(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 Hugging Face Spaces 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_huggingface_spaces_top_details(url, headers)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             from ..connector_heat_fetch import (
@@ -741,35 +703,17 @@ def _run_connector_request(
             )
 
             if source_key == "taaft" and taaft_list_is_new_tools_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 TAAFT 新工具列表热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_taaft_top_details(url, headers)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             if source_key == "acquire" and acquire_portal_is_list_url(url):
-                _connector_req_diag(
-                    db, level="info", step="heat_path", message="走 Acquire v1-search 热度打包",
-                    connector_id=connector_id, source_key=sk,
-                )
                 code, text = sync_acquire_top_details(url, headers)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-                _connector_req_diag(
-                    db,
-                    level="info" if code and 200 <= code < 300 else "error",
-                    step="heat_done",
-                    message=f"HTTP {code} {_snippet_pack_diag(out)}",
-                    connector_id=connector_id,
-                    source_key=sk,
+                _connector_log_fetch_outcome(
+                    db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
             from ..product_connectors_bootstrap import mainstream_heat_fetch_url_ok
@@ -787,21 +731,16 @@ def _run_connector_request(
                 return 0, msg
             _connector_req_diag(
                 db,
-                level="warn",
+                level="error",
                 step="http_fallback",
-                message=f"未走热度打包，直接 {method} 请求（可能无法入库多段 pack）",
+                message=f"未走热度打包，直接 {method} 请求（可能无法入库多段 pack） url={url[:200]}",
                 connector_id=connector_id,
                 source_key=sk,
             )
             r = client.request(method, url, headers=headers)
         text = (r.text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
-        _connector_req_diag(
-            db,
-            level="info" if 200 <= r.status_code < 300 else "error",
-            step="http_fallback_done",
-            message=f"HTTP {r.status_code} len={len(text)} {_snippet_pack_diag(text)}",
-            connector_id=connector_id,
-            source_key=sk,
+        _connector_log_fetch_outcome(
+            db, code=r.status_code, text=text, connector_id=connector_id, source_key=sk,
         )
         return r.status_code, text
     except Exception as e:
@@ -836,7 +775,7 @@ def run_connector_sync(
         if delta < c.min_interval_seconds:
             diag_write(
                 db,
-                level="warn",
+                level="error",
                 step="rate_limit",
                 message=f"连接器 #{c.id} {c.name!r} 被最短间隔限制（{c.min_interval_seconds}s）",
                 connector_id=c.id,
@@ -844,23 +783,6 @@ def run_connector_sync(
             )
             commit_diagnostics(db)
             raise HTTPException(429, f"rate limited: min_interval_seconds={c.min_interval_seconds}")
-    sync_url = ""
-    if ask_preview:
-        _src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask_preview))
-        if _src:
-            sync_url = (_src.api_base or "").strip()[:120]
-    diag_write(
-        db,
-        step="connector_start",
-        message=(
-            f"连接器 #{c.id} {c.name!r} source={ask_preview or '—'} enabled={c.enabled} "
-            f"bypass_interval={bypass_rate_limit}"
-            + (f" url={sync_url!r}" if sync_url else "")
-        ),
-        connector_id=c.id,
-        source_key=ask_preview or None,
-    )
-    commit_diagnostics(db)
     log = ProductConnectorLog(connector_id=c.id, started_at=now, status="running")
     db.add(log)
     db.flush()
@@ -949,14 +871,6 @@ def run_connector_sync(
         status_code, snippet = _run_connector_request(
             cfg, db, connector_id=c.id, source_key=ask or ask_preview,
         )
-        diag_write(
-            db,
-            step="connector_fetch",
-            message=f"HTTP {status_code or '—'} {_snippet_pack_diag(snippet or '')}",
-            connector_id=c.id,
-            source_key=ask or ask_preview or None,
-        )
-        commit_diagnostics(db)
         if ask or ask_preview:
             _log_news_fetch_stats(
                 db,
@@ -1079,17 +993,29 @@ def run_connector_sync(
     log.finished_at = datetime.utcnow()
     log.rows_ingested = rows_ingested + articles_created
     try:
-        diag_write(
-            db,
-            level="info" if not err and articles_created else ("warn" if not err else "error"),
-            step="connector_done",
-            message=(
-                f"同步结束 status={log.status} 新建文章={articles_created} "
-                f"指标点={rows_ingested}" + (f" 错误={err}" if err else "")
-            ),
-            connector_id=c.id,
-            source_key=ask or None,
-        )
+        if err or articles_created == 0:
+            pack_diag = _snippet_pack_diag(snippet or "")
+            if err:
+                done_msg = (
+                    f"同步结束 status={log.status} 新建文章=0 错误={err}"
+                )
+            elif "pack_items=0" in pack_diag:
+                done_msg = (
+                    f"同步结束 status={log.status} 新建文章=0（上游无 pack 条目，见 fetch_empty）"
+                )
+            else:
+                done_msg = (
+                    f"同步结束 status={log.status} 新建文章=0（pack 有条目但未入库，"
+                    f"见本 run skip_* / skip_llm_* / ingest_pack_empty）"
+                )
+            diag_write(
+                db,
+                level="error",
+                step="connector_done",
+                message=done_msg,
+                connector_id=c.id,
+                source_key=ask or ask_preview or None,
+            )
         commit_diagnostics(db)
         db.commit()
     except Exception as e:
@@ -1145,7 +1071,7 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
         diag_write(
             db,
             run_id=run_id,
-            level="warn",
+            level="error",
             step="source_url_audit",
             message=(
                 f"已修复主流源 api_base {n_repair} 处；连接器 URL 对齐 {n_url} 个。仍异常: "
@@ -1243,9 +1169,9 @@ def run_theme_fetch_batch(db: Session, *, actor: str, theme: str | None) -> dict
         diag_write(
             db,
             run_id=run_id,
-            level="warn",
+            level="error",
             step="batch_articles",
-            message="本批新建文章 0 篇：请查看各连接器 connector_done、skip_llm / skip_score 等告警或错误行。",
+            message="本批新建文章 0 篇：请查看各连接器 connector_done、skip_llm_*、fetch_empty 等错误行。",
         )
     end_run(db, run_id=run_id, ok=ok_n, fail=fail_n, total=len(rows))
     commit_diagnostics(db)

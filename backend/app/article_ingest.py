@@ -226,8 +226,6 @@ def _create_one_published_article_from_connector_targets(
     src_tag = (admin_source_key or "").strip() or "未绑定数据源"
 
     title_prev = _snippet_title_preview(safe)
-    sk_low = src_tag.lower()
-    verbose_news = sk_low in ("newsapi", "thenewsapi")
 
     def _diag(level: str, step: str, msg: str) -> None:
         try:
@@ -241,15 +239,12 @@ def _create_one_published_article_from_connector_targets(
                 connector_id=connector_id,
                 source_key=src_tag if src_tag != "未绑定数据源" else None,
             )
-            if verbose_news:
-                commit_diagnostics(db)
+            commit_diagnostics(db)
         except Exception:
             pass
 
     def _skip(step: str, msg: str) -> None:
-        lv = "warn" if verbose_news else "info"
-        prefix = f"「{title_prev}」" if verbose_news else ""
-        _diag(lv, step, f"{prefix}{msg}")
+        _diag("error", step, f"「{title_prev}」{msg}")
 
     if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
         _skip("skip_dup_fp", "跳过：内容指纹重复（ingest_fingerprint）")
@@ -330,25 +325,26 @@ def _create_one_published_article_from_connector_targets(
         feed_kind=fk,
     )
     if not polished:
+        from .connector_ingest_diagnostics import explain_polish_error
+
         item_ref = (
-            f"pack {connector_rank + 1}/{connector_pool_size} "
+            f"pack {connector_rank + 1}/{connector_pool_size}："
             if connector_pool_size > 1
             else ""
         )
-        _diag(
-            "error",
-            "skip_llm_polish",
-            f"{item_ref}「{title_prev}」— {polish_err or 'unknown'}。"
-            " 请查同步日志 llm_polish_retry、管理端 LLM 配置与 LlmUsageLog（scenario=article_ingest_polish）。",
-        )
+        explain = explain_polish_error(polish_err or "", admin_source_key=admin_source_key)
+        _diag("error", "skip_llm_polish", f"{item_ref}{explain}")
         return 0
     if not validate_llm_polish_for_publish(polished, admin_source_key=admin_source_key):
-        from .domain.articles import publish_polish_length_thresholds
+        from .connector_ingest_diagnostics import explain_polish_reject
+        from .llm_service import _describe_polish_reject
 
-        th = publish_polish_length_thresholds(admin_source_key)
-        _skip(
+        reject = _describe_polish_reject(polished, admin_source_key=admin_source_key)
+        explain = explain_polish_reject(reject, admin_source_key=admin_source_key)
+        _diag(
+            "error",
             "skip_llm_shape",
-            f"跳过：LLM 输出未通过发布校验（描述 summary≥{th['desc_summary']}、body≥{th['desc_body']}）。可重试同步。",
+            f"「{title_prev}」{explain}（校验码:{reject}）",
         )
         return 0
 
@@ -460,11 +456,6 @@ def _create_one_published_article_from_connector_targets(
     art.updated_at = now
     db.add(art)
     db.flush()
-    _diag(
-        "info",
-        "article_ok",
-        f"「{title_prev}」入库成功 id={art.id} feed={stored_feed_kind} 标题={(title or '')[:80]}",
-    )
     return 1
 
 
@@ -492,38 +483,10 @@ def create_published_articles_for_connector_targets(
     safe_full = (snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
     parts = parse_connector_sync_item_snippets(safe_full)
     if parts:
-        try:
-            from .sync_diagnostic_log import write as diag_write
-
-            diag_write(
-                db,
-                step="ingest_pack",
-                message=f"多段 pack：共 {len(parts)} 条，逐条价值分+LLM（可能需数分钟）",
-                connector_id=connector_id,
-                source_key=(admin_source_key or "").strip() or None,
-            )
-        except Exception:
-            pass
         pool_n = len(parts)
         total = 0
         sk = (admin_source_key or "").strip().lower()
-        verbose_news = sk in ("newsapi", "thenewsapi")
         for rank, piece in enumerate(parts):
-            title_prev = _snippet_title_preview(piece)
-            if verbose_news:
-                try:
-                    from .sync_diagnostic_log import commit_diagnostics, write as diag_write
-
-                    diag_write(
-                        db,
-                        step="ingest_item",
-                        message=f"#{rank + 1}/{pool_n} 开始处理 title={title_prev!r}",
-                        connector_id=connector_id,
-                        source_key=sk or None,
-                    )
-                    commit_diagnostics(db)
-                except Exception:
-                    pass
             n = _create_one_published_article_from_connector_targets(
                 db,
                 connector_id=connector_id,
@@ -538,28 +501,18 @@ def create_published_articles_for_connector_targets(
                 connector_pool_size=pool_n,
             )
             total += n
-            if verbose_news:
-                try:
-                    from .sync_diagnostic_log import commit_diagnostics, write as diag_write
-
-                    diag_write(
-                        db,
-                        step="ingest_item_done",
-                        message=f"#{rank + 1}/{pool_n} 结束 created={n} title={title_prev!r}",
-                        connector_id=connector_id,
-                        source_key=sk or None,
-                    )
-                    commit_diagnostics(db)
-                except Exception:
-                    pass
-        if verbose_news:
+        if total == 0:
             try:
                 from .sync_diagnostic_log import commit_diagnostics, write as diag_write
 
                 diag_write(
                     db,
-                    step="ingest_summary",
-                    message=f"pack 入库汇总：{total}/{pool_n} 篇新建",
+                    level="error",
+                    step="ingest_pack_empty",
+                    message=(
+                        f"pack 共 {pool_n} 条，0 篇入库。"
+                        "每条失败原因见本 run 内 skip_* / skip_llm_* 行（重复、价值分不足、LLM 校验等）。"
+                    ),
                     connector_id=connector_id,
                     source_key=sk or None,
                 )

@@ -6,34 +6,20 @@ import uuid
 from datetime import datetime
 
 # 写入 batch_start 消息，便于确认线上是否已部署最新诊断提交逻辑。
-DIAG_PIPELINE_VERSION = "7"
+DIAG_PIPELINE_VERSION = "8"
 
-# 仅保留关键 info（批次/连接器起止 + 拉取/入库进度）；warn/error 始终入库。
-_KEY_INFO_STEPS: frozenset[str] = frozenset(
-    {
-        "batch_start",
-        "batch_done",
-        "connector_start",
-        "connector_fetch",
-        "news_fetch_stats",
-        "ingest_pack",
-        "ingest_item",
-        "ingest_item_done",
-        "ingest_summary",
-        "connector_done",
-        "connector_aborted",
-        "auth_missing",
-        "llm_polish_retry",
-    }
-)
+# 管理端「同步日志」默认只展示 error：每条失败必须有明确原因（拉取 / 鉴权 / 入库 / LLM 校验）。
 
 
 def should_persist_diagnostic(*, level: str, step: str) -> bool:
+    del step
+    return (level or "info").strip().lower() == "error"
+
+
+def should_persist_diagnostic_for_export(*, level: str, step: str) -> bool:
+    """导出/复制时可选择包含 warn（默认 API 仍仅返回 error）。"""
     lv = (level or "info").strip().lower()
-    if lv in ("error", "warn"):
-        return True
-    st = (step or "log").strip().lower()
-    return lv == "info" and st in _KEY_INFO_STEPS
+    return lv in ("error", "warn")
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -48,46 +34,27 @@ def get_current_run_id() -> str | None:
 def begin_run(db: Session, *, actor: str, kind: str = "theme_fetch") -> str:
     run_id = uuid.uuid4().hex[:16]
     _current_run_id.set(run_id)
-    write(
-        db,
-        run_id=run_id,
-        level="info",
-        step="batch_start",
-        message=f"开始拉取（{kind}）操作者={actor} diag_v={DIAG_PIPELINE_VERSION}",
-    )
-    commit_diagnostics(db)
     return run_id
 
 
 def begin_connector_run(db: Session, *, actor: str, connector_id: int, source_key: str = "") -> str:
     """单连接器手动同步：独立 run_id，便于在「同步日志」页筛选复制。"""
+    del db, actor, connector_id, source_key
     run_id = uuid.uuid4().hex[:16]
     _current_run_id.set(run_id)
-    sk = (source_key or "").strip().lower()
-    write(
-        db,
-        run_id=run_id,
-        level="info",
-        step="batch_start",
-        message=(
-            f"开始单连接器同步 #{connector_id} source={sk or '—'} "
-            f"操作者={actor} diag_v={DIAG_PIPELINE_VERSION}"
-        ),
-        connector_id=connector_id,
-        source_key=sk or None,
-    )
-    commit_diagnostics(db)
     return run_id
 
 
 def end_run(db: Session, *, run_id: str, ok: int, fail: int, total: int) -> None:
-    write(
-        db,
-        run_id=run_id,
-        level="info" if fail == 0 else "warn",
-        step="batch_done",
-        message=f"整批拉取结束：连接器 {total} 个，成功 {ok}，失败 {fail}",
-    )
+    if fail > 0:
+        write(
+            db,
+            run_id=run_id,
+            level="error",
+            step="batch_done",
+            message=f"整批拉取结束：连接器 {total} 个，成功 {ok}，失败 {fail}（仅失败连接器见上方 error 行）",
+        )
+        commit_diagnostics(db)
     if _current_run_id.get() == run_id:
         _current_run_id.set(None)
 
@@ -132,14 +99,17 @@ def list_logs(
     *,
     run_id: str | None = None,
     limit: int = 500,
+    errors_only: bool = True,
 ) -> list[dict]:
     from .product_models import ProductSyncDiagnosticLog
 
     lim = max(1, min(int(limit), 2000))
-    q = select(ProductSyncDiagnosticLog).order_by(desc(ProductSyncDiagnosticLog.id)).limit(lim)
+    q = select(ProductSyncDiagnosticLog).order_by(desc(ProductSyncDiagnosticLog.id)).limit(lim * 3 if errors_only else lim)
     if run_id:
         q = q.where(ProductSyncDiagnosticLog.run_id == run_id.strip()[:32])
     rows = db.scalars(q).all()
+    if errors_only:
+        rows = [r for r in rows if (r.level or "").strip().lower() == "error"][:lim]
     if run_id:
         rows = list(reversed(rows))
     else:

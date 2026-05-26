@@ -2909,8 +2909,8 @@ export function App() {
                 同步诊断日志
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.65 }}>
-                仅记录每批/每连接器的起止，以及告警与失败（如 HTTP 失败、LLM 未配置、跳过入库原因等），便于排查。拉取完成后会自动打开本页；报错时请选中对应{" "}
-                <strong>run_id</strong> 后点「复制本批日志」。
+                <strong>仅错误日志</strong>：每条未入库、拉取失败、鉴权/限流、LLM 字数校验失败等都会写入 error 行（含中文原因）。
+                拉取完成后会自动打开本页；排查时请选中对应 <strong>run_id</strong> 后点「复制本批日志」。
                 {diagPipelineVersion ? (
                   <>
                     {" "}
@@ -2929,7 +2929,7 @@ export function App() {
                       void loadDiagnosticLogs(v || undefined);
                     }}
                   >
-                    <option value="">最近全部（最多 800 行）</option>
+                    <option value="">最近全部错误（最多 800 行）</option>
                     {diagRunIds.map((rid) => (
                       <option key={rid} value={rid}>
                         {rid}
@@ -2980,7 +2980,7 @@ export function App() {
                           return `${head}\n  ${r.message ?? ""}`;
                         })
                         .join("\n\n")
-                    : "（暂无日志，请先点击「拉取全部数据」）"}
+                    : "（暂无错误日志：可能本批全部入库成功，或尚未拉取）"}
               </pre>
             </div>
           </section>

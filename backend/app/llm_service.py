@@ -446,13 +446,18 @@ def polish_connector_article(
         reject = _describe_polish_reject(out, admin_source_key=admin_source_key)
         th = publish_polish_length_thresholds(admin_source_key)
         try:
+            from .connector_ingest_diagnostics import explain_polish_reject
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
 
             diag_write(
                 db,
-                level="warn",
+                level="error",
                 step="llm_polish_retry",
-                message=f"source={admin_source_key} ref={ref_id[:32]} 首次校验未通过：{reject}",
+                message=(
+                    f"source={admin_source_key} ref={ref_id[:32]} 首次校验未通过，将自动重试："
+                    f"{explain_polish_reject(reject, admin_source_key=admin_source_key)}"
+                    f"（校验码:{reject}）"
+                ),
                 source_key=(admin_source_key or "").strip().lower() or None,
                 run_id=get_current_run_id(),
             )

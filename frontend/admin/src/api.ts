@@ -236,10 +236,11 @@ export const adminApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts?.theme?.trim() ? { theme: opts.theme.trim() } : {}),
     }),
-  syncDiagnosticLogs: (opts?: { run_id?: string; limit?: number }) => {
+  syncDiagnosticLogs: (opts?: { run_id?: string; limit?: number; errors_only?: boolean }) => {
     const sp = new URLSearchParams();
     if (opts?.run_id) sp.set("run_id", opts.run_id);
     if (opts?.limit != null) sp.set("limit", String(opts.limit));
+    if (opts?.errors_only === false) sp.set("errors_only", "false");
     const q = sp.toString();
     return request<{
       items: SyncDiagnosticLogItem[];

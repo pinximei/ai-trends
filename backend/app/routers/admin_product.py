@@ -60,13 +60,14 @@ def post_theme_fetch_ingest(
 def get_sync_diagnostic_logs(
     run_id: str | None = None,
     limit: int = 500,
+    errors_only: bool = True,
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("viewer")),
 ):
     from ..sync_diagnostic_log import DIAG_PIPELINE_VERSION, list_logs, list_recent_run_ids
 
     rid = (run_id or "").strip() or None
-    items = list_logs(db, run_id=rid, limit=limit)
+    items = list_logs(db, run_id=rid, limit=limit, errors_only=errors_only)
     return ok(
         {
             "items": items,
@@ -81,6 +82,7 @@ def get_sync_diagnostic_logs(
 def export_sync_diagnostic_logs(
     run_id: str,
     limit: int = 800,
+    errors_only: bool = True,
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("viewer")),
 ):
@@ -95,7 +97,7 @@ def export_sync_diagnostic_logs(
         from fastapi import HTTPException
 
         raise HTTPException(400, "run_id required")
-    items = list_logs(db, run_id=rid, limit=limit)
+    items = list_logs(db, run_id=rid, limit=limit, errors_only=errors_only)
     body = format_logs_for_export(items, run_id=rid)
     return PlainTextResponse(body, media_type="text/plain; charset=utf-8")
 
