@@ -1220,6 +1220,8 @@ def parse_article_tabs_json(raw: str | None) -> list[dict[str, str]]:
     """解析 product_articles.ai_tabs_json → [{label, summary, body_md}, ...]。"""
     if not raw or not str(raw).strip():
         return []
+    from ..text_display import sanitize_stored_text_field
+
     try:
         v = json.loads(raw)
         if not isinstance(v, list):
@@ -1228,15 +1230,50 @@ def parse_article_tabs_json(raw: str | None) -> list[dict[str, str]]:
         for item in v[:8]:
             if not isinstance(item, dict):
                 continue
-            label = str(item.get("label") or "").strip()
-            summary = str(item.get("summary") or "").strip()
-            body_md = str(item.get("body_md") or "").strip()
+            label = sanitize_stored_text_field(str(item.get("label") or "").strip(), max_len=128)
+            summary = sanitize_stored_text_field(str(item.get("summary") or "").strip(), max_len=2000)
+            body_md = sanitize_stored_text_field(str(item.get("body_md") or "").strip(), max_len=50000)
             if not label or not summary or not body_md:
                 continue
-            out.append({"label": label[:128], "summary": summary[:2000], "body_md": body_md[:50000]})
+            out.append({"label": label, "summary": summary, "body_md": body_md})
         return out
     except Exception:
         return []
+
+
+def build_connector_data_tab_markdown(admin_source_key: str, snippet: str) -> str:
+    """从连接器片段生成规范「数据支撑」Markdown 表（规则兜底，避免仅 | 字段 | 内容 | 占位）。"""
+    from ..text_display import format_connector_snippet_plain
+
+    sk = (admin_source_key or "").strip().lower()
+    plain_lines = format_connector_snippet_plain(snippet, admin_source_key=sk, max_len=8000)
+    if not plain_lines:
+        return ""
+    rows: list[tuple[str, str]] = []
+    for line in plain_lines.splitlines():
+        line = line.strip()
+        if "：" in line:
+            a, _, b = line.partition("：")
+            if a.strip() and b.strip():
+                rows.append((a.strip(), b.strip()))
+        elif ":" in line:
+            a, _, b = line.partition(":")
+            if a.strip() and b.strip():
+                rows.append((a.strip(), b.strip()))
+    if not rows:
+        return f"## 数据支撑\n\n{plain_lines}"
+    md = ["## 数据支撑", "", "| 指标 | 内容 |", "| --- | --- |"]
+    for lab, val in rows[:14]:
+        val_esc = val.replace("|", "\\|").replace("\n", " ")
+        md.append(f"| {lab} | {val_esc} |")
+    link_rows = extract_connector_detail_link_rows(sk, snippet)
+    if link_rows:
+        md.append("")
+        md.append("**相关链接**")
+        md.append("")
+        for lab, url in link_rows:
+            md.append(f"- [{lab}]({url})")
+    return "\n".join(md)
 
 
 def ui_shape_warnings_for_stored_article(

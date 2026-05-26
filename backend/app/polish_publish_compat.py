@@ -92,24 +92,14 @@ def _merge_text(*parts: str, min_len: int = 0) -> str:
     return out[:12000]
 
 
-def _snippet_plain(snippet: str, *, max_len: int = 4000) -> str:
-    text = (snippet or "").strip()[:max_len]
-    if not text:
-        return ""
-    try:
-        obj = json.loads(text)
-        if isinstance(obj, dict):
-            bits: list[str] = []
-            for k in ("title", "name", "tagline", "description", "body", "url", "website"):
-                v = obj.get(k)
-                if v and isinstance(v, str):
-                    bits.append(f"{k}: {v.strip()}")
-            if bits:
-                return "\n".join(bits)
-            return json.dumps(obj, ensure_ascii=False)[:max_len]
-    except json.JSONDecodeError:
-        pass
-    return re.sub(r"\s+", " ", text)[:max_len]
+def _snippet_plain(snippet: str, *, max_len: int = 4000, admin_source_key: str = "") -> str:
+    from .text_display import format_connector_snippet_plain
+
+    return format_connector_snippet_plain(
+        snippet,
+        admin_source_key=admin_source_key,
+        max_len=max_len,
+    )
 
 
 def _title_from_snippet(snippet: str) -> str:
@@ -169,18 +159,27 @@ def _synthesize_data_tab(
     *,
     snippet_plain: str,
     rule_summary: str,
+    admin_source_key: str = "",
+    snippet: str = "",
 ) -> dict[str, str]:
+    from .domain.articles import build_connector_data_tab_markdown
+    from .text_display import markdown_to_plain_preview
+
     existing = _tab_piece(by_label, FEED_CARD_TAB_DATA)
     desc = _tab_piece(by_label, FEED_CARD_TAB_DESCRIPTION)
+    table_md = ""
+    if snippet.strip():
+        table_md = build_connector_data_tab_markdown(admin_source_key, snippet)
     body = _merge_text(
         existing.get("body_md") or "",
-        "| 字段 | 内容 |\n| --- | --- |",
+        table_md,
         snippet_plain,
         desc.get("body_md") or "",
         min_len=60,
     )
     summary = _merge_text(
         existing.get("summary") or "",
+        markdown_to_plain_preview(table_md or snippet_plain, max_len=200),
         "关键指标与链接见下表。",
         rule_summary,
         min_len=12,
@@ -261,7 +260,7 @@ def repair_polish_for_publish(
     out = dict(data)
     fixes: list[str] = []
     th = publish_polish_length_thresholds(admin_source_key)
-    snippet_plain = _snippet_plain(snippet)
+    snippet_plain = _snippet_plain(snippet, admin_source_key=admin_source_key or "")
     fk = str(out.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
@@ -330,7 +329,11 @@ def repair_polish_for_publish(
 
     if FEED_CARD_TAB_DATA not in by_label:
         by_label[FEED_CARD_TAB_DATA] = _synthesize_data_tab(
-            by_label, snippet_plain=snippet_plain, rule_summary=rule_summary
+            by_label,
+            snippet_plain=snippet_plain,
+            rule_summary=rule_summary,
+            admin_source_key=sk_low,
+            snippet=snippet,
         )
         fixes.append("synth_data_tab")
 

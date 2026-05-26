@@ -90,6 +90,42 @@ export function ensureParagraphBreaks(md: string): string {
   return parts.join("\n\n");
 }
 
+/** 列表卡片「数据支撑」预览：去掉表格竖线、代码块等，避免像乱码 */
+export function markdownToPlainPreview(md: string, maxLen = 500): string {
+  let s = (md || "").trim();
+  if (!s) return "";
+  s = s.replace(/```[\s\S]*?```/g, " ");
+  s = s.replace(/`([^`]+)`/g, "$1");
+  const linesOut: string[] = [];
+  for (const line of s.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    if (/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(t)) continue;
+    if (t.includes("|") && (t.match(/\|/g)?.length ?? 0) >= 2) {
+      const cells = t
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((c) => c.trim())
+        .filter(Boolean);
+      if (cells.length >= 2 && !cells.every((c) => /^:?-{3,}:?$/.test(c))) {
+        linesOut.push(`${cells[0]}：${cells[1]}`);
+        continue;
+      }
+    }
+    const plain = t
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/^#+\s*/, "")
+      .replace(/^[-*+]\s+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (plain) linesOut.push(plain);
+  }
+  let out = linesOut.length ? linesOut.join("；") : s.replace(/\s+/g, " ").trim();
+  if (maxLen > 0 && out.length > maxLen) out = `${out.slice(0, maxLen - 1)}…`;
+  return out;
+}
+
 export function prepareDetailMarkdown(md: string): string {
   const cleaned = sanitizeArticleMarkdown(md);
   const withTables = normalizeMarkdownTables(cleaned);

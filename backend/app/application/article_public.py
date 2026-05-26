@@ -388,16 +388,19 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
     tab_labels = art.required_feed_card_tab_labels(row_lane)
     desc_label = tab_labels[0]
     hi_label = tab_labels[-1]
-    card_description = (a.summary or "")[:960]
+    from ..text_display import markdown_to_plain_preview
+
+    card_description = markdown_to_plain_preview((a.summary or "")[:960], max_len=960)
     card_highlights = ""
     if tabs_parsed:
         for x in tabs_parsed:
             lab = (x.get("label") or "").strip()
             sm = (x.get("summary") or "").strip()
+            body_plain = markdown_to_plain_preview((x.get("body_md") or "")[:400], max_len=200)
             if lab == desc_label and sm:
-                card_description = sm[:960]
-            elif art.feed_card_highlights_tab_label(lab) and sm:
-                card_highlights = sm[:200]
+                card_description = markdown_to_plain_preview(sm, max_len=960) or body_plain
+            elif art.feed_card_highlights_tab_label(lab):
+                card_highlights = markdown_to_plain_preview(sm, max_len=200) or body_plain
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     fp = art.display_fingerprint(a.title, a.summary or "")
     display_dt = art.article_freshness_for_row(a)

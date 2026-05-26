@@ -76,6 +76,7 @@ def _ensure_markdown_paragraphs(text: str) -> str:
 
 def _normalize_polish_tabs(tabs: list) -> None:
     from .domain.articles import FEED_CARD_TAB_DATA, FEED_CARD_TAB_LEGACY_HIGHLIGHTS
+    from .text_display import markdown_to_plain_preview, sanitize_stored_text_field
 
     for t in tabs:
         if not isinstance(t, dict):
@@ -83,8 +84,11 @@ def _normalize_polish_tabs(tabs: list) -> None:
         lab = str(t.get("label") or "").strip()
         if lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS:
             t["label"] = FEED_CARD_TAB_DATA
-        t["body_md"] = _ensure_markdown_paragraphs(str(t.get("body_md") or ""))
-        t["summary"] = str(t.get("summary") or "").strip()
+        t["body_md"] = _ensure_markdown_paragraphs(sanitize_stored_text_field(str(t.get("body_md") or "")))
+        sm = sanitize_stored_text_field(str(t.get("summary") or ""))
+        if str(t.get("label") or "").strip() == FEED_CARD_TAB_DATA:
+            sm = markdown_to_plain_preview(sm, max_len=512) or sm
+        t["summary"] = sm
 
 
 def _render_readable_snapshot(snippet: str) -> tuple[str, str]:

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { replicationTierLabel } from "@/components/home/homeUtils";
+import { markdownToPlainPreview } from "@/lib/articleMarkdown";
 import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
 import { formatStarCount } from "@/articleCardVisual";
 import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
@@ -40,21 +41,21 @@ function summarize(text: string, max: number) {
 
 /** 旧稿无 card_description 时，从 tab 概要兜底（不展示「产品概述」等标签名） */
 function feedCardDescriptionText(a: ArticleFeedCard): string {
-  if ((a.card_description || "").trim()) return a.card_description!.trim();
+  if ((a.card_description || "").trim()) return markdownToPlainPreview(a.card_description!, 720);
   const tabs = a.tab_summaries ?? [];
   const desc = tabs.find((t) => /描述|概述/.test(t.label)) ?? tabs[0];
-  return (desc?.summary || a.summary || "").trim();
+  return markdownToPlainPreview((desc?.summary || a.summary || "").trim(), 720);
 }
 
 function feedCardHighlightsText(a: ArticleFeedCard, _mode: "news" | "apps"): string {
-  if ((a.card_highlights || "").trim()) return a.card_highlights!.trim();
+  if ((a.card_highlights || "").trim()) return markdownToPlainPreview(a.card_highlights!, 200);
   const tabs = a.tab_summaries ?? [];
   const hi = tabs.find(
     (t) =>
       /数据支撑|亮点|要点/.test(t.label) &&
       !/描述|概述|技术/.test(t.label),
   );
-  return (hi?.summary || "").trim();
+  return markdownToPlainPreview((hi?.summary || "").trim(), 200);
 }
 
 function formatFeedDateLabel(isoDay: string): string {

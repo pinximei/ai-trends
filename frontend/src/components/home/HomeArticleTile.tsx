@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { ArticleFeedCard } from "@/api/public";
 import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
 import { useI18n } from "@/i18n";
+import { markdownToPlainPreview } from "@/lib/articleMarkdown";
 import { HomeHeatBadge } from "./HomeHeatBadge";
 import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel, showReplicationTierOnCard } from "./homeUtils";
 
@@ -90,7 +91,7 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
 
 export function HomeArticleTile({ item, variant, rank }: Props) {
   const { t } = useI18n();
-  const highlights = (item.card_highlights || "").trim();
+  const highlights = markdownToPlainPreview((item.card_highlights || "").trim(), 200);
   const categories = item.categories?.slice(0, 2) ?? [];
 
   let inner: ReactNode;
