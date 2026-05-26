@@ -170,13 +170,16 @@ def _synthesize_data_tab(
     table_md = ""
     if snippet.strip():
         table_md = build_connector_data_tab_markdown(admin_source_key, snippet)
-    body = _merge_text(
-        existing.get("body_md") or "",
-        table_md,
-        snippet_plain,
-        desc.get("body_md") or "",
-        min_len=60,
-    )
+    if table_md.strip():
+        body = table_md
+    else:
+        from .text_display import prepare_detail_data_tab_body
+
+        body = prepare_detail_data_tab_body(
+            _merge_text(existing.get("body_md") or "", desc.get("body_md") or "", min_len=60),
+            admin_source_key=admin_source_key,
+            snippet=snippet,
+        )
     summary = _merge_text(
         existing.get("summary") or "",
         markdown_to_plain_preview(table_md or snippet_plain, max_len=200),
@@ -355,14 +358,28 @@ def repair_polish_for_publish(
             ms, mb = th.get("repl_summary", 52), th.get("repl_body", 180)
         else:
             ms, mb = th["hi_summary"], th["hi_body"]
-        sources_body = [piece.get("body_md") or "", snippet_plain, rule_summary]
-        sources_sum = [piece.get("summary") or "", piece.get("body_md") or "", rule_summary]
-        if lab == FEED_CARD_TAB_REPLICATION:
-            ra = out.get("replication_analysis") if isinstance(out.get("replication_analysis"), dict) else {}
-            sources_body.insert(0, str(ra.get("tier_rationale") or ""))
-            sources_sum.insert(0, str(ra.get("value_summary") or ""))
-        new_body = _merge_text(piece.get("body_md") or "", *sources_body, min_len=mb)
-        new_sum = _merge_text(piece.get("summary") or "", *sources_sum, min_len=ms)
+        if lab == FEED_CARD_TAB_DATA:
+            from .text_display import markdown_to_plain_preview, prepare_detail_data_tab_body
+
+            new_body = prepare_detail_data_tab_body(
+                _merge_text(piece.get("body_md") or "", rule_summary, min_len=mb),
+                admin_source_key=sk_low,
+                snippet=snippet,
+            )
+            new_sum = _merge_text(
+                piece.get("summary") or "",
+                markdown_to_plain_preview(new_body, max_len=200),
+                min_len=ms,
+            )
+        else:
+            sources_body = [piece.get("body_md") or "", snippet_plain, rule_summary]
+            sources_sum = [piece.get("summary") or "", piece.get("body_md") or "", rule_summary]
+            if lab == FEED_CARD_TAB_REPLICATION:
+                ra = out.get("replication_analysis") if isinstance(out.get("replication_analysis"), dict) else {}
+                sources_body.insert(0, str(ra.get("tier_rationale") or ""))
+                sources_sum.insert(0, str(ra.get("value_summary") or ""))
+            new_body = _merge_text(piece.get("body_md") or "", *sources_body, min_len=mb)
+            new_sum = _merge_text(piece.get("summary") or "", *sources_sum, min_len=ms)
         if new_body != piece.get("body_md") or new_sum != piece.get("summary"):
             fixes.append(f"pad_tab:{lab}")
         piece["summary"] = new_sum[:512]

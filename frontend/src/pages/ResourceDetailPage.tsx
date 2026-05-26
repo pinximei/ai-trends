@@ -14,6 +14,7 @@ import {
   markdownComponentsForBody,
   DETAIL_REPLICATION_TAB_LABEL,
   pickDetailTabs,
+  prepareDataTabMarkdown,
   prepareDetailMarkdown,
 } from "@/lib/articleMarkdown";
 import {
@@ -134,7 +135,8 @@ export function ResourceDetailPage() {
     }
     const build = (tab: typeof descTab, kind: DetailSectionKind): SectionBlock | null => {
       if (!tab?.body_md?.trim()) return null;
-      const bodyMd = prepareDetailMarkdown(tab.body_md);
+      const bodyMd =
+        kind === "data" ? prepareDataTabMarkdown(tab.body_md) : prepareDetailMarkdown(tab.body_md);
       if (!bodyMd) return null;
       let title = t(layout.dataTitleKey);
       if (kind === "description") title = t("detailSectionDescription");

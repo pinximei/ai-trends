@@ -957,6 +957,24 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
             source_original_url=src_url,
             admin_source_key=ak,
         )
+    if tabs:
+        from ..text_display import markdown_to_plain_preview, prepare_detail_data_tab_body
+
+        fixed_tabs: list[dict] = []
+        for t in tabs:
+            if not isinstance(t, dict):
+                continue
+            row = dict(t)
+            lab = str(row.get("label") or "").strip()
+            if art.feed_card_highlights_tab_label(lab):
+                row["body_md"] = prepare_detail_data_tab_body(
+                    str(row.get("body_md") or ""),
+                    admin_source_key=ak,
+                    source_original_url=src_url or "",
+                )
+                row["summary"] = markdown_to_plain_preview(str(row.get("summary") or ""), max_len=400)
+            fixed_tabs.append(row)
+        tabs = fixed_tabs
     if not tabs and (a.body or "").strip():
         tabs = [
             {

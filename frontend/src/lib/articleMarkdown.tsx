@@ -126,6 +126,19 @@ export function markdownToPlainPreview(md: string, maxLen = 500): string {
   return out;
 }
 
+/** 详情「数据支撑」：去掉英文 key 行等残渣后再规范化表格 */
+export function prepareDataTabMarkdown(md: string): string {
+  const cleaned = sanitizeArticleMarkdown(md);
+  const lines = cleaned.split("\n").filter((line) => {
+    const t = line.trim();
+    if (!t) return true;
+    return !/^[a-zA-Z_][a-zA-Z0-9_]*\s*[:：]\s*.+/.test(t);
+  });
+  const body = lines.join("\n").replace(/\n{4,}/g, "\n\n\n").trim();
+  const withTables = normalizeMarkdownTables(body);
+  return ensureParagraphBreaks(withTables);
+}
+
 export function prepareDetailMarkdown(md: string): string {
   const cleaned = sanitizeArticleMarkdown(md);
   const withTables = normalizeMarkdownTables(cleaned);
