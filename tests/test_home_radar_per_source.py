@@ -1,4 +1,4 @@
-"""首页七路雷达：按源查询，不依赖精选剔除后的池。"""
+"""首页六路雷达：按源查询，不依赖精选剔除后的池。"""
 from __future__ import annotations
 
 from backend.app.application.home_public import (
@@ -9,10 +9,10 @@ from backend.app.application.home_public import (
 )
 
 
-def test_home_radar_key_sets_cover_seven_builtin() -> None:
-    assert len(HOME_MAIN_SOURCE_KEYS) == 7
+def test_home_radar_key_sets_cover_six_builtin() -> None:
+    assert len(HOME_MAIN_SOURCE_KEYS) == 6
     assert len(HOME_RADAR_NEWS_KEYS) == 3
-    assert len(HOME_RADAR_APPS_KEYS) == 4
+    assert len(HOME_RADAR_APPS_KEYS) == 3
     assert HOME_RADAR_NEWS_KEYS | HOME_RADAR_APPS_KEYS == frozenset(HOME_MAIN_SOURCE_KEYS)
 
 

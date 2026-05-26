@@ -44,10 +44,10 @@ def test_list_highlight_monetization_apps_includes_json_tag_when_primary_is_apps
             Article(
                 industry_id=ind.id,
                 segment_id=seg.id,
-                title="TAAFT tool two",
+                title="Acquire deal two",
                 status="published",
                 feed_kind="apps",
-                third_party_source="taaft / tools",
+                third_party_source="acquire / weekly",
                 ai_categories_json='["应用产品"]',
                 heat_score=40.0,
                 published_at=now,
@@ -81,7 +81,7 @@ def test_list_highlight_monetization_apps_includes_json_tag_when_primary_is_apps
     assert len(items) == 4
     titles = {x["title"] for x in items}
     assert "Acquire deal one" in titles
-    assert "TAAFT tool two" in titles
+    assert "Acquire deal two" in titles
     assert "PH with monetization tag" in titles
     assert "Verified revenue" in titles
 
@@ -100,11 +100,11 @@ def test_list_highlight_monetization_apps_prefers_case_study_first() -> None:
             Article(
                 industry_id=ind.id,
                 segment_id=seg.id,
-                title="Hot generic app",
+                title="Hot PH with monetization tag",
                 status="published",
                 feed_kind="apps",
-                third_party_source="taaft / x",
-                ai_categories_json='["应用产品"]',
+                third_party_source="product_hunt / x",
+                ai_categories_json='["应用产品", "变现案例"]',
                 heat_score=999.0,
                 published_at=now,
             ),
@@ -125,3 +125,4 @@ def test_list_highlight_monetization_apps_prefers_case_study_first() -> None:
     items = list_highlight_monetization_apps(db, industry_slug="ai", limit=2, published_within_days=30)
     assert len(items) == 2
     assert items[0]["title"] == "Case study"
+    assert items[1]["title"] == "Hot PH with monetization tag"

@@ -8,11 +8,11 @@ from fastapi.testclient import TestClient
 
 from backend.app.domain import articles as art
 from backend.app.llm_service import (
-    _coerce_polish_output,
     chat_completion,
     generate_inspiration_body,
     polish_connector_article,
 )
+from backend.app.polish_publish_compat import coerce_polish_output
 from backend.app.main import app
 
 
@@ -41,7 +41,7 @@ def test_coerce_polish_output_maps_category_and_tab_labels() -> None:
             {"label": "数据支撑", "summary": "c" * 20, "body_md": "d" * 80},
         ],
     }
-    fixed = _coerce_polish_output(out)
+    fixed = coerce_polish_output(out)
     assert fixed["categories"][0] in art.FACET_ALL_LABELS
     assert [t["label"] for t in fixed["tabs"]] == ["描述", "数据支撑"]
 
