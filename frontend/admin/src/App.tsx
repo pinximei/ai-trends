@@ -93,7 +93,7 @@ function formatDiagLogBlock(
 ): string {
   const ts = (r.created_at ?? "").replace("T", " ").replace("Z", " UTC");
   const step = (r.step ?? "").trim();
-  const stepZh = DIAG_STEP_LABELS_ZH[step] ?? step || "未知步骤";
+  const stepZh = DIAG_STEP_LABELS_ZH[step] ?? (step || "未知步骤");
   const sk = (r.source_key ?? "").trim();
   const lines = [
     `【${index}】${ts}`,
