@@ -19,8 +19,8 @@ const INDUSTRY = "ai";
 /** 首页资讯情报墙展示条数（与侧栏应用榜高度大致对齐） */
 const HOME_NEWS_WALL_LIMIT = 8;
 
-/** 首页邮件订阅条：功能未对公众开放前保持隐藏；与后台 newsletter 就绪后可改为 true */
-const HOME_NEWSLETTER_VISIBLE = false;
+/** 首页邮件订阅条（公开） */
+const HOME_NEWSLETTER_VISIBLE = true;
 
 type SparkPoint = { day: string; count: number };
 

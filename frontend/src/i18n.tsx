@@ -55,7 +55,7 @@ const STRINGS: Record<string, string> = {
   homeStatNoCompare: "暂无环比",
   homeStatNewArticles: "新增资讯",
   homeStatGrowth: "周环比",
-  homeSubscribeBarTitle: "订阅每周精选，第一时间获取 AI 前沿简报与工具清单",
+  homeSubscribeBarTitle: "订阅每日精选邮件，与站内「今日精选」同规则：高可复刻应用、热门资讯与变现线索",
   homeSubscribeBarBtn: "订阅",
   homePopularCat1Title: "AI 前沿",
   homePopularCat1Sub: "模型与论文",
