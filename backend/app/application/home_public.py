@@ -660,7 +660,7 @@ def _home_dashboard_cache_params(
     published_within_days: int,
 ) -> dict:
     return {
-        "v": 3,
+        "v": 4,
         "industry_slug": industry_slug.strip().lower(),
         "news_limit": int(news_limit),
         "apps_limit": int(apps_limit),
@@ -788,7 +788,7 @@ def _build_home_dashboard(
 
     from .industry_wind_public import get_industry_wind_overview
 
-    industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug, recent_days=7)
+    industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug)
 
     scoring = "heat_score: platform engagement + connector rank + recency; weak snippet-length signal"
     return {

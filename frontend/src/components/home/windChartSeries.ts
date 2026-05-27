@@ -29,11 +29,14 @@ function spreadCountAcrossDays(total: number, days: string[]): WindDayPoint[] {
   });
 }
 
-/** API/缓存缺 series 时，用本周/上周篇数生成 7 日折线（便于切换视图，非精确按日统计）。 */
-export function ensureWindChartSeries(row: IndustryWindRow): IndustryWindRow {
+const WIND_CHART_HALF_DAYS = 15;
+
+/** API/缓存缺 series 时，用近半窗/前半窗篇数生成折线（便于切换视图，非精确按日统计）。 */
+export function ensureWindChartSeries(row: IndustryWindRow, halfDays = WIND_CHART_HALF_DAYS): IndustryWindRow {
   if ((row.series_this_week?.length ?? 0) > 0) return row;
-  const thisDays = lastUtcDayKeys(0, 7);
-  const lastDays = lastUtcDayKeys(7, 7);
+  const n = Math.max(7, Math.min(halfDays, 30));
+  const thisDays = lastUtcDayKeys(0, n);
+  const lastDays = lastUtcDayKeys(n, n);
   return {
     ...row,
     series_this_week: spreadCountAcrossDays(row.article_count ?? 0, thisDays),
@@ -41,6 +44,6 @@ export function ensureWindChartSeries(row: IndustryWindRow): IndustryWindRow {
   };
 }
 
-export function industriesWithChartSeries(rows: IndustryWindRow[]): IndustryWindRow[] {
-  return rows.map(ensureWindChartSeries);
+export function industriesWithChartSeries(rows: IndustryWindRow[], halfDays = WIND_CHART_HALF_DAYS): IndustryWindRow[] {
+  return rows.map((r) => ensureWindChartSeries(r, halfDays));
 }

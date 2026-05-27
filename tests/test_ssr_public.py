@@ -20,8 +20,8 @@ def test_inject_home_ssr_puts_json_and_root_markup() -> None:
         "sourceFacets": [],
         "topCategories": [],
         "industryWind": {
-            "compare_mode": "week_over_week",
-            "period_label": "本周 vs 上周",
+            "compare_mode": "period_half",
+            "period_label": "近15日 vs 前15日",
             "industries": [
                 {
                     "headline": "Cursor 工具链",

@@ -1,4 +1,4 @@
-"""行业风向：从近两周高热文章由 AI 归纳可读热点（非固定赛道）。"""
+"""行业风向：从近 30 日高热文章由 AI 归纳可读热点（非固定赛道）。"""
 from __future__ import annotations
 
 import json
@@ -21,9 +21,11 @@ SCAN_LIMIT = 120
 LLM_CANDIDATE_LIMIT = 55
 MAX_TRENDS = 6
 MIN_TRENDS = 3
-CACHE_KEY = "industry_wind_cache_v3"
+CACHE_KEY = "industry_wind_cache_v4"
 CACHE_TTL_SECONDS = 6 * 3600
-WEEK_COMPARE_DAYS = 7
+WIND_HALF_PERIOD_DAYS = 15
+WIND_TOTAL_DAYS = 30
+WIND_COMPARE_MODE = "period_half"
 
 # 运营/空泛大类：不参与风向聚类，也不作为 LLM 输出
 _OPS_OR_ABSTRACT_LABELS: frozenset[str] = frozenset(
@@ -162,9 +164,9 @@ def _daily_series_for_article_ids(
     *,
     now: datetime,
     window_end_offset_days: int,
-    days: int = WEEK_COMPARE_DAYS,
+    days: int = WIND_HALF_PERIOD_DAYS,
 ) -> list[dict[str, int | str]]:
-    """window_end_offset_days=0 → 本周 7 日；=7 → 上周 7 日。"""
+    """window_end_offset_days=0 → 近半窗；=WIND_HALF_PERIOD_DAYS → 再前一半。"""
     window_end = now - timedelta(days=window_end_offset_days)
     window_start = window_end - timedelta(days=days)
     day_keys = _day_keys_utc(end=window_end, days=days)
@@ -227,7 +229,7 @@ def _collect_hot_articles(
     lookback_days: int,
     now: datetime,
 ) -> list[tuple[Article, float, datetime]]:
-    lookback = max(WEEK_COMPARE_DAYS * 2, min(int(lookback_days), 30))
+    lookback = max(WIND_TOTAL_DAYS, min(int(lookback_days), 90))
     prior_since = now - timedelta(days=lookback)
     fe = art.article_freshness_sql_expr()
     base = and_(
@@ -268,7 +270,7 @@ def _load_cache(
     if not row or not isinstance(row.value_json, dict):
         return None
     blob = row.value_json
-    if blob.get("compare_mode") != "week_over_week":
+    if blob.get("compare_mode") != WIND_COMPARE_MODE:
         return None
     if blob.get("industry_slug") != industry_slug or int(blob.get("recent_days") or 0) != recent_days:
         return None
@@ -309,7 +311,7 @@ def _save_cache(
     row.value_json = {
         "industry_slug": industry_slug,
         "recent_days": recent_days,
-        "compare_mode": payload.get("compare_mode") or "week_over_week",
+        "compare_mode": payload.get("compare_mode") or WIND_COMPARE_MODE,
         "generated_at": datetime.utcnow().isoformat(timespec="seconds"),
         "industries": payload.get("industries") or [],
         "note": payload.get("note") or "",
@@ -320,7 +322,7 @@ def _save_cache(
 
 def _build_llm_user_payload(candidates: list[tuple[Article, float, datetime]], *, recent_days: int) -> str:
     lines = [
-        "时间窗口：本周近 7 天 vs 上周再前 7 天（环比）",
+        f"时间窗口：近 {WIND_HALF_PERIOD_DAYS} 天 vs 再前 {WIND_HALF_PERIOD_DAYS} 天（共 {WIND_TOTAL_DAYS} 日，环比）",
         "下列为高热文章，请归纳 4～6 个读者能立刻理解的热点方向。",
         "要求：",
         "- headline 必须具体（产品名/场景/现象），禁止「政策市场」「安全合规」「数据算力」等空泛词",
@@ -484,7 +486,7 @@ def _fallback_trends(candidates: list[tuple[Article, float, datetime]]) -> list[
         trends.append(
             {
                 "headline": headline,
-                "summary": f"本周 {len(cluster)} 篇标题/主题相近的高热讨论",
+                "summary": f"近{WIND_HALF_PERIOD_DAYS}日 {len(cluster)} 篇标题/主题相近的高热讨论",
                 "article_ids": [a.id for a in cluster],
                 "signal_hint": "稳定",
             }
@@ -563,7 +565,7 @@ def _enrich_trends(
                     ids, articles_by_id, now=now, window_end_offset_days=0
                 ),
                 "series_last_week": _daily_series_for_article_ids(
-                    ids, articles_by_id, now=now, window_end_offset_days=WEEK_COMPARE_DAYS
+                    ids, articles_by_id, now=now, window_end_offset_days=WIND_HALF_PERIOD_DAYS
                 ),
             }
         )
@@ -582,21 +584,23 @@ def get_industry_wind_overview(
     db: Session,
     *,
     industry_slug: str = "ai",
-    recent_days: int = WEEK_COMPARE_DAYS,
+    recent_days: int = WIND_HALF_PERIOD_DAYS,
 ) -> dict:
     """
     从高热文章归纳 4～6 个可读热点（LLM + 缓存；无 Key 时标题聚类回退）。
 
-    默认 **本周（近 7 天）vs 上周（再前 7 天）** 对比增幅与信号。
+    默认 **近 15 日 vs 前 15 日**（共 30 日窗口）对比增幅与信号。
     """
-    recent = max(WEEK_COMPARE_DAYS, min(int(recent_days), 30))
-    if recent != WEEK_COMPARE_DAYS:
-        recent = WEEK_COMPARE_DAYS
-    note = "由近 14 日高热文章 AI 归纳；环比为本周 vs 上周文章数；条越长表示本周综合热度越高"
+    recent = WIND_HALF_PERIOD_DAYS
+    period_label = f"近{WIND_HALF_PERIOD_DAYS}日 vs 前{WIND_HALF_PERIOD_DAYS}日"
+    note = (
+        f"由近 {WIND_TOTAL_DAYS} 日高热文章 AI 归纳；环比为近{WIND_HALF_PERIOD_DAYS}日 vs "
+        f"前{WIND_HALF_PERIOD_DAYS}日文章数；条越长表示近半窗综合热度越高"
+    )
     empty = {
         "recent_days": recent,
-        "compare_mode": "week_over_week",
-        "period_label": "本周 vs 上周",
+        "compare_mode": WIND_COMPARE_MODE,
+        "period_label": period_label,
         "industries": [],
         "note": note,
         "source": "empty",
@@ -611,15 +615,15 @@ def get_industry_wind_overview(
         return empty
 
     now = datetime.utcnow()
-    recent_since = now - timedelta(days=WEEK_COMPARE_DAYS)
-    prior_since = now - timedelta(days=WEEK_COMPARE_DAYS * 2)
+    recent_since = now - timedelta(days=WIND_HALF_PERIOD_DAYS)
+    prior_since = now - timedelta(days=WIND_TOTAL_DAYS)
     this_week_start = recent_since.date().isoformat()
     last_week_start = prior_since.date().isoformat()
     candidates = _collect_hot_articles(
-        db, industry_ids=industry_ids, lookback_days=WEEK_COMPARE_DAYS * 2, now=now
+        db, industry_ids=industry_ids, lookback_days=WIND_TOTAL_DAYS, now=now
     )
     if len(candidates) < MIN_TRENDS:
-        return {**empty, "note": "近两周高热文章不足，暂无法归纳风向"}
+        return {**empty, "note": f"近{WIND_TOTAL_DAYS}日高热文章不足，暂无法归纳风向"}
 
     articles_by_id = {a.id: a for a, _, _ in candidates}
     momentum_by_id = {a.id: mom for a, mom, _ in candidates}
@@ -643,8 +647,8 @@ def get_industry_wind_overview(
 
     payload = {
         "recent_days": recent,
-        "compare_mode": "week_over_week",
-        "period_label": "本周 vs 上周",
+        "compare_mode": WIND_COMPARE_MODE,
+        "period_label": period_label,
         "this_week_start": this_week_start,
         "last_week_start": last_week_start,
         "industries": industries,

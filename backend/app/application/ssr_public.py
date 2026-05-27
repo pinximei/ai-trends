@@ -53,7 +53,7 @@ def _esc(text: str) -> str:
 def render_industry_wind_ssr_html(wind: dict[str, Any] | None) -> str:
     if not wind or not isinstance(wind.get("industries"), list) or not wind["industries"]:
         return ""
-    period = _esc(str(wind.get("period_label") or "本周 vs 上周"))
+    period = _esc(str(wind.get("period_label") or "近15日 vs 前15日"))
     parts = [
         '<section id="industry-wind" class="ui-card scroll-mt-24 overflow-hidden p-5 sm:p-6" data-ssr="industry-wind">',
         '<h2 class="text-lg font-bold text-slate-900">行业风向</h2>',
@@ -75,7 +75,7 @@ def render_industry_wind_ssr_html(wind: dict[str, Any] | None) -> str:
             f'<p class="text-sm font-bold text-slate-900">{headline} '
             f'<span class="text-xs font-semibold text-orange-700">{signal}</span></p>'
             f'<p class="mt-1 text-xs text-slate-600">{summary}</p>'
-            f'<p class="mt-1 text-xs text-slate-500">较上周 {growth_s} · 本周 {ac} 篇 · 上周 {pc} 篇</p>'
+            f'<p class="mt-1 text-xs text-slate-500">较前期 {growth_s} · 近15日 {ac} 篇 · 前15日 {pc} 篇</p>'
             f"</li>"
         )
     parts.append("</ol></section>")

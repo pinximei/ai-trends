@@ -99,7 +99,8 @@ export function IndustryWindPanel({ data, loading }: Props) {
     }
   }, [view]);
 
-  const chartRows = data?.industries?.length ? industriesWithChartSeries(data.industries) : [];
+  const halfDays = data?.recent_days ?? 15;
+  const chartRows = data?.industries?.length ? industriesWithChartSeries(data.industries, halfDays) : [];
   const usesFallbackSeries = Boolean(
     data?.industries?.some((r) => (r.series_this_week?.length ?? 0) === 0),
   );
