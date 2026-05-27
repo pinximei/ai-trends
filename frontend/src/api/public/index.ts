@@ -2,7 +2,20 @@ import { publicGet, publicPost } from "./client";
 import type { ArticleDetail, ArticleFeedCard, ArticlesFeedResponse } from "./types";
 
 export { publicGet, publicPost } from "./client";
-export type { ArticleCard, ArticleDetail, ArticleFeedCard, ArticleTab, ArticleTabSummary, ArticlesFeedResponse, ArticlesFeedDayResponse, ArticlesFeedCursorResponse, ArticlesFeedHeatResponse } from "./types";
+export type {
+  ArticleCard,
+  ArticleDetail,
+  ArticleFeedCard,
+  ArticleTab,
+  ArticleTabSummary,
+  ArticlesFeedResponse,
+  ArticlesFeedDayResponse,
+  ArticlesFeedCursorResponse,
+  ArticlesFeedHeatResponse,
+  TrendMomentumItem,
+  TrendMomentumResponse,
+  TrendMomentumTopic,
+} from "./types";
 
 export const publicApi = {
   articleCategories: (opts: {
@@ -205,5 +218,21 @@ export const publicApi = {
       apps_growth_pct: number | null;
       news_growth_pct: number | null;
     }>(`/api/public/v1/home/trend-overview${qs ? `?${qs}` : ""}`);
+  },
+  trendMomentum: (opts?: {
+    industry_slug?: string;
+    period_days?: number;
+    limit_per_track?: number;
+    topic_limit?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
+    if (opts?.period_days != null) sp.set("period_days", String(opts.period_days));
+    if (opts?.limit_per_track != null) sp.set("limit_per_track", String(opts.limit_per_track));
+    if (opts?.topic_limit != null) sp.set("topic_limit", String(opts.topic_limit));
+    const qs = sp.toString();
+    return publicGet<import("./types").TrendMomentumResponse>(
+      `/api/public/v1/trends/momentum${qs ? `?${qs}` : ""}`,
+    );
   },
 };

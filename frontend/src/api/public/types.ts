@@ -142,3 +142,26 @@ export type ArticlesFeedHeatResponse = {
 };
 
 export type ArticlesFeedResponse = ArticlesFeedCursorResponse | ArticlesFeedDayResponse | ArticlesFeedHeatResponse;
+
+export type TrendMomentumItem = ArticleFeedCard & {
+  momentum_score: number;
+  momentum_tags: string[];
+  days_on_radar: number;
+};
+
+export type TrendMomentumTopic = {
+  label: string;
+  article_count: number;
+  momentum_score: number;
+  heat_avg: number;
+  sample_titles: string[];
+};
+
+export type TrendMomentumResponse = {
+  period_days: number;
+  software: TrendMomentumItem[];
+  oss: TrendMomentumItem[];
+  hotspots: TrendMomentumItem[];
+  topics: TrendMomentumTopic[];
+  scoring_note: string;
+};

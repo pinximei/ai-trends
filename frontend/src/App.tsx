@@ -10,6 +10,7 @@ const AboutSitePage = lazy(() => import("@/pages/AboutSitePage").then((m) => ({ 
 const SoftwareDownloadsPage = lazy(() =>
   import("@/pages/SoftwareDownloadsPage").then((m) => ({ default: m.SoftwareDownloadsPage })),
 );
+const TrendsPage = lazy(() => import("@/pages/TrendsPage").then((m) => ({ default: m.TrendsPage })));
 export default function App() {
   return (
     <I18nProvider>
@@ -18,6 +19,7 @@ export default function App() {
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<HomePage />} />
+              <Route path="trends" element={<TrendsPage />} />
               <Route path="apps" element={<FeedRadarPage key="apps" mode="apps" />} />
               <Route path="news" element={<FeedRadarPage key="news" mode="news" />} />
               <Route path="resources/:id" element={<ResourceDetailPage />} />

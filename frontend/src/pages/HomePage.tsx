@@ -124,6 +124,11 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{t("homeTrendLegend")}</p>
         <p className="mt-0.5 text-xs text-slate-400">{t("homeTrendDataNote")}</p>
+        <p className="mt-2">
+          <Link to="/trends" className="text-sm font-semibold text-violet-600 hover:text-violet-800 hover:underline">
+            {t("homeTrendsLink")}
+          </Link>
+        </p>
       </header>
 
       <div className="relative mt-4 w-full">
