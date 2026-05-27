@@ -38,7 +38,7 @@ def main() -> int:
 
     base = (os.environ.get("AITRENDS_LLM_BASE_URL") or "https://api.deepseek.com/v1").strip().rstrip("/")
     key = (os.environ.get("AITRENDS_LLM_API_KEY") or "").strip()
-    model = (os.environ.get("AITRENDS_LLM_MODEL") or "deepseek-chat").strip()
+    model = (os.environ.get("AITRENDS_LLM_MODEL") or "deepseek-v4-flash").strip()
 
     if not key:
         print("未找到 AITRENDS_LLM_API_KEY。请在 backend/.env 中填写，或导出到环境变量。", file=sys.stderr)

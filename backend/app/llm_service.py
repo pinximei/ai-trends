@@ -374,7 +374,9 @@ def polish_connector_article(
         f"占位摘要: {rule_summary}\n\n"
         f"原始片段:\n```\n{snippet_cut}\n```"
     )
-    model = _model or "deepseek-chat"
+    from .llm_settings_service import FLASH_MODEL
+
+    model = _model or FLASH_MODEL
     try:
         try:
             raw, _, _ = chat_completion(

@@ -290,7 +290,7 @@ def ensure_product_settings_and_demo_connector(db: Session) -> None:
                 value_json={
                     "provider": "deepseek",
                     "base_url": "https://api.deepseek.com/v1",
-                    "model": "deepseek-chat",
+                    "model": "deepseek-v4-flash",
                     "api_key": "",
                 },
             )

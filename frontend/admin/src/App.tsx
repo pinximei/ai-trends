@@ -2884,7 +2884,7 @@ export function App() {
               </h3>
               <p className="muted tiny" style={{ marginTop: 6 }}>
                 默认 <code className="inline-code">https://api.deepseek.com/v1</code> 与{" "}
-                <code className="inline-code">deepseek-chat</code>。连接器同步依赖 LLM：请在本页保存 Key（写入 <code className="inline-code">product_settings_kv.llm</code>）；<code className="inline-code">backend/.env</code> 里的 <code className="inline-code">AITRENDS_LLM_*</code> 可继续保留，库内为空时启动会自动迁入。
+                <code className="inline-code">deepseek-v4-flash</code>（推荐，快且省）。连接器同步、行业风向、日报/飞书摘要等均走此模型；Pro/旧别名保存时会自动改为 Flash。Key 写入 <code className="inline-code">product_settings_kv.llm</code>。
               </p>
               <form className="create-user-form" onSubmit={onSaveLlm} style={{ marginTop: 16 }}>
                 <div className="form-field">
@@ -2912,7 +2912,7 @@ export function App() {
                     value={llmForm.model}
                     onChange={(e) => setLlmForm((p) => ({ ...p, model: e.target.value }))}
                     disabled={!canOperate}
-                    placeholder="deepseek-chat"
+                    placeholder="deepseek-v4-flash"
                     autoComplete="off"
                   />
                 </div>

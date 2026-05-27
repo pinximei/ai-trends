@@ -42,7 +42,9 @@ def _startup_sync() -> None:
 
         ensure_scheduler_settings_row(db)
         ensure_newsletter_settings_row(db)
-        seed_product_settings_from_environment(db)
+        seeded = seed_product_settings_from_environment(db)
+        if seeded.get("llm_model_flash"):
+            logger.info("LLM model migrated to deepseek-v4-flash (was pro/legacy alias)")
         from .newsletter_settings_service import (
             repair_newsletter_cn_morning_schedule_once,
             repair_newsletter_feishu_stagger_minute_once,

@@ -105,7 +105,7 @@ def load_llm_credentials() -> tuple[str, str, str]:
     return (
         _kv("AITRENDS_LLM_API_KEY", "AISOU_LLM_API_KEY"),
         _kv("AITRENDS_LLM_BASE_URL", "AISOU_LLM_BASE_URL") or "https://api.deepseek.com/v1",
-        _kv("AITRENDS_LLM_MODEL", "AISOU_LLM_MODEL") or "deepseek-chat",
+        _kv("AITRENDS_LLM_MODEL", "AISOU_LLM_MODEL") or "deepseek-v4-flash",
     )
 
 
