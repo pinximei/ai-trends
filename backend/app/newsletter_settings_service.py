@@ -25,9 +25,9 @@ def default_newsletter_json() -> dict[str, Any]:
         "news_limit": 12,
         "llm_apps_limit": 3,
         "llm_news_limit": 3,
-        # 美东 21:00（夏令时）≈ 北京时间次日 09:00，便于飞书早间收摘要
+        # 美东 21:12（夏令时）≈ 北京时间次日 09:12，错开飞书整点限流
         "daily_hour": 21,
-        "daily_minute": 0,
+        "daily_minute": 12,
         "public_site_base_url": "",
         "smtp_host": "",
         "smtp_port": 465,
@@ -125,6 +125,28 @@ def repair_newsletter_cn_morning_schedule_once(db: Session) -> bool:
     db.commit()
     if changed:
         logger.info("newsletter schedule migrated to US 21:00 (approx Beijing 09:00)")
+    return changed
+
+
+def repair_newsletter_feishu_stagger_minute_once(db: Session) -> bool:
+    """美东 21:00 → 21:12，降低飞书整点 frequency limited。"""
+    row = db.get(ProductSetting, NEWSLETTER_KEY)
+    if not row:
+        return False
+    cur = _merged_stored(db)
+    if cur.get("digest_schedule_feishu_stagger_v1"):
+        return False
+    h = int(cur.get("daily_hour", 21))
+    m = int(cur.get("daily_minute", 0))
+    changed = False
+    if h == 21 and m == 0:
+        cur["daily_minute"] = 12
+        changed = True
+    cur["digest_schedule_feishu_stagger_v1"] = True
+    row.value_json = _normalize_merged(cur)
+    db.commit()
+    if changed:
+        logger.info("newsletter schedule migrated to US 21:12 (approx Beijing 09:12)")
     return changed
 
 

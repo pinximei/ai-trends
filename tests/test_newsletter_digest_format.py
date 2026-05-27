@@ -21,7 +21,8 @@ def test_build_body_highlight_and_more_sections() -> None:
         SimpleNamespace(id=4, title="App Four", summary="fourth", replication_tier=""),
     ]
     body = build_digest_body_from_articles(apps, [], highlight_apps=2, highlight_news=0)
-    assert "## 亮点应用" in body
+    assert "## 高可复刻" in body
+    assert "## 今日应用" in body
     assert "## 更多应用" in body
     assert "**介绍**：" in body
     assert "### 1. App One" in body
@@ -33,8 +34,44 @@ def test_build_body_highlight_and_more_sections() -> None:
 def test_build_body_only_highlights_when_few_items() -> None:
     apps = [SimpleNamespace(id=1, title="Only", summary="one", replication_tier="A")]
     body = build_digest_body_from_articles(apps, [], highlight_apps=3)
-    assert "## 亮点应用" in body
+    assert "## 今日应用" in body
     assert "## 更多应用" not in body
+
+
+def test_build_body_shows_tier_only_with_deep_replication() -> None:
+    import json
+
+    from backend.app.domain.replication_analysis import normalize_replication_analysis
+
+    repl = normalize_replication_analysis(
+        {
+            "verdict": "值得复刻",
+            "worth_score": 8,
+            "difficulty": "中",
+            "tier_rationale": "x" * 24,
+            "value_summary": "y" * 20,
+            "tech_stack": ["Next.js"],
+            "implementation_plan": ["step"],
+            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
+            "open_source": {"has_support": False, "projects": [], "gaps": ""},
+            "risks": [],
+        }
+    )
+    apps = [
+        SimpleNamespace(
+            id=1,
+            title="Deep",
+            summary="ok",
+            replication_tier="S",
+            replication_analysis_json=json.dumps(repl, ensure_ascii=False),
+        ),
+        SimpleNamespace(id=2, title="Shallow", summary="ok", replication_tier="S"),
+    ]
+    body = build_digest_body_from_articles(apps, [], highlight_apps=3)
+    assert "## 高可复刻" in body
+    assert "较高可复刻" in body or "高可复刻" in body
+    assert "深度评估 8/10" in body
+    assert "仅有档位标签" in body
 
 
 def test_build_subject_default() -> None:
@@ -60,7 +97,7 @@ def test_enrich_read_links() -> None:
 
 
 def test_delivery_texts_have_section_headers() -> None:
-    md = """## 亮点应用
+    md = """## 高可复刻
 
 > 编辑推荐 Top 1 条
 
@@ -69,7 +106,7 @@ def test_delivery_texts_have_section_headers() -> None:
 - **为何关注**：复刻向
 - **站内阅读**：文章 #1
 
-## 亮点资讯
+## 本周必读
 
 > 今日暂无新稿。
 """
@@ -81,11 +118,11 @@ def test_delivery_texts_have_section_headers() -> None:
         apps_count=1,
         news_count=0,
     )
-    assert "【亮点应用】" in email
-    assert "【亮点资讯】" in email
-    assert "📬 AiTrends" in feishu
+    assert "【高可复刻】" in email
+    assert "【本周必读】" in email
+    assert "📬 AI 产品雷达" in feishu
     assert "应用 1 条" in feishu
-    assert "【亮点应用】" in feishu
+    assert "【高可复刻】" in feishu
     assert "━━━━━━━━" not in feishu
     assert "1. 测试产品" in feishu
     assert "  介绍：" in feishu
@@ -94,7 +131,7 @@ def test_delivery_texts_have_section_headers() -> None:
 def test_format_digest_for_delivery() -> None:
     apps = [SimpleNamespace(id=3)]
     md, email, feishu = format_digest_for_delivery(
-        "## 亮点应用\n\n### 1. X\n- **站内阅读**：文章 #3\n\n## 亮点资讯\n\n> 今日暂无新稿。",
+        "## 今日应用\n\n### 1. X\n- **站内阅读**：文章 #3\n\n## 本周必读\n\n> 今日暂无新稿。",
         "标题",
         digest_date="2026-05-19",
         public_site_base_url="https://site.test",
@@ -102,7 +139,7 @@ def test_format_digest_for_delivery() -> None:
         news=[],
     )
     assert "/resources/3" in md
-    assert "【亮点应用】" in email
+    assert "【今日应用】" in email
     assert len(feishu) > 20
     assert "━━━━━━━━" not in feishu
-    assert "【亮点应用】" in feishu
+    assert "【今日应用】" in feishu

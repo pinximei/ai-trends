@@ -2545,7 +2545,7 @@ export function App() {
                 按<strong>美东（America/New_York）当天</strong>已发布应用/资讯拼一篇摘要，写入{" "}
                 <code className="inline-code">newsletter_daily_digests</code>（每天一篇）。
                 连接器在<strong>美东当日 23:00–24:00</strong>整批拉取（便于对齐 NewsAPI 等按 US 日切分的数据）；摘要默认定时{" "}
-                <strong>23:50</strong> 美东（可在配置中改）。「立即推送」：无今日摘要则先从库内文章生成再推；已有摘要则直接推飞书/邮件（可重复推飞书）。不是单篇新文章，是当日精选摘要。
+                <strong>21:12</strong> 美东（≈ 北京时间次日 9:12，可在配置中改，建议避开整点防飞书限流）。正文与公开站一致：「高可复刻」仅含完整评估且价值分≥7 的 S/A 档；无达标条目会如实写空态。「立即推送」：无今日摘要则生成再推；已有摘要则直接推飞书/邮件。
               </p>
               {canOperate ? (
                 <form className="newsletter-push-form" onSubmit={onSaveNewsletter}>

@@ -101,18 +101,20 @@ def fetch_articles_for_shanghai_day(db: Session, d: date, *, limit: int) -> list
 
 
 def _prioritize_digest_apps(articles: list[Article]) -> list[Article]:
-    """邮件摘要应用栏：变现案例 / Acquire·TAAFT / S 档优先，再按热度。"""
+    """邮件/飞书摘要应用栏：完整复刻评估优先，再变现向 / S→A 档，再按热度。"""
+    from ..newsletter_replication import article_deep_replication
 
-    def _rank(a: Article) -> tuple[int, int, float, int]:
+    def _rank(a: Article) -> tuple[int, int, int, float, int]:
         cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
         primary = cats[0] if cats else ""
         mon_src = 0 if art.admin_source_key(a.third_party_source) in art.MONETIZATION_SOURCE_KEYS else 1
         mon_cat = 0 if primary in art.MONETIZATION_APPS_CATEGORIES else 1
+        deep = 0 if article_deep_replication(a) else 1
         tier = (getattr(a, "replication_tier", None) or "").strip().upper()
         tier_rank = {"S": 0, "A": 1, "B": 2, "C": 3}.get(tier, 4)
         heat = -float(getattr(a, "heat_score", None) or 0.0)
         aid = -int(a.id or 0)
-        return (mon_src, mon_cat, tier_rank, heat, aid)
+        return (mon_src, mon_cat, deep, tier_rank, heat, aid)
 
     return sorted(articles, key=_rank)
 

@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 DIGEST_SUBJECT_LLM_SYSTEM = (
-    "为 AiTrends「今日精选」推送写标题。严格输出单个 JSON 对象，禁止 Markdown 围栏与 JSON 外文字。"
+    "为 AiTrends「AI 产品雷达 · 每日精选」推送写标题。严格输出单个 JSON 对象，禁止 Markdown 围栏与 JSON 外文字。"
     '仅一个键 subject（中文标题，≤50 字）。'
     "只能根据用户给出的标题列表概括，禁止编造未列出的产品或事件；不要输出正文。"
 )
@@ -27,12 +27,12 @@ def build_digest_subject_default(digest_date: str, apps: list[Any], news: list[A
     d = (digest_date or "").strip()
     na, nn = len(apps), len(news)
     if na and nn:
-        return f"今日精选 · {na} 应用 {nn} 资讯 · {d}"
+        return f"AI 产品雷达 · {na} 应用 {nn} 资讯 · {d}"
     if na:
-        return f"今日 {na} 款 AI 应用 · {d}"
+        return f"AI 产品雷达 · {na} 款应用 · {d}"
     if nn:
-        return f"今日 {nn} 条 AI 资讯 · {d}"
-    return f"AiTrends 每日精选 · {d}"
+        return f"AI 产品雷达 · {nn} 条资讯 · {d}"
+    return f"AI 产品雷达 · 每日精选 · {d}"
 
 
 _TIER_LABEL: dict[str, str] = {
@@ -50,20 +50,41 @@ def _tier_display(tier: str) -> str:
     return _TIER_LABEL.get(t, f"{t} 档")
 
 
+def _tier_suffix_for_article(a: Any, *, feed_kind: str) -> str:
+    if feed_kind != "apps":
+        return ""
+    from .newsletter_replication import article_deep_replication
+
+    tier = (getattr(a, "replication_tier", None) or "").strip().upper()
+    if not tier or not article_deep_replication(a):
+        return ""
+    label = _tier_display(tier)
+    return f" · {label}" if label else ""
+
+
 def _why_follow(a: Any, *, feed_kind: str) -> str:
+    from .newsletter_replication import article_deep_replication, article_replication_public
+
     tier = (getattr(a, "replication_tier", None) or "").strip().upper()
     if feed_kind == "apps":
-        if tier == "S":
-            return "高可复刻：产品边界清晰，适合独立开发者快速验证 MVP 与变现假设"
-        if tier == "A":
-            return "较高可复刻：形态明确，可参考其技术栈与用户路径做 1 月内验证"
+        repl = article_replication_public(a)
+        if repl and article_deep_replication(a):
+            worth = int(repl.get("worth_score") or 0)
+            verdict = (repl.get("verdict") or "").strip()
+            vs = (repl.get("value_summary") or "").strip()
+            head = f"深度评估 {worth}/10"
+            if verdict:
+                head = f"{head} · {verdict}"
+            if vs:
+                return f"{head}；{_snippet(vs, max_len=120)}"
+            return head
+        if tier in ("S", "A"):
+            return "仅有档位标签，暂无完整复刻评估，建议以热度与介绍为准，详见站内详情"
         if tier == "B":
-            return "可复刻性中等，需更多工程投入，建议结合站内详情评估范围"
+            return "可复刻性中等，站内评估未达标展示档位列，建议结合详情判断"
         if tier == "C":
-            return "低可复刻：偏基础设施或强依赖闭源能力，更适合跟踪趋势而非直接抄"
-        if tier:
-            return f"可复刻性 {_tier_display(tier)}，建议结合站内详情评估"
-        return "热度靠前，适合作为今日可跟进的应用样本"
+            return "低可复刻向，更适合跟踪趋势而非直接复刻"
+        return "当日热度靠前，可作为产品动态样本跟踪"
     return "当日高热度资讯，建议了解对行业与产品方向的影响"
 
 
@@ -72,8 +93,7 @@ def _highlight_item_lines(articles: list[Any], *, feed_kind: str) -> list[str]:
     for i, a in enumerate(articles, 1):
         title = _snippet((getattr(a, "title", None) or "无标题"), max_len=64)
         intro = _snippet(getattr(a, "summary", None) or "", max_len=_HIGHLIGHT_SNIP)
-        tier = (getattr(a, "replication_tier", None) or "").strip()
-        tier_s = f" · {_tier_display(tier)}" if tier and feed_kind == "apps" else ""
+        tier_s = _tier_suffix_for_article(a, feed_kind=feed_kind)
         aid = int(getattr(a, "id", 0) or 0)
         lines.append(f"### {i}. {title}{tier_s}")
         lines.append(f"- **介绍**：{intro or '见站内详情'}")
@@ -116,13 +136,14 @@ def _lane_body(
     more_title: str,
     kind_note: str,
     highlight_n: int,
+    empty_message: str | None = None,
 ) -> list[str]:
     """单栏：亮点详细介绍 + 其余简明列表。"""
     if not articles:
         return [
             f"## {highlight_title}",
             "",
-            "> 今日暂无新稿。",
+            f"> {empty_message or '今日暂无新稿。'}",
             "",
         ]
     featured, rest = _split_highlight(articles, highlight_n)
@@ -156,12 +177,16 @@ def build_digest_body_from_articles(
     regular_apps: list[Any] | None = None,
 ) -> str:
     """正文：亮点条目单独介绍，其余简明列表（均用站内已发布摘要，不二次 LLM）。"""
+    from .newsletter_replication import split_deep_replicable_apps
+
     if monetization_apps is not None and regular_apps is not None:
         mon_lane, app_lane = monetization_apps, regular_apps
     else:
         mon_lane, app_lane = [], list(apps)
+    replicable_apps, regular_rest = split_deep_replicable_apps(app_lane)
     parts: list[str] = [
-        "> 收录范围：美东（America/New_York）摘要日当天已发布内容；数据源在当日 23:00 后整批拉取入库。",
+        "> AI 产品雷达 · 每日精选（美东摘要日当天已发布）。"
+        "「高可复刻」仅含完整评估且价值分≥7 的 S/A 档；其余应用按热度收录。",
         "",
     ]
     if mon_lane:
@@ -177,11 +202,22 @@ def build_digest_body_from_articles(
         )
     parts.extend(
         _lane_body(
-            app_lane,
+            replicable_apps,
             feed_kind="apps",
-            highlight_title="亮点应用",
+            highlight_title="高可复刻",
+            more_title="更多高可复刻",
+            kind_note="（完整评估 · S/A 档）",
+            highlight_n=highlight_apps,
+            empty_message="今日无达标的高可复刻应用（须完整评估且价值分≥7）。",
+        )
+    )
+    parts.extend(
+        _lane_body(
+            regular_rest,
+            feed_kind="apps",
+            highlight_title="今日应用",
             more_title="更多应用",
-            kind_note="（可安装 / 可复刻产品向）",
+            kind_note="（热度向）",
             highlight_n=highlight_apps,
         )
     )
@@ -189,7 +225,7 @@ def build_digest_body_from_articles(
         _lane_body(
             news,
             feed_kind="news",
-            highlight_title="亮点资讯",
+            highlight_title="本周必读",
             more_title="更多资讯",
             kind_note="（行业动态向）",
             highlight_n=highlight_news,
@@ -314,7 +350,7 @@ def digest_md_to_feishu_text(
     base = (public_site_base_url or "").strip().rstrip("/")
     tail = f"\n\n🔗 完整站点：{base}" if base else ""
     meta = f"（应用 {apps_count} 条 · 资讯 {news_count} 条）" if (apps_count or news_count) else ""
-    head = f"📬 AiTrends 每日精选 · {digest_date}\n主题：{_strip_md_inline(subject)}"
+    head = f"📬 AI 产品雷达 · 每日精选 · {digest_date}\n主题：{_strip_md_inline(subject)}"
     if meta:
         head = f"{head}\n{meta}"
     return _collapse_blank_lines(f"{head}\n\n{body}{tail}")[:4000]
