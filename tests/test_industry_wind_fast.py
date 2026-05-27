@@ -57,6 +57,37 @@ def test_fast_path_skips_llm() -> None:
         assert len(out["industries"]) >= 1
 
 
+def test_cache_without_chart_series_still_served() -> None:
+    """旧缓存无 series_this_week 时公开 API 仍应返回热点列表（勿误判为空）。"""
+    db = _session()
+    db.add(
+        ProductSetting(
+            key=CACHE_KEY,
+            value_json={
+                "industry_slug": "ai",
+                "recent_days": 15,
+                "compare_mode": "period_half",
+                "generated_at": datetime.utcnow().isoformat(timespec="seconds"),
+                "industries": [
+                    {
+                        "headline": "LLM tooling",
+                        "summary": "dev tools heat",
+                        "article_count": 3,
+                        "prior_count": 1,
+                    }
+                ],
+                "note": "cached",
+                "source": "llm",
+            },
+        )
+    )
+    db.commit()
+    with patch("backend.app.application.industry_wind_public.chat_completion") as mock_llm:
+        out = get_industry_wind_overview(db, industry_slug="ai", allow_llm=False)
+    mock_llm.assert_not_called()
+    assert out["industries"][0]["headline"] == "LLM tooling"
+
+
 def test_stale_cache_served_on_fast_path() -> None:
     db = _session()
     _seed_hot_articles(db)

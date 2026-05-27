@@ -344,7 +344,9 @@ function applyHomeDashboardPayload(
   set.setActiveSourceCount(p.activeSourceCount);
   set.setActiveSourceKeys(p.activeSourceKeys);
   set.setTrendOverview(p.trendOverview);
-  set.setIndustryWind(p.industryWind);
+  if (p.industryWind != null && (p.industryWind.industries?.length ?? 0) > 0) {
+    set.setIndustryWind(p.industryWind);
+  }
 }
 
 export function HomePage() {
@@ -425,12 +427,17 @@ export function HomePage() {
 
     const commitPayload = (payload: HomeDashboardCachePayload) => {
       const cachedWind = readHomeDashboardCache()?.industryWind;
+      const windKeep =
+        cachedWind && (cachedWind.industries?.length ?? 0) > 0 ? cachedWind : payload.industryWind;
       const merged: HomeDashboardCachePayload = {
         ...payload,
-        industryWind: cachedWind ?? payload.industryWind ?? null,
+        ...(windKeep && (windKeep.industries?.length ?? 0) > 0 ? { industryWind: windKeep } : {}),
       };
       applyHomeDashboardPayload(merged, stateSetters);
-      writeHomeDashboardCache(merged);
+      writeHomeDashboardCache({
+        ...merged,
+        industryWind: windKeep ?? cachedWind ?? merged.industryWind ?? null,
+      });
     };
 
     const loadFeedFallback = async (feed: "news" | "apps", limit: number) => {
@@ -445,11 +452,24 @@ export function HomePage() {
       return "items" in res && Array.isArray(res.items) ? res.items : [];
     };
 
-    const mergeWindIntoCache = (wind: IndustryWindData | null) => {
-      if (!wind) return;
+    const mergeWindIntoCache = (wind: IndustryWindData) => {
       const prev = readHomeDashboardCache();
-      if (!prev) return;
-      writeHomeDashboardCache({ ...prev, industryWind: wind });
+      writeHomeDashboardCache({
+        news: prev?.news ?? [],
+        apps: prev?.apps ?? [],
+        editorialNews: prev?.editorialNews ?? [],
+        editorialApps: prev?.editorialApps ?? [],
+        highlightApps: prev?.highlightApps ?? [],
+        highlightMonetization: prev?.highlightMonetization ?? [],
+        newsLanes: prev?.newsLanes ?? [],
+        appsLanes: prev?.appsLanes ?? [],
+        sourceFacets: prev?.sourceFacets ?? [],
+        topCategories: prev?.topCategories ?? [],
+        industryWind: wind,
+        activeSourceCount: prev?.activeSourceCount ?? 6,
+        activeSourceKeys: prev?.activeSourceKeys ?? [],
+        trendOverview: prev?.trendOverview ?? null,
+      });
     };
 
     const fetchIndustryWind = async () => {
@@ -457,7 +477,7 @@ export function HomePage() {
         setWindLoading(true);
         const wind = await publicApi.homeIndustryWind({ industry_slug: INDUSTRY });
         if (cancelled) return;
-        if (wind) {
+        if ((wind?.industries?.length ?? 0) > 0) {
           setIndustryWind(wind);
           mergeWindIntoCache(wind);
         }
@@ -510,7 +530,6 @@ export function HomePage() {
             appsLanes: data.apps_source_lanes ?? [],
             sourceFacets: data.source_facets ?? [],
             topCategories: data.top_categories ?? [],
-            industryWind: null,
             activeSourceCount: data.active_source_count ?? data.active_source_keys?.length ?? 6,
             activeSourceKeys: data.active_source_keys ?? [],
             trendOverview: data.trend ?? null,
@@ -538,7 +557,6 @@ export function HomePage() {
             appsLanes: [],
             sourceFacets: [],
             topCategories: [],
-            industryWind: null,
             activeSourceCount: 6,
             activeSourceKeys: [],
             trendOverview: null,

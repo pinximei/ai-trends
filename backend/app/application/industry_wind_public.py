@@ -290,7 +290,10 @@ def _load_cache(
     industries = blob.get("industries")
     if not isinstance(industries, list) or not industries:
         return None
-    if not any(isinstance(r, dict) and r.get("series_this_week") for r in industries):
+    if not any(
+        isinstance(r, dict) and str(r.get("headline") or r.get("label") or "").strip()
+        for r in industries
+    ):
         return None
     period_label = f"近{WIND_HALF_PERIOD_DAYS}日 vs 前{WIND_HALF_PERIOD_DAYS}日"
     source = str(blob.get("source") or "cache")
@@ -635,6 +638,18 @@ def get_industry_wind_overview(
             if "每日" not in stale_note:
                 stale_note = f"{stale_note}（完整 AI 归纳每日自动更新一次）"
             return {**stale, "note": stale_note}
+        # 公开 API 绝不现场调 LLM；有库内缓存即返回（含缺折线序列的旧格式，由前端估算图表）
+        any_cached = _load_cache(
+            db,
+            industry_slug=industry_slug,
+            recent_days=recent,
+            max_age_seconds=None,
+        )
+        if any_cached:
+            any_note = str(any_cached.get("note") or note)
+            if "每日" not in any_note:
+                any_note = f"{any_note}（完整 AI 归纳每日自动更新一次）"
+            return {**any_cached, "note": any_note, "source": any_cached.get("source") or "cache"}
 
     if allow_llm:
         recent_llm = _load_cache(
