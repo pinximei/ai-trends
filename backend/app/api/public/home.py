@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ...application.home_public import get_home_dashboard, get_home_editorial_picks, get_home_trend_overview
+from ...application.industry_wind_public import get_industry_wind_overview
 from ...core.envelope import success
 from ...db import get_db
 
@@ -22,6 +23,21 @@ def home_trend_overview(
         industry_slug=industry_slug,
         sparkline_days=sparkline_days,
         period_days=period_days,
+    )
+    return success(data)
+
+
+@router.get("/home/industry-wind")
+def home_industry_wind(
+    industry_slug: str = "ai",
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """行业风向：默认快速路径；``refresh=true`` 时允许 LLM 归纳并写缓存。"""
+    data = get_industry_wind_overview(
+        db,
+        industry_slug=industry_slug,
+        allow_llm=bool(refresh),
     )
     return success(data)
 

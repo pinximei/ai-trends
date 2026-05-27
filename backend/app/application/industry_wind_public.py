@@ -23,6 +23,7 @@ MAX_TRENDS = 6
 MIN_TRENDS = 3
 CACHE_KEY = "industry_wind_cache_v4"
 CACHE_TTL_SECONDS = 6 * 3600
+CACHE_STALE_MAX_SECONDS = 7 * 24 * 3600
 WIND_HALF_PERIOD_DAYS = 15
 WIND_TOTAL_DAYS = 30
 WIND_COMPARE_MODE = "period_half"
@@ -265,6 +266,7 @@ def _load_cache(
     *,
     industry_slug: str,
     recent_days: int,
+    max_age_seconds: int | None = CACHE_TTL_SECONDS,
 ) -> dict[str, Any] | None:
     row = db.get(ProductSetting, CACHE_KEY)
     if not row or not isinstance(row.value_json, dict):
@@ -281,18 +283,25 @@ def _load_cache(
         ts = datetime.fromisoformat(str(gen).replace("Z", ""))
     except ValueError:
         return None
-    if (datetime.utcnow() - ts).total_seconds() > CACHE_TTL_SECONDS:
+    age = (datetime.utcnow() - ts).total_seconds()
+    if max_age_seconds is not None and age > max_age_seconds:
         return None
     industries = blob.get("industries")
     if not isinstance(industries, list) or not industries:
         return None
     if not any(isinstance(r, dict) and r.get("series_this_week") for r in industries):
         return None
+    period_label = f"近{WIND_HALF_PERIOD_DAYS}日 vs 前{WIND_HALF_PERIOD_DAYS}日"
+    source = str(blob.get("source") or "cache")
+    if max_age_seconds is not None and age > CACHE_TTL_SECONDS:
+        source = "stale_cache"
     return {
         "recent_days": recent_days,
+        "compare_mode": WIND_COMPARE_MODE,
+        "period_label": period_label,
         "industries": industries,
         "note": str(blob.get("note") or ""),
-        "source": str(blob.get("source") or "cache"),
+        "source": source,
         "generated_at": gen,
     }
 
@@ -585,11 +594,14 @@ def get_industry_wind_overview(
     *,
     industry_slug: str = "ai",
     recent_days: int = WIND_HALF_PERIOD_DAYS,
+    allow_llm: bool = True,
 ) -> dict:
     """
     从高热文章归纳 4～6 个可读热点（LLM + 缓存；无 Key 时标题聚类回退）。
 
     默认 **近 15 日 vs 前 15 日**（共 30 日窗口）对比增幅与信号。
+
+    ``allow_llm=False``：仅新鲜/过期缓存或标题聚类回退，供首页仪表盘快速路径，不阻塞 LLM。
     """
     recent = WIND_HALF_PERIOD_DAYS
     period_label = f"近{WIND_HALF_PERIOD_DAYS}日 vs 前{WIND_HALF_PERIOD_DAYS}日"
@@ -606,9 +618,22 @@ def get_industry_wind_overview(
         "source": "empty",
     }
 
-    cached = _load_cache(db, industry_slug=industry_slug, recent_days=recent)
+    cached = _load_cache(db, industry_slug=industry_slug, recent_days=recent, max_age_seconds=CACHE_TTL_SECONDS)
     if cached:
         return cached
+
+    if not allow_llm:
+        stale = _load_cache(
+            db,
+            industry_slug=industry_slug,
+            recent_days=recent,
+            max_age_seconds=CACHE_STALE_MAX_SECONDS,
+        )
+        if stale:
+            stale_note = str(stale.get("note") or note)
+            if "更新中" not in stale_note:
+                stale_note = f"{stale_note}（AI 归纳缓存更新中，稍后自动刷新）"
+            return {**stale, "note": stale_note}
 
     industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
     if not industry_ids:
@@ -628,11 +653,15 @@ def get_industry_wind_overview(
     articles_by_id = {a.id: a for a, _, _ in candidates}
     momentum_by_id = {a.id: mom for a, mom, _ in candidates}
 
-    raw_trends = _generate_wind_llm(db, candidates, recent_days=recent, industry_slug=industry_slug)
-    source = "llm"
+    source = "fallback"
+    raw_trends = None
+    if allow_llm:
+        raw_trends = _generate_wind_llm(db, candidates, recent_days=recent, industry_slug=industry_slug)
+        source = "llm"
     if not raw_trends:
         raw_trends = _fallback_trends(candidates)
-        source = "fallback"
+        if allow_llm and source == "llm":
+            source = "fallback"
 
     industries = _enrich_trends(
         raw_trends,
@@ -652,11 +681,12 @@ def get_industry_wind_overview(
         "this_week_start": this_week_start,
         "last_week_start": last_week_start,
         "industries": industries,
-        "note": note,
+        "note": note if allow_llm else f"{note}（当前为快速聚类预览，完整 AI 归纳将后台更新）",
         "source": source,
     }
-    try:
-        _save_cache(db, industry_slug=industry_slug, recent_days=recent, payload=payload)
-    except Exception:
-        db.rollback()
+    if allow_llm and source in ("llm", "fallback"):
+        try:
+            _save_cache(db, industry_slug=industry_slug, recent_days=recent, payload=payload)
+        except Exception:
+            db.rollback()
     return payload

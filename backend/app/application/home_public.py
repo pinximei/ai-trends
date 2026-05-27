@@ -20,7 +20,7 @@ HOME_HEAT_POOL_CAP = 36
 HOME_HEAT_PAGE_SIZE = 24
 HOME_EDITORIAL_PICK_DAYS = 14
 HOME_DASHBOARD_CACHE_KEY = "home_dashboard_public"
-HOME_DASHBOARD_CACHE_TTL_SECONDS = 120
+HOME_DASHBOARD_CACHE_TTL_SECONDS = 300
 
 
 def _industry_article_ids(db: Session, *, industry_slug: str) -> list[int]:
@@ -660,7 +660,7 @@ def _home_dashboard_cache_params(
     published_within_days: int,
 ) -> dict:
     return {
-        "v": 4,
+        "v": 5,
         "industry_slug": industry_slug.strip().lower(),
         "news_limit": int(news_limit),
         "apps_limit": int(apps_limit),
@@ -786,10 +786,6 @@ def _build_home_dashboard(
     apps_sources = list_article_source_facets(db, feed="apps", **facet_kw)
     top_categories = list_article_category_facets(db, feed="news", **facet_kw)[:10]
 
-    from .industry_wind_public import get_industry_wind_overview
-
-    industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug)
-
     scoring = "heat_score: platform engagement + connector rank + recency; weak snippet-length signal"
     return {
         "news": news_items,
@@ -819,7 +815,6 @@ def _build_home_dashboard(
         ),
         "source_facets": _merge_source_facets(news_sources, apps_sources),
         "top_categories": top_categories,
-        "industry_wind": industry_wind,
         "active_source_count": len(HOME_MAIN_SOURCE_KEYS),
         "active_source_keys": list(HOME_MAIN_SOURCE_KEYS),
     }

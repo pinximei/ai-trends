@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from .home_public import get_home_dashboard
+from .industry_wind_public import get_industry_wind_overview
 
 _SSR_BOOTSTRAP_ID = "aitrends-ssr-home"
 _INDEX_CANDIDATES = (
@@ -28,6 +29,7 @@ def _repo_index_html() -> Path | None:
 def build_home_ssr_bootstrap(db: Session, *, industry_slug: str = "ai") -> dict[str, Any]:
     """与前端 ``HomeDashboardCachePayload`` 字段对齐。"""
     dash = get_home_dashboard(db, industry_slug=industry_slug, published_within_days=30)
+    wind = get_industry_wind_overview(db, industry_slug=industry_slug, allow_llm=False)
     return {
         "news": dash.get("news") or [],
         "apps": dash.get("apps") or [],
@@ -39,7 +41,7 @@ def build_home_ssr_bootstrap(db: Session, *, industry_slug: str = "ai") -> dict[
         "appsLanes": dash.get("apps_source_lanes") or [],
         "sourceFacets": dash.get("source_facets") or [],
         "topCategories": dash.get("top_categories") or [],
-        "industryWind": dash.get("industry_wind"),
+        "industryWind": wind,
         "activeSourceCount": dash.get("active_source_count") or 6,
         "activeSourceKeys": dash.get("active_source_keys") or [],
         "trendOverview": dash.get("trend"),

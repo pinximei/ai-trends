@@ -28,6 +28,17 @@ def test_home_dashboard_shape(client: TestClient) -> None:
     assert isinstance(data.get("editorial_apps"), list)
     assert data["trend"].get("metric_basis") == "display_at"
     assert "display_at" in (data["trend"].get("metric_note") or "")
+    assert "industry_wind" not in data
+
+
+def test_home_industry_wind_fast_endpoint(client: TestClient) -> None:
+    r = client.get("/api/public/v1/home/industry-wind?industry_slug=ai")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("code") == 0
+    data = body["data"]
+    assert "industries" in data
+    assert data.get("compare_mode") == "period_half"
 
 
 def test_format_logs_for_export_multiline() -> None:

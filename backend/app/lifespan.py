@@ -466,6 +466,24 @@ def reschedule_newsletter_digest_job() -> None:
     logger.info("newsletter digest cron rescheduled (America/New_York %s:%02d)", h, m)
 
 
+def _job_industry_wind_warm() -> None:
+    """定时用 LLM 刷新行业风向缓存，避免用户请求阻塞在归纳上。"""
+    db = SessionLocal()
+    try:
+        from .application.industry_wind_public import get_industry_wind_overview
+
+        out = get_industry_wind_overview(db, industry_slug="ai", allow_llm=True)
+        logger.info(
+            "industry wind warm done source=%s trends=%s",
+            out.get("source"),
+            len(out.get("industries") or []),
+        )
+    except Exception:
+        logger.exception("industry wind warm failed")
+    finally:
+        db.close()
+
+
 def _start_scheduler() -> None:
     global _scheduler
     if _scheduler is not None:
@@ -501,6 +519,13 @@ def _start_scheduler() -> None:
         _job_newsletter_feishu_retry,
         IntervalTrigger(minutes=30),
         id="newsletter_feishu_retry",
+        coalesce=True,
+        max_instances=1,
+    )
+    _scheduler.add_job(
+        _job_industry_wind_warm,
+        IntervalTrigger(hours=4),
+        id="industry_wind_warm",
         coalesce=True,
         max_instances=1,
     )

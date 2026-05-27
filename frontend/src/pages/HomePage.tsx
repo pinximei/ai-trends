@@ -376,6 +376,7 @@ export function HomePage() {
   const [industryWind, setIndustryWind] = useState<IndustryWindData | null>(
     () => initialHomeCache?.industryWind ?? null,
   );
+  const [windLoading, setWindLoading] = useState(() => !initialHomeCache?.industryWind);
 
   const sparkSummary = useMemo(() => {
     const spark = trendOverview?.sparkline ?? [];
@@ -423,8 +424,13 @@ export function HomePage() {
     };
 
     const commitPayload = (payload: HomeDashboardCachePayload) => {
-      applyHomeDashboardPayload(payload, stateSetters);
-      writeHomeDashboardCache(payload);
+      const cachedWind = readHomeDashboardCache()?.industryWind;
+      const merged: HomeDashboardCachePayload = {
+        ...payload,
+        industryWind: cachedWind ?? payload.industryWind ?? null,
+      };
+      applyHomeDashboardPayload(merged, stateSetters);
+      writeHomeDashboardCache(merged);
     };
 
     const loadFeedFallback = async (feed: "news" | "apps", limit: number) => {
@@ -438,6 +444,46 @@ export function HomePage() {
       });
       return "items" in res && Array.isArray(res.items) ? res.items : [];
     };
+
+    const mergeWindIntoCache = (wind: IndustryWindData | null) => {
+      if (!wind) return;
+      const prev = readHomeDashboardCache();
+      if (!prev) return;
+      writeHomeDashboardCache({ ...prev, industryWind: wind });
+    };
+
+    const fetchIndustryWind = async (opts?: { refresh?: boolean }) => {
+      try {
+        if (!opts?.refresh) setWindLoading(true);
+        const wind = await publicApi.homeIndustryWind({
+          industry_slug: INDUSTRY,
+          refresh: opts?.refresh,
+        });
+        if (cancelled) return;
+        if (wind) {
+          setIndustryWind(wind);
+          mergeWindIntoCache(wind);
+        }
+        if (!opts?.refresh) {
+          setWindLoading(false);
+          const src = wind?.source;
+          const needsFull =
+            src === "stale_cache" ||
+            src === "fallback" ||
+            src === "empty" ||
+            !(wind?.industries?.length);
+          if (needsFull) {
+            window.setTimeout(() => {
+              if (!cancelled) void fetchIndustryWind({ refresh: true });
+            }, 400);
+          }
+        }
+      } catch {
+        if (!cancelled && !opts?.refresh) setWindLoading(false);
+      }
+    };
+
+    void fetchIndustryWind();
 
     const fetchDashboard = () =>
       publicApi
@@ -479,7 +525,7 @@ export function HomePage() {
             appsLanes: data.apps_source_lanes ?? [],
             sourceFacets: data.source_facets ?? [],
             topCategories: data.top_categories ?? [],
-            industryWind: data.industry_wind ?? null,
+            industryWind: null,
             activeSourceCount: data.active_source_count ?? data.active_source_keys?.length ?? 6,
             activeSourceKeys: data.active_source_keys ?? [],
             trendOverview: data.trend ?? null,
@@ -733,7 +779,7 @@ export function HomePage() {
         </HomeSection>
       </div>
 
-      <IndustryWindPanel data={industryWind} loading={loading && !industryWind} />
+      <IndustryWindPanel data={industryWind} loading={windLoading && !industryWind} />
 
       <HomeSection
         className="ui-card overflow-hidden p-4 sm:p-5"
