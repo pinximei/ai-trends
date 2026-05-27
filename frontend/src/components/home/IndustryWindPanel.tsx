@@ -4,6 +4,8 @@ import { useI18n } from "@/i18n";
 
 export type IndustryWindRow = {
   label: string;
+  headline?: string;
+  summary?: string;
   rank: number;
   momentum_pct: number;
   raw_momentum: number;
@@ -19,6 +21,7 @@ export type IndustryWindData = {
   recent_days: number;
   industries: IndustryWindRow[];
   note?: string;
+  source?: string;
 };
 
 const SIGNAL_STYLE: Record<string, { bar: string; badge: string; text: string }> = {
@@ -50,6 +53,10 @@ function formatGrowth(pct: number | null): string {
   return `${sign}${pct}%`;
 }
 
+function rowHeadline(row: IndustryWindRow): string {
+  return (row.headline || row.label || "").trim();
+}
+
 type Props = {
   data: IndustryWindData | null;
   loading?: boolean;
@@ -79,18 +86,27 @@ export function IndustryWindPanel({ data, loading }: Props) {
           {data.industries.map((row) => {
             const style = SIGNAL_STYLE[row.signal] ?? SIGNAL_STYLE["稳定"];
             const barPct = Math.max(row.momentum_pct, row.article_count > 0 ? 8 : 0);
+            const headline = rowHeadline(row);
+            const key = `${row.rank}-${headline}`;
             return (
               <div
-                key={row.label}
+                key={key}
                 className="rounded-xl border border-slate-200/80 bg-slate-50/50 px-3 py-3 sm:px-4"
               >
-                <div className="flex flex-wrap items-center gap-2 gap-y-1">
-                  <span className="w-6 text-center text-xs font-bold tabular-nums text-slate-400">{row.rank}</span>
-                  <span className="min-w-[5.5rem] text-sm font-bold text-slate-900 sm:min-w-[6.5rem]">{row.label}</span>
-                  <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ring-1 ${style.badge}`}>
+                <div className="flex flex-wrap items-start gap-2 gap-y-1">
+                  <span className="mt-0.5 w-6 shrink-0 text-center text-xs font-bold tabular-nums text-slate-400">
+                    {row.rank}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold leading-snug text-slate-900 sm:text-[15px]">{headline}</p>
+                    {row.summary ? (
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600 sm:text-sm">{row.summary}</p>
+                    ) : null}
+                  </div>
+                  <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ring-1 ${style.badge}`}>
                     {row.signal}
                   </span>
-                  <span className={`ml-auto text-xs font-semibold tabular-nums ${style.text}`}>
+                  <span className={`w-full text-right text-xs font-semibold tabular-nums sm:ml-auto sm:w-auto ${style.text}`}>
                     {formatGrowth(row.growth_pct)}
                     <span className="mx-1 font-normal text-slate-300">·</span>
                     <span className="font-normal text-slate-500">
@@ -121,7 +137,6 @@ export function IndustryWindPanel({ data, loading }: Props) {
                     <span className="mx-1 text-slate-300">·</span>
                     <Link
                       to={row.top_pick.feed_kind === "apps" ? "/apps" : "/news"}
-                      state={{ category: row.label }}
                       className="text-violet-600 hover:underline"
                     >
                       {t("homeIndustryWindMore")}

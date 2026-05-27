@@ -1,47 +1,124 @@
-"""行业风向：近两周各技术赛道热度对比（首页专用，非文章列表页）。"""
+"""行业风向：从近两周高热文章由 AI 归纳可读热点（非固定赛道）。"""
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import and_, desc, select
 from sqlalchemy.orm import Session
 
 from ..domain import articles as art
-from ..product_models import Article
+from ..llm_settings_service import resolve_llm_http_config
+from ..llm_service import _extract_json_object, chat_completion
+from ..product_models import Article, ProductSetting
 from .article_public import _article_matches_public_feed
 from .home_public import _industry_article_ids
 
 MOMENTUM_MIN_HEAT = 48.0
-SCAN_LIMIT = 500
+SCAN_LIMIT = 120
+LLM_CANDIDATE_LIMIT = 55
+MAX_TRENDS = 6
+MIN_TRENDS = 3
+CACHE_KEY = "industry_wind_cache"
+CACHE_TTL_SECONDS = 6 * 3600
 
-TOPIC_INDUSTRY_TRACK_LABELS: tuple[str, ...] = (
-    "Agent",
-    "多模态",
-    "模型层(谨慎)",
-    "数据算力",
-    "安全合规",
-    "政策市场",
+# 运营/空泛大类：不参与风向聚类，也不作为 LLM 输出
+_OPS_OR_ABSTRACT_LABELS: frozenset[str] = frozenset(
+    {
+        "高可复刻",
+        "已验证变现",
+        "变现案例",
+        "其他",
+        "政策市场",
+        "安全合规",
+        "数据算力",
+        "模型层(谨慎)",
+    }
+)
+
+_TITLE_STOP: frozenset[str] = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "your",
+        "you",
+        "are",
+        "was",
+        "has",
+        "have",
+        "new",
+        "how",
+        "why",
+        "what",
+        "when",
+        "can",
+        "will",
+        "not",
+        "all",
+        "our",
+        "its",
+        "into",
+        "out",
+        "app",
+        "api",
+        "tool",
+        "tools",
+        "using",
+        "use",
+        "based",
+        "open",
+        "source",
+        "github",
+        "show",
+        "hn",
+        "ai",
+        "llm",
+        "gpt",
+        "发布",
+        "更新",
+        "推出",
+        "开源",
+        "工具",
+        "应用",
+        "产品",
+        "平台",
+        "服务",
+        "技术",
+        "方案",
+        "系统",
+        "模型",
+        "最新",
+        "今日",
+        "本周",
+        "一个",
+        "如何",
+        "什么",
+        "可以",
+        "已经",
+        "进行",
+        "通过",
+        "基于",
+        "支持",
+        "实现",
+        "提供",
+        "包括",
+        "相关",
+        "更多",
+        "首次",
+        "正式",
+    }
 )
 
 
 def _days_between(later: datetime, earlier: datetime) -> float:
     return max(0.0, (later - earlier).total_seconds() / 86400.0)
-
-
-def topic_track_labels_for_article(a: Article) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for raw in art.parse_category_labels_json(getattr(a, "ai_categories_json", None)):
-        canon = art.map_raw_label_to_canonical(raw)
-        if canon in TOPIC_INDUSTRY_TRACK_LABELS and canon not in seen:
-            seen.add(canon)
-            out.append(canon)
-    if not out:
-        cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-        label = cats[0] if cats else ""
-        if label in TOPIC_INDUSTRY_TRACK_LABELS and label not in seen:
-            out.append(label)
-    return out
 
 
 def compute_article_momentum(a: Article, *, now: datetime | None = None) -> float:
@@ -78,46 +155,40 @@ def _wind_signal(*, growth_pct: float | None, recent_count: int, raw_momentum: f
     return "稳定"
 
 
-def get_industry_wind_overview(
+def _article_snippet(a: Article) -> str:
+    for field in ("card_highlights", "card_description", "summary"):
+        raw = str(getattr(a, field, None) or "").strip()
+        if raw:
+            return raw.replace("\n", " ")[:140]
+    return ""
+
+
+def _article_source_label(a: Article) -> str:
+    raw = str(getattr(a, "third_party_source", None) or "").strip()
+    if " / " in raw:
+        return raw.split(" / ", 1)[0].strip() or raw
+    return raw or "unknown"
+
+
+def _is_ops_facet_article(a: Article) -> bool:
+    cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    if cats and cats[0] in _OPS_OR_ABSTRACT_LABELS:
+        return True
+    for raw in art.parse_category_labels_json(getattr(a, "ai_categories_json", None)):
+        canon = art.map_raw_label_to_canonical(raw)
+        if canon in _OPS_OR_ABSTRACT_LABELS:
+            return True
+    return False
+
+
+def _collect_hot_articles(
     db: Session,
     *,
-    industry_slug: str = "ai",
-    recent_days: int = 14,
-) -> dict:
-    """
-    固定 6 条行业赛道，返回可对比的动量条与环比，便于一眼看出「哪个方向在热」。
-
-    与首页其它区块分工：
-    - 今日精选 / 资讯墙 / 应用榜 → 具体文章
-    - 入库曲线 → 全站活跃度
-    - 本接口 → 行业赛道横向对比
-    """
+    industry_ids: list[int],
+    recent_days: int,
+    now: datetime,
+) -> list[tuple[Article, float, datetime]]:
     recent = max(7, min(int(recent_days), 30))
-    industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
-    empty = {
-        "recent_days": recent,
-        "industries": [
-            {
-                "label": label,
-                "rank": i + 1,
-                "momentum_pct": 0,
-                "raw_momentum": 0.0,
-                "article_count": 0,
-                "prior_count": 0,
-                "growth_pct": None,
-                "signal": "偏冷",
-                "heat_avg": 0.0,
-                "top_pick": None,
-            }
-            for i, label in enumerate(TOPIC_INDUSTRY_TRACK_LABELS)
-        ],
-        "note": "近两周入库文章按行业标签聚合；动量条越长表示该赛道当前综合热度越高",
-    }
-    if not industry_ids:
-        return empty
-
-    now = datetime.utcnow()
-    recent_since = now - timedelta(days=recent)
     prior_since = now - timedelta(days=recent * 2)
     fe = art.article_freshness_sql_expr()
     base = and_(
@@ -127,7 +198,6 @@ def get_industry_wind_overview(
         fe >= prior_since,
         Article.heat_score >= MOMENTUM_MIN_HEAT,
     )
-
     rows = list(
         db.scalars(
             select(Article)
@@ -136,75 +206,391 @@ def get_industry_wind_overview(
             .limit(SCAN_LIMIT)
         ).all()
     )
-
-    acc: dict[str, dict] = {
-        label: {
-            "label": label,
-            "recent_count": 0,
-            "prior_count": 0,
-            "raw_momentum": 0.0,
-            "heat_sum": 0.0,
-            "best_mom": 0.0,
-            "best_article": None,
-        }
-        for label in TOPIC_INDUSTRY_TRACK_LABELS
-    }
-
+    scored: list[tuple[Article, float, datetime]] = []
     for a in rows:
-        labels = topic_track_labels_for_article(a)
-        if not labels:
+        if _is_ops_facet_article(a):
+            continue
+        mom = compute_article_momentum(a, now=now)
+        if mom <= 0:
             continue
         fresh = art.article_freshness_for_row(a) or a.published_at or now
-        mom = compute_article_momentum(a, now=now)
-        in_recent = fresh >= recent_since
-        in_prior = prior_since <= fresh < recent_since
-        for label in labels:
-            bucket = acc[label]
-            if in_recent:
-                bucket["recent_count"] += 1
-                bucket["raw_momentum"] += mom
-                bucket["heat_sum"] += float(a.heat_score or 0)
-                if mom > bucket["best_mom"]:
-                    bucket["best_mom"] = mom
-                    bucket["best_article"] = a
-            elif in_prior:
-                bucket["prior_count"] += 1
+        scored.append((a, mom, fresh))
+    scored.sort(key=lambda x: (-x[1], -float(x[0].heat_score or 0), -x[0].id))
+    return scored
 
-    max_raw = max((b["raw_momentum"] for b in acc.values()), default=0.0) or 1.0
+
+def _load_cache(
+    db: Session,
+    *,
+    industry_slug: str,
+    recent_days: int,
+) -> dict[str, Any] | None:
+    row = db.get(ProductSetting, CACHE_KEY)
+    if not row or not isinstance(row.value_json, dict):
+        return None
+    blob = row.value_json
+    if blob.get("industry_slug") != industry_slug or int(blob.get("recent_days") or 0) != recent_days:
+        return None
+    gen = blob.get("generated_at")
+    if not gen:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(gen).replace("Z", ""))
+    except ValueError:
+        return None
+    if (datetime.utcnow() - ts).total_seconds() > CACHE_TTL_SECONDS:
+        return None
+    industries = blob.get("industries")
+    if not isinstance(industries, list) or not industries:
+        return None
+    return {
+        "recent_days": recent_days,
+        "industries": industries,
+        "note": str(blob.get("note") or ""),
+        "source": str(blob.get("source") or "cache"),
+        "generated_at": gen,
+    }
+
+
+def _save_cache(
+    db: Session,
+    *,
+    industry_slug: str,
+    recent_days: int,
+    payload: dict[str, Any],
+) -> None:
+    row = db.get(ProductSetting, CACHE_KEY)
+    if not row:
+        row = ProductSetting(key=CACHE_KEY, value_json={})
+        db.add(row)
+    row.value_json = {
+        "industry_slug": industry_slug,
+        "recent_days": recent_days,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "industries": payload.get("industries") or [],
+        "note": payload.get("note") or "",
+        "source": payload.get("source") or "llm",
+    }
+    db.commit()
+
+
+def _build_llm_user_payload(candidates: list[tuple[Article, float, datetime]], *, recent_days: int) -> str:
+    lines = [
+        f"时间窗口：近 {recent_days} 天（含上一窗口对比）",
+        "下列为高热文章，请归纳 4～6 个读者能立刻理解的热点方向。",
+        "要求：",
+        "- headline 必须具体（产品名/场景/现象），禁止「政策市场」「安全合规」「数据算力」等空泛词",
+        "- summary 一句话说明为何正在变热，可引用标题中的事实",
+        "- 每篇 id 最多归属一个 trend",
+        "- article_ids 至少 2 条（若整体文章不足可 1 条）",
+        "",
+        "文章列表：",
+    ]
+    for a, mom, fresh in candidates[:LLM_CANDIDATE_LIMIT]:
+        title = (a.title or "").strip().replace("\n", " ")[:100]
+        snip = _article_snippet(a)[:100]
+        src = _article_source_label(a)
+        feed = "apps" if _article_matches_public_feed(a, "apps") else "news"
+        lines.append(f"- id={a.id} heat={a.heat_score:.0f} mom={mom:.0f} src={src} feed={feed} title={title}")
+        if snip:
+            lines.append(f"  摘要: {snip}")
+    return "\n".join(lines)
+
+
+def _parse_llm_trends(raw: str, valid_ids: set[int]) -> list[dict[str, Any]] | None:
+    obj = _extract_json_object(raw)
+    if not obj or not isinstance(obj.get("trends"), list):
+        return None
+    out: list[dict[str, Any]] = []
+    used: set[int] = set()
+    for item in obj["trends"]:
+        if not isinstance(item, dict):
+            continue
+        headline = str(item.get("headline") or item.get("label") or "").strip()
+        summary = str(item.get("summary") or item.get("why_hot") or "").strip()
+        if not headline or len(headline) < 4:
+            continue
+        if headline in _OPS_OR_ABSTRACT_LABELS:
+            continue
+        ids_raw = item.get("article_ids") or item.get("ids") or []
+        if not isinstance(ids_raw, list):
+            continue
+        ids: list[int] = []
+        for x in ids_raw:
+            try:
+                i = int(x)
+            except (TypeError, ValueError):
+                continue
+            if i in valid_ids and i not in used:
+                ids.append(i)
+                used.add(i)
+        if not ids:
+            continue
+        signal = str(item.get("signal") or "稳定").strip()
+        if signal not in ("升温", "稳定", "降温", "偏冷"):
+            signal = "稳定"
+        out.append(
+            {
+                "headline": headline[:40],
+                "summary": summary[:200] if summary else f"近两周 {len(ids)} 篇相关高热讨论",
+                "article_ids": ids,
+                "signal_hint": signal,
+            }
+        )
+        if len(out) >= MAX_TRENDS:
+            break
+    return out if len(out) >= 1 else None
+
+
+def _generate_wind_llm(
+    db: Session,
+    candidates: list[tuple[Article, float, datetime]],
+    *,
+    recent_days: int,
+    industry_slug: str,
+) -> list[dict[str, Any]] | None:
+    _base, key, _model = resolve_llm_http_config(db)
+    if not (key or "").strip():
+        return None
+    valid_ids = {a.id for a, _, _ in candidates}
+    system = (
+        "你是 AI 行业情报主编。根据文章标题与摘要，归纳当下正在变热的具体方向。"
+        "输出必须是 JSON 对象，字段 trends 为数组，每项含 headline、summary、article_ids、signal。"
+        "headline 8～20 字，要让普通开发者一眼看懂在讨论什么；禁止空泛赛道名。"
+    )
+    user = _build_llm_user_payload(candidates, recent_days=recent_days)
+    try:
+        raw, _, _ = chat_completion(
+            db,
+            system=system,
+            user=user,
+            scenario="industry_wind",
+            ref_type="industry",
+            ref_id=industry_slug,
+            response_json=True,
+            max_tokens=1200,
+        )
+    except Exception:
+        return None
+    return _parse_llm_trends(raw, valid_ids)
+
+
+def _title_tokens(title: str) -> list[str]:
+    t = (title or "").strip()
+    if not t:
+        return []
+    tokens: list[str] = []
+    for m in re.finditer(r"[A-Za-z][A-Za-z0-9+#.-]{2,}", t):
+        w = m.group().lower()
+        if w not in _TITLE_STOP and len(w) >= 3:
+            tokens.append(w)
+    for m in re.finditer(r"[\u4e00-\u9fff]{2,6}", t):
+        w = m.group()
+        if w not in _TITLE_STOP:
+            tokens.append(w)
+    return tokens
+
+
+def _headline_from_cluster(cluster: list[Article]) -> str:
+    if not cluster:
+        return "近期热点"
+    seed_title = (cluster[0].title or "").strip()
+    if len(seed_title) <= 22:
+        return seed_title
+    counts: dict[str, int] = {}
+    for a in cluster:
+        for tok in _title_tokens(a.title or ""):
+            if len(tok) >= 4 or (len(tok) >= 2 and "\u4e00" <= tok[0] <= "\u9fff"):
+                counts[tok] = counts.get(tok, 0) + 1
+    ranked = sorted(counts.items(), key=lambda x: (-x[1], -len(x[0])))
+    if ranked:
+        top = [w for w, c in ranked[:3] if c >= 2]
+        if not top:
+            top = [ranked[0][0]]
+        name = " · ".join(top[:2])
+        if len(name) >= 6:
+            return name[:22]
+    return seed_title[:22] + ("…" if len(seed_title) > 22 else "")
+
+
+def _fallback_trends(candidates: list[tuple[Article, float, datetime]]) -> list[dict[str, Any]]:
+    """无 LLM 时：按标题关键词重叠粗聚类，仍输出具体可读 headline。"""
+    if not candidates:
+        return []
+    assigned: set[int] = set()
+    trends: list[dict[str, Any]] = []
+    for seed_a, _, _ in candidates:
+        if seed_a.id in assigned:
+            continue
+        seed_tokens = set(_title_tokens(seed_a.title or ""))
+        cluster: list[Article] = [seed_a]
+        assigned.add(seed_a.id)
+        for other_a, _, _ in candidates:
+            if other_a.id in assigned:
+                continue
+            other_tokens = set(_title_tokens(other_a.title or ""))
+            overlap = seed_tokens & other_tokens
+            strong = [t for t in overlap if len(t) >= 4 or (len(t) >= 2 and "\u4e00" <= t[0] <= "\u9fff")]
+            if strong:
+                cluster.append(other_a)
+                assigned.add(other_a.id)
+        if len(cluster) == 1 and len(trends) >= MIN_TRENDS:
+            continue
+        headline = _headline_from_cluster(cluster)
+        trends.append(
+            {
+                "headline": headline,
+                "summary": f"近两周 {len(cluster)} 篇标题/主题相近的高热讨论",
+                "article_ids": [a.id for a in cluster],
+                "signal_hint": "稳定",
+            }
+        )
+        if len(trends) >= MAX_TRENDS:
+            break
+    if not trends and candidates:
+        a0 = candidates[0][0]
+        trends.append(
+            {
+                "headline": _headline_from_cluster([a0]),
+                "summary": "当前最热单条讨论",
+                "article_ids": [a0.id],
+                "signal_hint": "稳定",
+            }
+        )
+    return trends
+
+
+def _enrich_trends(
+    trends: list[dict[str, Any]],
+    *,
+    articles_by_id: dict[int, Article],
+    momentum_by_id: dict[int, float],
+    now: datetime,
+    recent_since: datetime,
+    prior_since: datetime,
+) -> list[dict]:
     industries: list[dict] = []
-    for label in TOPIC_INDUSTRY_TRACK_LABELS:
-        b = acc[label]
-        rc = int(b["recent_count"])
-        pc = int(b["prior_count"])
-        raw = round(float(b["raw_momentum"]), 1)
-        growth = _growth_pct(rc, pc)
-        signal = _wind_signal(growth_pct=growth, recent_count=rc, raw_momentum=raw)
+    for t in trends:
+        ids = [int(i) for i in (t.get("article_ids") or []) if int(i) in articles_by_id]
+        if not ids:
+            continue
+        recent_count = 0
+        prior_count = 0
+        raw_momentum = 0.0
+        heat_sum = 0.0
+        best_mom = 0.0
+        best_article: Article | None = None
+        for aid in ids:
+            a = articles_by_id[aid]
+            mom = momentum_by_id.get(aid, 0.0)
+            fresh = art.article_freshness_for_row(a) or a.published_at or now
+            if fresh >= recent_since:
+                recent_count += 1
+                raw_momentum += mom
+                heat_sum += float(a.heat_score or 0)
+                if mom > best_mom:
+                    best_mom = mom
+                    best_article = a
+            elif prior_since <= fresh < recent_since:
+                prior_count += 1
+        growth = _growth_pct(recent_count, prior_count)
+        signal = _wind_signal(growth_pct=growth, recent_count=recent_count, raw_momentum=raw_momentum)
         top = None
-        if b["best_article"] is not None:
-            ba = b["best_article"]
-            feed = "apps" if _article_matches_public_feed(ba, "apps") else "news"
-            top = {"id": ba.id, "title": (ba.title or "")[:200], "feed_kind": feed}
+        if best_article is not None:
+            feed = "apps" if _article_matches_public_feed(best_article, "apps") else "news"
+            top = {"id": best_article.id, "title": (best_article.title or "")[:200], "feed_kind": feed}
+        headline = str(t.get("headline") or "").strip()
+        summary = str(t.get("summary") or "").strip()
         industries.append(
             {
-                "label": label,
+                "label": headline,
+                "headline": headline,
+                "summary": summary,
                 "rank": 0,
-                "momentum_pct": round(100.0 * raw / max_raw) if raw > 0 else 0,
-                "raw_momentum": raw,
-                "article_count": rc,
-                "prior_count": pc,
+                "momentum_pct": 0,
+                "raw_momentum": round(raw_momentum, 1),
+                "article_count": recent_count,
+                "prior_count": prior_count,
                 "growth_pct": growth,
                 "signal": signal,
-                "heat_avg": round(b["heat_sum"] / rc, 1) if rc else 0.0,
+                "heat_avg": round(heat_sum / recent_count, 1) if recent_count else 0.0,
                 "top_pick": top,
             }
         )
 
-    industries.sort(key=lambda x: (-x["momentum_pct"], -x["article_count"], x["label"]))
+    max_raw = max((x["raw_momentum"] for x in industries), default=0.0) or 1.0
+    for row in industries:
+        raw = float(row["raw_momentum"])
+        row["momentum_pct"] = round(100.0 * raw / max_raw) if raw > 0 else 0
+    industries.sort(key=lambda x: (-x["momentum_pct"], -x["article_count"], x["headline"]))
     for i, row in enumerate(industries):
         row["rank"] = i + 1
+    return industries
 
-    return {
+
+def get_industry_wind_overview(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    recent_days: int = 14,
+) -> dict:
+    """
+    从近两周高热文章归纳 4～6 个可读热点（LLM + 缓存；无 Key 时标题聚类回退）。
+
+    与固定赛道不同：headline/summary 来自真实讨论主题，而非「政策市场」类空泛标签。
+    """
+    recent = max(7, min(int(recent_days), 30))
+    note = "由近两周高热文章 AI 归纳；条越长表示该方向综合热度越高，摘要说明为何在变热"
+    empty = {
+        "recent_days": recent,
+        "industries": [],
+        "note": note,
+        "source": "empty",
+    }
+
+    cached = _load_cache(db, industry_slug=industry_slug, recent_days=recent)
+    if cached:
+        return cached
+
+    industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
+    if not industry_ids:
+        return empty
+
+    now = datetime.utcnow()
+    recent_since = now - timedelta(days=recent)
+    prior_since = now - timedelta(days=recent * 2)
+    candidates = _collect_hot_articles(db, industry_ids=industry_ids, recent_days=recent, now=now)
+    if len(candidates) < MIN_TRENDS:
+        return {**empty, "note": "近两周高热文章不足，暂无法归纳风向"}
+
+    articles_by_id = {a.id: a for a, _, _ in candidates}
+    momentum_by_id = {a.id: mom for a, mom, _ in candidates}
+
+    raw_trends = _generate_wind_llm(db, candidates, recent_days=recent, industry_slug=industry_slug)
+    source = "llm"
+    if not raw_trends:
+        raw_trends = _fallback_trends(candidates)
+        source = "fallback"
+
+    industries = _enrich_trends(
+        raw_trends,
+        articles_by_id=articles_by_id,
+        momentum_by_id=momentum_by_id,
+        now=now,
+        recent_since=recent_since,
+        prior_since=prior_since,
+    )
+    if not industries:
+        return {**empty, "note": "未能从当前文章归纳出清晰热点，请稍后再试"}
+
+    payload = {
         "recent_days": recent,
         "industries": industries,
-        "note": empty["note"],
+        "note": note,
+        "source": source,
     }
+    try:
+        _save_cache(db, industry_slug=industry_slug, recent_days=recent, payload=payload)
+    except Exception:
+        db.rollback()
+    return payload
