@@ -1,208 +1,17 @@
-import type { CSSProperties, FormEvent, ReactNode } from "react";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Brain, Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
+import { Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
 import { mergeSourceLanes, platformAccent, radarGridClass, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
-import { TOP_NAV_ITEMS } from "@/navConfig";
 
 const INDUSTRY = "ai";
 
 /** 首页邮件订阅条：功能未对公众开放前保持隐藏；与后台 newsletter 就绪后可改为 true */
 const HOME_NEWSLETTER_VISIBLE = false;
-
-/** 倾斜星环平面内的圆轨道半径（rem）；越大越贴近外圈光晕、离中心 AI 越远 */
-const HERO_ORBIT_REM = 9.52;
-const HERO_ORBIT_REM_COMPACT = 5.25;
-const HERO_ORBIT_SEC = 52;
-/** 主光晕慢旋周期（秒），与 index.css 中 .hero-halo-spin 默认值一致 */
-const HERO_HALO_ROT_SEC = 88;
-const HERO_RING_TILT_DEG = 58;
-
-/** 中心 AI 块静态外发光（无呼吸） */
-const HERO_AI_CARD_SHADOW =
-  "0 26px 60px -10px rgba(49,46,129,0.58), 0 0 52px rgba(34,211,238,0.34), 0 0 28px rgba(167,139,250,0.22), inset 0 1px 0 rgba(255,255,255,0.42)";
-
-function usePrefersReducedMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduce(mq.matches);
-    const onChange = () => setReduce(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return reduce;
-}
-
-/** 星环平面内：圆轨道 + 逆旋保持图标正向（CSS 动画） */
-function OrbitSatellite({
-  angleDeg,
-  orbitRem,
-  reduce,
-  compact,
-  children,
-}: {
-  angleDeg: number;
-  orbitRem: number;
-  reduce: boolean;
-  compact?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className="absolute left-1/2 top-1/2 z-[6] h-0 w-0"
-      style={{
-        transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(-${orbitRem}rem)`,
-      }}
-    >
-      <div className={reduce ? "flex -translate-x-1/2 -translate-y-1/2" : "hero-sat-counter flex"}>
-        <span
-          className={`pointer-events-auto relative flex items-center justify-center text-indigo-600 drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] ${
-            compact ? "h-8 w-8" : "h-11 w-11 sm:h-12 sm:w-12"
-          }`}
-        >
-          {children}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 天体星环：圆环放在 rotateX 倾斜的 3D 平面上，透视下呈椭圆；
- * 整层 rotateZ 公转，肉眼即「绕中心转」。
- */
-function HeroGraphic({ compact = false }: { compact?: boolean }) {
-  const { t } = useI18n();
-  const reduce = usePrefersReducedMotion();
-  const orbitRem = compact ? HERO_ORBIT_REM_COMPACT : HERO_ORBIT_REM;
-  const tilt = reduce ? 0 : HERO_RING_TILT_DEG;
-  const orbitStepDeg = 360 / TOP_NAV_ITEMS.length;
-  const ringMax = compact ? "max-w-[168px]" : "max-w-[min(100%,310px)] sm:max-w-[334px]";
-  const shellMax = compact ? "max-w-[188px]" : "max-w-[min(100%,392px)] sm:max-w-[416px]";
-  const squareMax = compact ? "max-w-[176px]" : "max-w-[352px] sm:max-w-[380px]";
-
-  const heroMotionStyle = {
-    ["--hero-orbit-sec" as string]: `${HERO_ORBIT_SEC}s`,
-    ["--hero-halo-sec" as string]: `${HERO_HALO_ROT_SEC}s`,
-  } as CSSProperties;
-
-  return (
-    <div
-      data-testid="hero-graphic"
-      className={`relative mx-auto w-full shrink-0 overflow-visible px-0 py-0 ${shellMax}`}
-      style={heroMotionStyle}
-    >
-      <div
-        data-orbit-square
-        className={`relative isolate mx-auto aspect-square w-full overflow-visible [perspective:1000px] [perspective-origin:50%_50%] ${squareMax}`}
-      >
-        {/* 背面大环境光（不倾斜） */}
-        <div
-          className="pointer-events-none absolute -inset-[18%] -z-[1] rounded-full bg-[radial-gradient(circle_at_50%_40%,rgba(165,180,252,0.2)_0%,rgba(147,163,253,0.14)_28%,rgba(125,211,252,0.1)_48%,rgba(99,102,241,0.05)_72%,transparent_92%)] blur-[58px]"
-          aria-hidden
-        />
-
-        <div className="relative h-full w-full [transform-style:preserve-3d]">
-          {/* 星环平面：圆 → 屏上椭圆 */}
-          <div
-            className="absolute inset-0 flex items-center justify-center [transform-style:preserve-3d]"
-            style={tilt ? { transform: `rotateX(${tilt}deg)` } : undefined}
-          >
-            {/* 慢旋柔光（与环同平面） */}
-            <div
-              data-testid="hero-halo-primary"
-              className={`pointer-events-none absolute aspect-square w-[90%] rounded-full ${ringMax} ${reduce ? "" : "hero-halo-spin"}`}
-              aria-hidden
-              style={{
-                background:
-                  "radial-gradient(ellipse 108% 102% at 48% 36%, rgba(199,210,254,0.26) 0%, rgba(176,190,254,0.2) 18%, rgba(165,180,252,0.17) 34%, rgba(139,154,255,0.13) 50%, rgba(125,211,252,0.11) 66%, rgba(99,102,241,0.07) 82%, transparent 96%)",
-                boxShadow:
-                  "0 0 96px 44px rgba(125,211,252,0.18), 0 0 160px 72px rgba(167,139,250,0.12), 0 0 220px 96px rgba(99,102,241,0.05), inset 0 0 72px rgba(165,180,252,0.09), inset 0 0 120px rgba(79,70,229,0.035)",
-              }}
-            />
-
-            {/* 公转：同平面整层旋转 */}
-            <div
-              className={`pointer-events-none absolute inset-0 flex items-center justify-center [transform-style:preserve-3d] ${reduce ? "" : "hero-orbit-spin"}`}
-            >
-              <div className={`relative aspect-square w-[90%] ${ringMax}`}>
-                {TOP_NAV_ITEMS.map((item, i) => {
-                  const Icon = item.icon;
-                  return (
-                    <OrbitSatellite
-                      key={item.to}
-                      angleDeg={orbitStepDeg * i}
-                      orbitRem={orbitRem}
-                      reduce={reduce}
-                      compact={compact}
-                    >
-                      <Link
-                        to={item.to}
-                        className="flex h-full w-full items-center justify-center rounded-full text-indigo-600 outline-none ring-violet-400/40 transition hover:bg-white/35 hover:text-violet-700 focus-visible:ring-2"
-                        aria-label={t(item.key)}
-                      >
-                        <Icon
-                          className={compact ? "h-4 w-4" : "h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7"}
-                          strokeWidth={2.2}
-                        />
-                      </Link>
-                    </OrbitSatellite>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* 中心 AI：反向倾斜正对镜头 */}
-          <div
-            className="absolute left-1/2 top-1/2 z-20 [transform-style:preserve-3d]"
-            style={
-              tilt
-                ? {
-                    transform: `translate(-50%, -50%) translateZ(${compact ? "2.5rem" : "4.35rem"}) rotateX(-${tilt}deg)`,
-                  }
-                : { transform: "translate(-50%, -50%)" }
-            }
-          >
-            <div
-              className={`relative overflow-hidden rounded-2xl ring-1 ring-white/30 ${
-                compact ? "h-[3.75rem] w-[3.75rem]" : "h-[5.75rem] w-[5.75rem] sm:h-[6.5rem] sm:w-[6.5rem]"
-              }`}
-              style={{ boxShadow: compact ? "0 12px 32px -8px rgba(49,46,129,0.45), 0 0 24px rgba(34,211,238,0.22)" : HERO_AI_CARD_SHADOW }}
-            >
-              <div
-                className={`absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)] ${reduce ? "" : "hero-ai-gradient-shift"}`}
-              />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_32%_18%,rgba(255,255,255,0.55)_0%,transparent_58%)]" />
-              <div className="absolute inset-0 bg-[linear-gradient(195deg,rgba(244,114,182,0.28)_0%,transparent_42%,rgba(56,189,248,0.22)_100%)]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/4 via-transparent to-transparent" />
-              <div className="absolute inset-0 rounded-2xl border border-white/35" />
-              <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/36 to-transparent" />
-              <div className="relative flex h-full w-full items-center justify-center">
-                <Brain
-                  className={`absolute -right-0.5 -top-0.5 z-10 text-cyan-100 drop-shadow ${compact ? "h-5 w-5" : "h-7 w-7 sm:h-8 sm:w-8"}`}
-                  strokeWidth={1.75}
-                />
-                <span
-                  className={`relative z-10 font-black tracking-tight text-white drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] ${
-                    compact ? "text-2xl" : "text-[1.7rem] sm:text-4xl"
-                  }`}
-                >
-                  AI
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 type SparkPoint = { day: string; count: number };
 
@@ -659,33 +468,28 @@ export function HomePage() {
 
   return (
     <div className="w-full space-y-5 lg:space-y-6">
-      <section className="ui-card overflow-hidden p-5 sm:p-6">
-        <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 lg:gap-8">
-          <div className="relative z-10 min-w-0 text-center sm:text-left">
-            <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
-              {t("homeMainHeroTitle")}
-            </h1>
-            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:mx-0 sm:text-[15px] lg:text-base">
-              {t("homeMainHeroDesc")}
-            </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
-              <Link
-                to="/apps"
-                state={{ replicationFilter: "complete" }}
-                className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
-              >
-                {t("homeMainHeroCta2")}
-              </Link>
-              <Link
-                to="/news"
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                {t("homeMainHeroCta1")}
-              </Link>
-            </div>
-          </div>
-          <div className="hidden shrink-0 items-center justify-center sm:flex sm:w-[11.5rem] lg:w-[13rem]">
-            <HeroGraphic compact />
+      <section className="ui-card overflow-hidden p-5 sm:p-6" data-testid="home-hero">
+        <div className="min-w-0 text-center sm:text-left">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
+            {t("homeMainHeroTitle")}
+          </h1>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:mx-0 sm:text-[15px] lg:text-base">
+            {t("homeMainHeroDesc")}
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+            <Link
+              to="/apps"
+              state={{ replicationFilter: "complete" }}
+              className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
+            >
+              {t("homeMainHeroCta2")}
+            </Link>
+            <Link
+              to="/news"
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              {t("homeMainHeroCta1")}
+            </Link>
           </div>
         </div>
       </section>
