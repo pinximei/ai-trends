@@ -25,12 +25,24 @@ export type ArticleCard = {
   /** Product Hunt / HF Spaces 等封面图 */
   cover_image_url?: string | null;
   categories?: string[];
-  /** LLM 可复刻性档位 S/A/B/C（S=高可复刻） */
+  /** 变现价值档位 S/A/B/C */
   replication_tier?: string | null;
-  /** 应用稿：复刻评估结构化字段（入库 LLM 输出） */
+  /** 应用稿：变现价值 + 工时拆解（工时仅详情页展示） */
   replication_analysis?: ReplicationAnalysis | null;
-  /** 列表角标：MVP 预估工时文案 */
-  replication_mvp_hours?: string | null;
+  /** 列表：变现一句（付费/定价） */
+  card_value_hook?: string | null;
+  /** 价值分≥7 且变现假设达标 */
+  value_assessed?: boolean;
+  /** 是否高价值精选（≥8 分且结论高价值） */
+  high_value_pick?: boolean;
+};
+
+export type ReplicationPhase = {
+  name: string;
+  hours_min: number;
+  hours_max: number;
+  deliverable: string;
+  depends_on?: string;
 };
 
 export type ReplicationMarketPosition = {
@@ -46,21 +58,27 @@ export type ReplicationAnalysis = {
   verdict: string;
   worth_score: number;
   difficulty: string;
+  phases?: ReplicationPhase[];
+  team_shape?: string;
+  assumptions?: string;
+  platform_fit?: string;
   estimated_hours: { mvp_min: number; mvp_max: number; prod_min: number; prod_max: number };
   estimated_hours_label?: { mvp: string; production: string };
+  effort_summary?: string;
+  mvp_weeks_label?: string;
   tier_rationale: string;
   value_summary: string;
   market_position?: ReplicationMarketPosition;
   ai_usage_steps?: string[];
-  tech_stack: string[];
-  implementation_plan: string[];
-  implementation_details: string[];
-  open_source: {
+  tech_stack?: string[];
+  implementation_plan?: string[];
+  implementation_details?: string[];
+  open_source?: {
     has_support: boolean;
     projects: { name: string; url: string; role: string }[];
     gaps: string;
   };
-  risks: string[];
+  risks?: string[];
 };
 
 export type ArticleTabSummary = { label: string; summary: string };

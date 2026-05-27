@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 
 from .domain.articles import (
-    FEED_CARD_TAB_LEGACY_HIGHLIGHTS,
-    canonical_feed_card_tab_label,
+    TAB_LABEL_ALIASES,
+    normalize_tab_label,
     publish_polish_length_thresholds,
     required_feed_card_tab_labels,
 )
@@ -60,18 +60,18 @@ def _tab_lengths(data: dict) -> dict[str, dict[str, int]]:
     return out
 
 
-def _legacy_label_warning(data: dict) -> str | None:
-    """模型是否仍使用旧 Tab 名（历史上会导致规整丢正文，现已自动映射）。"""
+def _wrong_tab_label_warning(data: dict) -> str | None:
+    """模型是否仍输出旧 Tab 名（入库前会自动改成规范名）。"""
     tabs = data.get("tabs")
     if not isinstance(tabs, list):
         return None
-    legacy = [
+    wrong = [
         str(t.get("label") or "").strip()
         for t in tabs
-        if isinstance(t, dict) and str(t.get("label") or "").strip() in FEED_CARD_TAB_LEGACY_HIGHLIGHTS
+        if isinstance(t, dict) and str(t.get("label") or "").strip() in TAB_LABEL_ALIASES
     ]
-    if legacy:
-        return f"模型使用了旧 Tab 名 {legacy!r}（已映射为「数据支撑」，若仍失败请看各 Tab 实测字数）"
+    if wrong:
+        return f"模型使用了旧 Tab 名 {wrong!r}（入库前会改为规范名，若仍失败请看各 Tab 字数）"
     return None
 
 
@@ -129,7 +129,7 @@ def diagnose_polish_failure(
     need = required_feed_card_tab_labels(fk)
 
     if isinstance(data, dict):
-        leg = _legacy_label_warning(data)
+        leg = _wrong_tab_label_warning(data)
         if leg:
             lines.append(leg)
         measured = _tab_lengths(data)
@@ -138,7 +138,7 @@ def diagnose_polish_failure(
             lines.append(f"实测 Tab 字数：{'；'.join(parts)}。")
         labels = [str(t.get("label") or "").strip() for t in (data.get("tabs") or []) if isinstance(t, dict)]
         if labels and list(labels) != list(need) and fk == "apps":
-            canon = [canonical_feed_card_tab_label(x) for x in labels]
+            canon = [normalize_tab_label(x) for x in labels]
             if canon != list(need):
                 lines.append(f"Tab 名称不符：模型={labels!r}，要求={list(need)!r}。")
 
@@ -222,7 +222,7 @@ def _length_failure_hints(lab: str, field: str, got: int, need: int, data: dict 
             stack = norm.get("tech_stack") or []
             if plan or stack:
                 hints.append(
-                    "replication_analysis 对象有内容但 Tab「复刻评估」body 偏短："
+                    "replication_analysis 对象有内容但 Tab「变现评估」body 偏短："
                     "须把技术栈/步骤写进 Tab 正文，不能只在 JSON 对象里。"
                 )
     if got > 0 and got >= need - 8:

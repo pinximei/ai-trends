@@ -1,4 +1,4 @@
-"""首页亮点高可复刻应用列表。"""
+"""首页亮点高价值复刻应用列表。"""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from backend.app.application.home_public import list_highlight_replicable_apps
 from backend.app.db import Base
 from backend.app.domain.replication_analysis import normalize_replication_analysis
 from backend.app.product_models import Article, Industry, Segment
-from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
+from tests.replication_fixtures import sample_replication_analysis
 
 
 def _session() -> Session:
@@ -22,26 +22,11 @@ def _session() -> Session:
 
 
 def _deep_replication_json(*, worth: int = 8) -> str:
-    repl = normalize_replication_analysis(
-        {
-            "verdict": "值得复刻",
-            "worth_score": worth,
-            "difficulty": "中",
-            "tier_rationale": "x" * 24,
-            "value_summary": "y" * 20,
-            "tech_stack": ["Next.js"],
-            "implementation_plan": ["step"],
-            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
-            "open_source": {"has_support": False, "projects": [], "gaps": ""},
-            "risks": [],
-            "market_position": sample_market_position(),
-            "ai_usage_steps": sample_ai_usage_steps(),
-        }
-    )
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=worth, verdict="高价值"))
     return json.dumps(repl, ensure_ascii=False)
 
 
-def test_list_highlight_replicable_apps_orders_s_before_a() -> None:
+def test_list_highlight_replicable_apps_orders_by_worth_score() -> None:
     db = _session()
     ind = Industry(slug="ai", name="AI")
     db.add(ind)
@@ -50,32 +35,33 @@ def test_list_highlight_replicable_apps_orders_s_before_a() -> None:
     db.add(seg)
     db.flush()
     now = datetime.utcnow()
-    repl = _deep_replication_json()
+    repl_high = _deep_replication_json(worth=9)
+    repl_low = _deep_replication_json(worth=8)
     db.add_all(
         [
             Article(
                 industry_id=ind.id,
                 segment_id=seg.id,
-                title="Low tier hot",
+                title="Lower worth hot",
                 status="published",
                 feed_kind="apps",
                 third_party_source="product_hunt / daily",
                 ai_categories_json='["应用产品"]',
                 replication_tier="A",
-                replication_analysis_json=repl,
+                replication_analysis_json=repl_low,
                 heat_score=900.0,
                 published_at=now,
             ),
             Article(
                 industry_id=ind.id,
                 segment_id=seg.id,
-                title="High tier",
+                title="Higher worth",
                 status="published",
                 feed_kind="apps",
                 third_party_source="product_hunt / launch",
                 ai_categories_json='["应用产品"]',
                 replication_tier="S",
-                replication_analysis_json=repl,
+                replication_analysis_json=repl_high,
                 heat_score=100.0,
                 published_at=now,
             ),
@@ -86,7 +72,7 @@ def test_list_highlight_replicable_apps_orders_s_before_a() -> None:
                 status="published",
                 feed_kind="news",
                 replication_tier="S",
-                replication_analysis_json=repl,
+                replication_analysis_json=repl_high,
                 heat_score=999.0,
                 published_at=now,
             ),
@@ -111,7 +97,7 @@ def test_list_highlight_replicable_apps_orders_s_before_a() -> None:
                 third_party_source="product_hunt / daily",
                 ai_categories_json='["应用产品"]',
                 replication_tier="S",
-                replication_analysis_json=repl,
+                replication_analysis_json=repl_high,
                 heat_score=500.0,
                 published_at=now - timedelta(days=60),
                 updated_at=now - timedelta(days=60),
@@ -124,10 +110,8 @@ def test_list_highlight_replicable_apps_orders_s_before_a() -> None:
     db.commit()
     items = list_highlight_replicable_apps(db, industry_slug="ai", limit=4, published_within_days=30)
     assert len(items) == 2
-    assert items[0]["title"] == "High tier"
-    assert items[0]["replication_tier"] == "S"
-    assert items[1]["title"] == "Low tier hot"
-    assert items[1]["replication_tier"] == "A"
+    assert items[0]["title"] == "Higher worth"
+    assert items[1]["title"] == "Lower worth hot"
 
 
 def test_list_highlight_replicable_apps_excludes_incomplete_and_low_worth() -> None:
@@ -176,7 +160,7 @@ def test_list_highlight_replicable_apps_excludes_incomplete_and_low_worth() -> N
                 third_party_source="product_hunt / extra",
                 ai_categories_json='["应用产品"]',
                 replication_tier="B",
-                replication_analysis_json=repl_ok,
+                replication_analysis_json=repl_low,
                 heat_score=80.0,
                 published_at=now,
             ),

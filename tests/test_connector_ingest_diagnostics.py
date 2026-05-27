@@ -6,6 +6,7 @@ from backend.app.connector_ingest_diagnostics import (
 )
 from backend.app.polish_publish_compat import coerce_polish_output
 from backend.app.sync_diagnostic_log import should_persist_diagnostic
+from tests.replication_fixtures import sample_replication_analysis
 
 
 def test_should_persist_diagnostic_errors_only():
@@ -49,22 +50,13 @@ def test_diagnose_replication_analysis_invalid():
 def test_coerce_maps_legacy_highlight_tab():
     raw = {
         "feed_kind": "apps",
-        "categories": ["高可复刻"],
+        "categories": ["高价值复刻"],
         "tabs": [
             {"label": "描述", "summary": "s" * 80, "body_md": "b" * 130},
             {"label": "复刻评估", "summary": "r" * 60, "body_md": "x" * 200},
             {"label": "功能亮点", "summary": "h" * 20, "body_md": "y" * 80},
         ],
-        "replication_analysis": {
-            "verdict": "值得复刻",
-            "worth_score": 8,
-            "difficulty": "中",
-            "tier_rationale": "x" * 30,
-            "value_summary": "v" * 20,
-            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 0, "prod_max": 0},
-            "tech_stack": ["Python"],
-            "implementation_plan": ["step1"],
-        },
+        "replication_analysis": sample_replication_analysis(worth=8, verdict="高价值"),
     }
     out = coerce_polish_output(raw)
     labels = [t["label"] for t in out["tabs"]]

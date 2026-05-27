@@ -9,7 +9,7 @@ def _minimal_apps_raw() -> dict:
         "summary": "短",
         "body_md": "",
         "feed_kind": "apps",
-        "categories": ["高可复刻"],
+        "categories": ["高价值复刻"],
         "replication_tier": "B",
         "tabs": [
             {"label": "描述", "summary": "产品简介", "body_md": "x" * 130},

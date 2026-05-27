@@ -1,17 +1,31 @@
-"""每日摘要 / 推送：与公开站一致的复刻评估准入规则。"""
+"""每日摘要 / 推送：与公开站一致的变现价值准入规则。"""
 from __future__ import annotations
 
 from typing import Any
 
-from .application.article_public import _article_replication_complete
+from .application.article_public import _article_listing_product_gate, _article_replication_complete
 from .domain.replication_analysis import parse_replication_analysis_json, replication_analysis_public_view
 
-DEEP_REPLICATION_MIN_WORTH = 7
-DEEP_REPLICATION_TIERS = frozenset({"S", "A"})
+VALUE_ASSESSED_MIN_WORTH = 7
+HIGH_VALUE_DIGEST_MIN_WORTH = 8
 
 
-def article_deep_replication(a: Any, *, min_worth: int = DEEP_REPLICATION_MIN_WORTH) -> bool:
-    return _article_replication_complete(a, min_worth=min_worth)
+def article_value_assessed(a: Any, *, min_worth: int = VALUE_ASSESSED_MIN_WORTH) -> bool:
+    repl = parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
+    if not _article_listing_product_gate(a, repl):
+        return False
+    return _article_replication_complete(a, min_worth=min_worth, require_high_value=False)
+
+
+def article_high_value_for_digest(a: Any) -> bool:
+    repl = parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
+    if not _article_listing_product_gate(a, repl):
+        return False
+    return _article_replication_complete(
+        a,
+        min_worth=HIGH_VALUE_DIGEST_MIN_WORTH,
+        require_high_value=True,
+    )
 
 
 def article_replication_public(a: Any) -> dict[str, Any] | None:
@@ -22,21 +36,20 @@ def article_replication_public(a: Any) -> dict[str, Any] | None:
 
 
 def split_deep_replicable_apps(articles: list[Any]) -> tuple[list[Any], list[Any]]:
-    """完整评估且 worth≥7 的 S/A 档 → 高可复刻；其余进常规应用栏。"""
+    """worth≥8 且 verdict=高价值 → 高价值栏；其余进常规应用栏。"""
     rep: list[Any] = []
     rest: list[Any] = []
     for a in articles:
-        tier = (getattr(a, "replication_tier", None) or "").strip().upper()
-        if article_deep_replication(a) and tier in DEEP_REPLICATION_TIERS:
+        if article_high_value_for_digest(a):
             rep.append(a)
         else:
             rest.append(a)
 
     def _rank(x: Any) -> tuple[int, float, int]:
-        tier = (getattr(x, "replication_tier", None) or "").strip().upper()
-        tier_rank = 0 if tier == "S" else 1
+        repl = article_replication_public(x) or {}
+        worth = -int(repl.get("worth_score") or 0)
         heat = -float(getattr(x, "heat_score", None) or 0.0)
-        return (tier_rank, heat, -int(getattr(x, "id", 0) or 0))
+        return (worth, heat, -int(getattr(x, "id", 0) or 0))
 
     rep.sort(key=_rank)
     return rep, rest

@@ -5,7 +5,11 @@ import json
 
 from backend.app.domain import articles as art
 from backend.app.domain.replication_analysis import FEED_CARD_TAB_REPLICATION
-from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
+from tests.replication_fixtures import (
+    sample_ai_usage_steps,
+    sample_market_position,
+    sample_replication_analysis,
+)
 
 _VALID_SUMMARY = "OpenAI 发布新模型系列，面向多模态与代码场景；核心提升上下文与推理能力；适合开发者与产品团队跟进。"
 _VALID_BODY = "## 一句话看懂\n\n" + "背景与进展说明。" * 40
@@ -32,24 +36,7 @@ def _valid_tabs_news() -> list[dict]:
 
 
 def _valid_replication_analysis() -> dict:
-    return {
-        "verdict": "值得复刻",
-        "worth_score": 8,
-        "difficulty": "低",
-        "estimated_hours": {"mvp_min": 40, "mvp_max": 120, "prod_min": 200, "prod_max": 600},
-        "tier_rationale": "产品边界清晰，可用 React + FastAPI 快速搭 MVP。",
-        "value_summary": "垂直场景明确，适合独立开发者验证。",
-        "tech_stack": ["React", "FastAPI"],
-        "implementation_plan": ["搭前后端骨架", "接支付与登录"],
-        "implementation_details": ["用户体系用 JWT"],
-        "open_source": {
-            "has_support": True,
-            "projects": [{"name": "FastAPI", "url": "https://fastapi.tiangolo.com", "role": "API 框架"}],
-        },
-        "risks": ["竞品多"],
-        "market_position": sample_market_position(),
-        "ai_usage_steps": sample_ai_usage_steps(),
-    }
+    return sample_replication_analysis(worth=8, verdict="高价值")
 
 
 def _valid_tabs_apps() -> list[dict]:
@@ -61,8 +48,8 @@ def _valid_tabs_apps() -> list[dict]:
         },
         {
             "label": FEED_CARD_TAB_REPLICATION,
-            "summary": "复刻评估 tab：值得复刻，技术栈常见，两周内可搭 MVP 验证核心流程；含工时、开源引用与主要风险，满足发布校验字数。",
-            "body_md": "## 复刻评估\n\n" + "实现步骤与开源引用说明。" * 24,
+            "summary": "变现评估 tab：高价值方向，含阶段化工时与变现假设；技术栈常见，可在数周内搭 MVP 验证核心流程与付费意愿，满足发布校验字数。",
+            "body_md": "## 变现评估\n\n" + "实现步骤与开源引用说明。" * 24,
         },
         {
             "label": "数据支撑",
@@ -385,7 +372,7 @@ def test_normalize_polish_tabs_renames_legacy_and_strips_json() -> None:
     assert "```json" not in tabs[0]["body_md"]
 
 
-def test_validate_llm_polish_accepts_legacy_news_tabs() -> None:
+def test_validate_llm_polish_rejects_wrong_news_tab_labels() -> None:
     data = {
         "title": "测试标题",
         "summary": _VALID_SUMMARY,
@@ -400,12 +387,12 @@ def test_validate_llm_polish_accepts_legacy_news_tabs() -> None:
             },
             {
                 "label": "要点",
-                "summary": "要点 tab：概括关键事实与数字，供兼容旧 label 的入库校验测试使用。",
+                "summary": "要点 tab：概括关键事实与数字，错误 label 应被拒绝。",
                 "body_md": "## 要点\n\n" + "- 要点条目一\n- 要点条目二\n" * 18,
             },
         ],
     }
-    assert art.validate_llm_polish_for_publish(data) is True
+    assert art.validate_llm_polish_for_publish(data) is False
 
 
 def test_extract_source_original_url_json_html_url() -> None:

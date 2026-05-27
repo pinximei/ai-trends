@@ -44,10 +44,10 @@ def build_digest_subject_default(
 
 
 _TIER_LABEL: dict[str, str] = {
-    "S": "高可复刻",
-    "A": "较高可复刻",
-    "B": "可复刻性中",
-    "C": "低可复刻",
+    "S": "高变现价值",
+    "A": "较高变现价值",
+    "B": "变现价值中",
+    "C": "低变现价值",
 }
 
 
@@ -61,22 +61,22 @@ def _tier_display(tier: str) -> str:
 def _tier_suffix_for_article(a: Any, *, feed_kind: str) -> str:
     if feed_kind != "apps":
         return ""
-    from .newsletter_replication import article_deep_replication
+    from .newsletter_replication import article_high_value_for_digest
 
     tier = (getattr(a, "replication_tier", None) or "").strip().upper()
-    if not tier or not article_deep_replication(a):
+    if not tier or not article_high_value_for_digest(a):
         return ""
     label = _tier_display(tier)
     return f" · {label}" if label else ""
 
 
 def _why_follow(a: Any, *, feed_kind: str) -> str:
-    from .newsletter_replication import article_deep_replication, article_replication_public
+    from .newsletter_replication import article_high_value_for_digest, article_replication_public
 
     tier = (getattr(a, "replication_tier", None) or "").strip().upper()
     if feed_kind == "apps":
         repl = article_replication_public(a)
-        if repl and article_deep_replication(a):
+        if repl and article_high_value_for_digest(a):
             worth = int(repl.get("worth_score") or 0)
             verdict = (repl.get("verdict") or "").strip()
             vs = (repl.get("value_summary") or "").strip()
@@ -87,11 +87,11 @@ def _why_follow(a: Any, *, feed_kind: str) -> str:
                 return f"{head}；{_snippet(vs, max_len=120)}"
             return head
         if tier in ("S", "A"):
-            return "仅有档位标签，暂无完整复刻评估，建议以热度与介绍为准，详见站内详情"
+            return "仅有档位标签，暂无完整变现评估，建议以热度与介绍为准，详见站内详情"
         if tier == "B":
-            return "可复刻性中等，站内评估未达标展示档位列，建议结合详情判断"
+            return "变现价值中等，站内评估未达标，建议结合详情判断"
         if tier == "C":
-            return "低可复刻向，更适合跟踪趋势而非直接复刻"
+            return "低变现价值向，更适合跟踪趋势而非投入开发"
         return "当日热度靠前，可作为产品动态样本跟踪"
     return "当日高热度资讯，建议了解对行业与产品方向的影响"
 
@@ -194,7 +194,7 @@ def build_digest_body_from_articles(
     replicable_apps, regular_rest = split_deep_replicable_apps(app_lane)
     parts: list[str] = [
         "> AI 产品雷达 · 每日精选（美东摘要日当天已发布）。"
-        "「高可复刻」仅含完整评估且价值分≥7 的 S/A 档；其余应用按热度收录。",
+        "「高价值应用」仅含价值分≥8 且结论为「高价值」的条目；其余按热度收录。",
         "",
     ]
     if mon_lane:
@@ -212,11 +212,11 @@ def build_digest_body_from_articles(
         _lane_body(
             replicable_apps,
             feed_kind="apps",
-            highlight_title="高可复刻",
-            more_title="更多高可复刻",
-            kind_note="（完整评估 · S/A 档）",
+            highlight_title="高价值应用",
+            more_title="更多高价值应用",
+            kind_note="（价值分≥8 · 结论高价值）",
             highlight_n=highlight_apps,
-            empty_message="今日无达标的高可复刻应用（须完整评估且价值分≥7）。",
+            empty_message="今日无达标的高价值应用（价值分≥8 且结论为「高价值」）。",
         )
     )
     parts.extend(

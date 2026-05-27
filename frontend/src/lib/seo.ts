@@ -9,7 +9,7 @@ export const SITE_PUBLIC_URL = (
 
 export const SITE_NAME = "AI 资讯站";
 export const SITE_DEFAULT_DESCRIPTION =
-  "聚合 Product Hunt、GitHub Trending、Hacker News 等源的 AI 应用与资讯，结构化呈现趋势与可复刻评估。";
+  "聚合 Product Hunt、GitHub Trending、Hacker News 等源的 AI 应用与资讯，按变现价值评估与排序。";
 
 export type PageSeo = {
   title?: string;

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Select, and_, case, desc, func, or_, select
+from sqlalchemy import Float, Select, and_, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..domain import articles as art
@@ -67,18 +67,15 @@ def _monetization_counts_as_apps_feed(a: Article) -> bool:
 
 
 def _github_counts_as_apps_feed(a: Article) -> bool:
-    """GitHub 客户端 Trending：公开「应用」泳道纳入 S/A 或「开源客户端(好抄)」类条目。"""
+    """GitHub 仅「开源客户端(好抄)」类进入应用泳道（不再用 S/A 档位旁路）。"""
     if art.admin_source_key(a.third_party_source) != "github":
         return False
     cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-    if cats and cats[0] == GITHUB_CLONE_APPS_CATEGORY:
-        return True
-    tier = (getattr(a, "replication_tier", None) or "").strip().upper()
-    return tier in ("S", "A")
+    return bool(cats and cats[0] == GITHUB_CLONE_APPS_CATEGORY)
 
 
 def _article_matches_public_feed(a: Article, feed: str) -> bool:
-    """公开 feed=apps/news 泳道：apps 含可抄 GitHub 与变现向条目；news 与之去重。"""
+    """公开 feed=apps/news 泳道：apps 含客户端 GitHub 与变现向条目；news 与之去重。"""
     lane = _row_feed_lane(a)
     if feed == "apps":
         return lane == "apps" or _github_counts_as_apps_feed(a) or _monetization_counts_as_apps_feed(a)
@@ -89,20 +86,51 @@ def _article_matches_public_feed(a: Article, feed: str) -> bool:
     return lane == feed
 
 
-def _article_replication_complete(a: Article, *, min_worth: int = 7) -> bool:
+def _article_listing_product_gate(a: Article, repl: dict | None) -> bool:
+    """排除纯 GitHub 技术雷达；变现向源与达标评估才进入「有价值」池。"""
+    from ..domain.replication_analysis import article_value_filter_eligible
+
+    sk = art.admin_source_key(getattr(a, "third_party_source", None))
+    cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+    primary = cats[0] if cats else ""
+
+    if sk == "github":
+        if primary != GITHUB_CLONE_APPS_CATEGORY:
+            return False
+        return bool(repl and article_value_filter_eligible(repl, min_worth=7))
+
+    if sk in art.MONETIZATION_SOURCE_KEYS or sk == "product_hunt" or sk == "huggingface_spaces":
+        return True
+
+    if primary in art.MONETIZATION_APPS_CATEGORIES | frozenset({"高价值复刻", "已验证变现"}):
+        return True
+
+    if (getattr(a, "feed_kind", None) or "").strip().lower() == "apps":
+        return bool(repl and article_value_filter_eligible(repl, min_worth=7))
+
+    return bool(repl and article_value_filter_eligible(repl, min_worth=7))
+
+
+def _article_replication_complete(
+    a: Article,
+    *,
+    min_worth: int = 7,
+    require_high_value: bool = False,
+) -> bool:
+    """公开筛选：变现价值达标（不要求阶段化工时），且更像可售卖产品（非纯 repo 雷达）。"""
     from ..domain.replication_analysis import (
+        article_value_filter_eligible,
         parse_replication_analysis_json,
-        validate_replication_analysis_for_publish,
     )
 
     repl = parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
-    if not validate_replication_analysis_for_publish(repl):
+    if not _article_listing_product_gate(a, repl):
         return False
-    try:
-        worth = int(repl.get("worth_score") or 0)
-    except (TypeError, ValueError):
-        return False
-    return worth >= int(min_worth)
+    return article_value_filter_eligible(
+        repl,
+        min_worth=min_worth,
+        require_high_value=require_high_value,
+    )
 
 
 def _feed_row_matches_list_filters(
@@ -114,8 +142,9 @@ def _feed_row_matches_list_filters(
     search_n: str | None,
     tier_filter: frozenset[str] | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
 ) -> bool:
-    """与公开列表一致的泳道 / 类别 / 数据源 / 搜索 / 可复刻档位筛选。"""
+    """与公开列表一致的泳道 / 类别 / 数据源 / 搜索 / 变现档位筛选。"""
     if not _article_matches_public_feed(a, feed):
         return False
     if source_filter and art.admin_source_key(a.third_party_source) != source_filter:
@@ -127,7 +156,13 @@ def _feed_row_matches_list_filters(
         t = (getattr(a, "replication_tier", None) or "").strip().upper()
         if t not in tier_filter:
             return False
-    if replication_complete and not _article_replication_complete(a):
+    if replication_high_value and not _article_replication_complete(
+        a, min_worth=8, require_high_value=True
+    ):
+        return False
+    if replication_complete and not replication_high_value and not _article_replication_complete(
+        a, min_worth=7, require_high_value=False
+    ):
         return False
     if search_n and not _article_title_summary_matches(a, search_n):
         return False
@@ -142,7 +177,20 @@ def _freshness_at(a: Article) -> datetime:
     return art.article_freshness_for_row(a) or datetime.utcnow()
 
 
-def _heat_order_by(*, sort_replicable: bool = False, sort_monetization: bool = False):
+def _worth_score_sql_expr():
+    """从 replication_analysis_json 提取 worth_score（1–10）；无评估字段视为 -1，排在有分条目之后。"""
+    return func.coalesce(
+        func.cast(func.json_extract(Article.replication_analysis_json, "$.worth_score"), Float),
+        -1.0,
+    )
+
+
+def _heat_order_by(
+    *,
+    sort_replicable: bool = False,
+    sort_by_value: bool = False,
+    sort_monetization: bool = False,
+):
     fe = _freshness_expr()
     order: list = []
     if sort_monetization:
@@ -153,15 +201,8 @@ def _heat_order_by(*, sort_replicable: bool = False, sort_monetization: bool = F
                 else_=2,
             )
         )
-    if sort_replicable:
-        order.append(
-            case(
-                (func.upper(Article.replication_tier) == "S", 0),
-                (func.upper(Article.replication_tier) == "A", 1),
-                (func.upper(Article.replication_tier) == "B", 2),
-                else_=3,
-            )
-        )
+    if sort_by_value or sort_replicable:
+        order.append(desc(_worth_score_sql_expr()))
     order.extend((desc(Article.heat_score), desc(fe), desc(Article.id)))
     return tuple(order)
 
@@ -176,6 +217,7 @@ def _build_feed_fingerprint_winner_ids(
     search_n: str | None,
     tier_filter: frozenset[str] | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
     max_scan_rows: int = 48_000,
     batch: int = 500,
 ) -> frozenset[int]:
@@ -205,6 +247,7 @@ def _build_feed_fingerprint_winner_ids(
                 search_n=search_n,
                 tier_filter=tier_filter,
                 replication_complete=replication_complete,
+                replication_high_value=replication_high_value,
             ):
                 continue
             fp = art.display_fingerprint(a.title, a.summary or "")
@@ -261,8 +304,9 @@ def list_articles_home_radar_source_top(
     published_within_days: int,
     published_on_latest_day: bool = False,
     limit: int = 12,
+    sort_by_value: bool = False,
 ) -> list[dict]:
-    """首页六路雷达：该数据源时间窗内热度 Top（与列表泳道规则解耦）。"""
+    """首页六路雷达：该数据源时间窗内 Top（应用源可按变现价值分排序）。"""
     sk = normalize_source_filter(source_key)
     if not sk:
         return []
@@ -282,8 +326,9 @@ def list_articles_home_radar_source_top(
     if not winner_ids:
         return []
     label_by_key = _admin_source_label_by_key(db)
+    order = _heat_order_by(sort_by_value=sort_by_value) if sort_by_value else _heat_order_by()
     rows = db.scalars(
-        select(Article).where(Article.id.in_(winner_ids)).order_by(*_heat_order_by()).limit(lim)
+        select(Article).where(Article.id.in_(winner_ids)).order_by(*order).limit(lim)
     ).all()
     return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 
@@ -378,10 +423,10 @@ def _base_article_query_for_scope(
 
 
 def _feed_day_inner_order_by(feed: str):
-    """按 UTC 日分页时，**同一天内**条目的 SQL 排序（日历日收集亦按展示时效）。"""
+    """按 UTC 日分页时同一天内排序：应用泳道先变现价值分，再热度。"""
     fe = _freshness_expr()
     if feed == "apps":
-        return (desc(Article.heat_score), desc(fe), desc(Article.id))
+        return (desc(_worth_score_sql_expr()), desc(Article.heat_score), desc(fe), desc(Article.id))
     return (desc(fe), desc(Article.id))
 
 
@@ -461,10 +506,20 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
     }
     repl = art.parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
     if repl:
-        from ..domain.replication_analysis import replication_analysis_public_view
+        from ..domain.replication_analysis import (
+            article_value_filter_eligible,
+            card_value_hook,
+            replication_analysis_public_view,
+        )
 
-        card["replication_analysis"] = replication_analysis_public_view(repl)
-        card["replication_mvp_hours"] = art.estimated_hours_mvp_label(repl)
+        pub = replication_analysis_public_view(repl)
+        card["replication_analysis"] = pub
+        card["card_value_hook"] = card_value_hook(repl)
+        card["value_assessed"] = article_value_filter_eligible(repl, min_worth=7, require_high_value=False)
+        card["high_value_pick"] = article_value_filter_eligible(repl, min_worth=8, require_high_value=True)
+    else:
+        card["value_assessed"] = False
+        card["high_value_pick"] = False
     return card
 
 
@@ -539,6 +594,7 @@ def list_articles_feed_by_day_page(
     days_per_page: int = DAYS_PER_PAGE_DEFAULT,
     replication_tiers: str | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
 ) -> dict:
     """按 UTC 自然日分页：每页连续 ``days_per_page`` 个有内容的日历日（默认 3），第 1 页为最新一段。"""
     cat_filter = (category or "").strip() or None
@@ -546,6 +602,7 @@ def list_articles_feed_by_day_page(
     n = normalize_feed_search(search)
     tier_filter = _tier_filter_from_csv(replication_tiers)
     repl_complete = bool(replication_complete)
+    repl_high = bool(replication_high_value)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -582,6 +639,7 @@ def list_articles_feed_by_day_page(
         search_n=n,
         tier_filter=tier_filter,
         replication_complete=repl_complete,
+        replication_high_value=repl_high,
     )
 
     ordered_days, truncated = _collect_ordered_days_for_feed(
@@ -636,6 +694,7 @@ def list_articles_feed_by_day_page(
             search_n=n,
             tier_filter=tier_filter,
             replication_complete=repl_complete,
+            replication_high_value=repl_high,
         ):
             continue
         if a.id not in winner_ids:
@@ -677,11 +736,13 @@ def list_articles_feed_by_heat_top(
     heat_max_ranked: int = HEAT_FEED_MAX,
     replication_tiers: str | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
     sort_replicable: bool = False,
+    sort_by_value: bool = False,
     sort_monetization: bool = False,
 ) -> dict:
     """
-    与「按日」相同的时间窗与筛选；在展示指纹胜者集合内排序（可选 S/A 优先），
+    与「按日」相同的时间窗与筛选；在展示指纹胜者集合内排序（默认按变现价值分 worth_score），
     先截取至多 ``heat_max_ranked`` 条作为热度池，再分页返回。
     """
     cat_filter = (category or "").strip() or None
@@ -689,7 +750,15 @@ def list_articles_feed_by_heat_top(
     n = normalize_feed_search(search)
     tier_filter = _tier_filter_from_csv(replication_tiers)
     repl_complete = bool(replication_complete)
-    sort_rep = bool(sort_replicable or tier_filter or repl_complete)
+    repl_high = bool(replication_high_value)
+    sort_val = bool(
+        sort_by_value
+        or sort_replicable
+        or repl_complete
+        or repl_high
+        or tier_filter
+        or feed == "apps"
+    )
     sort_mon = bool(sort_monetization or (cat_filter in art.MONETIZATION_APPS_CATEGORIES))
     ps = max(1, min(int(heat_page_size or HEAT_PAGE_DEFAULT), HEAT_PAGE_MAX))
     off = max(0, int(heat_offset or 0))
@@ -725,6 +794,7 @@ def list_articles_feed_by_heat_top(
         search_n=n,
         tier_filter=tier_filter,
         replication_complete=repl_complete,
+        replication_high_value=repl_high,
     )
     if not winner_ids:
         return empty
@@ -734,7 +804,7 @@ def list_articles_feed_by_heat_top(
     ranked_pool = (
         select(Article.id.label("rid"))
         .where(pool_where)
-        .order_by(*_heat_order_by(sort_replicable=sort_rep, sort_monetization=sort_mon))
+        .order_by(*_heat_order_by(sort_by_value=sort_val, sort_monetization=sort_mon))
         .limit(cap)
         .subquery()
     )
@@ -781,10 +851,12 @@ def list_article_category_facets(
     search: str | None = None,
     replication_tiers: str | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，由 AI categories 聚合出的可选筛选项。"""
     tier_filter = _tier_filter_from_csv(replication_tiers)
     repl_complete = bool(replication_complete)
+    repl_high = bool(replication_high_value)
     ind, q = _base_article_query_for_scope(
         db,
         industry_slug=industry_slug,
@@ -806,6 +878,7 @@ def list_article_category_facets(
         search_n=n,
         tier_filter=tier_filter,
         replication_complete=repl_complete,
+        replication_high_value=repl_high,
     )
     rows = db.scalars(q.order_by(desc(_freshness_expr()), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
@@ -818,6 +891,7 @@ def list_article_category_facets(
             search_n=n,
             tier_filter=tier_filter,
             replication_complete=repl_complete,
+            replication_high_value=repl_high,
         ):
             continue
         if a.id not in winner_ids:
@@ -842,10 +916,12 @@ def list_article_source_facets(
     search: str | None = None,
     replication_tiers: str | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，按 admin_source_key 聚合的数据源筛选项。"""
     tier_filter = _tier_filter_from_csv(replication_tiers)
     repl_complete = bool(replication_complete)
+    repl_high = bool(replication_high_value)
     ind, q = _base_article_query_for_scope(
         db,
         industry_slug=industry_slug,
@@ -868,6 +944,7 @@ def list_article_source_facets(
         search_n=n,
         tier_filter=tier_filter,
         replication_complete=repl_complete,
+        replication_high_value=repl_high,
     )
     rows = db.scalars(q.order_by(desc(_freshness_expr()), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
@@ -880,6 +957,7 @@ def list_article_source_facets(
             search_n=n,
             tier_filter=tier_filter,
             replication_complete=repl_complete,
+            replication_high_value=repl_high,
         ):
             continue
         if a.id not in winner_ids:
@@ -912,12 +990,14 @@ def list_articles_feed(
     search: str | None = None,
     replication_tiers: str | None = None,
     replication_complete: bool = False,
+    replication_high_value: bool = False,
 ) -> dict:
     scan_limit = 280
     cat_filter = (category or "").strip() or None
     source_filter = normalize_source_filter(source)
     tier_filter = _tier_filter_from_csv(replication_tiers)
     repl_complete = bool(replication_complete)
+    repl_high = bool(replication_high_value)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -941,6 +1021,7 @@ def list_articles_feed(
         search_n=n,
         tier_filter=tier_filter,
         replication_complete=repl_complete,
+        replication_high_value=repl_high,
     )
 
     exclude = art.parse_exclude_fingerprints(exclude_fp)
@@ -966,6 +1047,7 @@ def list_articles_feed(
                 search_n=n,
                 tier_filter=tier_filter,
                 replication_complete=repl_complete,
+                replication_high_value=repl_high,
             ):
                 continue
             if a.id not in winner_ids:

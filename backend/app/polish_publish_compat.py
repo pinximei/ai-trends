@@ -1,6 +1,5 @@
 """
-LLM 润色结果发布兼容层：在丢弃入库前，用规则补齐 Tab / 字数 / replication_analysis。
-目标：解决失败、兼容旧格式，而不是 skip。
+LLM 润色结果入库修复：在丢弃前补齐 Tab / 字数 / replication_analysis（仅用于当次连接器润色）。
 """
 from __future__ import annotations
 
@@ -26,7 +25,7 @@ from .domain.replication_analysis import (
 
 
 def coerce_polish_output(out: dict) -> dict:
-    """规整 feed_kind、单分类、Tab 顺序与旧 label 映射。"""
+    """规整 feed_kind、单分类、Tab 顺序；将模型误用的 Tab 名映射为规范名。"""
     fk = str(out.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
@@ -221,10 +220,29 @@ def _ensure_replication_analysis_object(
         hours = {}
     mvp_max = int(hours.get("mvp_max") or 0)
     prod_max = int(hours.get("prod_max") or 0)
+    phases = ra.get("phases")
+    if not isinstance(phases, list) or len(phases) < 3:
+        plan_lines = [ln.strip() for ln in (repl.get("body_md") or "").splitlines() if ln.strip()][:6]
+        synth_phases = []
+        defaults_h = [(16, 24), (20, 32), (24, 40)]
+        for i, (lo, hi) in enumerate(defaults_h):
+            title = plan_lines[i].lstrip("-*0123456789. ")[:40] if i < len(plan_lines) else f"阶段 {i + 1}"
+            synth_phases.append(
+                {
+                    "name": title or f"阶段 {i + 1}",
+                    "hours_min": lo,
+                    "hours_max": hi,
+                    "deliverable": "可演示交付物（需结合正文核对）",
+                }
+            )
+        ra["phases"] = synth_phases
     if mvp_max < 8 and prod_max < 40:
-        defaults = {"S": (24, 80, 80, 240), "A": (40, 120, 120, 400), "B": (80, 200, 200, 600), "C": (120, 320, 320, 960)}
-        a, b, c, d = defaults.get(tier, defaults["B"])
-        ra["estimated_hours"] = {"mvp_min": a, "mvp_max": b, "prod_min": c, "prod_max": d}
+        from .domain.replication_analysis import _normalize_phases, _sync_hours_from_phases
+
+        ra["estimated_hours"] = _sync_hours_from_phases(
+            _normalize_phases(ra.get("phases")),
+            {"mvp_min": 0, "mvp_max": 0, "prod_min": 0, "prod_max": 0},
+        )
     plan = ra.get("implementation_plan")
     if not isinstance(plan, list) or not [x for x in plan if str(x).strip()]:
         lines = [ln.strip() for ln in (repl.get("body_md") or "").splitlines() if ln.strip()]
@@ -239,14 +257,14 @@ def _ensure_replication_analysis_object(
             flags=re.I,
         )
         ra["tech_stack"] = list(dict.fromkeys(found))[:8] or ["Web", "API"]
-    if str(ra.get("verdict") or "") not in ("值得复刻", "观望", "不建议"):
+    if str(ra.get("verdict") or "") not in ("高价值", "观望", "不建议"):
         ra["verdict"] = "观望"
     if str(ra.get("difficulty") or "") not in ("低", "中", "高"):
         ra["difficulty"] = "中"
     try:
-        ra["worth_score"] = max(1, min(10, int(ra.get("worth_score") or 6)))
+        ra["worth_score"] = max(1, min(10, int(ra.get("worth_score") or 4)))
     except (TypeError, ValueError):
-        ra["worth_score"] = 6
+        ra["worth_score"] = 4
     mp = ra.get("market_position")
     if not isinstance(mp, dict):
         mp = {}
@@ -261,16 +279,23 @@ def _ensure_replication_analysis_object(
         mp["competitors"] = [{"name": "同类 Web/SaaS 竞品（需自行检索）", "note": "差异化见 differentiation 字段"}]
     if len(str(mp.get("differentiation") or "")) < 12:
         mp["differentiation"] = _merge_text(repl.get("summary") or "", str(ra.get("value_summary") or ""), min_len=12)[:800]
-    if len(str(mp.get("monetization_hypothesis") or "")) < 10:
-        mp["monetization_hypothesis"] = "订阅或买断；优先验证 20 个目标用户付费意愿后再扩功能"
+    if len(str(mp.get("monetization_hypothesis") or "")) < 16:
+        vs = str(ra.get("value_summary") or "").strip()
+        if len(vs) >= 16:
+            mp["monetization_hypothesis"] = vs[:800]
     ra["market_position"] = mp
+    risks = ra.get("risks")
+    if not isinstance(risks, list) or not [x for x in risks if str(x).strip()]:
+        ra["risks"] = ["竞争与获客成本需自行验证"]
+    if not str(ra.get("platform_fit") or "").strip():
+        ra["platform_fit"] = "unknown"
     ai_steps = ra.get("ai_usage_steps")
     if not isinstance(ai_steps, list) or len([x for x in ai_steps if str(x).strip()]) < 2:
         ra["ai_usage_steps"] = [
             "用 LLM 根据原文生成 MVP 功能清单与文案草稿（人工删减）",
             "编码阶段：核心数据流用确定性逻辑，仅辅助环节调用模型 API",
         ]
-    out["replication_analysis"] = ra
+    out["replication_analysis"] = normalize_replication_analysis(ra) or ra
     out["replication_tier"] = tier
 
 
@@ -321,8 +346,8 @@ def repair_polish_for_publish(
 
         out["categories"] = [primary_canonical_from_raw_labels(["开源客户端(好抄)"])]
         tier = normalize_replication_tier(out.get("replication_tier"))
-        if tier not in ("S", "A"):
-            out["replication_tier"] = "A"
+        if tier not in ("S", "A", "B", "C"):
+            out["replication_tier"] = "B"
         fixes.append("github_apps_defaults")
 
     cats = out.get("categories")
@@ -438,7 +463,7 @@ def ensure_publishable_polish(
     rule_title: str = "",
     rule_summary: str = "",
 ) -> dict | None:
-    """兼容修复后若仍可通过校验则返回 dict，否则 None。"""
+    """规则修复后若仍可通过校验则返回 dict，否则 None。"""
     if not data or not isinstance(data, dict):
         return None
     sk = admin_source_key

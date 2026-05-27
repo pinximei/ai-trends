@@ -32,7 +32,7 @@ WIND_COMPARE_MODE = "period_half"
 # 运营/空泛大类：不参与风向聚类，也不作为 LLM 输出
 _OPS_OR_ABSTRACT_LABELS: frozenset[str] = frozenset(
     {
-        "高可复刻",
+        "高价值复刻",
         "已验证变现",
         "变现案例",
         "其他",

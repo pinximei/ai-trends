@@ -10,9 +10,8 @@ from ..domain import articles as art
 from ..domain.articles import FEED_APPS_KEYS
 from ..product_models import Article, Industry, ProductSetting
 
-# 首页「亮点应用」：仅展示完整复刻评估且 worth≥7 的 S/A 档
-HOME_REPLICABLE_TIERS: tuple[str, ...] = ("S", "A")
-HOME_REPLICABLE_MIN_WORTH = 7
+# 首页「亮点应用」：verdict=高价值、worth≥8，按价值分排序
+HOME_REPLICABLE_MIN_WORTH = 8
 HOME_REPLICABLE_HIGHLIGHT_DEFAULT = 4
 HOME_MONETIZATION_HIGHLIGHT_DEFAULT = 4
 # 首页热度池：缩小指纹扫描上限（原 96×2 过重）
@@ -265,11 +264,7 @@ def get_home_editorial_picks(
     apps_limit: int = 6,
     published_within_days: int = 30,
 ) -> dict:
-    """
-    首页编辑推荐：按统一 heat_score 取资讯/应用热门，而非「最新发布时间」。
-
-    列表页默认仍可按日浏览；首页焦点位应对齐各平台真实热度 + 榜内名次。
-    """
+    """首页编辑推荐：资讯按热度；应用按变现价值分（须完整评估）。"""
     from .article_public import list_articles_feed_by_heat_top
 
     nl = max(1, min(int(news_limit), 20))
@@ -299,6 +294,8 @@ def get_home_editorial_picks(
         heat_offset=0,
         heat_page_size=min(HOME_HEAT_PAGE_SIZE, al * 2),
         heat_max_ranked=min(HOME_HEAT_POOL_CAP, al * 4),
+        sort_by_value=True,
+        replication_complete=True,
     )
     news_items = _select_home_picks(news_raw.get("items") or [], nl)
     apps_items = _select_home_picks(apps_raw.get("items") or [], al)
@@ -307,7 +304,7 @@ def get_home_editorial_picks(
         "apps": apps_items,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
-        "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
+        "scoring_note": "news: heat_score; apps: worth_score then heat (replication_complete)",
     }
 
 
@@ -326,6 +323,8 @@ def _home_radar_lanes_for_feed(
     label_by_key = _admin_source_label_by_key(db)
     skip = exclude_ids or set()
     lanes: list[dict] = []
+    from ..domain.replication_analysis import article_value_filter_eligible
+
     for k in keys:
         candidates = list_articles_home_radar_source_top(
             db,
@@ -334,7 +333,15 @@ def _home_radar_lanes_for_feed(
             published_within_days=published_within_days,
             published_on_latest_day=False,
             limit=16,
+            sort_by_value=(feed == "apps"),
         )
+        if feed == "apps":
+            candidates = [
+                it
+                for it in candidates
+                if isinstance(it.get("replication_analysis"), dict)
+                and article_value_filter_eligible(it["replication_analysis"], min_worth=7)
+            ]
         picked: list[dict] = []
         for it in candidates:
             aid = it.get("id")
@@ -430,65 +437,61 @@ def _pick_highlight_replicable_articles(
     since: datetime,
     limit: int,
 ) -> list[Article]:
-    """S → A 分档拉取（须完整复刻评估且 worth≥7），优先不同数据源。"""
-    from .article_public import _article_matches_public_feed, _article_replication_complete
+    """按变现价值分 worth_score 拉取（≥HOME_REPLICABLE_MIN_WORTH 且结论高价值），优先不同数据源。"""
+    from .article_public import (
+        _article_matches_public_feed,
+        _article_replication_complete,
+        _worth_score_sql_expr,
+    )
 
     fe = art.article_freshness_sql_expr()
-    tier_rank = case(
-        (func.upper(Article.replication_tier) == "S", 0),
-        (func.upper(Article.replication_tier) == "A", 1),
-        else_=3,
+    scan_lim = max(limit * 12, 48)
+    candidates = list(
+        db.scalars(
+            select(Article)
+            .where(
+                Article.industry_id.in_(industry_ids),
+                Article.status == "published",
+                fe.isnot(None),
+                fe >= since,
+            )
+            .order_by(
+                desc(_worth_score_sql_expr()),
+                desc(Article.heat_score),
+                desc(fe),
+                desc(Article.id),
+            )
+            .limit(scan_lim)
+        ).all()
     )
+    pool = [
+        a
+        for a in candidates
+        if _article_matches_public_feed(a, "apps")
+            and _article_replication_complete(
+                a,
+                min_worth=HOME_REPLICABLE_MIN_WORTH,
+                require_high_value=True,
+            )
+    ]
     picked: list[Article] = []
     seen_ids: set[int] = set()
     used_sources: set[str] = set()
-
-    for tier_group in (("S",), ("A",)):
+    for pass_diverse in (True, False):
         if len(picked) >= limit:
             break
-        tier_set = {t.upper() for t in tier_group}
-        scan_lim = max(limit * 10, 32)
-        candidates = list(
-            db.scalars(
-                select(Article)
-                .where(
-                    Article.industry_id.in_(industry_ids),
-                    Article.status == "published",
-                    fe.isnot(None),
-                    fe >= since,
-                    func.upper(Article.replication_tier).in_(tier_set),
-                )
-                .order_by(
-                    tier_rank,
-                    desc(Article.heat_score),
-                    desc(fe),
-                    desc(Article.id),
-                )
-                .limit(scan_lim)
-            ).all()
-        )
-        pool = [
-            a
-            for a in candidates
-            if _article_matches_public_feed(a, "apps")
-            and a.id not in seen_ids
-            and _article_replication_complete(a, min_worth=HOME_REPLICABLE_MIN_WORTH)
-        ]
-        for pass_diverse in (True, False):
+        for a in pool:
             if len(picked) >= limit:
                 break
-            for a in pool:
-                if len(picked) >= limit:
-                    break
-                if a.id in seen_ids:
-                    continue
-                sk = art.admin_source_key(a.third_party_source)
-                if pass_diverse and sk and sk in used_sources:
-                    continue
-                picked.append(a)
-                seen_ids.add(a.id)
-                if sk:
-                    used_sources.add(sk)
+            if a.id in seen_ids:
+                continue
+            sk = art.admin_source_key(a.third_party_source)
+            if pass_diverse and sk and sk in used_sources:
+                continue
+            picked.append(a)
+            seen_ids.add(a.id)
+            if sk:
+                used_sources.add(sk)
     return picked
 
 
@@ -498,10 +501,8 @@ def list_highlight_replicable_apps(
     industry_slug: str = "ai",
     limit: int = HOME_REPLICABLE_HIGHLIGHT_DEFAULT,
     published_within_days: int = 30,
-    tiers: tuple[str, ...] | None = None,
 ) -> list[dict]:
-    """首页亮点应用：完整复刻评估且 worth≥7 的 S/A 档（默认 4 条，多数据源）。"""
-    del tiers  # 保留参数兼容；档位策略见 _pick_highlight_replicable_articles
+    """首页亮点应用：worth≥8 且结论「高价值」，按价值分排序。"""
     from .article_public import _admin_source_label_by_key, _feed_card_from_article
 
     lim = max(1, min(int(limit), 12))
@@ -535,10 +536,16 @@ def _monetization_highlight_rank(a: Article) -> int:
 
 
 def _eligible_monetization_highlight(a: Article) -> bool:
-    """首页变现线索入池：应用泳道 + 变现类/源站；JSON 含变现标签但主类为应用产品时也纳入。"""
-    from .article_public import _article_matches_public_feed, _monetization_counts_as_apps_feed
+    """首页变现线索：变现向分类/源站 + 价值分≥7（与列表「有价值」同门槛）。"""
+    from .article_public import (
+        _article_matches_public_feed,
+        _article_replication_complete,
+        _monetization_counts_as_apps_feed,
+    )
 
     if not _article_matches_public_feed(a, "apps"):
+        return False
+    if not _article_replication_complete(a, min_worth=7, require_high_value=False):
         return False
     if _monetization_counts_as_apps_feed(a):
         return True
@@ -555,7 +562,9 @@ def _pick_highlight_monetization_articles(
     since: datetime,
     limit: int,
 ) -> list[Article]:
-    """分档拉取变现线索，优先不同数据源，凑满首页展示条数。"""
+    """分档拉取达标变现线索：价值分优先，再按变现类/源站档位与热度。"""
+    from .article_public import _worth_score_sql_expr
+
     fe = art.article_freshness_sql_expr()
     scan_lim = max(limit * 15, 48)
     candidates = list(
@@ -575,6 +584,7 @@ def _pick_highlight_monetization_articles(
                 ),
             )
             .order_by(
+                desc(_worth_score_sql_expr()),
                 desc(Article.heat_score),
                 desc(fe),
                 desc(Article.id),
@@ -583,9 +593,21 @@ def _pick_highlight_monetization_articles(
         ).all()
     )
     pool = [a for a in candidates if _eligible_monetization_highlight(a)]
+    from ..domain.replication_analysis import parse_replication_analysis_json
+
+    def _worth_rank(a: Article) -> int:
+        repl = parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
+        if not repl:
+            return 0
+        try:
+            return int(repl.get("worth_score") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     pool.sort(
         key=lambda a: (
             _monetization_highlight_rank(a),
+            -_worth_rank(a),
             -(float(a.heat_score or 0)),
             -(art.article_freshness_for_row(a) or since).timestamp(),
             -int(a.id),
@@ -635,7 +657,7 @@ def list_highlight_monetization_apps(
     limit: int = HOME_MONETIZATION_HIGHLIGHT_DEFAULT,
     published_within_days: int = 30,
 ) -> list[dict]:
-    """首页变现线索：变现案例优先，不足时按档位与热度补足（默认 4 条，多数据源）。"""
+    """首页变现线索：价值分≥7 + 变现向分类/源站，按价值分与变现档位排序。"""
     from .article_public import _admin_source_label_by_key, _feed_card_from_article
 
     lim = max(1, min(int(limit), 8))
@@ -660,7 +682,7 @@ def _home_dashboard_cache_params(
     published_within_days: int,
 ) -> dict:
     return {
-        "v": 5,
+        "v": 6,
         "industry_slug": industry_slug.strip().lower(),
         "news_limit": int(news_limit),
         "apps_limit": int(apps_limit),
@@ -742,7 +764,13 @@ def _build_home_dashboard(
         heat_max_ranked=HOME_HEAT_POOL_CAP,
     )
     news_raw = list_articles_feed_by_heat_top(db, feed="news", **heat_kw)
-    apps_raw = list_articles_feed_by_heat_top(db, feed="apps", **heat_kw)
+    apps_raw = list_articles_feed_by_heat_top(
+        db,
+        feed="apps",
+        **heat_kw,
+        sort_by_value=True,
+        replication_complete=True,
+    )
 
     news_raw_items = news_raw.get("items") or []
     apps_raw_items = apps_raw.get("items") or []
@@ -786,7 +814,7 @@ def _build_home_dashboard(
     apps_sources = list_article_source_facets(db, feed="apps", **facet_kw)
     top_categories = list_article_category_facets(db, feed="news", **facet_kw)[:10]
 
-    scoring = "heat_score: platform engagement + connector rank + recency; weak snippet-length signal"
+    scoring = "news: heat_score; apps: worth_score (replication_complete)"
     return {
         "news": news_items,
         "apps": apps_items,

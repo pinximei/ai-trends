@@ -1,13 +1,19 @@
-"""应用复刻评估 JSON 解析与发布校验。"""
+"""应用变现价值评估 JSON 解析与发布校验。"""
 from __future__ import annotations
 
 from backend.app.domain.replication_analysis import (
     FEED_CARD_TAB_REPLICATION,
+    article_value_filter_eligible,
+    monetization_hypothesis_is_substantive,
     normalize_replication_analysis,
     validate_replication_analysis_for_publish,
 )
 from backend.app.domain.articles import required_feed_card_tab_labels, validate_llm_polish_for_publish
-from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
+from tests.replication_fixtures import (
+    sample_ai_usage_steps,
+    sample_market_position,
+    sample_replication_analysis,
+)
 
 
 def test_required_tabs_apps_includes_replication() -> None:
@@ -16,48 +22,15 @@ def test_required_tabs_apps_includes_replication() -> None:
 
 
 def test_normalize_and_validate_replication_analysis() -> None:
-    raw = {
-        "verdict": "值得复刻",
-        "worth_score": 8,
-        "difficulty": "中",
-        "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 200, "prod_max": 400},
-        "tier_rationale": "产品边界清晰，可用 React + FastAPI 快速搭 MVP。",
-        "value_summary": "面向独立开发者的订阅工具，有明确付费场景。",
-        "tech_stack": ["React", "FastAPI", "PostgreSQL"],
-        "implementation_plan": ["搭建鉴权", "实现核心列表 API", "接入支付"],
-        "implementation_details": ["复用开源 admin 模板"],
-        "open_source": {
-            "has_support": True,
-            "projects": [{"name": "refine", "url": "https://github.com/refinedev/refine", "role": "后台脚手架"}],
-            "gaps": "支付与邮件需自研",
-        },
-        "risks": ["竞品多"],
-        "market_position": sample_market_position(),
-        "ai_usage_steps": sample_ai_usage_steps(),
-    }
+    raw = sample_replication_analysis(worth=8, verdict="值得复刻")
     norm = normalize_replication_analysis(raw)
     assert norm is not None
+    assert norm["verdict"] == "高价值"
     assert validate_replication_analysis_for_publish(norm)
 
 
 def test_validate_llm_polish_apps_three_tabs() -> None:
-    repl = normalize_replication_analysis(
-        {
-            "verdict": "观望",
-            "worth_score": 6,
-            "difficulty": "高",
-            "estimated_hours": {"mvp_min": 120, "mvp_max": 200, "prod_min": 500, "prod_max": 800},
-            "tier_rationale": "依赖闭源大模型 API，复刻成本高但可做垂直细分。",
-            "value_summary": "企业向工作流，客单价高但销售周期长。",
-            "tech_stack": ["Next.js", "Python"],
-            "implementation_plan": ["调研 API 配额"],
-            "implementation_details": ["先做只读演示"],
-            "open_source": {"has_support": False, "projects": [], "gaps": "核心推理无开源替代"},
-            "risks": ["合规"],
-            "market_position": sample_market_position(),
-            "ai_usage_steps": sample_ai_usage_steps(),
-        }
-    )
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=6, verdict="观望"))
     data = {
         "title": "示例 AI 写作助手",
         "summary": "面向创作者的写作助手，提供模板与多模型切换，适合独立开发者参考其产品形态、订阅设计与增长路径。",
@@ -85,6 +58,34 @@ def test_validate_llm_polish_apps_three_tabs() -> None:
         ],
     }
     assert validate_llm_polish_for_publish(data, admin_source_key="product_hunt")
+
+
+def test_generic_monetization_hypothesis_fails_filters() -> None:
+    raw = sample_replication_analysis(worth=8, verdict="高价值")
+    mp = raw["market_position"]
+    mp["monetization_hypothesis"] = "订阅或买断；优先验证 20 个目标用户付费意愿后再扩功能"
+    assert not monetization_hypothesis_is_substantive(mp["monetization_hypothesis"])
+    norm = normalize_replication_analysis(raw)
+    assert norm is not None
+    assert not article_value_filter_eligible(norm, min_worth=7)
+
+
+def test_pricing_signal_boosts_worth_score() -> None:
+    raw = sample_replication_analysis(worth=6, verdict="观望")
+    raw["market_position"]["monetization_hypothesis"] = "SaaS 定价 $19/月，面向独立开发者"
+    norm = normalize_replication_analysis(raw, pricing_context="$19/mo subscription")
+    assert norm is not None
+    assert int(norm["worth_score"]) >= 7
+
+
+def test_value_filter_eligible_without_phases() -> None:
+    raw = sample_replication_analysis(worth=8, verdict="高价值")
+    raw.pop("phases", None)
+    norm = normalize_replication_analysis(raw)
+    assert norm is not None
+    assert not validate_replication_analysis_for_publish(norm)
+    assert article_value_filter_eligible(norm, min_worth=7)
+    assert article_value_filter_eligible(norm, min_worth=8, require_high_value=True)
 
 
 def test_validate_rejects_incomplete_market_position() -> None:

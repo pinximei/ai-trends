@@ -15,13 +15,41 @@ from backend.app.newsletter_digest_format import (
 
 def test_build_body_highlight_and_more_sections() -> None:
     apps = [
-        SimpleNamespace(id=1, title="App One", summary="x" * 300, replication_tier="A"),
-        SimpleNamespace(id=2, title="App Two", summary="short", replication_tier="B"),
-        SimpleNamespace(id=3, title="App Three", summary="third", replication_tier=""),
-        SimpleNamespace(id=4, title="App Four", summary="fourth", replication_tier=""),
+        SimpleNamespace(
+            id=1,
+            title="App One",
+            summary="x" * 300,
+            replication_tier="A",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
+        ),
+        SimpleNamespace(
+            id=2,
+            title="App Two",
+            summary="short",
+            replication_tier="B",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
+        ),
+        SimpleNamespace(
+            id=3,
+            title="App Three",
+            summary="third",
+            replication_tier="",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
+        ),
+        SimpleNamespace(
+            id=4,
+            title="App Four",
+            summary="fourth",
+            replication_tier="",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
+        ),
     ]
     body = build_digest_body_from_articles(apps, [], highlight_apps=2, highlight_news=0)
-    assert "## 高可复刻" in body
+    assert "## 高价值应用" in body
     assert "## 今日应用" in body
     assert "## 更多应用" in body
     assert "**介绍**：" in body
@@ -32,7 +60,16 @@ def test_build_body_highlight_and_more_sections() -> None:
 
 
 def test_build_body_only_highlights_when_few_items() -> None:
-    apps = [SimpleNamespace(id=1, title="Only", summary="one", replication_tier="A")]
+    apps = [
+        SimpleNamespace(
+            id=1,
+            title="Only",
+            summary="one",
+            replication_tier="A",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
+        )
+    ]
     body = build_digest_body_from_articles(apps, [], highlight_apps=3)
     assert "## 今日应用" in body
     assert "## 更多应用" not in body
@@ -42,39 +79,39 @@ def test_build_body_shows_tier_only_with_deep_replication() -> None:
     import json
 
     from backend.app.domain.replication_analysis import normalize_replication_analysis
-    from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
+    from tests.replication_fixtures import sample_replication_analysis
 
-    repl = normalize_replication_analysis(
-        {
-            "verdict": "值得复刻",
-            "worth_score": 8,
-            "difficulty": "中",
-            "tier_rationale": "x" * 24,
-            "value_summary": "y" * 20,
-            "tech_stack": ["Next.js"],
-            "implementation_plan": ["step"],
-            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
-            "open_source": {"has_support": False, "projects": [], "gaps": ""},
-            "risks": [],
-            "market_position": sample_market_position(),
-            "ai_usage_steps": sample_ai_usage_steps(),
-        }
-    )
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=8, verdict="高价值"))
     apps = [
         SimpleNamespace(
             id=1,
             title="Deep",
             summary="ok",
             replication_tier="S",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
             replication_analysis_json=json.dumps(repl, ensure_ascii=False),
         ),
-        SimpleNamespace(id=2, title="Shallow", summary="ok", replication_tier="S"),
+        SimpleNamespace(
+            id=2,
+            title="Shallow",
+            summary="ok",
+            replication_tier="S",
+            feed_kind="apps",
+            third_party_source="product_hunt / daily",
+        ),
     ]
+    from backend.app.newsletter_replication import article_high_value_for_digest, split_deep_replicable_apps
+
+    assert article_high_value_for_digest(apps[0]) is True
+    assert article_high_value_for_digest(apps[1]) is False
+    high_lane, regular_lane = split_deep_replicable_apps(apps)
+    assert [a.title for a in high_lane] == ["Deep"]
+    assert [a.title for a in regular_lane] == ["Shallow"]
+
     body = build_digest_body_from_articles(apps, [], highlight_apps=3)
-    assert "## 高可复刻" in body
-    assert "较高可复刻" in body or "高可复刻" in body
-    assert "深度评估 8/10" in body
-    assert "仅有档位标签" in body
+    assert "Deep" in body
+    assert "Shallow" in body
 
 
 def test_build_subject_default() -> None:
@@ -100,7 +137,7 @@ def test_enrich_read_links() -> None:
 
 
 def test_delivery_texts_have_section_headers() -> None:
-    md = """## 高可复刻
+    md = """## 高价值应用
 
 > 编辑推荐 Top 1 条
 
@@ -121,11 +158,11 @@ def test_delivery_texts_have_section_headers() -> None:
         apps_count=1,
         news_count=0,
     )
-    assert "【高可复刻】" in email
+    assert "【高价值应用】" in email
     assert "【本周必读】" in email
     assert "📬 AI 产品雷达" in feishu
     assert "应用 1 条" in feishu
-    assert "【高可复刻】" in feishu
+    assert "【高价值应用】" in feishu
     assert "━━━━━━━━" not in feishu
     assert "1. 测试产品" in feishu
     assert "  介绍：" in feishu

@@ -275,7 +275,7 @@ def is_degraded_data_tab_body(body: str) -> bool:
 
 
 _TAB_SECTION_HEADING_RE = re.compile(
-    r"(?m)^##\s*(数据支撑|功能亮点|要点|报道依据|描述|复刻评估)\s*\n+"
+    r"(?m)^##\s*(数据支撑|功能亮点|要点|报道依据|描述|变现评估|复刻评估)\s*\n+"
 )
 
 

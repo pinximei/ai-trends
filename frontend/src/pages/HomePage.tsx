@@ -465,6 +465,9 @@ export function HomePage() {
         heat_page_size: limit,
         heat_max_ranked: limit * 3,
         published_within_days: 30,
+        ...(feed === "apps"
+          ? { replication_complete: true, sort_by_value: true }
+          : {}),
       });
       return "items" in res && Array.isArray(res.items) ? res.items : [];
     };
@@ -654,7 +657,7 @@ export function HomePage() {
             </Link>
             <Link
               to="/apps"
-              state={{ replicationFilter: "complete" }}
+              state={{ replicationFilter: "high_value" }}
               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
             >
               {t("homeMainHeroCta2")}
@@ -782,7 +785,7 @@ export function HomePage() {
           action={{
             label: t("homeHighlightMonetizationAppsCta"),
             to: "/apps",
-            state: { category: "变现案例" },
+            state: { replicationFilter: "complete", category: "变现案例" },
           }}
         >
           {showBlockingLoad ? (

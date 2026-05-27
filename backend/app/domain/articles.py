@@ -633,7 +633,7 @@ FACET_PRIMARY_CATEGORIES: tuple[str, ...] = (
     "模型层(谨慎)",
     "开源客户端(好抄)",
     "应用产品",
-    "高可复刻",
+    "高价值复刻",
     "已验证变现",
     "变现案例",
     "数据算力",
@@ -648,14 +648,15 @@ _LEGACY_CATEGORY_ALIASES: dict[str, str] = {
     "大模型": "模型层(谨慎)",
     "开源工具": "开源客户端(好抄)",
     "论文研究": "模型层(谨慎)",
-    "易复刻": "高可复刻",
+    "易复刻": "高价值复刻",
+    "高可复刻": "高价值复刻",
 }
 
 REPLICATION_TIER_ALLOWED: frozenset[str] = frozenset({"S", "A", "B", "C"})
 
 
 def normalize_replication_tier(raw: object) -> str | None:
-    """LLM 可复刻性档位：S=高可复刻 … C=低可复刻；兼容中文别名。"""
+    """LLM 变现价值档位：S=高变现价值 … C=低变现；兼容旧「可复刻」别名。"""
     s = str(raw or "").strip().upper()
     if not s:
         return None
@@ -663,9 +664,12 @@ def normalize_replication_tier(raw: object) -> str | None:
         "易": "S",
         "易复刻": "S",
         "高可复刻": "S",
+        "高价值": "S",
+        "高变现": "S",
         "极高": "S",
         "极易": "S",
         "较高可复刻": "A",
+        "较高变现": "A",
         "可复刻": "A",
         "A级": "A",
         "B级": "B",
@@ -687,7 +691,7 @@ FACET_DISPLAY_ORDER: tuple[str, ...] = (*FACET_PRIMARY_CATEGORIES, FACET_CATEGOR
 _CATEGORY_KEYWORD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("变现案例", ("acquire", "并购", "出售", "arr", "mrr", "估值", "退出")),
     ("已验证变现", ("付费", "订阅", "营收", "变现", "商业化", "saas 收入")),
-    ("高可复刻", ("高可复刻", "易复刻", "复刻", "克隆", "mvp", "一周", "独立开发", "side project")),
+    ("高价值复刻", ("高价值", "高可复刻", "易复刻", "变现", "付费", "订阅", "定价", "side project")),
     ("Agent", ("agent", "智能体", "工作流", "自动化")),
     ("政策市场", ("政策", "监管", "市场", "融资")),
     ("安全合规", ("安全", "对齐", "合规", "隐私", "风险")),
@@ -1344,20 +1348,27 @@ def article_detail_profile(admin_source_key: str, feed_kind: str) -> str:
 
 FEED_CARD_TAB_DESCRIPTION = "描述"
 FEED_CARD_TAB_DATA = "数据支撑"
-# 旧稿 tab 名，列表卡片与详情仍可读
-FEED_CARD_TAB_LEGACY_HIGHLIGHTS = frozenset({"功能亮点", "要点"})
+
+# 模型偶发仍输出的旧 Tab 名 → 入库/展示时统一改成规范名（只改 label，正文不动）
+TAB_LABEL_ALIASES: dict[str, str] = {
+    "复刻评估": "变现评估",
+    "功能亮点": "数据支撑",
+    "要点": "数据支撑",
+}
+
+
+def normalize_tab_label(raw_label: str) -> str:
+    lab = (raw_label or "").strip()
+    return TAB_LABEL_ALIASES.get(lab, lab)
 
 
 def canonical_feed_card_tab_label(raw_label: str) -> str:
-    """将模型常用的旧 Tab 名映射为当前规范名，避免解析/规整时丢弃正文。"""
-    lab = (raw_label or "").strip()
-    if lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS:
-        return FEED_CARD_TAB_DATA
-    return lab
+    """同 normalize_tab_label（保留旧函数名供各处 import）。"""
+    return normalize_tab_label(raw_label)
 
 
 def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
-    """应用泳道：描述 + 复刻评估 + 数据支撑；资讯仍为描述 + 数据支撑。"""
+    """应用泳道：描述 + 变现评估 + 数据支撑；资讯仍为描述 + 数据支撑。"""
     from .replication_analysis import FEED_CARD_TAB_REPLICATION
 
     fk = (feed_kind or "news").strip().lower()
@@ -1367,9 +1378,7 @@ def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
 
 
 def feed_card_highlights_tab_label(raw_label: str) -> bool:
-    """是否对应列表卡片「亮点/要点」槽位（含旧 label）。"""
-    lab = (raw_label or "").strip()
-    return lab == FEED_CARD_TAB_DATA or lab in FEED_CARD_TAB_LEGACY_HIGHLIGHTS
+    return normalize_tab_label(raw_label) == FEED_CARD_TAB_DATA
 
 
 # 资讯/社区源（原文偏短）：略放宽 tab 字数门槛，仍要求双 tab + 单合法大类。
@@ -1440,20 +1449,8 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     tabs = data.get("tabs")
     if not isinstance(tabs, list):
         return False
-    expected_n = len(need_labels)
-    if len(tabs) != expected_n:
-        if fk == "apps" and len(tabs) == 2:
-            legacy_ok = [str(t.get("label") or "").strip() for t in tabs if isinstance(t, dict)] == [
-                need_labels[0],
-                need_labels[-1],
-            ] or [str(t.get("label") or "").strip() for t in tabs if isinstance(t, dict)] == [
-                need_labels[0],
-                "功能亮点",
-            ]
-            if not legacy_ok:
-                return False
-        else:
-            return False
+    if len(tabs) != len(need_labels):
+        return False
     tab_body_total = 0
     labels: list[str] = []
     for t in tabs:
@@ -1472,15 +1469,11 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
         if len(lab) < 2 or len(summ) < min_summ or len(body) < min_body:
             return False
         tab_body_total += len(body)
-    if fk == "apps" and len(need_labels) == 3:
-        if labels != list(need_labels):
-            return False
+    if labels != list(need_labels):
+        return False
+    if fk == "apps":
         norm = normalize_replication_analysis(data.get("replication_analysis"))
         if not validate_replication_analysis_for_publish(norm):
-            return False
-    elif labels != list(need_labels):
-        legacy_ok = labels == [need_labels[0], "功能亮点"] if fk == "apps" else labels == [need_labels[0], "要点"]
-        if not legacy_ok:
             return False
     if tab_body_total < th["tab_body_total"]:
         return False

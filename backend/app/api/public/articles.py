@@ -32,11 +32,15 @@ def list_article_categories(
     ),
     replication_tiers: str | None = Query(
         None,
-        description="Comma-separated replication tiers S,A,B,C (apps 抄应用筛选).",
+        description="Comma-separated monetization tiers S,A,B,C (legacy filter).",
     ),
     replication_complete: bool = Query(
         False,
-        description="When true, only apps with full replication analysis and worth≥7.",
+        description="When true, only apps with monetization assessment and worth_score≥7.",
+    ),
+    replication_high_value: bool = Query(
+        False,
+        description="When true, only high-value picks (worth≥8, verdict=高价值).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -57,6 +61,7 @@ def list_article_categories(
             search=q,
             replication_tiers=replication_tiers,
             replication_complete=replication_complete,
+            replication_high_value=replication_high_value,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -88,7 +93,11 @@ def list_article_sources(
     ),
     replication_complete: bool = Query(
         False,
-        description="When true, only apps with full replication analysis and worth≥7.",
+        description="When true, only apps with monetization assessment and worth_score≥7.",
+    ),
+    replication_high_value: bool = Query(
+        False,
+        description="When true, only high-value picks (worth≥8, verdict=高价值).",
     ),
     db: Session = Depends(get_db),
 ):
@@ -109,6 +118,7 @@ def list_article_sources(
             search=q,
             replication_tiers=replication_tiers,
             replication_complete=replication_complete,
+            replication_high_value=replication_high_value,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -176,15 +186,23 @@ def list_articles_feed(
     ),
     replication_tiers: str | None = Query(
         None,
-        description="Comma-separated replication tiers S,A,B,C (e.g. S,A for clone-friendly apps).",
+        description="Comma-separated monetization tiers S,A,B,C (legacy; prefer replication_complete).",
     ),
     replication_complete: bool = Query(
         False,
-        description="When true, only apps with full replication analysis and worth≥7.",
+        description="When true, only apps with monetization assessment and worth_score≥7.",
+    ),
+    replication_high_value: bool = Query(
+        False,
+        description="When true, only high-value picks (worth≥8, verdict=高价值).",
     ),
     sort_replicable: bool = Query(
         False,
-        description="When true, order heat pool by tier S→A→B→C then heat_score (抄应用优先).",
+        description="Deprecated alias: same as sort_by_value (order by worth_score desc).",
+    ),
+    sort_by_value: bool = Query(
+        False,
+        description="When true, order heat pool by worth_score (变现价值分 1–10) desc, then heat.",
     ),
     sort_monetization: bool = Query(
         False,
@@ -212,6 +230,7 @@ def list_articles_feed(
                 days_per_page=days_per_page,
                 replication_tiers=replication_tiers,
                 replication_complete=replication_complete,
+                replication_high_value=replication_high_value,
             )
         elif paginate_by == "heat":
             data = article_app.list_articles_feed_by_heat_top(
@@ -230,7 +249,9 @@ def list_articles_feed(
                 heat_max_ranked=heat_max_ranked,
                 replication_tiers=replication_tiers,
                 replication_complete=replication_complete,
+                replication_high_value=replication_high_value,
                 sort_replicable=sort_replicable,
+                sort_by_value=sort_by_value or sort_replicable,
                 sort_monetization=sort_monetization,
             )
         else:
@@ -250,6 +271,7 @@ def list_articles_feed(
                 search=q,
                 replication_tiers=replication_tiers,
                 replication_complete=replication_complete,
+                replication_high_value=replication_high_value,
             )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e

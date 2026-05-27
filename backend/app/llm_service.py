@@ -242,12 +242,7 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
             return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
         if len(body) < min_body:
             return f"tab_{lab}_body_short len={len(body)} need>={min_body}"
-    legacy_ok = (
-        fk == "apps"
-        and len(need_labels) == 3
-        and labels in ([need_labels[0], need_labels[-1]], [need_labels[0], "功能亮点"])
-    ) or (fk == "news" and labels == [need_labels[0], "要点"])
-    if labels != list(need_labels) and not legacy_ok:
+    if labels != list(need_labels):
         return f"tab_labels={labels!r} need={list(need_labels)!r}"
     if fk == "apps" and len(need_labels) == 3:
         from .domain.replication_analysis import (
@@ -299,13 +294,15 @@ def polish_connector_article(
     snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
     category_rule = (
         "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列固定大类中选其一（禁止自造近义词）："
-        "模型层(谨慎)、开源客户端(好抄)、应用产品、高可复刻、已验证变现、变现案例、"
+        "模型层(谨慎)、开源客户端(好抄)、应用产品、高价值复刻、已验证变现、变现案例、"
         "数据算力、安全合规、政策市场、Agent、多模态、其他。"
-        "独立开发者视角优先：高可复刻潜力的客户端/小工具选「开源客户端(好抄)」或「高可复刻」；明确营收/并购线索选「变现案例」或「已验证变现」。"
+        "独立开发者视角优先：有清晰付费路径/定价/营收线索的应用选「高价值复刻」或「已验证变现」；"
+        "纯开源仓库、无商业模式的 GitHub 趋势项勿标「高价值复刻」，宜归「应用产品」或留在资讯泳道。"
     )
     commercial_hint = (
-        "你是「独立开发者高可复刻产品与商业灵感库」主编。读者要回答三件事：① 可复刻性有多高（产品边界、技术栈、人力）；"
-        "② 怎么赚钱（定价、渠道、目标用户）；③ 风险与差异化。"
+        "你是「独立开发者 AI 产品与变现灵感库」主编。读者只关心一件事：**做这个产品能不能赚钱、谁愿意付钱**。"
+        "必须写清：谁付钱、付多少、为什么现在付、你怎么卖；次要才提技术实现。"
+        "禁止用「可复刻性高/易抄」作为主结论；star 多不等于值得做。"
         "语气务实、可执行，避免空泛「颠覆行业」。"
     )
     if fk == "apps":
@@ -315,22 +312,27 @@ def polish_connector_article(
             f"{category_rule}"
         )
         structure_hint = (
-            "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「复刻评估」「数据支撑」（勿用「功能亮点」等旧名）。"
-            f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字：产品是什么、目标用户与变现线索。"
-            f"「复刻评估」summary≥{th_gate['repl_summary']} 字、body_md≥{th_gate['repl_body']} 字："
-            "须按顺序写清——①目标用户与垂直场景 ②市场饱和度与竞品 ③差异化 ④变现假设 "
-            "⑤开源可复用性 ⑥分步实现路径 ⑦AI 用在哪些环节（勿替代核心逻辑）⑧风险。"
+            "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「变现评估」「数据支撑」（勿用「复刻评估」「功能亮点」等旧名）。"
+            f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字：产品是什么、**谁愿意付钱**、现有定价/营收线索。"
+            f"「变现评估」summary≥{th_gate['repl_summary']} 字、body_md≥{th_gate['repl_body']} 字："
+            "分两大块写——**一、变现价值**（谁付钱、怎么收钱、竞品与风险）；**二、实施与工时拆解**（必须含 Markdown 表格列出各阶段工时）。"
+            "变现块：目标用户、付费动机、定价/营收线索、差异化、主要风险。"
+            "工时块：用表格列「阶段|工时(小时)|交付物」，至少 3 行阶段；合计 MVP 须≥8 小时；可注明团队形态（如 1 人业余 20h/周）。"
             f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字：中文表格写可核对指标（链接、star、定价等）；禁止 ```json。"
             "另须输出 replication_analysis 对象（与 tabs 一致、可机器解析），键："
-            "verdict（值得复刻|观望|不建议）、worth_score（1-10 整数）、difficulty（低|中|高）、"
-            "estimated_hours（mvp_min/mvp_max/prod_min/prod_max 均为整数小时）、tier_rationale、value_summary、"
-            "market_position（对象：target_user、vertical_niche、market_saturation 仅能为 红海|竞争适中|细分蓝海、"
-            "competitors 数组每项 name+note、differentiation、monetization_hypothesis）、"
-            "ai_usage_steps（字符串数组，至少 2 条，说明哪一步用 AI、输入输出是什么）、"
-            "tech_stack（字符串数组）、implementation_plan（工程实施步骤数组，至少 3 条）、"
-            "implementation_details（细节数组）、"
-            "open_source（has_support 布尔、projects 数组每项 name/url/role、gaps 字符串）、risks（字符串数组）。"
-            "replication_tier 须与 replication_analysis 自洽；竞争/饱和判断须写入 market_position，勿只写空泛「市场大」。"
+            "verdict（高价值|观望|不建议）、"
+            "worth_score（1-10，**仅表示变现价值**，与 star 无关）、"
+            "difficulty（低|中|高）、"
+            "phases（**必填**数组≥3项，每项 name、hours_min、hours_max 整数、deliverable 交付物描述、depends_on 可选）、"
+            "estimated_hours（mvp_min/mvp_max/prod_min/prod_max 整数，须与 phases 合计大致一致）、"
+            "team_shape（如「1 人全职」）、assumptions（工时前提）、"
+            "platform_fit（windows|mac_only|web|extension|cli|cross_platform|unknown）、"
+            "tier_rationale、value_summary（一句话：谁付钱+为何现在）、"
+            "market_position（target_user、vertical_niche、market_saturation、competitors、differentiation、"
+            "monetization_hypothesis 必填≥16字）、"
+            "implementation_plan（可选补充步骤）、implementation_details、tech_stack、ai_usage_steps、"
+            "open_source、risks（≥1条）。"
+            "replication_tier=变现价值档位 S/A/B/C，须与 worth_score 自洽。"
         )
     else:
         stream_hint = (
@@ -352,9 +354,9 @@ def polish_connector_article(
         "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, replication_tier, tabs"
         + ('；应用稿另须 replication_analysis 对象（见上文）。' if fk == "apps" else "")
         + "。"
-        "replication_tier 只能是 S、A、B、C 之一，表示可复刻性（非「好不好抄」的口语）："
-        "S=高可复刻（边界清晰、常见技术栈、1～2 周可演示 MVP、有明确用户与变现路径），"
-        "A=较高可复刻（约 1 月内可验证），B=可复刻性中等，C=低可复刻（基础设施/闭源大模型依赖/团队规模化）。"
+        "replication_tier 只能是 S、A、B、C 之一，表示**变现价值档位**（与 worth_score 一致，非 star 热度）："
+        "S=高变现价值（清晰付费用户+定价/营收线索或强订阅假设），"
+        "A=较高变现价值，B=中等，C=低变现/难收钱（纯开源无商业模式、政策风险、巨头碾压）。"
         "title：单行中文标题，含主体名，避免「同步资源·板块·连接器」类占位风格。"
         "summary：列表卡片与详情页首屏用，信息密度高，不可与 title 重复同一句。"
         "body_md：详情页「总览」区 Markdown，须含二级标题，与 tabs 内容互补（总览讲脉络，tabs 讲展开），勿整段复制 tabs。"
@@ -448,11 +450,11 @@ def polish_connector_article(
         except Exception:
             pass
         tab_hint = (
-            "tabs 恰好 3 个，label 只能是「描述」「复刻评估」「数据支撑」；"
+            "tabs 恰好 3 个，label 只能是「描述」「变现评估」「数据支撑」；"
             f"「描述」summary≥{th_gate['desc_summary']}、body≥{th_gate['desc_body']}；"
-            f"「复刻评估」summary≥{th_gate.get('repl_summary', 64)}、body≥{th_gate.get('repl_body', 180)}；"
+            f"「变现评估」summary≥{th_gate.get('repl_summary', 64)}、body≥{th_gate.get('repl_body', 180)}；"
             f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}；"
-            "并含完整 replication_analysis 对象（含 market_position、ai_usage_steps、implementation_plan 等全部键）。"
+            "并含完整 replication_analysis（含 phases≥3、mvp_max≥8、monetization_hypothesis、risks≥1）。"
             if fk == "apps"
             else (
                 "tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
@@ -498,7 +500,7 @@ def polish_connector_article(
             repair2_user = (
                 f"{repair_user}\n\n【第二次修复】{reject2}\n"
                 f"请在「描述」summary 写满≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
-                f"「复刻评估」summary≥{th_gate['repl_summary']}、body≥{th_gate['repl_body']}；"
+                f"「变现评估」summary≥{th_gate['repl_summary']}、body≥{th_gate['repl_body']}；"
                 f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}（含表格与链接）。只输出 JSON。"
             )
             try:

@@ -23,7 +23,6 @@ import {
   type DetailSectionKind,
 } from "@/lib/articleDetailLayout";
 import { pushRecentArticle } from "@/lib/recentArticles";
-import { hasCompleteReplicationAnalysis } from "@/lib/replication";
 import { usePageSeo } from "@/lib/seo";
 
 const INDUSTRY = "ai";
@@ -256,7 +255,7 @@ export function ResourceDetailPage() {
   const backTo = feedKind === "apps" ? "/apps" : "/news";
   const profileBadge = t(profileBadgeI18nKey(layout.profile));
   const showStructuredReplication =
-    feedKind === "apps" && hasCompleteReplicationAnalysis(a.replication_analysis);
+    feedKind === "apps" && Boolean(a.replication_analysis?.verdict?.trim() && a.replication_analysis?.worth_score);
 
   const categoryTagsEl =
     a.categories && a.categories.length > 0 ? (

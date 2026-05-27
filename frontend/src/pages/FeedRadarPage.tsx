@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { itemEngagementLine, replicationTierLabel } from "@/components/home/homeUtils";
-import { showReplicationTierOnCard } from "@/lib/replication";
+import { hasValueAssessment, normalizeVerdict, showReplicationTierOnCard } from "@/lib/replication";
 import { markdownToPlainPreview } from "@/lib/articleMarkdown";
 import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
 import { formatStarCount } from "@/articleCardVisual";
@@ -16,7 +16,7 @@ const FEED_CARD_GRID_CLASS = "mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-
 const DAYS_PER_PAGE = 3;
 
 type TimeKey = "d2" | "all" | "d7" | "d30" | "d90";
-type ReplicationTierFilter = "complete" | "sa" | "s" | "all";
+type ReplicationTierFilter = "complete" | "high_value";
 
 const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
   { key: "d2", labelKey: "resourcesDays2" },
@@ -30,8 +30,9 @@ function defaultTimeKeyForMode(mode: "news" | "apps"): TimeKey {
   return mode === "apps" ? "d7" : "d2";
 }
 
-function defaultReplicationFilter(): ReplicationTierFilter {
-  return "all";
+function defaultReplicationFilter(mode: "news" | "apps"): ReplicationTierFilter {
+  void mode;
+  return "complete";
 }
 
 function timeKeyToArticleParams(timeKey: TimeKey): {
@@ -49,23 +50,14 @@ function summarize(text: string, max: number) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-/** 旧稿无 card_description 时，从 tab 概要兜底（不展示「产品概述」等标签名） */
 function feedCardDescriptionText(a: ArticleFeedCard): string {
-  if ((a.card_description || "").trim()) return markdownToPlainPreview(a.card_description!, 720);
-  const tabs = a.tab_summaries ?? [];
-  const desc = tabs.find((t) => /描述|概述/.test(t.label)) ?? tabs[0];
-  return markdownToPlainPreview((desc?.summary || a.summary || "").trim(), 720);
+  const text = (a.card_description || a.summary || "").trim();
+  return markdownToPlainPreview(text, 720);
 }
 
-function feedCardHighlightsText(a: ArticleFeedCard, _mode: "news" | "apps"): string {
-  if ((a.card_highlights || "").trim()) return markdownToPlainPreview(a.card_highlights!, 200);
-  const tabs = a.tab_summaries ?? [];
-  const hi = tabs.find(
-    (t) =>
-      /数据支撑|亮点|要点/.test(t.label) &&
-      !/描述|概述|技术/.test(t.label),
-  );
-  return markdownToPlainPreview((hi?.summary || "").trim(), 200);
+function feedCardHighlightsText(a: ArticleFeedCard): string {
+  const text = (a.card_highlights || "").trim();
+  return markdownToPlainPreview(text, 200);
 }
 
 function formatFeedDateLabel(isoDay: string): string {
@@ -107,21 +99,31 @@ type ListDisplayMode = "date" | "heat";
 const CLONE_APP_CATEGORIES = [
   "开源客户端(好抄)",
   "应用产品",
-  "高可复刻",
+  "高价值复刻",
   "已验证变现",
   "变现案例",
 ] as const;
+
+const CLONE_APP_CATEGORY_LABELS: Record<string, string> = {
+  "开源客户端(好抄)": "开源客户端",
+};
 
 const MONETIZATION_CATEGORIES = new Set<string>(["已验证变现", "变现案例"]);
 
 function replicationTierApiParams(
   feedMode: "news" | "apps",
   filter: ReplicationTierFilter,
-): { replication_tiers?: string; replication_complete?: boolean; sort_replicable?: boolean } {
-  if (feedMode !== "apps" || filter === "all") return {};
-  if (filter === "complete") return { replication_complete: true, sort_replicable: true };
-  if (filter === "s") return { replication_tiers: "S", sort_replicable: true };
-  return { replication_tiers: "S,A", sort_replicable: true };
+): {
+  replication_tiers?: string;
+  replication_complete?: boolean;
+  replication_high_value?: boolean;
+  sort_by_value?: boolean;
+} {
+  if (feedMode !== "apps") return {};
+  if (filter === "high_value") {
+    return { replication_high_value: true, sort_by_value: true };
+  }
+  return { replication_complete: true, sort_by_value: true };
 }
 
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
@@ -157,7 +159,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [sourceOptions, setSourceOptions] = useState<Array<{ key: string; label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
-  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(defaultReplicationFilter);
+  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(() =>
+    defaultReplicationFilter(mode),
+  );
   const listApiParams = useMemo(() => {
     const base = replicationTierApiParams(mode, replicationFilter);
     if (mode === "apps" && categoryKey && MONETIZATION_CATEGORIES.has(categoryKey)) {
@@ -559,10 +563,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [
-                { key: "all" as const, label: t("resourcesReplicationAll") },
                 { key: "complete" as const, label: t("resourcesReplicationComplete") },
-                { key: "sa" as const, label: t("resourcesReplicationSa") },
-                { key: "s" as const, label: t("resourcesReplicationS") },
+                { key: "high_value" as const, label: t("resourcesReplicationHighValue") },
               ] as const
             ).map((f) => (
               <button
@@ -593,7 +595,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                   categoryKey === label ? "pill-active shadow-md" : "pill-idle"
                 }`}
               >
-                {label}
+                {CLONE_APP_CATEGORY_LABELS[label] ?? label}
               </button>
             ))}
           </div>
@@ -739,8 +741,12 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                     const displayIso = articleListDisplayIso(a);
                     const starsTotal = a.engagement_stars_total;
                     const starsToday = a.engagement_stars_today;
+                    const ra = a.replication_analysis;
+                    const showValue = mode === "apps" && hasValueAssessment(ra, 7);
+                    const worth = ra?.worth_score;
+                    const verdict = normalizeVerdict(ra?.verdict);
                     const tierBadge =
-                      mode === "apps" && showReplicationTierOnCard(mode, a.replication_analysis, a.replication_tier)
+                      mode === "apps" && showReplicationTierOnCard(a.feed_kind, ra, a.replication_tier)
                         ? replicationTierLabel(a.replication_tier)
                         : null;
                     const rankLine = itemEngagementLine(a);
@@ -774,11 +780,14 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                               <span className="inline-flex max-w-[min(100%,18rem)] items-center truncate rounded-md bg-gradient-to-r from-emerald-50/90 to-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-100/90">
                                 {a.platform_label || t("source")}
                               </span>
+                              {showValue && worth != null ? (
+                                <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                                  {t("replWorthScore")} {worth}/10
+                                  {verdict ? ` · ${verdict}` : ""}
+                                </span>
+                              ) : null}
                               {tierBadge ? (
-                                <span
-                                  className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800"
-                                  title={`可复刻性 ${(a.replication_tier || "").trim().toUpperCase()} 档`}
-                                >
+                                <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-800">
                                   {tierBadge}
                                 </span>
                               ) : null}
@@ -821,6 +830,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                           <h2 className="mt-3 text-[1.05rem] font-semibold leading-snug tracking-tight text-slate-900 sm:text-lg sm:leading-snug group-hover:text-brand-600">
                             {a.title}
                           </h2>
+                          {showValue && a.card_value_hook ? (
+                            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{a.card_value_hook}</p>
+                          ) : null}
                           {rankLine ? (
                             <p className="mt-2 text-xs font-medium text-amber-800/90">{rankLine}</p>
                           ) : null}

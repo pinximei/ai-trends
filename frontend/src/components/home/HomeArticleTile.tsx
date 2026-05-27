@@ -5,7 +5,7 @@ import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
 import { useI18n } from "@/i18n";
 import { markdownToPlainPreview } from "@/lib/articleMarkdown";
 import { HomeHeatBadge } from "./HomeHeatBadge";
-import { showReplicationTierOnCard } from "@/lib/replication";
+import { hasValueAssessment, normalizeVerdict, showReplicationTierOnCard } from "@/lib/replication";
 import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel } from "./homeUtils";
 
 function timeAgo(iso: string | null): string {
@@ -65,27 +65,34 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
   const { t } = useI18n();
   const accent = platformAccent(item.admin_source_key || "");
   const engagement = itemEngagementLine(item);
-  const showTier = showReplicationTierOnCard(item.feed_kind, item.replication_analysis, item.replication_tier);
+  const ra = item.replication_analysis;
+  const showTier = showReplicationTierOnCard(item.feed_kind, ra, item.replication_tier);
   const tierLabel = showTier ? replicationTierLabel(item.replication_tier) : null;
-  const tier = (item.replication_tier || "").trim().toUpperCase();
+  const worth = ra?.worth_score;
+  const verdict = normalizeVerdict(ra?.verdict);
+  const showValue = item.feed_kind === "apps" && hasValueAssessment(ra, 7);
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-      <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${accent.badge}`}>
-        {item.platform_label || t("source")}
-      </span>
-      {showTier && tierLabel ? (
-        <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800" title={`可复刻性 ${tier} 档`}>
-          {tierLabel}
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+        <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${accent.badge}`}>
+          {item.platform_label || t("source")}
         </span>
+        {showValue && worth != null ? (
+          <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+            {t("replWorthScore")} {worth}/10
+            {verdict ? ` · ${verdict}` : ""}
+          </span>
+        ) : null}
+        {showTier && tierLabel ? (
+          <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-800">{tierLabel}</span>
+        ) : null}
+        <HomeHeatBadge heat={item.heat_score} />
+        {engagement ? <span className="font-semibold tabular-nums text-amber-700">{engagement}</span> : null}
+        <span className="tabular-nums text-slate-400">{timeAgo(item.display_at ?? item.published_at)}</span>
+      </div>
+      {showValue && item.card_value_hook ? (
+        <p className="line-clamp-2 text-xs leading-relaxed text-slate-600">{item.card_value_hook}</p>
       ) : null}
-      <HomeHeatBadge heat={item.heat_score} />
-      {engagement ? <span className="font-semibold tabular-nums text-amber-700">{engagement}</span> : null}
-      {item.replication_mvp_hours ? (
-        <span className="tabular-nums text-emerald-700" title="MVP 预估工时">
-          {item.replication_mvp_hours}
-        </span>
-      ) : null}
-      <span className="tabular-nums text-slate-400">{timeAgo(item.display_at ?? item.published_at)}</span>
     </div>
   );
 }

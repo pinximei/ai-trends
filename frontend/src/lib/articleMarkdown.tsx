@@ -129,7 +129,7 @@ export function markdownToPlainPreview(md: string, maxLen = 500): string {
 /** 与后端 TabTextRole 对齐：描述 / 复刻评估 / 数据类（含报道依据等 i18n 标题） */
 export type ArticleTabRenderRole = "description" | "replication" | "data";
 
-const TAB_SECTION_HEADING_RE = /^##\s*(数据支撑|功能亮点|要点|报道依据|描述|复刻评估)\s*$/gm;
+const TAB_SECTION_HEADING_RE = /^##\s*(数据支撑|功能亮点|要点|报道依据|描述|变现评估|复刻评估)\s*$/gm;
 
 function stripEnglishKeyLines(md: string): string {
   return md
@@ -271,7 +271,7 @@ export function ArticleMarkdownContent({ bodyMd, components }: ArticleMarkdownCo
 
 /** 详情主区：描述 + 复刻评估 + 数据支撑（兼容旧稿「功能亮点」「要点」） */
 export const DETAIL_DATA_TAB_LABELS = new Set(["数据支撑", "功能亮点", "要点"]);
-export const DETAIL_REPLICATION_TAB_LABEL = "复刻评估";
+export const DETAIL_REPLICATION_TAB_LABEL = "变现评估";
 
 export function pickDetailTabs<T extends { label: string }>(tabs: T[]): T[] {
   if (!tabs.length) return [];

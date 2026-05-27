@@ -1,6 +1,7 @@
 """公开应用列表：可复刻档位筛选与 S→A 热度排序。"""
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from sqlalchemy import create_engine
@@ -34,24 +35,9 @@ def test_parse_replication_tiers_csv() -> None:
 
 def test_feed_row_matches_replication_complete() -> None:
     from backend.app.domain.replication_analysis import normalize_replication_analysis
-    from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
+    from tests.replication_fixtures import sample_replication_analysis
 
-    repl = normalize_replication_analysis(
-        {
-            "verdict": "值得复刻",
-            "worth_score": 8,
-            "difficulty": "中",
-            "tier_rationale": "x" * 24,
-            "value_summary": "y" * 20,
-            "tech_stack": ["Next.js"],
-            "implementation_plan": ["step"],
-            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
-            "open_source": {"has_support": False, "projects": [], "gaps": ""},
-            "risks": [],
-            "market_position": sample_market_position(),
-            "ai_usage_steps": sample_ai_usage_steps(),
-        }
-    )
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=8, verdict="高价值"))
     a = Article(
         industry_id=1,
         segment_id=1,
@@ -103,6 +89,66 @@ def test_feed_row_matches_replication_complete() -> None:
     )
 
 
+def test_github_trending_apps_fails_product_gate_without_value_assessment() -> None:
+    from backend.app.application.article_public import _article_listing_product_gate
+
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="t",
+        status="published",
+        feed_kind="apps",
+        third_party_source="github / trending",
+        ai_categories_json='["应用产品"]',
+        replication_tier="A",
+    )
+    assert _article_listing_product_gate(a, None) is False
+
+
+def test_feed_row_matches_replication_high_value() -> None:
+    import json
+
+    from backend.app.domain.replication_analysis import normalize_replication_analysis
+    from tests.replication_fixtures import sample_replication_analysis
+
+    repl_ok = normalize_replication_analysis(sample_replication_analysis(worth=8, verdict="高价值"))
+    repl_watch = normalize_replication_analysis(sample_replication_analysis(worth=8, verdict="观望"))
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="t",
+        status="published",
+        feed_kind="apps",
+        third_party_source="product_hunt / daily",
+        ai_categories_json='["应用产品"]',
+        replication_tier="S",
+    )
+    a.replication_analysis_json = json.dumps(repl_ok, ensure_ascii=False)
+    assert (
+        ap._feed_row_matches_list_filters(
+            a,
+            feed="apps",
+            cat_filter=None,
+            source_filter=None,
+            search_n=None,
+            replication_high_value=True,
+        )
+        is True
+    )
+    a.replication_analysis_json = json.dumps(repl_watch, ensure_ascii=False)
+    assert (
+        ap._feed_row_matches_list_filters(
+            a,
+            feed="apps",
+            cat_filter=None,
+            source_filter=None,
+            search_n=None,
+            replication_high_value=True,
+        )
+        is False
+    )
+
+
 def test_feed_row_matches_tier_filter() -> None:
     a = Article(
         industry_id=1,
@@ -145,7 +191,22 @@ def test_monetization_category_counts_as_apps_feed() -> None:
     assert _article_matches_public_feed(a, "news") is False
 
 
-def test_github_s_tier_counts_as_apps_feed() -> None:
+def test_github_s_tier_alone_not_apps_feed_without_client_category() -> None:
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="Generic repo",
+        status="published",
+        feed_kind="news",
+        third_party_source="github / trending",
+        replication_tier="S",
+        ai_categories_json='["应用产品"]',
+    )
+    assert _github_counts_as_apps_feed(a) is False
+    assert _article_matches_public_feed(a, "apps") is False
+
+
+def test_github_client_category_counts_as_apps_feed() -> None:
     a = Article(
         industry_id=1,
         segment_id=1,
@@ -153,14 +214,14 @@ def test_github_s_tier_counts_as_apps_feed() -> None:
         status="published",
         feed_kind="news",
         third_party_source="github / trending",
-        replication_tier="S",
+        ai_categories_json='["开源客户端(好抄)"]',
     )
     assert _github_counts_as_apps_feed(a) is True
     assert _article_matches_public_feed(a, "apps") is True
     assert _article_matches_public_feed(a, "news") is False
 
 
-def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
+def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None:
     db = _session()
     ind = Industry(slug="ai", name="AI")
     db.add(ind)
@@ -169,6 +230,13 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
     db.add(seg)
     db.flush()
     now = datetime.utcnow()
+    from backend.app.domain.replication_analysis import normalize_replication_analysis
+    from tests.replication_fixtures import sample_replication_analysis
+
+    def _repl_json(worth: int) -> str:
+        repl = normalize_replication_analysis(sample_replication_analysis(worth=worth, verdict="高价值"))
+        return json.dumps(repl, ensure_ascii=False)
+
     db.add_all(
         [
             Article(
@@ -181,6 +249,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
                 third_party_source="product_hunt / daily",
                 ai_categories_json='["应用产品"]',
                 replication_tier="A",
+                replication_analysis_json=_repl_json(9),
                 heat_score=999.0,
                 published_at=now,
             ),
@@ -194,6 +263,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
                 third_party_source="product_hunt / daily",
                 ai_categories_json='["应用产品"]',
                 replication_tier="S",
+                replication_analysis_json=_repl_json(6),
                 heat_score=1.0,
                 published_at=now,
             ),
@@ -223,13 +293,13 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
         published_within_days=30,
         published_on_latest_day=False,
         replication_tiers="S,A",
-        sort_replicable=True,
+        sort_by_value=True,
         heat_offset=0,
         heat_page_size=10,
         heat_max_ranked=50,
     )
     titles = [x["title"] for x in out["items"]]
-    assert titles == ["Tier S cold", "Tier A hot"]
+    assert titles == ["Tier A hot", "Tier S cold"]
     assert out["total"] == 2
 
     db.add(
@@ -257,7 +327,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
         published_within_days=30,
         published_on_latest_day=False,
         replication_tiers="S,A",
-        sort_replicable=True,
+        sort_by_value=True,
         heat_offset=0,
         heat_page_size=10,
         heat_max_ranked=50,
@@ -270,24 +340,9 @@ def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
     import json
 
     from backend.app.domain.replication_analysis import normalize_replication_analysis
-    from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
+    from tests.replication_fixtures import sample_replication_analysis
 
-    repl = normalize_replication_analysis(
-        {
-            "verdict": "值得复刻",
-            "worth_score": 8,
-            "difficulty": "中",
-            "tier_rationale": "x" * 24,
-            "value_summary": "y" * 20,
-            "tech_stack": ["Rust"],
-            "implementation_plan": ["step"],
-            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
-            "open_source": {"has_support": True, "projects": [], "gaps": ""},
-            "risks": [],
-            "market_position": sample_market_position(),
-            "ai_usage_steps": sample_ai_usage_steps(),
-        }
-    )
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=8, verdict="高价值"))
     db = _session()
     ind = Industry(slug="ai", name="AI")
     db.add(ind)
@@ -305,6 +360,7 @@ def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
             status="published",
             feed_kind="news",
             third_party_source="github / trending",
+            ai_categories_json='["开源客户端(好抄)"]',
             replication_tier="S",
             replication_analysis_json=json.dumps(repl, ensure_ascii=False),
             heat_score=10.0,

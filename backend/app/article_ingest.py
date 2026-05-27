@@ -423,7 +423,7 @@ def _create_one_published_article_from_connector_targets(
     if isinstance(repl_raw, dict):
         from .domain.replication_analysis import normalize_replication_analysis
 
-        repl_norm = normalize_replication_analysis(repl_raw)
+        repl_norm = normalize_replication_analysis(repl_raw, pricing_context=safe[:4000])
         replication_analysis_json = json.dumps(repl_norm or {}, ensure_ascii=False)
     else:
         replication_analysis_json = "{}"
