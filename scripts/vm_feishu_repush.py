@@ -2,11 +2,31 @@
 """Production VM: repush today's Feishu digest. Usage: cd /opt/aisoul && .venv/bin/python scripts/vm_feishu_repush.py"""
 from __future__ import annotations
 
+import os
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+
+def _load_systemd_env(unit: str = "aisoul-backend") -> None:
+    if os.environ.get("AITRENDS_DATABASE_URL"):
+        return
+    try:
+        raw = subprocess.check_output(
+            ["systemctl", "show", unit, "-p", "Environment", "--value"],
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return
+    for token in shlex.split(raw.strip()):
+        if "=" in token:
+            k, v = token.split("=", 1)
+            os.environ.setdefault(k, v)
 
 from sqlalchemy import select
 
@@ -18,6 +38,7 @@ from backend.app.us_content_calendar import us_calendar_today
 
 
 def main() -> int:
+    _load_systemd_env()
     db = SessionLocal()
     try:
         key = us_calendar_today().isoformat()
