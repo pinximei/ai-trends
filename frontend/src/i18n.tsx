@@ -25,8 +25,8 @@ const STRINGS: Record<string, string> = {
   trendsPageTitle: "趋势发现 · 持续升温榜",
   trendsPageDesc:
     "不只看单日爆款：这里筛选近 30 天内仍被多源同步、热度居高不下的应用、开源项目与资讯，并按话题赛道聚合，帮你判断行业风向。",
-  trendsTopicsTitle: "热门话题赛道",
-  trendsTopicsSub: "同一分类下多篇高动量文章 → 赛道正在变热",
+  trendsTopicsTitle: "热门行业话题",
+  trendsTopicsSub: "Agent、多模态、算力等政策/技术方向；不含「高可复刻」「变现」等运营标签",
   trendsSoftwareTitle: "持续火热的软件",
   trendsSoftwareSub: "Product Hunt 等应用向产品，跨日仍保持高热度",
   trendsOssTitle: "持续火热的开源项目",

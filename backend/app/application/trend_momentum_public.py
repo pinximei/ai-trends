@@ -14,9 +14,18 @@ from .home_public import _industry_article_ids
 
 MOMENTUM_MIN_HEAT = 52.0
 MOMENTUM_SCAN_LIMIT = 400
-TOPIC_GENERIC_LABELS = frozenset({"其他", "应用产品"})
 
-
+# 行业/技术话题赛道（不含复刻档位、变现运营、泛化产品类标签）
+TOPIC_INDUSTRY_TRACK_LABELS: frozenset[str] = frozenset(
+    {
+        "Agent",
+        "多模态",
+        "模型层(谨慎)",
+        "数据算力",
+        "安全合规",
+        "政策市场",
+    }
+)
 def _days_between(later: datetime, earlier: datetime) -> float:
     return max(0.0, (later - earlier).total_seconds() / 86400.0)
 
@@ -49,6 +58,23 @@ def compute_article_momentum(a: Article, *, now: datetime | None = None) -> tupl
     if not tags:
         tags.append("高热度")
     return round(score, 2), tags
+
+
+def topic_track_labels_for_article(a: Article) -> list[str]:
+    """从文章分类提取可聚合的行业话题（白名单），排除高可复刻/变现等运营标签。"""
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in art.parse_category_labels_json(getattr(a, "ai_categories_json", None)):
+        canon = art.map_raw_label_to_canonical(raw)
+        if canon in TOPIC_INDUSTRY_TRACK_LABELS and canon not in seen:
+            seen.add(canon)
+            out.append(canon)
+    if not out:
+        cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
+        label = cats[0] if cats else ""
+        if label in TOPIC_INDUSTRY_TRACK_LABELS and label not in seen:
+            out.append(label)
+    return out
 
 
 def _track_for_article(a: Article) -> str:
@@ -126,16 +152,13 @@ def get_trend_momentum_dashboard(
         if mom <= 0:
             continue
         scored.append((mom, a, tags))
-        cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
-        label = cats[0] if cats else "其他"
-        if label in TOPIC_GENERIC_LABELS:
-            continue
-        acc = topic_acc[label]
-        acc["momentum_sum"] += mom
-        acc["heat_sum"] += float(a.heat_score or 0)
-        acc["count"] += 1
-        if len(acc["titles"]) < 3:
-            acc["titles"].append((a.title or "")[:120])
+        for label in topic_track_labels_for_article(a):
+            acc = topic_acc[label]
+            acc["momentum_sum"] += mom
+            acc["heat_sum"] += float(a.heat_score or 0)
+            acc["count"] += 1
+            if len(acc["titles"]) < 3:
+                acc["titles"].append((a.title or "")[:120])
 
     scored.sort(key=lambda x: (-x[0], -float(x[1].heat_score or 0)))
 

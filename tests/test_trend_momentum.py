@@ -107,3 +107,79 @@ def test_dashboard_splits_tracks() -> None:
     assert len(out["software"]) >= 1
     assert len(out["hotspots"]) >= 1
     assert any(t["label"] == "Agent" for t in out["topics"])
+    topic_labels = {t["label"] for t in out["topics"]}
+    assert "高可复刻" not in topic_labels
+    assert "变现案例" not in topic_labels
+
+
+def test_topics_exclude_replication_and_monetization_facets() -> None:
+    db = _session()
+    ind = Industry(slug="ai", name="AI")
+    db.add(ind)
+    db.flush()
+    seg = Segment(industry_id=ind.id, slug="general", name="General")
+    db.add(seg)
+    db.flush()
+    now = datetime.utcnow()
+    db.add_all(
+        [
+            Article(
+                industry_id=ind.id,
+                segment_id=seg.id,
+                title="Repl 1",
+                summary="a" * 40,
+                status="published",
+                third_party_source="product_hunt / daily",
+                feed_kind="apps",
+                heat_score=100.0,
+                ai_categories_json='["高可复刻"]',
+                published_at=now - timedelta(days=2),
+                updated_at=now - timedelta(hours=2),
+            ),
+            Article(
+                industry_id=ind.id,
+                segment_id=seg.id,
+                title="Repl 2",
+                summary="b" * 40,
+                status="published",
+                third_party_source="product_hunt / daily",
+                feed_kind="apps",
+                heat_score=98.0,
+                ai_categories_json='["高可复刻"]',
+                published_at=now - timedelta(days=3),
+                updated_at=now - timedelta(hours=3),
+            ),
+            Article(
+                industry_id=ind.id,
+                segment_id=seg.id,
+                title="Mon 1",
+                summary="c" * 40,
+                status="published",
+                third_party_source="acquire / feed",
+                feed_kind="apps",
+                heat_score=96.0,
+                ai_categories_json='["变现案例"]',
+                published_at=now - timedelta(days=2),
+                updated_at=now - timedelta(hours=4),
+            ),
+            Article(
+                industry_id=ind.id,
+                segment_id=seg.id,
+                title="Mon 2",
+                summary="d" * 40,
+                status="published",
+                third_party_source="acquire / feed",
+                feed_kind="apps",
+                heat_score=94.0,
+                ai_categories_json='["变现案例"]',
+                published_at=now - timedelta(days=4),
+                updated_at=now - timedelta(hours=5),
+            ),
+        ]
+    )
+    db.commit()
+    out = get_trend_momentum_dashboard(db, industry_slug="ai", period_days=30)
+    topic_labels = {t["label"] for t in out["topics"]}
+    assert "高可复刻" not in topic_labels
+    assert "变现案例" not in topic_labels
+    assert "已验证变现" not in topic_labels
