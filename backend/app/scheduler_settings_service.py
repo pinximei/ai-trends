@@ -7,12 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from .product_models import ProductSetting
-from .us_content_calendar import (
-    US_CONTENT_TZ,
-    US_END_OF_DAY_PULL_HOUR,
-    US_TIMEZONE_LABEL,
-    us_end_of_day_pull_start_local,
-)
+from .us_content_calendar import US_CONTENT_TZ, US_TIMEZONE_LABEL
 
 SCHEDULER_KEY = "scheduler"
 CONNECTOR_SCHEDULER_TZ = US_CONTENT_TZ
@@ -60,7 +55,7 @@ def get_scheduler_settings_public(db: Session) -> dict[str, Any]:
         "last_connector_batch_at": m.get("last_connector_batch_at"),
         "gate_interval_minutes": CONNECTOR_GATE_CHECK_MINUTES,
         "scheduler_timezone": US_TIMEZONE_LABEL,
-        "sync_anchor": "us_eod_last_hour",
+        "sync_anchor": "interval_hours",
         "daily_slot_times_local": _connector_slot_times_label(interval_h),
         "last_custom_source_batch_at": ly_map,
         "custom_sync_note": "单独同步频率在「数据源」卡片配置；开启后不参与上方整批。",
@@ -68,9 +63,8 @@ def get_scheduler_settings_public(db: Session) -> dict[str, Any]:
 
 
 def _connector_slot_times_label(interval_h: int) -> str:
-    """美东当日最后一小时（23:00–24:00）整批拉取；间隔小时数仅作展示保留。"""
-    _ = interval_h
-    return f"每日 {US_END_OF_DAY_PULL_HOUR:02d}:00–24:00（{US_TIMEZONE_LABEL}，gate 每 {CONNECTOR_GATE_CHECK_MINUTES} 分钟检查）"
+    h = max(1, min(168, int(interval_h or 6)))
+    return f"每 {h} 小时整批（{US_TIMEZONE_LABEL}，gate 每 {CONNECTOR_GATE_CHECK_MINUTES} 分钟检查）"
 
 
 def connector_batch_due_now(
@@ -83,29 +77,24 @@ def connector_batch_due_now(
     """
     是否应在当前 gate 周期触发整批拉取。
 
-    仅在 **美东当日 23:00–23:59** 触发（最后一小时拉取，便于对齐 US 日切数据源）。
-    每个美东日历日最多成功触发一次（``last_batch_at`` 早于当日 23:00 美东）。
-    ``interval_hours`` 保留配置项，不再用于切分拉取时段。
+    距 ``last_batch_at`` 已满 ``interval_hours`` 则触发；未单独设置同步频率的连接器参与整批。
+    ``gate_window_minutes`` 仅保留参数兼容，不参与判断。
     """
-    _ = interval_hours, gate_window_minutes
-    ref = now or datetime.now(CONNECTOR_SCHEDULER_TZ)
+    _ = gate_window_minutes
+    h = max(1, min(168, int(interval_hours or 6)))
+    ref = now or datetime.now(timezone.utc)
     if ref.tzinfo is None:
-        ref = ref.replace(tzinfo=timezone.utc).astimezone(CONNECTOR_SCHEDULER_TZ)
+        ref = ref.replace(tzinfo=timezone.utc)
     else:
-        ref = ref.astimezone(CONNECTOR_SCHEDULER_TZ)
-
-    if ref.hour != US_END_OF_DAY_PULL_HOUR:
-        return False
-
-    slot_start = us_end_of_day_pull_start_local(ref)
+        ref = ref.astimezone(timezone.utc)
     if last_batch_at is None:
         return True
-
     last = last_batch_at
     if last.tzinfo is None:
         last = last.replace(tzinfo=timezone.utc)
-    last_local = last.astimezone(CONNECTOR_SCHEDULER_TZ)
-    return last_local < slot_start
+    else:
+        last = last.astimezone(timezone.utc)
+    return (ref - last).total_seconds() >= h * 3600
 
 
 def save_scheduler_settings_patch(db: Session, patch: dict[str, Any]) -> dict[str, Any]:

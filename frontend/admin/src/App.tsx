@@ -302,7 +302,7 @@ function sourceSyncScheduleHint(
   scheduler: SchedulerSettingsView | null,
 ): string {
   if (!draft.custom_sync_enabled) {
-    return "跟随整批同步（美东 23:00–24:00，见「AI 资讯与数据」页）";
+    return "跟随整批同步（间隔见「AI 资讯与数据」页「整批间隔」）";
   }
   const last = scheduler?.last_custom_source_batch_at?.[sourceKey];
   return last
@@ -2426,7 +2426,7 @@ export function App() {
                 定时同步与数据清理
               </h3>
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
-                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；仅在<strong>美东当日 23:00–24:00</strong>触发<strong>整批</strong>同步（与 NewsAPI 等按美国日切分的数据源对齐，每日最多一次）。已在数据源卡片开启「单独设置同步频率」的源<strong>不参与整批</strong>，改按卡片上的间隔全天自动拉取。对其余<strong>已启用</strong>连接器执行同步（与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
+                进程内每 <strong>{schedulerSettings?.gate_interval_minutes ?? 15} 分钟</strong>检查一次；距上次整批成功已满<strong>整批间隔</strong>小时时，对<strong>未</strong>开启「单独设置同步频率」的已启用连接器执行<strong>整批</strong>同步。已在数据源卡片开启「单独设置同步频率」的源<strong>不参与整批</strong>，改按卡片上的间隔自动拉取。整批与手动「同步」同逻辑，且<strong>不受</strong>单连接器{" "}
                 <code className="inline-code">min_interval_seconds</code> 限制）。配置保存在{" "}
                 <code className="inline-code">product_settings_kv.scheduler</code>。
               </p>
