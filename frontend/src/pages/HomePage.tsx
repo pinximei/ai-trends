@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
+import { Flame, Mail, Newspaper, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { IndustryWindPanel, type IndustryWindData } from "@/components/home/IndustryWindPanel";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
@@ -527,7 +527,7 @@ export function HomePage() {
   const editorialNewsShow = editorialNews.slice(0, 3);
 
   return (
-    <div className="w-full space-y-5 lg:space-y-6">
+    <div className="w-full space-y-5 lg:space-y-7">
       <section className="ui-card overflow-hidden p-5 sm:p-6" data-testid="home-hero">
         <div className="min-w-0 text-center sm:text-left">
           {refreshing ? (
@@ -541,25 +541,37 @@ export function HomePage() {
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
             <Link
-              to="/apps"
-              state={{ replicationFilter: "complete" }}
-              className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
-            >
-              {t("homeMainHeroCta2")}
-            </Link>
-            <Link
               to="/news"
-              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
             >
               {t("homeMainHeroCta1")}
             </Link>
+            <Link
+              to="/apps"
+              state={{ replicationFilter: "complete" }}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              {t("homeMainHeroCta2")}
+            </Link>
+            <a
+              href="#industry-wind"
+              className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-5 py-2.5 text-sm font-semibold text-orange-800 transition hover:bg-orange-100"
+            >
+              {t("homeHeroCtaWind")}
+            </a>
           </div>
         </div>
       </section>
 
       <IndustryWindPanel data={industryWind} loading={loading && !industryWind} />
 
-      <HomeSection title={t("homeEditorialPicksTitle")} subtitle={t("homeEditorialPicksSub")} icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}>
+      <HomeSection
+        className="ui-card overflow-hidden p-4 sm:p-5 ring-1 ring-orange-100/80"
+        title={t("homeEditorialPicksTitle")}
+        subtitle={t("homeEditorialPicksSub")}
+        icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}
+        action={{ label: t("homeEditorialPicksCta"), to: "/news" }}
+      >
         {loading ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
         ) : editorialAppsShow.length === 0 && editorialNewsShow.length === 0 ? (
@@ -586,7 +598,107 @@ export function HomePage() {
         )}
       </HomeSection>
 
+      <div className="grid gap-5 lg:grid-cols-12 lg:gap-6">
+        <div className="lg:col-span-8">
+          <HomeSection
+            className="ui-card h-full overflow-hidden p-4 sm:p-5"
+            title={t("homeNewsWall")}
+            subtitle={t("homeNewsWallSub")}
+            icon={<Newspaper className="h-5 w-5 text-violet-600" strokeWidth={2} />}
+            action={{ label: t("homeNewsWallCta"), to: "/news" }}
+          >
+            {loading ? (
+              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+            ) : newsWall.length === 0 ? (
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {newsWall.map((item) => (
+                  <HomeArticleTile key={item.id} item={item} variant="tile" />
+                ))}
+              </div>
+            )}
+          </HomeSection>
+        </div>
+        <aside className="lg:col-span-4">
+          <HomeSection
+            className="ui-card h-full overflow-hidden p-4 sm:p-5"
+            title={t("homeAppsLeaderboard")}
+            subtitle={t("homeAppsLeaderboardSub")}
+            icon={<Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />}
+            action={{ label: t("homeAppsLeaderboardCta"), to: "/apps" }}
+          >
+            {loading ? (
+              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+            ) : appLeaderboard.length === 0 ? (
+              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+            ) : (
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-white">
+                {appLeaderboard.map((item, idx) => (
+                  <HomeArticleTile key={item.id} item={item} variant="rank" rank={idx + 1} />
+                ))}
+              </div>
+            )}
+          </HomeSection>
+        </aside>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2 lg:gap-6">
+        <HomeSection
+          className="ui-card overflow-hidden p-4 sm:p-5"
+          title={t("homeHighlightReplicableApps")}
+          subtitle={t("homeHighlightReplicableAppsSub")}
+          icon={<Sparkles className="h-5 w-5 text-sky-600" strokeWidth={2} />}
+          action={{
+            label: t("homeHighlightReplicableAppsCta"),
+            to: "/apps",
+            state: { replicationFilter: "complete" },
+          }}
+        >
+          {loading ? (
+            <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+          ) : highlightApps.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-8 text-center text-sm text-slate-600">
+              {t("homeHighlightReplicableAppsEmpty")}
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {highlightApps.map((item) => (
+                <HomeArticleTile key={item.id} item={item} variant="tile" />
+              ))}
+            </div>
+          )}
+        </HomeSection>
+
+        <HomeSection
+          className="ui-card overflow-hidden p-4 sm:p-5"
+          title={t("homeHighlightMonetizationApps")}
+          subtitle={t("homeHighlightMonetizationAppsSub")}
+          icon={<TrendingUp className="h-5 w-5 text-emerald-600" strokeWidth={2} />}
+          action={{
+            label: t("homeHighlightMonetizationAppsCta"),
+            to: "/apps",
+            state: { category: "变现案例" },
+          }}
+        >
+          {loading ? (
+            <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+          ) : highlightMonetization.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-8 text-center text-sm text-slate-600">
+              {t("homeHighlightMonetizationAppsEmpty")}
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {highlightMonetization.map((item) => (
+                <HomeArticleTile key={item.id} item={item} variant="tile" />
+              ))}
+            </div>
+          )}
+        </HomeSection>
+      </div>
+
       <section className="ui-card overflow-hidden p-4 sm:p-5">
+        <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeDataOverviewTitle")}</p>
         <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
           {!loading && trendOverview ? (
             <div className="min-w-0">
@@ -707,56 +819,7 @@ export function HomePage() {
       </section>
 
       <HomeSection
-        title={t("homeHighlightReplicableApps")}
-        subtitle={t("homeHighlightReplicableAppsSub")}
-        icon={<Sparkles className="h-5 w-5 text-sky-600" strokeWidth={2} />}
-        action={{
-          label: t("homeHighlightReplicableAppsCta"),
-          to: "/apps",
-          state: { replicationFilter: "complete" },
-        }}
-      >
-        {loading ? (
-          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : highlightApps.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-8 text-center text-sm text-slate-600">
-            {t("homeHighlightReplicableAppsEmpty")}
-          </p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {highlightApps.map((item) => (
-              <HomeArticleTile key={item.id} item={item} variant="tile" />
-            ))}
-          </div>
-        )}
-      </HomeSection>
-
-      <HomeSection
-        title={t("homeHighlightMonetizationApps")}
-        subtitle={t("homeHighlightMonetizationAppsSub")}
-        icon={<TrendingUp className="h-5 w-5 text-emerald-600" strokeWidth={2} />}
-        action={{
-          label: t("homeHighlightMonetizationAppsCta"),
-          to: "/apps",
-          state: { category: "变现案例" },
-        }}
-      >
-        {loading ? (
-          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : highlightMonetization.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-8 text-center text-sm text-slate-600">
-            {t("homeHighlightMonetizationAppsEmpty")}
-          </p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {highlightMonetization.map((item) => (
-              <HomeArticleTile key={item.id} item={item} variant="tile" />
-            ))}
-          </div>
-        )}
-      </HomeSection>
-
-      <HomeSection
+        className="ui-card overflow-hidden p-4 sm:p-5"
         title={radarCount > 0 ? `${radarCount}路雷达` : t("homeSourceRadar")}
         subtitle={
           radarCount > 0
@@ -816,44 +879,6 @@ export function HomePage() {
           </div>
         )}
       </HomeSection>
-
-      <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
-        <div className="space-y-6 lg:col-span-8 lg:space-y-8">
-          <HomeSection title={t("homeNewsWall")} subtitle={t("homeNewsWallSub")}>
-            {loading ? (
-              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-            ) : newsWall.length === 0 ? (
-              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {newsWall.map((item) => (
-                  <HomeArticleTile key={item.id} item={item} variant="tile" />
-                ))}
-              </div>
-            )}
-          </HomeSection>
-        </div>
-
-        <aside className="space-y-6 lg:col-span-4 lg:space-y-8">
-          <HomeSection
-            title={t("homeAppsLeaderboard")}
-            subtitle={t("homeAppsLeaderboardSub")}
-            icon={<Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />}
-          >
-            {loading ? (
-              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-            ) : appLeaderboard.length === 0 ? (
-              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-            ) : (
-              <div className="ui-card divide-y divide-slate-100 overflow-hidden">
-                {appLeaderboard.map((item, idx) => (
-                  <HomeArticleTile key={item.id} item={item} variant="rank" rank={idx + 1} />
-                ))}
-              </div>
-            )}
-          </HomeSection>
-        </aside>
-      </div>
 
       {NEWSLETTER_SUBSCRIBE_ENABLED ? (
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">
