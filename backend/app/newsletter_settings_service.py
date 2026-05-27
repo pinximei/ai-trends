@@ -133,6 +133,11 @@ def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
     effective = get_newsletter_settings_merged(db)
     m["effective_public_site_base_url"] = effective["public_site_base_url"]
     m["effective_smtp_ready"] = _smtp_ready(effective)
+    m["effective_smtp_host"] = str(effective.get("smtp_host") or "").strip()
+    m["effective_smtp_user"] = str(effective.get("smtp_user") or "").strip()
+    m["effective_mail_from"] = (
+        str(effective.get("mail_from") or "").strip() or m["effective_smtp_user"]
+    )
     m["effective_feishu_ready"] = bool(str(effective.get("feishu_webhook_url") or "").strip())
     return m
 

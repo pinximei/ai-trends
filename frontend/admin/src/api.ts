@@ -30,6 +30,10 @@ export type NewsletterSettingsResponse = {
   effective_public_site_base_url?: string;
   /** 合并 env/库后 SMTP 是否足以发信 */
   effective_smtp_ready?: boolean;
+  effective_smtp_host?: string;
+  effective_smtp_user?: string;
+  /** 收件人看到的 From（未填 mail_from 时同 smtp_user） */
+  effective_mail_from?: string;
   effective_feishu_ready?: boolean;
 };
 

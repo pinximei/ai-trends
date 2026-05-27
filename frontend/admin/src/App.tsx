@@ -2655,6 +2655,28 @@ export function App() {
                               autoComplete="off"
                             />
                           </div>
+                          {newsletterSettings?.effective_smtp_ready ? (
+                            <p className="form-hint" style={{ gridColumn: "1 / -1", marginTop: 4, fontSize: 12, color: "#475569" }}>
+                              <strong>当前实际发信：</strong>
+                              {newsletterSettings.effective_mail_from || "—"}
+                              {newsletterSettings.effective_smtp_host ? (
+                                <>
+                                  {" "}
+                                  · SMTP {newsletterSettings.effective_smtp_host}
+                                  {newsletterSettings.effective_smtp_user &&
+                                  newsletterSettings.effective_smtp_user !== newsletterSettings.effective_mail_from
+                                    ? `（登录账号 ${newsletterSettings.effective_smtp_user}）`
+                                    : null}
+                                </>
+                              ) : null}
+                              {newsletterSettings.has_smtp_password ? null : " · 密码来自环境变量 NEWSLETTER_SMTP_PASSWORD"}
+                            </p>
+                          ) : newsletterForm.email_enabled ? (
+                            <p className="form-hint" style={{ gridColumn: "1 / -1", marginTop: 4, fontSize: 12, color: "#b45309" }}>
+                              邮件已开启但 SMTP 未配齐：需填写主机、发件邮箱（或用户名）及密码，或在服务器{" "}
+                              <code className="inline-code">backend/.env</code> 配置 NEWSLETTER_SMTP_* 后重启/保存一次。
+                            </p>
+                          ) : null}
                         </div>
                       ) : null}
                     </section>
