@@ -563,8 +563,6 @@ export function HomePage() {
         </div>
       </section>
 
-      <IndustryWindPanel data={industryWind} loading={loading && !industryWind} />
-
       <HomeSection
         className="ui-card overflow-hidden p-4 sm:p-5 ring-1 ring-orange-100/80"
         title={t("homeEditorialPicksTitle")}
@@ -697,6 +695,70 @@ export function HomePage() {
         </HomeSection>
       </div>
 
+      <IndustryWindPanel data={industryWind} loading={loading && !industryWind} />
+
+      <HomeSection
+        className="ui-card overflow-hidden p-4 sm:p-5"
+        title={radarCount > 0 ? `${radarCount}路雷达` : t("homeSourceRadar")}
+        subtitle={
+          radarCount > 0
+            ? `${radarCount} 路已配置数据源各 1 条（与上方精选区不重复 id，按源单独取热度最高）`
+            : t("homeSourceRadarSub")
+        }
+        icon={<Radar className="h-5 w-5" strokeWidth={2} />}
+      >
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : (
+          <div className={radarGridClass(radarCount)}>
+            {mergedLanes.map((lane) => {
+              const item = lane.items[0];
+              const accent = platformAccent(lane.source_key);
+              const facet = sourceFacets.find((f) => f.key === lane.source_key);
+              if (!item) {
+                return (
+                  <div
+                    key={lane.source_key}
+                    className={`ui-card p-3 sm:p-4 ring-1 ring-dashed ${accent.ring} bg-slate-50/80`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot} opacity-50`} aria-hidden />
+                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
+                        {lane.source_label}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-500">{t("homeSourceRadarNoData")}</p>
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={lane.source_key}
+                  to={`/resources/${item.id}`}
+                  className={`ui-card block p-3 transition hover:shadow-md sm:p-4 ring-1 ${accent.ring}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
+                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
+                      {lane.source_label}
+                    </span>
+                    {facet ? (
+                      <span className="ml-auto text-[10px] tabular-nums text-slate-400">
+                        {facet.news_count + facet.apps_count}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">
+                    {(item.card_highlights || item.card_description || item.summary || "").slice(0, 88)}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </HomeSection>
+
       <section className="ui-card overflow-hidden p-4 sm:p-5">
         <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeDataOverviewTitle")}</p>
         <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
@@ -817,68 +879,6 @@ export function HomePage() {
           </div>
         </div>
       </section>
-
-      <HomeSection
-        className="ui-card overflow-hidden p-4 sm:p-5"
-        title={radarCount > 0 ? `${radarCount}路雷达` : t("homeSourceRadar")}
-        subtitle={
-          radarCount > 0
-            ? `${radarCount} 路已配置数据源各 1 条（与上方精选区不重复 id，按源单独取热度最高）`
-            : t("homeSourceRadarSub")
-        }
-        icon={<Radar className="h-5 w-5" strokeWidth={2} />}
-      >
-        {loading ? (
-          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-        ) : (
-          <div className={radarGridClass(radarCount)}>
-            {mergedLanes.map((lane) => {
-              const item = lane.items[0];
-              const accent = platformAccent(lane.source_key);
-              const facet = sourceFacets.find((f) => f.key === lane.source_key);
-              if (!item) {
-                return (
-                  <div
-                    key={lane.source_key}
-                    className={`ui-card p-3 sm:p-4 ring-1 ring-dashed ${accent.ring} bg-slate-50/80`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot} opacity-50`} aria-hidden />
-                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
-                        {lane.source_label}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-xs leading-relaxed text-slate-500">{t("homeSourceRadarNoData")}</p>
-                  </div>
-                );
-              }
-              return (
-                <Link
-                  key={lane.source_key}
-                  to={`/resources/${item.id}`}
-                  className={`ui-card block p-3 transition hover:shadow-md sm:p-4 ring-1 ${accent.ring}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
-                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${accent.badge}`}>
-                      {lane.source_label}
-                    </span>
-                    {facet ? (
-                      <span className="ml-auto text-[10px] tabular-nums text-slate-400">
-                        {facet.news_count + facet.apps_count}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-3 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{item.title}</p>
-                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">
-                    {(item.card_highlights || item.card_description || item.summary || "").slice(0, 88)}
-                  </p>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </HomeSection>
 
       {NEWSLETTER_SUBSCRIBE_ENABLED ? (
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">
