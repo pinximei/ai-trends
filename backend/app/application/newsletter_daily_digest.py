@@ -80,7 +80,13 @@ def _fetch_articles_for_day_lane(
             | (Article.third_party_source.ilike("taaft%"))
             | (Article.third_party_source.ilike("acquire%"))
         ).limit(max(lim * 4, 32))
-        rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "apps")]
+        from ..newsletter_replication import article_value_assessed
+
+        rows = [
+            a
+            for a in db.scalars(q).all()
+            if _article_matches_public_feed(a, "apps") and article_value_assessed(a)
+        ]
         return _prioritize_digest_apps(rows)[:lim]
     q = base.where(Article.feed_kind == "news").limit(max(lim * 4, 24))
     rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "news")]
@@ -104,17 +110,17 @@ def _prioritize_digest_apps(articles: list[Article]) -> list[Article]:
     """邮件/飞书摘要应用栏：高价值评估优先，再变现向源/类，再按价值分与热度。"""
     from ..newsletter_replication import article_high_value_for_digest, article_replication_public
 
-    def _rank(a: Article) -> tuple[int, int, int, int, float, int]:
+    def _rank(a: Article) -> tuple[int, int, int, int, int, float, int]:
         cats = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
         primary = cats[0] if cats else ""
-        mon_src = 0 if art.admin_source_key(a.third_party_source) in art.MONETIZATION_SOURCE_KEYS else 1
-        mon_cat = 0 if primary in art.MONETIZATION_APPS_CATEGORIES else 1
         high = 0 if article_high_value_for_digest(a) else 1
         repl = article_replication_public(a) or {}
         worth = -int(repl.get("worth_score") or 0)
+        mon_src = 0 if art.admin_source_key(a.third_party_source) in art.MONETIZATION_SOURCE_KEYS else 1
+        mon_cat = 0 if primary in art.MONETIZATION_APPS_CATEGORIES else 1
         heat = -float(getattr(a, "heat_score", None) or 0.0)
         aid = -int(a.id or 0)
-        return (mon_src, mon_cat, high, worth, heat, aid)
+        return (high, worth, mon_src, mon_cat, heat, aid)
 
     return sorted(articles, key=_rank)
 
@@ -171,7 +177,13 @@ def fetch_articles_for_us_date_range_split(
                 | (Article.third_party_source.ilike("taaft%"))
                 | (Article.third_party_source.ilike("acquire%"))
             ).limit(max(lim * 4, 32))
-            rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "apps")]
+            from ..newsletter_replication import article_value_assessed
+
+            rows = [
+                a
+                for a in db.scalars(q).all()
+                if _article_matches_public_feed(a, "apps") and article_value_assessed(a)
+            ]
             return _prioritize_digest_apps(rows)[:lim]
         q = base.where(Article.feed_kind == "news").limit(max(lim * 4, 24))
         rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "news")]
@@ -377,7 +389,9 @@ def generate_digest_content(
     public_base = str(settings.get("public_site_base_url") or "").strip()
     hl_apps = max(0, min(8, int(settings.get("llm_apps_limit", 3))))
     hl_news = max(0, min(8, int(settings.get("llm_news_limit", 3))))
-    mon_apps = [a for a in apps if _monetization_counts_as_apps_feed(a)]
+    from .home_public import _eligible_monetization_highlight
+
+    mon_apps = [a for a in apps if _eligible_monetization_highlight(a)]
     reg_apps = [a for a in apps if a not in mon_apps]
     body_md = build_digest_body_from_articles(
         apps,

@@ -2,6 +2,19 @@ import type { ReplicationAnalysis, ReplicationPhase } from "@/api/public/types";
 
 const POSITIVE_VERDICTS = new Set(["高价值", "值得复刻", "值得做", "高变现"]);
 
+/** 与后端 monetization_hypothesis_is_substantive 对齐 */
+const GENERIC_MONETIZATION_HYPOTHESES = new Set([
+  "订阅或买断；优先验证 20 个目标用户付费意愿后再扩功能",
+]);
+
+function monetizationHypothesisIsSubstantive(hypothesis: string | undefined): boolean {
+  const h = (hypothesis || "").trim();
+  if (h.length < 16) return false;
+  if (GENERIC_MONETIZATION_HYPOTHESES.has(h)) return false;
+  if (h.startsWith("围绕「") && h.includes("垂直场景") && h.length < 48) return false;
+  return true;
+}
+
 export function normalizeVerdict(verdict: string | undefined): string {
   const v = (verdict || "").trim();
   if (v === "值得复刻" || v === "值得做" || v === "高变现") return "高价值";
@@ -20,7 +33,7 @@ export function hasValueAssessment(
   if (!Number.isFinite(worth) || worth < minWorth) return false;
   if ((analysis.value_summary || "").trim().length < 16) return false;
   const mp = analysis.market_position;
-  if (!mp || (mp.monetization_hypothesis || "").trim().length < 16) return false;
+  if (!monetizationHypothesisIsSubstantive(mp?.monetization_hypothesis)) return false;
   return true;
 }
 

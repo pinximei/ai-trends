@@ -76,6 +76,8 @@ def _why_follow(a: Any, *, feed_kind: str) -> str:
     tier = (getattr(a, "replication_tier", None) or "").strip().upper()
     if feed_kind == "apps":
         repl = article_replication_public(a)
+        from .newsletter_replication import article_high_value_for_digest, article_value_assessed
+
         if repl and article_high_value_for_digest(a):
             worth = int(repl.get("worth_score") or 0)
             verdict = (repl.get("verdict") or "").strip()
@@ -86,13 +88,10 @@ def _why_follow(a: Any, *, feed_kind: str) -> str:
             if vs:
                 return f"{head}；{_snippet(vs, max_len=120)}"
             return head
-        if tier in ("S", "A"):
-            return "仅有档位标签，暂无完整变现评估，建议以热度与介绍为准，详见站内详情"
-        if tier == "B":
-            return "变现价值中等，站内评估未达标，建议结合详情判断"
-        if tier == "C":
-            return "低变现价值向，更适合跟踪趋势而非投入开发"
-        return "当日热度靠前，可作为产品动态样本跟踪"
+        if repl and article_value_assessed(a):
+            worth = int(repl.get("worth_score") or 0)
+            return f"价值分 {worth}/10，可作变现向样本；详见站内评估"
+        return "未达价值评估门槛，建议仅作动态跟踪或跳过"
     return "当日高热度资讯，建议了解对行业与产品方向的影响"
 
 
@@ -194,7 +193,7 @@ def build_digest_body_from_articles(
     replicable_apps, regular_rest = split_deep_replicable_apps(app_lane)
     parts: list[str] = [
         "> AI 产品雷达 · 每日精选（美东摘要日当天已发布）。"
-        "「高价值应用」仅含价值分≥8 且结论为「高价值」的条目；其余按热度收录。",
+        "应用栏仅含价值分≥7 的评估；「高价值应用」为≥8 分且结论「高价值」。",
         "",
     ]
     if mon_lane:
@@ -225,7 +224,7 @@ def build_digest_body_from_articles(
             feed_kind="apps",
             highlight_title="今日应用",
             more_title="更多应用",
-            kind_note="（热度向）",
+            kind_note="（有价值评估、未进高价值栏）",
             highlight_n=highlight_apps,
         )
     )

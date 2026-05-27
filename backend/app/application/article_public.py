@@ -156,11 +156,20 @@ def _feed_row_matches_list_filters(
         t = (getattr(a, "replication_tier", None) or "").strip().upper()
         if t not in tier_filter:
             return False
-    if replication_high_value and not _article_replication_complete(
+    # 应用泳道：公开列表一律要求价值评估达标（tier 仅作附加筛选，不能绕过 worth≥7）
+    if feed == "apps":
+        if replication_high_value:
+            if not _article_replication_complete(
+                a, min_worth=8, require_high_value=True
+            ):
+                return False
+        elif not _article_replication_complete(a, min_worth=7, require_high_value=False):
+            return False
+    elif replication_high_value and not _article_replication_complete(
         a, min_worth=8, require_high_value=True
     ):
         return False
-    if replication_complete and not replication_high_value and not _article_replication_complete(
+    elif replication_complete and not _article_replication_complete(
         a, min_worth=7, require_high_value=False
     ):
         return False
@@ -193,7 +202,17 @@ def _heat_order_by(
 ):
     fe = _freshness_expr()
     order: list = []
-    if sort_monetization:
+    if sort_by_value or sort_replicable:
+        order.append(desc(_worth_score_sql_expr()))
+        if sort_monetization:
+            order.append(
+                case(
+                    (Article.ai_categories_json.like('%"变现案例"%'), 0),
+                    (Article.ai_categories_json.like('%"已验证变现"%'), 1),
+                    else_=2,
+                )
+            )
+    elif sort_monetization:
         order.append(
             case(
                 (Article.ai_categories_json.like('%"变现案例"%'), 0),
@@ -201,8 +220,6 @@ def _heat_order_by(
                 else_=2,
             )
         )
-    if sort_by_value or sort_replicable:
-        order.append(desc(_worth_score_sql_expr()))
     order.extend((desc(Article.heat_score), desc(fe), desc(Article.id)))
     return tuple(order)
 

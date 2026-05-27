@@ -150,6 +150,12 @@ def test_feed_row_matches_replication_high_value() -> None:
 
 
 def test_feed_row_matches_tier_filter() -> None:
+    import json
+
+    from backend.app.domain.replication_analysis import normalize_replication_analysis
+    from tests.replication_fixtures import sample_replication_analysis
+
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=8, verdict="高价值"))
     a = Article(
         industry_id=1,
         segment_id=1,
@@ -159,6 +165,7 @@ def test_feed_row_matches_tier_filter() -> None:
         third_party_source="product_hunt / daily",
         ai_categories_json='["应用产品"]',
         replication_tier="B",
+        replication_analysis_json=json.dumps(repl, ensure_ascii=False),
     )
     assert ap._feed_row_matches_list_filters(a, feed="apps", cat_filter=None, source_filter=None, search_n=None) is True
     assert (
@@ -237,6 +244,25 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None
         repl = normalize_replication_analysis(sample_replication_analysis(worth=worth, verdict="高价值"))
         return json.dumps(repl, ensure_ascii=False)
 
+    def _repl_json_no_boost(worth: int) -> str:
+        """避免定价关键词把低分抬到 ≥7。"""
+        repl = normalize_replication_analysis(
+            {
+                **sample_replication_analysis(worth=worth, verdict="高价值"),
+                "value_summary": "面向独立开发者的小众垂直工具，适合作为副业方向跟踪",
+                "market_position": {
+                    "target_user": "独立开发者验证小众工具付费意愿",
+                    "vertical_niche": "笔记同步细分场景",
+                    "market_saturation": "竞争适中",
+                    "competitors": [{"name": "竞品A", "note": "功能接近"}],
+                    "differentiation": "更轻量的本地优先工作流",
+                    "monetization_hypothesis": "按年一次性授权，先卖终身版验证需求",
+                },
+            }
+        )
+        assert int(repl.get("worth_score") or 0) < 7
+        return json.dumps(repl, ensure_ascii=False)
+
     db.add_all(
         [
             Article(
@@ -263,7 +289,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None
                 third_party_source="product_hunt / daily",
                 ai_categories_json='["应用产品"]',
                 replication_tier="S",
-                replication_analysis_json=_repl_json(6),
+                replication_analysis_json=_repl_json_no_boost(6),
                 heat_score=1.0,
                 published_at=now,
             ),
@@ -299,8 +325,8 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None
         heat_max_ranked=50,
     )
     titles = [x["title"] for x in out["items"]]
-    assert titles == ["Tier A hot", "Tier S cold"]
-    assert out["total"] == 2
+    assert titles == ["Tier A hot"]
+    assert out["total"] == 1
 
     db.add(
         Article(
@@ -313,6 +339,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None
             third_party_source="github / trending",
             ai_categories_json='["开源客户端(好抄)"]',
             replication_tier="S",
+            replication_analysis_json=_repl_json(8),
             heat_score=50.0,
             published_at=now,
         )
@@ -333,7 +360,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None
         heat_max_ranked=50,
     )
     gh_titles = [x["title"] for x in out2["items"] if "GitHub" in x["title"]]
-    assert "GitHub client S" in gh_titles
+    assert gh_titles == ["GitHub client S"]
 
 
 def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:

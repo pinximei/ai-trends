@@ -1,7 +1,8 @@
-"""首页亮点变现线索列表。"""
+"""首页亮点变现线索列表（须价值分≥7）。"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import json
+from datetime import datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -9,7 +10,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.app import models as _admin_models  # noqa: F401
 from backend.app.application.home_public import list_highlight_monetization_apps
 from backend.app.db import Base
+from backend.app.domain.replication_analysis import normalize_replication_analysis
 from backend.app.product_models import Article, Industry, Segment
+from tests.replication_fixtures import sample_replication_analysis
 
 
 def _session() -> Session:
@@ -18,8 +21,12 @@ def _session() -> Session:
     return sessionmaker(bind=engine)()
 
 
-def test_list_highlight_monetization_apps_includes_json_tag_when_primary_is_apps() -> None:
-    """JSON 含变现案例但展示主类为应用产品时，仍应进入变现线索池。"""
+def _repl_json(worth: int = 8) -> str:
+    repl = normalize_replication_analysis(sample_replication_analysis(worth=worth, verdict="高价值"))
+    return json.dumps(repl, ensure_ascii=False)
+
+
+def test_list_highlight_monetization_apps_requires_value_assessment() -> None:
     db = _session()
     ind = Industry(slug="ai", name="AI")
     db.add(ind)
@@ -33,57 +40,33 @@ def test_list_highlight_monetization_apps_includes_json_tag_when_primary_is_apps
             Article(
                 industry_id=ind.id,
                 segment_id=seg.id,
-                title="Acquire deal one",
+                title="Acquire with value",
                 status="published",
                 feed_kind="apps",
                 third_party_source="acquire / daily",
                 ai_categories_json='["应用产品"]',
                 heat_score=50.0,
                 published_at=now,
+                replication_analysis_json=_repl_json(8),
             ),
             Article(
                 industry_id=ind.id,
                 segment_id=seg.id,
-                title="Acquire deal two",
+                title="Acquire no assessment",
                 status="published",
                 feed_kind="apps",
                 third_party_source="acquire / weekly",
-                ai_categories_json='["应用产品"]',
-                heat_score=40.0,
-                published_at=now,
-            ),
-            Article(
-                industry_id=ind.id,
-                segment_id=seg.id,
-                title="PH with monetization tag",
-                status="published",
-                feed_kind="apps",
-                third_party_source="product_hunt / daily",
-                ai_categories_json='["应用产品", "变现案例"]',
-                heat_score=30.0,
-                published_at=now,
-            ),
-            Article(
-                industry_id=ind.id,
-                segment_id=seg.id,
-                title="Verified revenue",
-                status="published",
-                feed_kind="apps",
-                third_party_source="product_hunt / daily",
-                ai_categories_json='["已验证变现"]',
-                heat_score=20.0,
+                ai_categories_json='["变现案例"]',
+                heat_score=999.0,
                 published_at=now,
             ),
         ]
     )
     db.commit()
     items = list_highlight_monetization_apps(db, industry_slug="ai", limit=4, published_within_days=30)
-    assert len(items) == 4
     titles = {x["title"] for x in items}
-    assert "Acquire deal one" in titles
-    assert "Acquire deal two" in titles
-    assert "PH with monetization tag" in titles
-    assert "Verified revenue" in titles
+    assert "Acquire with value" in titles
+    assert "Acquire no assessment" not in titles
 
 
 def test_list_highlight_monetization_apps_prefers_case_study_first() -> None:
@@ -107,6 +90,7 @@ def test_list_highlight_monetization_apps_prefers_case_study_first() -> None:
                 ai_categories_json='["应用产品", "变现案例"]',
                 heat_score=999.0,
                 published_at=now,
+                replication_analysis_json=_repl_json(7),
             ),
             Article(
                 industry_id=ind.id,
@@ -118,6 +102,7 @@ def test_list_highlight_monetization_apps_prefers_case_study_first() -> None:
                 ai_categories_json='["变现案例"]',
                 heat_score=10.0,
                 published_at=now,
+                replication_analysis_json=_repl_json(9),
             ),
         ]
     )

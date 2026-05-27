@@ -280,8 +280,10 @@ def _ensure_replication_analysis_object(
     if len(str(mp.get("differentiation") or "")) < 12:
         mp["differentiation"] = _merge_text(repl.get("summary") or "", str(ra.get("value_summary") or ""), min_len=12)[:800]
     if len(str(mp.get("monetization_hypothesis") or "")) < 16:
+        from .domain.replication_analysis import monetization_hypothesis_is_substantive
+
         vs = str(ra.get("value_summary") or "").strip()
-        if len(vs) >= 16:
+        if monetization_hypothesis_is_substantive(vs):
             mp["monetization_hypothesis"] = vs[:800]
     ra["market_position"] = mp
     risks = ra.get("risks")
