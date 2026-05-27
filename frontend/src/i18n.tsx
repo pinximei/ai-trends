@@ -120,6 +120,10 @@ const STRINGS: Record<string, string> = {
   aboutGithubCta: "在 GitHub 查看源码与贡献",
 
   newsletterCta: "把握 AI 浪潮，订阅精选更新",
+  newsletterHeaderBtn: "邮件订阅",
+  newsletterPopoverTitle: "订阅每日精选",
+  newsletterPopoverDesc: "高可复刻应用、热门资讯与变现线索，可随时退订。",
+  newsletterClose: "关闭",
   newsletterPlaceholder: "请输入邮箱",
   newsletterSubscribe: "订阅",
   newsletterThanks: "谢谢！",

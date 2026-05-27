@@ -1,4 +1,3 @@
-import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
@@ -6,7 +5,9 @@ import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
 import { mergeSourceLanes, platformAccent, radarGridClass, type SourceLane } from "@/components/home/homeUtils";
+import { useNewsletterSubscribe } from "@/hooks/useNewsletterSubscribe";
 import { useI18n } from "@/i18n";
+import { NEWSLETTER_SUBSCRIBE_ENABLED } from "@/lib/newsletterConfig";
 import {
   readHomeDashboardCache,
   writeHomeDashboardCache,
@@ -18,9 +19,6 @@ const INDUSTRY = "ai";
 
 /** 首页资讯情报墙展示条数（与侧栏应用榜高度大致对齐） */
 const HOME_NEWS_WALL_LIMIT = 8;
-
-/** 首页邮件订阅条（公开） */
-const HOME_NEWSLETTER_VISIBLE = true;
 
 type SparkPoint = { day: string; count: number };
 
@@ -355,10 +353,7 @@ export function HomePage() {
   const [activeSourceKeys, setActiveSourceKeys] = useState<string[]>(() => initialHomeCache?.activeSourceKeys ?? []);
   const [loading, setLoading] = useState(() => !initialHomeCache);
   const [refreshing, setRefreshing] = useState(false);
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [subscribeErr, setSubscribeErr] = useState("");
+  const { email, setEmail, sent, submitting, subscribeErr, clearError, onSubscribe } = useNewsletterSubscribe();
   const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialApps ?? []);
   const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialNews ?? []);
   const [trendOverview, setTrendOverview] = useState<HomeTrendOverview | null>(
@@ -518,27 +513,6 @@ export function HomePage() {
   const newsWall = news.slice(0, HOME_NEWS_WALL_LIMIT);
   const appLeaderboard = apps.slice(0, 6);
   const totalInWindow = (trendOverview?.news_count ?? 0) + (trendOverview?.apps_count ?? 0);
-
-  const onSubscribe = async (e: FormEvent) => {
-    e.preventDefault();
-    const trimmed = email.trim();
-    if (!trimmed || submitting) return;
-    setSubmitting(true);
-    setSubscribeErr("");
-    try {
-      await publicApi.newsletterSubscribe(trimmed);
-      setSent(true);
-      setEmail("");
-      window.setTimeout(() => {
-        setSent(false);
-      }, 4000);
-    } catch (err) {
-      const text = err instanceof Error && err.message ? err.message : t("newsletterErrorNetwork");
-      setSubscribeErr(text);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const editorialAppsShow = editorialApps.slice(0, 3);
   const editorialNewsShow = editorialNews.slice(0, 3);
@@ -886,7 +860,7 @@ export function HomePage() {
         </aside>
       </div>
 
-      {HOME_NEWSLETTER_VISIBLE ? (
+      {NEWSLETTER_SUBSCRIBE_ENABLED ? (
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-600 p-[1px] shadow-lg">
           <form
             onSubmit={onSubscribe}
@@ -903,7 +877,7 @@ export function HomePage() {
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
-                if (subscribeErr) setSubscribeErr("");
+                if (subscribeErr) clearError();
               }}
               placeholder={t("newsletterPlaceholder")}
               className="w-full min-w-0 rounded-full border border-white/30 bg-white py-2.5 pl-4 pr-4 text-sm text-slate-900 shadow-inner outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-white/50"

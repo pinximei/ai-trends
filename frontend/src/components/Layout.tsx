@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Github } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { NewsletterSubscribeButton } from "@/components/NewsletterSubscribeButton";
 import { useI18n } from "@/i18n";
+import { NEWSLETTER_SUBSCRIBE_ENABLED } from "@/lib/newsletterConfig";
 import { TOP_NAV_ITEMS } from "@/navConfig";
 import { SITE_NAME, usePageSeo } from "@/lib/seo";
 import { SITE_GITHUB_REPO_URL } from "@/siteLinks";
@@ -136,6 +138,7 @@ export function Layout() {
           </nav>
 
           <div className="order-1 flex w-full min-w-0 shrink-0 items-center justify-center gap-2 md:order-none md:w-auto md:max-w-[18rem] md:justify-end">
+            {isHome && NEWSLETTER_SUBSCRIBE_ENABLED ? <NewsletterSubscribeButton /> : null}
             <a
               href={SITE_GITHUB_REPO_URL}
               target="_blank"
