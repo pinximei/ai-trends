@@ -382,6 +382,11 @@ def _job_newsletter_daily() -> None:
             return
         out = run_daily_newsletter_digest_job(db=db, settings=s)
         logger.info("newsletter daily cron finished: %s", out)
+        from .application.newsletter_period_digest import run_scheduled_feishu_period_push
+
+        period_out = run_scheduled_feishu_period_push(db, settings=s)
+        if period_out.get("feishu_sent"):
+            logger.info("newsletter feishu period cron finished: %s", period_out)
     except Exception as e:
         logger.exception("newsletter daily job failed: %s", e)
     finally:
@@ -399,8 +404,12 @@ def _job_newsletter_feishu_retry() -> None:
         from .newsletter_settings_service import get_newsletter_settings_merged
         from .us_content_calendar import us_calendar_today
 
+        from .application.newsletter_period_digest import normalize_feishu_cadence
+
         s = get_newsletter_settings_merged(db)
         if not s.get("daily_digest_job_enabled", True):
+            return
+        if normalize_feishu_cadence(s.get("feishu_push_cadence")) != "daily":
             return
         feishu_on = bool(s.get("feishu_enabled")) and bool((s.get("feishu_webhook_url") or "").strip())
         if not feishu_on:

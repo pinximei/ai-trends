@@ -38,6 +38,10 @@ def default_newsletter_json() -> dict[str, Any]:
         "mail_from": "",
         "smtp_use_tls": False,
         "feishu_webhook_url": "",
+        # 飞书推送周期：daily=与日报同频；weekly=每周一推上周；monthly=每月 1 日推上月
+        "feishu_push_cadence": "daily",
+        "feishu_weekly_weekday": 0,
+        "feishu_last_sent_period": "",
         "bcc_batch": 40,
         "footer_note": "",
         # 定时任务与订阅校验：可在后台「邮件订阅」页修改
@@ -69,6 +73,10 @@ def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     out["smtp_port"] = max(1, min(65535, int(out.get("smtp_port") or 465)))
     out["bcc_batch"] = max(1, min(80, int(out.get("bcc_batch") or 40)))
     out["smtp_use_tls"] = bool(out.get("smtp_use_tls", False))
+    cadence = str(out.get("feishu_push_cadence") or "daily").strip().lower()
+    out["feishu_push_cadence"] = cadence if cadence in ("daily", "weekly", "monthly") else "daily"
+    out["feishu_weekly_weekday"] = max(0, min(6, int(out.get("feishu_weekly_weekday", 0))))
+    out["feishu_last_sent_period"] = str(out.get("feishu_last_sent_period") or "").strip()
     for k in ("smtp_host", "smtp_user", "smtp_password", "mail_from", "public_site_base_url", "footer_note"):
         out[k] = str(out.get(k) or "").strip()
     return out
@@ -139,6 +147,9 @@ def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
         str(effective.get("mail_from") or "").strip() or m["effective_smtp_user"]
     )
     m["effective_feishu_ready"] = bool(str(effective.get("feishu_webhook_url") or "").strip())
+    m["feishu_push_cadence"] = str(m.get("feishu_push_cadence") or "daily")
+    m["feishu_weekly_weekday"] = int(m.get("feishu_weekly_weekday", 0))
+    m["feishu_last_sent_period"] = str(m.get("feishu_last_sent_period") or "")
     return m
 
 
@@ -204,6 +215,20 @@ def _sync_push_channel_flags(cur: dict[str, Any]) -> None:
     cur["daily_digest_job_enabled"] = any_on
 
 
+def set_feishu_last_sent_period(db: Session, period_key: str) -> None:
+    row = db.get(ProductSetting, NEWSLETTER_KEY)
+    if not row:
+        ensure_newsletter_settings_row(db)
+        row = db.get(ProductSetting, NEWSLETTER_KEY)
+    if not row:
+        return
+    cur = _merged_stored(db)
+    cur["feishu_last_sent_period"] = str(period_key or "").strip()
+    row.value_json = _normalize_merged(cur)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+
+
 def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
     """patch 中空字符串的 smtp_password 表示不修改已存密码。"""
     row = db.get(ProductSetting, NEWSLETTER_KEY)
@@ -230,6 +255,7 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         "daily_minute",
         "smtp_port",
         "bcc_batch",
+        "feishu_weekly_weekday",
     )
     str_keys = (
         "public_site_base_url",
@@ -238,6 +264,8 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         "mail_from",
         "footer_note",
         "feishu_webhook_url",
+        "feishu_push_cadence",
+        "feishu_last_sent_period",
     )
     for k in bool_keys:
         if k in patch:

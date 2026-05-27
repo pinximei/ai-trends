@@ -22,17 +22,25 @@ def _snippet(text: str, *, max_len: int = _SUMMARY_SNIP) -> str:
     return s[: max_len - 1] + "…"
 
 
-def build_digest_subject_default(digest_date: str, apps: list[Any], news: list[Any]) -> str:
+def build_digest_subject_default(
+    digest_date: str,
+    apps: list[Any],
+    news: list[Any],
+    *,
+    period_label: str | None = None,
+    period_kind: str | None = None,
+) -> str:
     """无 LLM 时的默认标题。"""
-    d = (digest_date or "").strip()
+    d = (period_label or digest_date or "").strip()
+    kind = (period_kind or "每日精选").strip()
     na, nn = len(apps), len(news)
     if na and nn:
-        return f"AI 产品雷达 · {na} 应用 {nn} 资讯 · {d}"
+        return f"AI 产品雷达 · {kind} · {na} 应用 {nn} 资讯 · {d}"
     if na:
-        return f"AI 产品雷达 · {na} 款应用 · {d}"
+        return f"AI 产品雷达 · {kind} · {na} 款应用 · {d}"
     if nn:
-        return f"AI 产品雷达 · {nn} 条资讯 · {d}"
-    return f"AI 产品雷达 · 每日精选 · {d}"
+        return f"AI 产品雷达 · {kind} · {nn} 条资讯 · {d}"
+    return f"AI 产品雷达 · {kind} · {d}"
 
 
 _TIER_LABEL: dict[str, str] = {
@@ -344,13 +352,16 @@ def digest_md_to_feishu_text(
     apps_count: int,
     news_count: int,
     public_site_base_url: str,
+    period_kind: str = "daily",
 ) -> str:
     """飞书文本：独立排版，避免邮件用的宽分隔线在手机端错位成「乱表」。"""
     body = _digest_md_lines_to_feishu_body(body_md)
     base = (public_site_base_url or "").strip().rstrip("/")
     tail = f"\n\n🔗 完整站点：{base}" if base else ""
     meta = f"（应用 {apps_count} 条 · 资讯 {news_count} 条）" if (apps_count or news_count) else ""
-    head = f"📬 AI 产品雷达 · 每日精选 · {digest_date}\n主题：{_strip_md_inline(subject)}"
+    kind_labels = {"daily": "每日精选", "weekly": "周报", "monthly": "月报"}
+    kind_label = kind_labels.get((period_kind or "daily").strip().lower(), "精选")
+    head = f"📬 AI 产品雷达 · {kind_label} · {digest_date}\n主题：{_strip_md_inline(subject)}"
     if meta:
         head = f"{head}\n{meta}"
     return _collapse_blank_lines(f"{head}\n\n{body}{tail}")[:4000]
@@ -364,6 +375,7 @@ def digest_delivery_texts(
     public_site_base_url: str,
     apps_count: int,
     news_count: int,
+    period_kind: str = "daily",
 ) -> tuple[str, str]:
     """从已落库的 body_md 生成邮件纯文本与飞书正文（发送阶段）。"""
     md = normalize_digest_body_md(body_md, apps_count=apps_count, news_count=news_count)
@@ -375,6 +387,7 @@ def digest_delivery_texts(
         apps_count=apps_count,
         news_count=news_count,
         public_site_base_url=public_site_base_url,
+        period_kind=period_kind,
     )
     return email_plain, feishu_text
 
@@ -402,5 +415,6 @@ def format_digest_for_delivery(
         apps_count=len(apps),
         news_count=len(news),
         public_site_base_url=public_site_base_url,
+        period_kind="daily",
     )
     return md, email_plain, feishu_text

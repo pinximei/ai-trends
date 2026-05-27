@@ -35,6 +35,9 @@ export type NewsletterSettingsResponse = {
   /** 收件人看到的 From（未填 mail_from 时同 smtp_user） */
   effective_mail_from?: string;
   effective_feishu_ready?: boolean;
+  feishu_push_cadence?: "daily" | "weekly" | "monthly";
+  feishu_weekly_weekday?: number;
+  feishu_last_sent_period?: string;
 };
 
 /** FastAPI：detail 可能是字符串或校验错误数组，直接塞进 Error 会显示 [object Object] */

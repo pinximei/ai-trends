@@ -250,6 +250,8 @@ function newsletterFormFromView(nl: NewsletterSettingsView) {
     smtp_password: "",
     mail_from: nl.mail_from,
     feishu_webhook_url: "",
+    feishu_push_cadence: (nl.feishu_push_cadence ?? "daily") as "daily" | "weekly" | "monthly",
+    feishu_weekly_weekday: nl.feishu_weekly_weekday ?? 0,
   };
 }
 
@@ -861,6 +863,10 @@ export function App() {
       }
       if (newsletterForm.smtp_password.trim()) payload.smtp_password = newsletterForm.smtp_password.trim();
       if (newsletterForm.feishu_webhook_url.trim()) payload.feishu_webhook_url = newsletterForm.feishu_webhook_url.trim();
+      if (feishuOn) {
+        payload.feishu_push_cadence = newsletterForm.feishu_push_cadence;
+        payload.feishu_weekly_weekday = Math.min(6, Math.max(0, Math.floor(Number(newsletterForm.feishu_weekly_weekday)) || 0));
+      }
       const out = await adminApi.saveNewsletterSettings(payload);
       setNewsletterSettings(out);
       setNewsletterForm(newsletterFormFromView(out));
@@ -2698,7 +2704,9 @@ export function App() {
                           </span>
                           <span>
                             <span className="push-channel-card__title">飞书群推送</span>
-                            <span className="push-channel-card__desc">通过群机器人 Webhook 发送同一份简报</span>
+                            <span className="push-channel-card__desc">
+                              群机器人 Webhook；可选按日 / 按周 / 按月（邮件仍为每日）
+                            </span>
                             <span className="push-channel-card__status">
                               {newsletterForm.feishu_enabled ? "已开启" : "未开启"}
                             </span>
@@ -2745,6 +2753,54 @@ export function App() {
                               autoComplete="off"
                             />
                           </div>
+                          <div className="form-field">
+                            <label>飞书推送周期</label>
+                            <select
+                              value={newsletterForm.feishu_push_cadence}
+                              onChange={(e) =>
+                                setNewsletterForm((p) => ({
+                                  ...p,
+                                  feishu_push_cadence: e.target.value as "daily" | "weekly" | "monthly",
+                                }))
+                              }
+                            >
+                              <option value="daily">按日（与美东当日日报同篇）</option>
+                              <option value="weekly">按周（每周推送上一自然周 Mon–Sun）</option>
+                              <option value="monthly">按月（每月 1 日推送上一自然月）</option>
+                            </select>
+                            <p className="form-hint" style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+                              {newsletterForm.feishu_push_cadence === "daily"
+                                ? "与上方定时同一时刻推送当日摘要；「立即推送」沿用库内今日摘要。"
+                                : newsletterForm.feishu_push_cadence === "weekly"
+                                  ? "定时：每周一（美东）在配置时刻推送上周一至周日内容；「立即推送」为近 7 日滚动窗。"
+                                  : "定时：每月 1 日（美东）在配置时刻推送上一整月；「立即推送」为本月 1 日至今日。"}
+                              {newsletterSettings?.feishu_last_sent_period
+                                ? ` 上次飞书周期：${newsletterSettings.feishu_last_sent_period}`
+                                : ""}
+                            </p>
+                          </div>
+                          {newsletterForm.feishu_push_cadence === "weekly" ? (
+                            <div className="form-field" style={{ maxWidth: 220 }}>
+                              <label>周报推送星期（美东）</label>
+                              <select
+                                value={newsletterForm.feishu_weekly_weekday}
+                                onChange={(e) =>
+                                  setNewsletterForm((p) => ({
+                                    ...p,
+                                    feishu_weekly_weekday: Number(e.target.value),
+                                  }))
+                                }
+                              >
+                                <option value={0}>周一</option>
+                                <option value={1}>周二</option>
+                                <option value={2}>周三</option>
+                                <option value={3}>周四</option>
+                                <option value={4}>周五</option>
+                                <option value={5}>周六</option>
+                                <option value={6}>周日</option>
+                              </select>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </section>

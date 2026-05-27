@@ -127,10 +127,57 @@ def fetch_articles_for_shanghai_day_split(
     news_limit: int,
 ) -> tuple[list[Article], list[Article]]:
     """美东日历「当天」已发布文章，按热度各取 Top N。"""
+    return fetch_articles_for_us_date_range_split(
+        db, d, d, apps_limit=apps_limit, news_limit=news_limit
+    )
+
+
+def fetch_articles_for_us_date_range_split(
+    db: Session,
+    start: date,
+    end: date,
+    *,
+    apps_limit: int,
+    news_limit: int,
+) -> tuple[list[Article], list[Article]]:
+    """美东日历闭区间 [start, end] 内已发布文章，按热度各取 Top N。"""
+    if end < start:
+        start, end = end, start
     ids_ = _ai_industry_ids(db)
-    apps = _fetch_articles_for_day_lane(db, d, feed_kind="apps", limit=apps_limit, industry_ids=ids_)
-    news = _fetch_articles_for_day_lane(db, d, feed_kind="news", limit=news_limit, industry_ids=ids_)
-    return apps, news
+    if not ids_:
+        return [], []
+    start_utc, _ = utc_naive_bounds_for_us_date(start)
+    _, end_utc_excl = utc_naive_bounds_for_us_date(end)
+    apps_lim = max(1, min(40, int(apps_limit)))
+    news_lim = max(1, min(40, int(news_limit)))
+
+    def _lane(feed_kind: str, lim: int) -> list[Article]:
+        fk = (feed_kind or "news").strip().lower()
+        base = (
+            select(Article)
+            .where(
+                Article.industry_id.in_(ids_),
+                Article.status == "published",
+                Article.published_at.is_not(None),
+                Article.published_at >= start_utc,
+                Article.published_at < end_utc_excl,
+            )
+            .order_by(Article.heat_score.desc(), Article.published_at.desc())
+        )
+        if fk == "apps":
+            q = base.where(
+                (Article.feed_kind == "apps")
+                | (Article.third_party_source.ilike("github%"))
+                | (Article.third_party_source.ilike("taaft%"))
+                | (Article.third_party_source.ilike("acquire%"))
+            ).limit(max(lim * 4, 32))
+            rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "apps")]
+            return _prioritize_digest_apps(rows)[:lim]
+        q = base.where(Article.feed_kind == "news").limit(max(lim * 4, 24))
+        rows = [a for a in db.scalars(q).all() if _article_matches_public_feed(a, "news")]
+        return rows[:lim]
+
+    return _lane("apps", apps_lim), _lane("news", news_lim)
 
 
 def _build_llm_subject_payload(
@@ -277,8 +324,15 @@ def _get_or_create_digest(db: Session, digest_date: str) -> NewsletterDailyDiges
 
 
 def _digest_delivery_complete(row: NewsletterDailyDigest, settings: dict[str, Any]) -> bool:
+    from .newsletter_period_digest import normalize_feishu_cadence
+
     email_needed = bool(settings.get("send_enabled")) and _smtp_config_from_settings(settings)
-    feishu_needed = bool(settings.get("feishu_enabled")) and bool((settings.get("feishu_webhook_url") or "").strip())
+    feishu_cadence = normalize_feishu_cadence(settings.get("feishu_push_cadence"))
+    feishu_needed = (
+        feishu_cadence == "daily"
+        and bool(settings.get("feishu_enabled"))
+        and bool((settings.get("feishu_webhook_url") or "").strip())
+    )
     if email_needed and row.sent_at is None:
         return False
     if feishu_needed and row.feishu_sent_at is None:
@@ -494,6 +548,23 @@ def run_daily_newsletter_digest_job(
         has_ready = _digest_has_content(row)
 
         if push_only and not has_ready:
+            from .newsletter_period_digest import normalize_feishu_cadence, run_manual_feishu_period_push
+
+            cadence_early = normalize_feishu_cadence(settings.get("feishu_push_cadence"))
+            feishu_only_push = (
+                manual_run
+                and cadence_early != "daily"
+                and bool(settings.get("feishu_enabled"))
+                and bool((settings.get("feishu_webhook_url") or "").strip())
+            )
+            if feishu_only_push:
+                period_out = run_manual_feishu_period_push(db, settings=settings)
+                return {
+                    "digest_date": digest_key,
+                    "ok": bool(period_out.get("feishu_sent")),
+                    "push_only": True,
+                    **period_out,
+                }
             return {
                 "digest_date": digest_key,
                 "ok": False,
@@ -588,8 +659,23 @@ def run_daily_newsletter_digest_job(
             logger.warning("newsletter daily: SMTP incomplete, digest_date=%s", digest_key)
             out["email_skip"] = "no_smtp"
 
+        from .newsletter_period_digest import normalize_feishu_cadence, run_manual_feishu_period_push
+
+        feishu_cadence = normalize_feishu_cadence(settings.get("feishu_push_cadence"))
         feishu_on = bool(settings.get("feishu_enabled")) and bool((settings.get("feishu_webhook_url") or "").strip())
-        if feishu_on:
+        if feishu_on and feishu_cadence != "daily":
+            period_out = run_manual_feishu_period_push(db, settings=settings) if manual_run else {}
+            if manual_run:
+                if period_out.get("feishu_sent"):
+                    out["feishu_sent"] = True
+                    out["feishu_period"] = period_out
+                    prev_msg = str(out.get("message") or "")
+                    out["message"] = f"{prev_msg} {period_out.get('message', '')}".strip()
+                elif period_out.get("error"):
+                    return {**out, "ok": False, "error": period_out.get("error")}
+                elif not period_out.get("skipped"):
+                    out["feishu_period"] = period_out
+        if feishu_on and feishu_cadence == "daily":
             db.expire_all()
             row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
             already_feishu = bool(row and row.feishu_sent_at is not None)

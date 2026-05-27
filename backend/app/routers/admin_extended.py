@@ -178,6 +178,8 @@ class NewsletterSettingsPatch(BaseModel):
     mail_from: str | None = None
     smtp_use_tls: bool | None = None
     feishu_webhook_url: str | None = Field(None, description="非空则覆盖已存飞书 Webhook；空串表示保留")
+    feishu_push_cadence: str | None = Field(None, description="飞书推送周期：daily | weekly | monthly")
+    feishu_weekly_weekday: int | None = Field(None, ge=0, le=6, description="周报推送星期（0=周一，美东）")
     bcc_batch: int | None = Field(None, ge=1, le=80)
     footer_note: str | None = None
 
