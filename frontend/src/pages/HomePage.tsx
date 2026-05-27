@@ -210,7 +210,8 @@ const SPARK_W = 400;
 const SPARK_H = 188;
 const SPARK_ML = 42;
 const SPARK_MR = 14;
-const SPARK_MT = 10;
+/** 顶部留白略大，避免「篇/日」与最高刻度数字重叠 */
+const SPARK_MT = 16;
 const SPARK_MB = 30;
 
 function formatSparkDayShort(day: string): string {
@@ -366,8 +367,9 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
 
           <text
             x={SPARK_ML - 8}
-            y={SPARK_MT - 2}
+            y={5}
             textAnchor="end"
+            dominantBaseline="hanging"
             className="fill-slate-400 text-[9px] font-semibold"
           >
             {t("homeTrendYUnit")}
