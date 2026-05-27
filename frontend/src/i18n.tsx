@@ -66,6 +66,7 @@ const STRINGS: Record<string, string> = {
 
   homeViewAll: "查看全部",
   homeLoading: "加载首页…",
+  homeRefreshing: "更新中…",
   homeEmpty: "暂无内容，请稍后重试或检查后端数据。",
   homeLiveStats: "实时概览",
   homeStatSources: "活跃数据源",

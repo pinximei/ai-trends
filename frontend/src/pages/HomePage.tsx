@@ -7,6 +7,12 @@ import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
 import { mergeSourceLanes, platformAccent, radarGridClass, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
+import {
+  readHomeDashboardCache,
+  writeHomeDashboardCache,
+  type HomeDashboardCachePayload,
+  type HomeTrendOverview,
+} from "@/lib/homeDashboardCache";
 
 const INDUSTRY = "ai";
 
@@ -294,34 +300,70 @@ function formatGrowth(pct: number | null | undefined): string | null {
   return `${sign}${pct}%`;
 }
 
+const initialHomeCache = readHomeDashboardCache();
+
+function applyHomeDashboardPayload(
+  p: HomeDashboardCachePayload,
+  set: {
+    setNews: (v: ArticleFeedCard[]) => void;
+    setApps: (v: ArticleFeedCard[]) => void;
+    setEditorialNews: (v: ArticleFeedCard[]) => void;
+    setEditorialApps: (v: ArticleFeedCard[]) => void;
+    setHighlightApps: (v: ArticleFeedCard[]) => void;
+    setHighlightMonetization: (v: ArticleFeedCard[]) => void;
+    setNewsLanes: (v: SourceLane[]) => void;
+    setAppsLanes: (v: SourceLane[]) => void;
+    setSourceFacets: (v: HomeDashboardCachePayload["sourceFacets"]) => void;
+    setTopCategories: (v: HomeDashboardCachePayload["topCategories"]) => void;
+    setActiveSourceCount: (v: number) => void;
+    setActiveSourceKeys: (v: string[]) => void;
+    setTrendOverview: (v: HomeTrendOverview | null) => void;
+  },
+) {
+  set.setNews(p.news);
+  set.setApps(p.apps);
+  set.setEditorialNews(p.editorialNews);
+  set.setEditorialApps(p.editorialApps);
+  set.setHighlightApps(p.highlightApps);
+  set.setHighlightMonetization(p.highlightMonetization);
+  set.setNewsLanes(p.newsLanes);
+  set.setAppsLanes(p.appsLanes);
+  set.setSourceFacets(p.sourceFacets);
+  set.setTopCategories(p.topCategories);
+  set.setActiveSourceCount(p.activeSourceCount);
+  set.setActiveSourceKeys(p.activeSourceKeys);
+  set.setTrendOverview(p.trendOverview);
+}
+
 export function HomePage() {
   const { t } = useI18n();
-  const [news, setNews] = useState<ArticleFeedCard[]>([]);
-  const [apps, setApps] = useState<ArticleFeedCard[]>([]);
-  const [highlightApps, setHighlightApps] = useState<ArticleFeedCard[]>([]);
-  const [highlightMonetization, setHighlightMonetization] = useState<ArticleFeedCard[]>([]);
-  const [newsLanes, setNewsLanes] = useState<SourceLane[]>([]);
-  const [appsLanes, setAppsLanes] = useState<SourceLane[]>([]);
-  const [sourceFacets, setSourceFacets] = useState<
-    Array<{ key: string; label: string; news_count: number; apps_count: number }>
-  >([]);
-  const [topCategories, setTopCategories] = useState<Array<{ label: string; count: number }>>([]);
-  const [activeSourceCount, setActiveSourceCount] = useState(6);
-  const [activeSourceKeys, setActiveSourceKeys] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [news, setNews] = useState<ArticleFeedCard[]>(() => initialHomeCache?.news ?? []);
+  const [apps, setApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.apps ?? []);
+  const [highlightApps, setHighlightApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.highlightApps ?? []);
+  const [highlightMonetization, setHighlightMonetization] = useState<ArticleFeedCard[]>(
+    () => initialHomeCache?.highlightMonetization ?? [],
+  );
+  const [newsLanes, setNewsLanes] = useState<SourceLane[]>(() => initialHomeCache?.newsLanes ?? []);
+  const [appsLanes, setAppsLanes] = useState<SourceLane[]>(() => initialHomeCache?.appsLanes ?? []);
+  const [sourceFacets, setSourceFacets] = useState<HomeDashboardCachePayload["sourceFacets"]>(
+    () => initialHomeCache?.sourceFacets ?? [],
+  );
+  const [topCategories, setTopCategories] = useState<HomeDashboardCachePayload["topCategories"]>(
+    () => initialHomeCache?.topCategories ?? [],
+  );
+  const [activeSourceCount, setActiveSourceCount] = useState(() => initialHomeCache?.activeSourceCount ?? 6);
+  const [activeSourceKeys, setActiveSourceKeys] = useState<string[]>(() => initialHomeCache?.activeSourceKeys ?? []);
+  const [loading, setLoading] = useState(() => !initialHomeCache);
+  const [refreshing, setRefreshing] = useState(false);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [subscribeErr, setSubscribeErr] = useState("");
-  const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>([]);
-  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>([]);
-  const [trendOverview, setTrendOverview] = useState<{
-    sparkline: Array<{ day: string; count: number }>;
-    apps_count: number;
-    news_count: number;
-    apps_growth_pct: number | null;
-    news_growth_pct: number | null;
-  } | null>(null);
+  const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialApps ?? []);
+  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialNews ?? []);
+  const [trendOverview, setTrendOverview] = useState<HomeTrendOverview | null>(
+    () => initialHomeCache?.trendOverview ?? null,
+  );
 
   const sparkSummary = useMemo(() => {
     const spark = trendOverview?.sparkline ?? [];
@@ -342,7 +384,30 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const hadCache = !!readHomeDashboardCache();
+    if (!hadCache) setLoading(true);
+    else setRefreshing(true);
+
+    const stateSetters = {
+      setNews,
+      setApps,
+      setEditorialNews,
+      setEditorialApps,
+      setHighlightApps,
+      setHighlightMonetization,
+      setNewsLanes,
+      setAppsLanes,
+      setSourceFacets,
+      setTopCategories,
+      setActiveSourceCount,
+      setActiveSourceKeys,
+      setTrendOverview,
+    };
+
+    const commitPayload = (payload: HomeDashboardCachePayload) => {
+      applyHomeDashboardPayload(payload, stateSetters);
+      writeHomeDashboardCache(payload);
+    };
 
     const loadFeedFallback = async (feed: "news" | "apps", limit: number) => {
       const res = await publicApi.articlesFeed({
@@ -391,30 +456,46 @@ export function HomePage() {
           }
         }
         if (cancelled) return;
-        setNews(nextNews);
-        setApps(nextApps);
-        setEditorialNews(picks.news ?? []);
-        setEditorialApps(picks.apps ?? []);
-        setHighlightApps(data.highlight_replicable_apps ?? []);
-        setHighlightMonetization(data.highlight_monetization_apps ?? []);
-        setNewsLanes(data.news_source_lanes ?? []);
-        setAppsLanes(data.apps_source_lanes ?? []);
-        setSourceFacets(data.source_facets ?? []);
-        setTopCategories(data.top_categories ?? []);
-        setActiveSourceCount(data.active_source_count ?? data.active_source_keys?.length ?? 6);
-        setActiveSourceKeys(data.active_source_keys ?? []);
-        setTrendOverview(data.trend ?? null);
+        commitPayload({
+          news: nextNews,
+          apps: nextApps,
+          editorialNews: picks.news ?? [],
+          editorialApps: picks.apps ?? [],
+          highlightApps: data.highlight_replicable_apps ?? [],
+          highlightMonetization: data.highlight_monetization_apps ?? [],
+          newsLanes: data.news_source_lanes ?? [],
+          appsLanes: data.apps_source_lanes ?? [],
+          sourceFacets: data.source_facets ?? [],
+          topCategories: data.top_categories ?? [],
+          activeSourceCount: data.active_source_count ?? data.active_source_keys?.length ?? 6,
+          activeSourceKeys: data.active_source_keys ?? [],
+          trendOverview: data.trend ?? null,
+        });
       })
       .catch(async () => {
         if (cancelled) return;
+        if (hadCache) return;
         try {
           const [nextNews, nextApps] = await Promise.all([
             loadFeedFallback("news", HOME_NEWS_WALL_LIMIT),
             loadFeedFallback("apps", 10),
           ]);
           if (cancelled) return;
-          setNews(nextNews);
-          setApps(nextApps);
+          commitPayload({
+            news: nextNews,
+            apps: nextApps,
+            editorialNews: [],
+            editorialApps: [],
+            highlightApps: [],
+            highlightMonetization: [],
+            newsLanes: [],
+            appsLanes: [],
+            sourceFacets: [],
+            topCategories: [],
+            activeSourceCount: 6,
+            activeSourceKeys: [],
+            trendOverview: null,
+          });
         } catch {
           if (!cancelled) {
             setNews([]);
@@ -422,19 +503,12 @@ export function HomePage() {
             setHighlightApps([]);
           }
         }
-        if (!cancelled) {
-          setEditorialNews([]);
-          setEditorialApps([]);
-          setHighlightApps([]);
-          setNewsLanes([]);
-          setAppsLanes([]);
-          setSourceFacets([]);
-          setTopCategories([]);
-          setTrendOverview(null);
-        }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -473,6 +547,9 @@ export function HomePage() {
     <div className="w-full space-y-5 lg:space-y-6">
       <section className="ui-card overflow-hidden p-5 sm:p-6" data-testid="home-hero">
         <div className="min-w-0 text-center sm:text-left">
+          {refreshing ? (
+            <p className="mb-2 text-right text-[11px] font-medium text-slate-400 sm:text-left">{t("homeRefreshing")}</p>
+          ) : null}
           <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
             {t("homeMainHeroTitle")}
           </h1>
