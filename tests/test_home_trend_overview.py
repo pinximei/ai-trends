@@ -26,6 +26,8 @@ def test_home_dashboard_shape(client: TestClient) -> None:
     assert isinstance(data["top_categories"], list)
     assert isinstance(data.get("editorial_news"), list)
     assert isinstance(data.get("editorial_apps"), list)
+    assert data["trend"].get("metric_basis") == "display_at"
+    assert "display_at" in (data["trend"].get("metric_note") or "")
 
 
 def test_format_logs_for_export_multiline() -> None:

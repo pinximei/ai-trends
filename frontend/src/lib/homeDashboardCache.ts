@@ -2,7 +2,7 @@ import type { ArticleFeedCard } from "@/api/public";
 import type { IndustryWindData } from "@/components/home/IndustryWindPanel";
 import type { SourceLane } from "@/components/home/homeUtils";
 
-const CACHE_KEY = "aitrends_home_dashboard_v8";
+const CACHE_KEY = "aitrends_home_dashboard_v9";
 /** 同一会话内复用首页数据，减少往返与「加载中」闪烁 */
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -16,6 +16,8 @@ export type HomeTrendOverview = {
   last_week_total?: number;
   week_total_growth_pct?: number | null;
   compare_mode?: string;
+  metric_basis?: string;
+  metric_note?: string;
 };
 
 export type HomeDashboardCachePayload = {

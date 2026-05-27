@@ -168,6 +168,8 @@ export const publicApi = {
         news_count: number;
         apps_growth_pct: number | null;
         news_growth_pct: number | null;
+        metric_basis?: string;
+        metric_note?: string;
       };
       news_source_lanes: Array<{ source_key: string; source_label: string; items: ArticleFeedCard[] }>;
       apps_source_lanes: Array<{ source_key: string; source_label: string; items: ArticleFeedCard[] }>;

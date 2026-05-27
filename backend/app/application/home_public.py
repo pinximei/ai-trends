@@ -1,4 +1,4 @@
-"""首页 AI 趋势概览：基于已发布文章的真实统计（非演示曲线）。"""
+"""首页收录动态：按展示时效（入库/连接器刷新）统计已发布条目，非行业话题热度。"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -54,21 +54,29 @@ def get_home_trend_overview(
     period_days: int = 30,
 ) -> dict:
     """
-    返回首页趋势图与侧栏统计。
+    返回首页「收录动态」折线与侧栏统计（非演示曲线）。
 
-    - ``sparkline``: 近 N 天每日已发布文章数（UTC 自然日，含资讯+应用）
-    - ``apps_count`` / ``news_count``: 近 ``period_days`` 天内应用泳道 / 资讯泳道文章数
-    - ``*_growth_pct``: 与上一段等长周期对比的周环比式增幅（%），无基期时为 null
+    统计口径与公开列表 ``display_at`` 一致：``article_freshness``（最近入库或连接器刷新，非仅源站 ``published_at``）。
+
+    - ``sparkline``: 近 N 天每日收录/刷新条目数（UTC 自然日，资讯+应用合计）
+    - ``apps_count`` / ``news_count``: 近 ``period_days`` 天内各泳道条目数（同上口径）
+    - ``*_growth_pct``: 与上一段等长周期对比的增幅（%），无基期时为 null
     """
     days = max(2, min(int(sparkline_days), 90))
     period = max(1, min(int(period_days), 365))
     industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
+    metric_note = (
+        "按最近入库或连接器刷新日期统计（与列表 display_at 一致），反映同步活跃度，"
+        "非源站首发日，亦非行业话题热度。"
+    )
     empty = {
         "sparkline": [{"day": d, "count": 0} for d in _day_range_utc(days)],
         "apps_count": 0,
         "news_count": 0,
         "apps_growth_pct": None,
         "news_growth_pct": None,
+        "metric_basis": "display_at",
+        "metric_note": metric_note,
     }
     if not industry_ids:
         return empty
@@ -133,6 +141,8 @@ def get_home_trend_overview(
         "last_week_total": last_week_total,
         "week_total_growth_pct": _growth_pct(this_week_total, last_week_total),
         "compare_mode": "week_over_week",
+        "metric_basis": "display_at",
+        "metric_note": metric_note,
     }
 
 
@@ -650,7 +660,7 @@ def _home_dashboard_cache_params(
     published_within_days: int,
 ) -> dict:
     return {
-        "v": 2,
+        "v": 3,
         "industry_slug": industry_slug.strip().lower(),
         "news_limit": int(news_limit),
         "apps_limit": int(apps_limit),

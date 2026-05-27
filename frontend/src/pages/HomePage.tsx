@@ -83,7 +83,15 @@ function layoutSparkline(points: SparkPoint[]) {
   return { coords, line, area, yTicks, yMax, innerH, xLabelIdx };
 }
 
-function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?: boolean }) {
+function TrendSparkline({
+  points,
+  tall = false,
+  metricNote,
+}: {
+  points: SparkPoint[];
+  tall?: boolean;
+  metricNote?: string | null;
+}) {
   const { t } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
 
@@ -126,7 +134,8 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
           <span className="font-bold tabular-nums text-violet-700">{formatCount(peak)}</span>
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{t("homeTrendLegend")}</p>
-        <p className="mt-0.5 text-xs text-slate-400">{t("homeTrendDataNote")}</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">{t("homeTrendVsWindHint")}</p>
+        <p className="mt-0.5 text-xs text-slate-400">{metricNote?.trim() || t("homeTrendDataNote")}</p>
       </header>
 
       <div className="relative mt-4 w-full">
@@ -794,6 +803,7 @@ export function HomePage() {
           {!loading && trendOverview ? (
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{t("homeLiveStatsSub")}</p>
               <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
                 <div className="rounded-xl bg-violet-50/80 px-3 py-2.5 ring-1 ring-violet-100">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80">{t("homeStatNewArticles")}</p>
@@ -902,7 +912,11 @@ export function HomePage() {
                   {t("homeLoading")}
                 </div>
               ) : (
-                <TrendSparkline points={trendOverview?.sparkline ?? []} tall />
+                <TrendSparkline
+                  points={trendOverview?.sparkline ?? []}
+                  tall
+                  metricNote={trendOverview?.metric_note}
+                />
               )}
             </div>
           </div>
