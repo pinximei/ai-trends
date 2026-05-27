@@ -13,8 +13,6 @@ sys.path.insert(0, str(ROOT))
 
 
 def _load_systemd_env(unit: str = "aisoul-backend") -> None:
-    if os.environ.get("AITRENDS_DATABASE_URL"):
-        return
     try:
         raw = subprocess.check_output(
             ["systemctl", "show", unit, "-p", "Environment", "--value"],
@@ -26,7 +24,10 @@ def _load_systemd_env(unit: str = "aisoul-backend") -> None:
     for token in shlex.split(raw.strip()):
         if "=" in token:
             k, v = token.split("=", 1)
-            os.environ.setdefault(k, v)
+            os.environ[k] = v
+
+
+_load_systemd_env()
 
 from sqlalchemy import select
 
@@ -38,7 +39,6 @@ from backend.app.us_content_calendar import us_calendar_today
 
 
 def main() -> int:
-    _load_systemd_env()
     db = SessionLocal()
     try:
         key = us_calendar_today().isoformat()
