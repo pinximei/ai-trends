@@ -1,10 +1,11 @@
 import type { ArticleFeedCard } from "@/api/public";
 import type { IndustryWindData } from "@/components/home/IndustryWindPanel";
 import type { SourceLane } from "@/components/home/homeUtils";
+import { readSsrHomeBootstrap } from "@/lib/ssrHomeBootstrap";
 
-const CACHE_KEY = "aitrends_home_dashboard_v11";
-/** 同一会话内复用首页数据，减少往返与「加载中」闪烁 */
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_KEY = "aitrends_home_dashboard_v12";
+/** 同一会话内复用首页数据（含今日精选），减少切页回首页时的重复加载 */
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
 export type HomeTrendOverview = {
   sparkline: Array<{ day: string; count: number }>;
@@ -66,6 +67,21 @@ export function readHomeDashboardCache(): HomeDashboardCachePayload | null {
   } catch {
     return null;
   }
+}
+
+/** 每次进入首页时调用：勿在模块顶层缓存，否则 React 路由切回时读不到已写入的 session。 */
+export function readHomePageBoot(): HomeDashboardCachePayload | null {
+  return readSsrHomeBootstrap() ?? readHomeDashboardCache();
+}
+
+export function homePayloadHasContent(p: HomeDashboardCachePayload | null | undefined): boolean {
+  if (!p) return false;
+  return (
+    (p.editorialApps?.length ?? 0) > 0 ||
+    (p.editorialNews?.length ?? 0) > 0 ||
+    (p.news?.length ?? 0) > 0 ||
+    (p.apps?.length ?? 0) > 0
+  );
 }
 
 export function writeHomeDashboardCache(payload: HomeDashboardCachePayload): void {

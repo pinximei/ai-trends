@@ -10,13 +10,14 @@ import { useNewsletterSubscribe } from "@/hooks/useNewsletterSubscribe";
 import { useI18n } from "@/i18n";
 import { NEWSLETTER_SUBSCRIBE_ENABLED } from "@/lib/newsletterConfig";
 import {
+  homePayloadHasContent,
   readHomeDashboardCache,
   readHomeDashboardCacheAgeMs,
+  readHomePageBoot,
   writeHomeDashboardCache,
   type HomeDashboardCachePayload,
   type HomeTrendOverview,
 } from "@/lib/homeDashboardCache";
-import { readSsrHomeBootstrap } from "@/lib/ssrHomeBootstrap";
 
 const INDUSTRY = "ai";
 
@@ -310,8 +311,6 @@ function formatGrowth(pct: number | null | undefined): string | null {
   return `${sign}${pct}%`;
 }
 
-const initialHomeCache = readSsrHomeBootstrap() ?? readHomeDashboardCache();
-
 function applyHomeDashboardPayload(
   p: HomeDashboardCachePayload,
   set: {
@@ -351,34 +350,37 @@ function applyHomeDashboardPayload(
 
 export function HomePage() {
   const { t } = useI18n();
-  const [news, setNews] = useState<ArticleFeedCard[]>(() => initialHomeCache?.news ?? []);
-  const [apps, setApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.apps ?? []);
-  const [highlightApps, setHighlightApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.highlightApps ?? []);
+  const [boot] = useState(() => readHomePageBoot());
+  const [news, setNews] = useState<ArticleFeedCard[]>(() => boot?.news ?? []);
+  const [apps, setApps] = useState<ArticleFeedCard[]>(() => boot?.apps ?? []);
+  const [highlightApps, setHighlightApps] = useState<ArticleFeedCard[]>(() => boot?.highlightApps ?? []);
   const [highlightMonetization, setHighlightMonetization] = useState<ArticleFeedCard[]>(
-    () => initialHomeCache?.highlightMonetization ?? [],
+    () => boot?.highlightMonetization ?? [],
   );
-  const [newsLanes, setNewsLanes] = useState<SourceLane[]>(() => initialHomeCache?.newsLanes ?? []);
-  const [appsLanes, setAppsLanes] = useState<SourceLane[]>(() => initialHomeCache?.appsLanes ?? []);
+  const [newsLanes, setNewsLanes] = useState<SourceLane[]>(() => boot?.newsLanes ?? []);
+  const [appsLanes, setAppsLanes] = useState<SourceLane[]>(() => boot?.appsLanes ?? []);
   const [sourceFacets, setSourceFacets] = useState<HomeDashboardCachePayload["sourceFacets"]>(
-    () => initialHomeCache?.sourceFacets ?? [],
+    () => boot?.sourceFacets ?? [],
   );
   const [topCategories, setTopCategories] = useState<HomeDashboardCachePayload["topCategories"]>(
-    () => initialHomeCache?.topCategories ?? [],
+    () => boot?.topCategories ?? [],
   );
-  const [activeSourceCount, setActiveSourceCount] = useState(() => initialHomeCache?.activeSourceCount ?? 6);
-  const [activeSourceKeys, setActiveSourceKeys] = useState<string[]>(() => initialHomeCache?.activeSourceKeys ?? []);
-  const [loading, setLoading] = useState(() => !initialHomeCache);
+  const [activeSourceCount, setActiveSourceCount] = useState(() => boot?.activeSourceCount ?? 6);
+  const [activeSourceKeys, setActiveSourceKeys] = useState<string[]>(() => boot?.activeSourceKeys ?? []);
+  const [loading, setLoading] = useState(() => !homePayloadHasContent(boot));
   const [refreshing, setRefreshing] = useState(false);
   const { email, setEmail, sent, submitting, subscribeErr, clearError, onSubscribe } = useNewsletterSubscribe();
-  const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialApps ?? []);
-  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialNews ?? []);
+  const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>(() => boot?.editorialApps ?? []);
+  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>(() => boot?.editorialNews ?? []);
   const [trendOverview, setTrendOverview] = useState<HomeTrendOverview | null>(
-    () => initialHomeCache?.trendOverview ?? null,
+    () => boot?.trendOverview ?? null,
   );
   const [industryWind, setIndustryWind] = useState<IndustryWindData | null>(
-    () => initialHomeCache?.industryWind ?? null,
+    () => boot?.industryWind ?? null,
   );
-  const [windLoading, setWindLoading] = useState(() => !initialHomeCache?.industryWind);
+  const [windLoading, setWindLoading] = useState(
+    () => !((boot?.industryWind?.industries?.length ?? 0) > 0),
+  );
 
   const sparkSummary = useMemo(() => {
     const spark = trendOverview?.sparkline ?? [];
@@ -399,7 +401,7 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const ssrBootstrap = readSsrHomeBootstrap();
+    const ssrBootstrap = readHomePageBoot();
     if (ssrBootstrap) {
       writeHomeDashboardCache(ssrBootstrap);
     }
@@ -612,6 +614,23 @@ export function HomePage() {
 
   const editorialAppsShow = editorialApps.slice(0, 3);
   const editorialNewsShow = editorialNews.slice(0, 3);
+  const hasHomeData = homePayloadHasContent({
+    news,
+    apps,
+    editorialNews,
+    editorialApps,
+    highlightApps,
+    highlightMonetization,
+    newsLanes,
+    appsLanes,
+    sourceFacets,
+    topCategories,
+    industryWind,
+    activeSourceCount,
+    activeSourceKeys,
+    trendOverview,
+  });
+  const showBlockingLoad = loading && !hasHomeData;
 
   return (
     <div className="w-full space-y-5 lg:space-y-7">
@@ -657,7 +676,7 @@ export function HomePage() {
         icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}
         action={{ label: t("homeEditorialPicksCta"), to: "/news" }}
       >
-        {loading ? (
+        {showBlockingLoad ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
         ) : editorialAppsShow.length === 0 && editorialNewsShow.length === 0 ? (
           <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
@@ -692,7 +711,7 @@ export function HomePage() {
             icon={<Newspaper className="h-5 w-5 text-violet-600" strokeWidth={2} />}
             action={{ label: t("homeNewsWallCta"), to: "/news" }}
           >
-            {loading ? (
+            {showBlockingLoad ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
             ) : newsWall.length === 0 ? (
               <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
@@ -713,7 +732,7 @@ export function HomePage() {
             icon={<Wrench className="h-5 w-5 text-sky-600" strokeWidth={2} />}
             action={{ label: t("homeAppsLeaderboardCta"), to: "/apps" }}
           >
-            {loading ? (
+            {showBlockingLoad ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
             ) : appLeaderboard.length === 0 ? (
               <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
@@ -740,7 +759,7 @@ export function HomePage() {
             state: { replicationFilter: "complete" },
           }}
         >
-          {loading ? (
+          {showBlockingLoad ? (
             <p className="text-sm text-slate-500">{t("homeLoading")}</p>
           ) : highlightApps.length === 0 ? (
             <p className="rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-8 text-center text-sm text-slate-600">
@@ -766,7 +785,7 @@ export function HomePage() {
             state: { category: "变现案例" },
           }}
         >
-          {loading ? (
+          {showBlockingLoad ? (
             <p className="text-sm text-slate-500">{t("homeLoading")}</p>
           ) : highlightMonetization.length === 0 ? (
             <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-8 text-center text-sm text-slate-600">
@@ -794,7 +813,7 @@ export function HomePage() {
         }
         icon={<Radar className="h-5 w-5" strokeWidth={2} />}
       >
-        {loading ? (
+        {showBlockingLoad ? (
           <p className="text-sm text-slate-500">{t("homeLoading")}</p>
         ) : (
           <div className={radarGridClass(radarCount)}>
@@ -948,15 +967,15 @@ export function HomePage() {
               ) : null}
 
             </div>
-          ) : loading ? (
+          ) : showBlockingLoad ? (
             <div className="flex min-h-[8rem] items-center justify-center text-sm text-slate-500">{t("homeLoading")}</div>
           ) : null}
 
           <div
-            className={`flex min-w-0 flex-col ${!loading && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}`}
+            className={`flex min-w-0 flex-col ${!showBlockingLoad && trendOverview ? "border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" : ""}`}
           >
             <div className="flex flex-1 flex-col items-center justify-center px-1 py-2">
-              {loading ? (
+              {showBlockingLoad && !trendOverview ? (
                 <div className="flex min-h-[16rem] flex-1 items-center justify-center text-sm text-slate-400">
                   {t("homeLoading")}
                 </div>
