@@ -155,3 +155,8 @@ def test_industry_wind_dynamic_not_fixed_tracks() -> None:
     first = out["industries"][0]
     assert first.get("summary")
     assert first.get("top_pick") is not None or first.get("article_count", 0) >= 1
+    assert isinstance(first.get("series_this_week"), list)
+    assert isinstance(first.get("series_last_week"), list)
+    if first["series_this_week"]:
+        pt = first["series_this_week"][0]
+        assert "day" in pt and "count" in pt

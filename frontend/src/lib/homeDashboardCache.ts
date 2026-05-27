@@ -2,7 +2,7 @@ import type { ArticleFeedCard } from "@/api/public";
 import type { IndustryWindData } from "@/components/home/IndustryWindPanel";
 import type { SourceLane } from "@/components/home/homeUtils";
 
-const CACHE_KEY = "aitrends_home_dashboard_v4";
+const CACHE_KEY = "aitrends_home_dashboard_v5";
 /** 同一会话内复用首页数据，减少往返与「加载中」闪烁 */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 

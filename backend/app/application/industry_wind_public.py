@@ -144,6 +144,44 @@ def _growth_pct(current: int, previous: int) -> float | None:
     return round((current - previous) / previous * 100.0, 1)
 
 
+def _day_keys_utc(*, end: datetime, days: int) -> list[str]:
+    """``days`` 个 UTC 自然日（不含 end 当日），从旧到新。"""
+    end_day = end.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_day = end_day - timedelta(days=days)
+    out: list[str] = []
+    d = start_day
+    while d < end_day:
+        out.append(d.date().isoformat())
+        d += timedelta(days=1)
+    return out
+
+
+def _daily_series_for_article_ids(
+    ids: list[int],
+    articles_by_id: dict[int, Article],
+    *,
+    now: datetime,
+    window_end_offset_days: int,
+    days: int = WEEK_COMPARE_DAYS,
+) -> list[dict[str, int | str]]:
+    """window_end_offset_days=0 → 本周 7 日；=7 → 上周 7 日。"""
+    window_end = now - timedelta(days=window_end_offset_days)
+    window_start = window_end - timedelta(days=days)
+    day_keys = _day_keys_utc(end=window_end, days=days)
+    counts = {k: 0 for k in day_keys}
+    for aid in ids:
+        a = articles_by_id.get(aid)
+        if a is None:
+            continue
+        fresh = art.article_freshness_for_row(a) or a.published_at or now
+        if fresh < window_start or fresh >= window_end:
+            continue
+        dk = fresh.replace(hour=0, minute=0, second=0, microsecond=0).date().isoformat()
+        if dk in counts:
+            counts[dk] += 1
+    return [{"day": k, "count": counts[k]} for k in day_keys]
+
+
 def _wind_signal(*, growth_pct: float | None, recent_count: int, raw_momentum: float) -> str:
     if recent_count <= 0:
         return "偏冷"
@@ -519,6 +557,12 @@ def _enrich_trends(
                 "signal": signal,
                 "heat_avg": round(heat_sum / recent_count, 1) if recent_count else 0.0,
                 "top_pick": top,
+                "series_this_week": _daily_series_for_article_ids(
+                    ids, articles_by_id, now=now, window_end_offset_days=0
+                ),
+                "series_last_week": _daily_series_for_article_ids(
+                    ids, articles_by_id, now=now, window_end_offset_days=WEEK_COMPARE_DAYS
+                ),
             }
         )
 
