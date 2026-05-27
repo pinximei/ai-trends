@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { TrendingUp } from "lucide-react";
 import { IndustryWindLineChart } from "@/components/home/IndustryWindLineChart";
+import { industriesWithChartSeries } from "@/components/home/windChartSeries";
 import { useI18n } from "@/i18n";
 
 export type WindDayPoint = { day: string; count: number };
@@ -98,15 +99,10 @@ export function IndustryWindPanel({ data, loading }: Props) {
     }
   }, [view]);
 
-  const hasChartSeries = Boolean(
-    data?.industries?.some((r) => (r.series_this_week?.length ?? 0) > 0 || (r.series_last_week?.length ?? 0) > 0),
+  const chartRows = data?.industries?.length ? industriesWithChartSeries(data.industries) : [];
+  const usesFallbackSeries = Boolean(
+    data?.industries?.some((r) => (r.series_this_week?.length ?? 0) === 0),
   );
-
-  useEffect(() => {
-    if (view === "chart" && !loading && data && !hasChartSeries) {
-      setView("rank");
-    }
-  }, [view, loading, data, hasChartSeries]);
 
   return (
     <section id="industry-wind" className="ui-card scroll-mt-24 overflow-hidden p-5 sm:p-6">
@@ -137,7 +133,6 @@ export function IndustryWindPanel({ data, loading }: Props) {
                 type="button"
                 role="tab"
                 aria-selected={view === opt.key}
-                disabled={opt.key === "chart" && !hasChartSeries}
                 onClick={() => setView(opt.key)}
                 className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition sm:text-sm ${
                   view === opt.key
@@ -158,7 +153,10 @@ export function IndustryWindPanel({ data, loading }: Props) {
         <p className="mt-4 text-sm text-slate-500">{t("homeIndustryWindEmpty")}</p>
       ) : view === "chart" ? (
         <div className="mt-5">
-          <IndustryWindLineChart rows={data.industries} />
+          {usesFallbackSeries ? (
+            <p className="mb-3 text-center text-[11px] text-amber-700/90">{t("homeIndustryWindChartFallback")}</p>
+          ) : null}
+          <IndustryWindLineChart rows={chartRows} />
           {data.note ? <p className="mt-4 text-[11px] leading-relaxed text-slate-400">{data.note}</p> : null}
           <p className="mt-2 text-center text-[11px] text-slate-400">
             {data.period_label || `${t("homeIndustryWindPeriod")} ${data.recent_days} ${t("trendsPeriodDaysUnit")}`}

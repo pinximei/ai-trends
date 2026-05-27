@@ -21,7 +21,7 @@ SCAN_LIMIT = 120
 LLM_CANDIDATE_LIMIT = 55
 MAX_TRENDS = 6
 MIN_TRENDS = 3
-CACHE_KEY = "industry_wind_cache_v2"
+CACHE_KEY = "industry_wind_cache_v3"
 CACHE_TTL_SECONDS = 6 * 3600
 WEEK_COMPARE_DAYS = 7
 
@@ -283,6 +283,8 @@ def _load_cache(
         return None
     industries = blob.get("industries")
     if not isinstance(industries, list) or not industries:
+        return None
+    if not any(isinstance(r, dict) and r.get("series_this_week") for r in industries):
         return None
     return {
         "recent_days": recent_days,

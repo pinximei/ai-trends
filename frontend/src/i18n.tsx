@@ -28,6 +28,7 @@ const STRINGS: Record<string, string> = {
   homeIndustryWindChartHint: "每条彩色线为一条热点：实线=本周，虚线=上周（按日篇数）",
   homeIndustryWindChartAria: "行业热点折线对比图",
   homeIndustryWindChartEmpty: "暂无足够按日数据绘制折线图，请使用排行视图",
+  homeIndustryWindChartFallback: "按日明细加载中或暂不可用，当前折线按本周/上周篇数估算分布，排行数据仍以列表为准",
   homeIndustryWindEmpty: "近两周暂无足够高热讨论，请稍后再看",
   homeIndustryWindArticlesUnit: "篇",
   homeIndustryWindThisWeek: "本周",
