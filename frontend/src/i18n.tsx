@@ -159,8 +159,6 @@ const STRINGS: Record<string, string> = {
   resourcesReplicationAll: "全部档位",
   resourcesReplicationSa: "S + A 档",
   resourcesReplicationS: "仅 S 档",
-  newsMustReadTitle: "本周必读",
-  newsMustReadSub: "近两周跨源热度最高的资讯精选",
   resourcesReplicationHint:
     "默认仅显示含完整复刻评估且价值分≥7 的应用；可切换档位查看全部。",
   resourcesAppsCloneCategories: "抄应用 / 变现常用类",

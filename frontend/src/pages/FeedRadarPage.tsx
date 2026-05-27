@@ -152,8 +152,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(
     mode === "apps" ? "complete" : "all",
   );
-  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>([]);
-
   const listApiParams = useMemo(() => {
     const base = replicationTierApiParams(mode, replicationFilter);
     if (mode === "apps" && categoryKey && MONETIZATION_CATEGORIES.has(categoryKey)) {
@@ -161,25 +159,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     }
     return base;
   }, [mode, replicationFilter, categoryKey]);
-
-  useEffect(() => {
-    if (mode !== "news") {
-      setEditorialNews([]);
-      return;
-    }
-    let cancelled = false;
-    publicApi
-      .editorialPicks({ industry_slug: INDUSTRY_SLUG, news_limit: 3, apps_limit: 0, published_within_days: 14 })
-      .then((data) => {
-        if (!cancelled) setEditorialNews(data.news ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setEditorialNews([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode]);
 
   useEffect(() => {
     const raw = location.state as {
@@ -727,26 +706,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     <>
       {err ? <p className="mt-1 text-sm font-medium text-rose-600 sm:mt-2">{err}</p> : null}
       {loading ? <p className="mt-2 text-sm text-slate-500 sm:mt-3">{t("resourcesLoading")}</p> : null}
-
-      {mode === "news" && editorialNews.length > 0 ? (
-        <section className="mb-8 rounded-2xl border border-violet-200/80 bg-violet-50/40 p-4 sm:p-5">
-          <h2 className="text-sm font-bold text-violet-900">{t("newsMustReadTitle")}</h2>
-          <p className="mt-1 text-xs text-violet-800/80">{t("newsMustReadSub")}</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {editorialNews.map((item) => (
-              <Link
-                key={item.id}
-                to={`/resources/${item.id}`}
-                className="ui-card block p-3 transition hover:border-violet-300 hover:shadow-md"
-              >
-                <p className="text-[10px] font-semibold uppercase text-violet-600">{item.platform_label}</p>
-                <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-slate-900">{item.title}</h3>
-                <p className="mt-2 line-clamp-2 text-xs text-slate-600">{summarize(feedCardDescriptionText(item), 100)}</p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       {!loading ? (
         <>
