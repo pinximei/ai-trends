@@ -185,6 +185,13 @@ export const publicApi = {
       scoring_note: string;
     }>(`/api/public/v1/home/editorial-picks${qs ? `?${qs}` : ""}`);
   },
+  /** @deprecated 使用 homeEditorialPicks；保留别名避免旧页面调用抛错导致首页卡死 */
+  editorialPicks: (opts?: {
+    industry_slug?: string;
+    news_limit?: number;
+    apps_limit?: number;
+    published_within_days?: number;
+  }) => publicApi.homeEditorialPicks(opts),
   homeTrendOverview: (opts?: { industry_slug?: string; sparkline_days?: number; period_days?: number }) => {
     const sp = new URLSearchParams();
     if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
