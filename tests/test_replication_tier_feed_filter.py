@@ -32,6 +32,74 @@ def test_parse_replication_tiers_csv() -> None:
     assert art.parse_replication_tiers_csv("invalid") is None
 
 
+def test_feed_row_matches_replication_complete() -> None:
+    from backend.app.domain.replication_analysis import normalize_replication_analysis
+
+    repl = normalize_replication_analysis(
+        {
+            "verdict": "值得复刻",
+            "worth_score": 8,
+            "difficulty": "中",
+            "tier_rationale": "x" * 24,
+            "value_summary": "y" * 20,
+            "tech_stack": ["Next.js"],
+            "implementation_plan": ["step"],
+            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
+            "open_source": {"has_support": False, "projects": [], "gaps": ""},
+            "risks": [],
+        }
+    )
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="t",
+        status="published",
+        feed_kind="apps",
+        third_party_source="product_hunt / daily",
+        ai_categories_json='["应用产品"]',
+        replication_tier="S",
+        replication_analysis_json='{"verdict":"观望"}',
+    )
+    assert (
+        ap._feed_row_matches_list_filters(
+            a,
+            feed="apps",
+            cat_filter=None,
+            source_filter=None,
+            search_n=None,
+            replication_complete=True,
+        )
+        is False
+    )
+    import json
+
+    a.replication_analysis_json = json.dumps(repl, ensure_ascii=False)
+    assert (
+        ap._feed_row_matches_list_filters(
+            a,
+            feed="apps",
+            cat_filter=None,
+            source_filter=None,
+            search_n=None,
+            replication_complete=True,
+        )
+        is True
+    )
+    repl["worth_score"] = 5
+    a.replication_analysis_json = json.dumps(repl, ensure_ascii=False)
+    assert (
+        ap._feed_row_matches_list_filters(
+            a,
+            feed="apps",
+            cat_filter=None,
+            source_filter=None,
+            search_n=None,
+            replication_complete=True,
+        )
+        is False
+    )
+
+
 def test_feed_row_matches_tier_filter() -> None:
     a = Article(
         industry_id=1,
@@ -196,6 +264,24 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_s_first() -> None:
 
 
 def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
+    import json
+
+    from backend.app.domain.replication_analysis import normalize_replication_analysis
+
+    repl = normalize_replication_analysis(
+        {
+            "verdict": "值得复刻",
+            "worth_score": 8,
+            "difficulty": "中",
+            "tier_rationale": "x" * 24,
+            "value_summary": "y" * 20,
+            "tech_stack": ["Rust"],
+            "implementation_plan": ["step"],
+            "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
+            "open_source": {"has_support": True, "projects": [], "gaps": ""},
+            "risks": [],
+        }
+    )
     db = _session()
     ind = Industry(slug="ai", name="AI")
     db.add(ind)
@@ -214,6 +300,7 @@ def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
             feed_kind="news",
             third_party_source="github / trending",
             replication_tier="S",
+            replication_analysis_json=json.dumps(repl, ensure_ascii=False),
             heat_score=10.0,
             published_at=now,
         )

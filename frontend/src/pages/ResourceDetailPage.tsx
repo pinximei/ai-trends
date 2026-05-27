@@ -23,6 +23,7 @@ import {
   type DetailSectionKind,
 } from "@/lib/articleDetailLayout";
 import { pushRecentArticle } from "@/lib/recentArticles";
+import { hasCompleteReplicationAnalysis } from "@/lib/replication";
 import { usePageSeo } from "@/lib/seo";
 
 const INDUSTRY = "ai";
@@ -255,7 +256,7 @@ export function ResourceDetailPage() {
   const backTo = feedKind === "apps" ? "/apps" : "/news";
   const profileBadge = t(profileBadgeI18nKey(layout.profile));
   const showStructuredReplication =
-    feedKind === "apps" && Boolean(a.replication_analysis && a.replication_analysis.verdict);
+    feedKind === "apps" && hasCompleteReplicationAnalysis(a.replication_analysis);
 
   const categoryTagsEl =
     a.categories && a.categories.length > 0 ? (
@@ -283,7 +284,7 @@ export function ResourceDetailPage() {
     {
       kind: "replication" as const,
       label: t("detailNavReplication"),
-      present: Boolean(showStructuredReplication || sectionContent.replication),
+      present: showStructuredReplication,
     },
     {
       kind: "data" as const,
@@ -431,19 +432,7 @@ export function ResourceDetailPage() {
                     </div>
                   );
                 }
-                const block = sectionContent.replication;
-                if (!block) return null;
-                return (
-                  <ArticleDetailSection
-                    key={kind}
-                    kind={kind}
-                    layout={layout}
-                    title={block.title}
-                    summary={block.summary}
-                    bodyMd={block.bodyMd}
-                    components={block.components}
-                  />
-                );
+                return null;
               }
               const block = kind === "description" ? sectionContent.description : sectionContent.data;
               if (!block) return null;

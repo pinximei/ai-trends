@@ -13,6 +13,7 @@ export const publicApi = {
     source?: string | null;
     q?: string | null;
     replication_tiers?: string | null;
+    replication_complete?: boolean;
   }) => {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
@@ -22,6 +23,7 @@ export const publicApi = {
     if (opts.source) sp.set("source", opts.source);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
     if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
+    if (opts.replication_complete) sp.set("replication_complete", "true");
     return publicGet<Array<{ label: string; count: number }>>(`/api/public/v1/articles/categories?${sp.toString()}`);
   },
   articleSources: (opts: {
@@ -32,6 +34,7 @@ export const publicApi = {
     category?: string | null;
     q?: string | null;
     replication_tiers?: string | null;
+    replication_complete?: boolean;
   }) => {
     const sp = new URLSearchParams();
     sp.set("feed", opts.feed);
@@ -41,6 +44,7 @@ export const publicApi = {
     if (opts.category) sp.set("category", opts.category);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
     if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
+    if (opts.replication_complete) sp.set("replication_complete", "true");
     return publicGet<Array<{ key: string; label: string; count: number }>>(
       `/api/public/v1/articles/sources?${sp.toString()}`,
     );
@@ -63,6 +67,7 @@ export const publicApi = {
     source?: string | null;
     q?: string | null;
     replication_tiers?: string | null;
+    replication_complete?: boolean;
     sort_replicable?: boolean;
     sort_monetization?: boolean;
   }) => {
@@ -84,6 +89,7 @@ export const publicApi = {
     if (opts.source) sp.set("source", opts.source);
     if (opts.q && opts.q.trim()) sp.set("q", opts.q.trim());
     if (opts.replication_tiers) sp.set("replication_tiers", opts.replication_tiers);
+    if (opts.replication_complete) sp.set("replication_complete", "true");
     if (opts.sort_replicable) sp.set("sort_replicable", "true");
     if (opts.sort_monetization) sp.set("sort_monetization", "true");
     return publicGet<ArticlesFeedResponse>(`/api/public/v1/articles/feed?${sp.toString()}`);

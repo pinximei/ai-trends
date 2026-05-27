@@ -472,6 +472,8 @@ export function HomePage() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [subscribeErr, setSubscribeErr] = useState("");
+  const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>([]);
+  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>([]);
   const [trendOverview, setTrendOverview] = useState<{
     sparkline: Array<{ day: string; count: number }>;
     apps_count: number;
@@ -513,16 +515,23 @@ export function HomePage() {
       return "items" in res && Array.isArray(res.items) ? res.items : [];
     };
 
-    publicApi
-      .homeDashboard({
+    Promise.all([
+      publicApi.homeDashboard({
         industry_slug: INDUSTRY,
         news_limit: 8,
         apps_limit: 10,
         replicable_apps_limit: 4,
         monetization_apps_limit: 4,
         published_within_days: 30,
-      })
-      .then(async (data) => {
+      }),
+      publicApi.editorialPicks({
+        industry_slug: INDUSTRY,
+        news_limit: 3,
+        apps_limit: 3,
+        published_within_days: 14,
+      }),
+    ])
+      .then(async ([data, picks]) => {
         if (cancelled) return;
         let nextNews = data.news ?? [];
         let nextApps = data.apps ?? [];
@@ -543,6 +552,8 @@ export function HomePage() {
         if (cancelled) return;
         setNews(nextNews);
         setApps(nextApps);
+        setEditorialNews(picks.news ?? []);
+        setEditorialApps(picks.apps ?? []);
         setHighlightApps(data.highlight_replicable_apps ?? []);
         setHighlightMonetization(data.highlight_monetization_apps ?? []);
         setNewsLanes(data.news_source_lanes ?? []);
@@ -571,6 +582,8 @@ export function HomePage() {
           }
         }
         if (!cancelled) {
+          setEditorialNews([]);
+          setEditorialApps([]);
           setHighlightApps([]);
           setNewsLanes([]);
           setAppsLanes([]);
@@ -613,20 +626,23 @@ export function HomePage() {
     }
   };
 
+  const editorialAppsShow = editorialApps.slice(0, 3);
+  const editorialNewsShow = editorialNews.slice(0, 3);
+
   return (
     <div className="w-full space-y-5 lg:space-y-6">
-      <section className="grid items-center gap-6 overflow-visible lg:grid-cols-[minmax(0,26rem)_1fr] lg:gap-6 lg:py-2 xl:grid-cols-[minmax(0,28rem)_1fr]">
-        <div className="relative z-10 min-w-0 text-center lg:max-w-none lg:text-left">
-          <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl lg:text-[2.1rem] lg:leading-snug xl:text-4xl">
+      <section className="ui-card overflow-hidden p-5 sm:p-6">
+        <div className="relative z-10 min-w-0 text-center lg:text-left">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
             {t("homeMainHeroTitle")}
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
             {t("homeMainHeroDesc")}
           </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
             <Link
               to="/apps"
-              state={{ replicationFilter: "sa" }}
+              state={{ replicationFilter: "complete" }}
               className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
             >
               {t("homeMainHeroCta2")}
@@ -639,8 +655,38 @@ export function HomePage() {
             </Link>
           </div>
         </div>
-        <div className="flex min-w-0 items-center justify-center px-2 py-2 sm:px-4 lg:px-6">
-          <div className="w-full max-w-[min(100%,380px)] shrink-0 sm:max-w-[400px]">
+      </section>
+
+      <HomeSection title={t("homeEditorialPicksTitle")} subtitle={t("homeEditorialPicksSub")} icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}>
+        {loading ? (
+          <p className="text-sm text-slate-500">{t("homeLoading")}</p>
+        ) : editorialAppsShow.length === 0 && editorialNewsShow.length === 0 ? (
+          <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-sky-700">{t("homeEditorialApps")}</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                {editorialAppsShow.map((item) => (
+                  <HomeArticleTile key={item.id} item={item} variant="tile" />
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-violet-700">{t("homeEditorialNews")}</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                {editorialNewsShow.map((item) => (
+                  <HomeArticleTile key={item.id} item={item} variant="tile" />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </HomeSection>
+
+      <section className="hidden lg:block">
+        <div className="flex justify-center py-2 opacity-80">
+          <div className="w-full max-w-[280px]">
             <HeroGraphic />
           </div>
         </div>
@@ -789,7 +835,7 @@ export function HomePage() {
         action={{
           label: t("homeHighlightReplicableAppsCta"),
           to: "/apps",
-          state: { replicationFilter: "sa" },
+          state: { replicationFilter: "complete" },
         }}
       >
         {loading ? (

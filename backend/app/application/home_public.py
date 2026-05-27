@@ -10,8 +10,9 @@ from ..domain import articles as art
 from ..domain.articles import FEED_APPS_KEYS
 from ..product_models import Article, Industry
 
-# 首页「亮点应用」：S/A 优先展示；不足时用 B 档补足条数（见 list_highlight_replicable_apps）
+# 首页「亮点应用」：仅展示完整复刻评估且 worth≥7 的 S/A 档
 HOME_REPLICABLE_TIERS: tuple[str, ...] = ("S", "A")
+HOME_REPLICABLE_MIN_WORTH = 7
 HOME_REPLICABLE_HIGHLIGHT_DEFAULT = 4
 HOME_MONETIZATION_HIGHLIGHT_DEFAULT = 4
 
@@ -377,21 +378,20 @@ def _pick_highlight_replicable_articles(
     since: datetime,
     limit: int,
 ) -> list[Article]:
-    """S → A → B 分档拉取，优先不同数据源，凑满首页可复刻展示条数。"""
-    from .article_public import _article_matches_public_feed
+    """S → A 分档拉取（须完整复刻评估且 worth≥7），优先不同数据源。"""
+    from .article_public import _article_matches_public_feed, _article_replication_complete
 
     fe = art.article_freshness_sql_expr()
     tier_rank = case(
         (func.upper(Article.replication_tier) == "S", 0),
         (func.upper(Article.replication_tier) == "A", 1),
-        (func.upper(Article.replication_tier) == "B", 2),
         else_=3,
     )
     picked: list[Article] = []
     seen_ids: set[int] = set()
     used_sources: set[str] = set()
 
-    for tier_group in (("S",), ("A",), ("B",)):
+    for tier_group in (("S",), ("A",)):
         if len(picked) >= limit:
             break
         tier_set = {t.upper() for t in tier_group}
@@ -415,7 +415,13 @@ def _pick_highlight_replicable_articles(
                 .limit(scan_lim)
             ).all()
         )
-        pool = [a for a in candidates if _article_matches_public_feed(a, "apps") and a.id not in seen_ids]
+        pool = [
+            a
+            for a in candidates
+            if _article_matches_public_feed(a, "apps")
+            and a.id not in seen_ids
+            and _article_replication_complete(a, min_worth=HOME_REPLICABLE_MIN_WORTH)
+        ]
         for pass_diverse in (True, False):
             if len(picked) >= limit:
                 break
@@ -442,7 +448,7 @@ def list_highlight_replicable_apps(
     published_within_days: int = 30,
     tiers: tuple[str, ...] | None = None,
 ) -> list[dict]:
-    """首页亮点应用：可复刻 S/A 优先，不足用 B 档补足（默认 4 条，多数据源）。"""
+    """首页亮点应用：完整复刻评估且 worth≥7 的 S/A 档（默认 4 条，多数据源）。"""
     del tiers  # 保留参数兼容；档位策略见 _pick_highlight_replicable_articles
     from .article_public import _admin_source_label_by_key, _feed_card_from_article
 

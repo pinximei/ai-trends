@@ -7,9 +7,9 @@ export const UI_LANG: Lang = "zh";
 
 const STRINGS: Record<string, string> = {
   brand: "AI 资讯站",
-  tagline: "发现 AI 的无限可能",
+  tagline: "多源 AI 产品雷达 · 精选解读",
   seoDefaultDescription:
-    "聚合 Product Hunt、GitHub Trending、Hacker News 等源的 AI 应用与资讯，结构化呈现趋势与可复刻评估。",
+    "聚合 Product Hunt、GitHub Trending、Hacker News 等源，提供 AI 应用与资讯雷达、热度精选与深度复刻评估。",
   seoHomeDescription:
     "洞察 AI 前沿动态：聚合全球模型发布、产品迭代与产业信号，用结构化信息流节省筛选时间。",
   seoNewsDescription: "AI 产业资讯雷达：跨源热度排序、要点摘要与报道依据，按日浏览全球 AI 动态。",
@@ -27,9 +27,13 @@ const STRINGS: Record<string, string> = {
   sidebarNavTitle: "导航",
 
   /** 首页（设计稿 1.png） */
-  homeMainHeroTitle: "洞察 AI 前沿动态 掌握智能未来趋势",
+  homeMainHeroTitle: "AI 产品雷达 · 精选解读",
   homeMainHeroDesc:
-    "聚合全球模型发布、产品迭代与产业信号，用结构化信息流帮你节省筛选时间，专注真正重要的变化。",
+    "跨源聚合热门应用与资讯，按热度筛选；有完整评估的条目才标注「高可复刻」，帮你少踩空壳推荐。",
+  homeEditorialPicksTitle: "今日精选",
+  homeEditorialPicksSub: "近两周跨源热度最高的应用与资讯（各 3 条）",
+  homeEditorialApps: "应用",
+  homeEditorialNews: "资讯",
   homeMainHeroCta1: "探索最新资讯",
   homeMainHeroCta2: "发现 AI 工具",
   homeTodayFocus: "今日焦点",
@@ -77,8 +81,8 @@ const STRINGS: Record<string, string> = {
   homeAppsLeaderboard: "更多高热应用",
   homeAppsLeaderboardSub: "按热度排序，已排除上方「亮点应用」；进入应用雷达可看全部",
   homeHighlightReplicableApps: "亮点应用 · 高可复刻",
-  homeHighlightReplicableAppsSub: "优先 S/A 档，不足时以 B 档补足，最多展示 4 条不同数据源样本",
-  homeHighlightReplicableAppsEmpty: "近 30 日暂无高可复刻应用，请稍后或到应用雷达浏览全部。",
+  homeHighlightReplicableAppsSub: "仅展示完整复刻评估且价值分≥7 的 S/A 档应用",
+  homeHighlightReplicableAppsEmpty: "近 30 日暂无达标的高可复刻应用，请到应用雷达查看「有深度评估」列表。",
   homeHighlightReplicableAppsCta: "查看全部应用",
   homeGoNewsRadar: "进入资讯雷达",
   homeGoAppsRadar: "进入应用雷达",
@@ -151,11 +155,14 @@ const STRINGS: Record<string, string> = {
   resourcesSourceFilter: "数据源",
   resourcesSourceAll: "全部数据源",
   resourcesReplicationFilter: "可复刻性（抄应用）",
+  resourcesReplicationComplete: "有深度评估（默认）",
   resourcesReplicationAll: "全部档位",
-  resourcesReplicationSa: "S + A（推荐）",
+  resourcesReplicationSa: "S + A 档",
   resourcesReplicationS: "仅 S 档",
+  newsMustReadTitle: "本周必读",
+  newsMustReadSub: "近两周跨源热度最高的资讯精选",
   resourcesReplicationHint:
-    "开启后按 S→A 优先排序，并只显示所选档位；应用列表含 Product Hunt、GitHub 客户端（S/A）及变现类资讯。",
+    "默认仅显示含完整复刻评估且价值分≥7 的应用；可切换档位查看全部。",
   resourcesAppsCloneCategories: "抄应用 / 变现常用类",
   homeHighlightMonetizationApps: "变现线索",
   homeHighlightMonetizationAppsSub: "优先变现案例与已验证变现，最多展示 4 条不同数据源线索（含 Acquire / TAAFT）",

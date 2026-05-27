@@ -5,7 +5,8 @@ import { ArticleCoverVisual } from "@/components/ArticleCoverVisual";
 import { useI18n } from "@/i18n";
 import { markdownToPlainPreview } from "@/lib/articleMarkdown";
 import { HomeHeatBadge } from "./HomeHeatBadge";
-import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel, showReplicationTierOnCard } from "./homeUtils";
+import { showReplicationTierOnCard } from "@/lib/replication";
+import { itemBlurb, itemEngagementLine, platformAccent, replicationTierLabel } from "./homeUtils";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "—";
@@ -64,7 +65,7 @@ function MetaRow({ item }: { item: ArticleFeedCard }) {
   const { t } = useI18n();
   const accent = platformAccent(item.admin_source_key || "");
   const engagement = itemEngagementLine(item);
-  const showTier = showReplicationTierOnCard(item.feed_kind);
+  const showTier = showReplicationTierOnCard(item.feed_kind, item.replication_analysis, item.replication_tier);
   const tierLabel = showTier ? replicationTierLabel(item.replication_tier) : null;
   const tier = (item.replication_tier || "").trim().toUpperCase();
   return (

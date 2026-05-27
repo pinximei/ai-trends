@@ -2,7 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
-import { replicationTierLabel } from "@/components/home/homeUtils";
+import { itemEngagementLine, replicationTierLabel } from "@/components/home/homeUtils";
+import { showReplicationTierOnCard } from "@/lib/replication";
 import { markdownToPlainPreview } from "@/lib/articleMarkdown";
 import type { ArticlesFeedDayResponse, ArticlesFeedHeatResponse } from "@/api/public/types";
 import { formatStarCount } from "@/articleCardVisual";
@@ -93,7 +94,7 @@ function isHeatFeedResponse(d: unknown): d is ArticlesFeedHeatResponse {
 }
 
 type ListDisplayMode = "date" | "heat";
-type ReplicationTierFilter = "all" | "sa" | "s";
+type ReplicationTierFilter = "complete" | "sa" | "s" | "all";
 
 const CLONE_APP_CATEGORIES = [
   "开源客户端(好抄)",
@@ -108,8 +109,9 @@ const MONETIZATION_CATEGORIES = new Set<string>(["已验证变现", "变现案�
 function replicationTierApiParams(
   feedMode: "news" | "apps",
   filter: ReplicationTierFilter,
-): { replication_tiers?: string; sort_replicable?: boolean } {
+): { replication_tiers?: string; replication_complete?: boolean; sort_replicable?: boolean } {
   if (feedMode !== "apps" || filter === "all") return {};
+  if (filter === "complete") return { replication_complete: true, sort_replicable: true };
   if (filter === "s") return { replication_tiers: "S", sort_replicable: true };
   return { replication_tiers: "S,A", sort_replicable: true };
 }
@@ -148,8 +150,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(
-    mode === "apps" ? "sa" : "all",
+    mode === "apps" ? "complete" : "all",
   );
+  const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>([]);
 
   const listApiParams = useMemo(() => {
     const base = replicationTierApiParams(mode, replicationFilter);
@@ -158,6 +161,25 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
     }
     return base;
   }, [mode, replicationFilter, categoryKey]);
+
+  useEffect(() => {
+    if (mode !== "news") {
+      setEditorialNews([]);
+      return;
+    }
+    let cancelled = false;
+    publicApi
+      .editorialPicks({ industry_slug: INDUSTRY_SLUG, news_limit: 3, apps_limit: 0, published_within_days: 14 })
+      .then((data) => {
+        if (!cancelled) setEditorialNews(data.news ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setEditorialNews([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   useEffect(() => {
     const raw = location.state as {
@@ -552,6 +574,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [
+                { key: "complete" as const, label: t("resourcesReplicationComplete") },
                 { key: "sa" as const, label: t("resourcesReplicationSa") },
                 { key: "s" as const, label: t("resourcesReplicationS") },
                 { key: "all" as const, label: t("resourcesReplicationAll") },
@@ -705,6 +728,26 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
       {err ? <p className="mt-1 text-sm font-medium text-rose-600 sm:mt-2">{err}</p> : null}
       {loading ? <p className="mt-2 text-sm text-slate-500 sm:mt-3">{t("resourcesLoading")}</p> : null}
 
+      {mode === "news" && editorialNews.length > 0 ? (
+        <section className="mb-8 rounded-2xl border border-violet-200/80 bg-violet-50/40 p-4 sm:p-5">
+          <h2 className="text-sm font-bold text-violet-900">{t("newsMustReadTitle")}</h2>
+          <p className="mt-1 text-xs text-violet-800/80">{t("newsMustReadSub")}</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {editorialNews.map((item) => (
+              <Link
+                key={item.id}
+                to={`/resources/${item.id}`}
+                className="ui-card block p-3 transition hover:border-violet-300 hover:shadow-md"
+              >
+                <p className="text-[10px] font-semibold uppercase text-violet-600">{item.platform_label}</p>
+                <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-slate-900">{item.title}</h3>
+                <p className="mt-2 line-clamp-2 text-xs text-slate-600">{summarize(feedCardDescriptionText(item), 100)}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {!loading ? (
         <>
           <p className="mt-1 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400 sm:mt-2">
@@ -732,7 +775,10 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                     const starsTotal = a.engagement_stars_total;
                     const starsToday = a.engagement_stars_today;
                     const tierBadge =
-                      mode === "apps" ? replicationTierLabel(a.replication_tier) : null;
+                      mode === "apps" && showReplicationTierOnCard(mode, a.replication_analysis, a.replication_tier)
+                        ? replicationTierLabel(a.replication_tier)
+                        : null;
+                    const rankLine = itemEngagementLine(a);
                     return (
                       <Link
                         key={a.id}
@@ -810,6 +856,9 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
                           <h2 className="mt-3 text-[1.05rem] font-semibold leading-snug tracking-tight text-slate-900 sm:text-lg sm:leading-snug group-hover:text-brand-600">
                             {a.title}
                           </h2>
+                          {rankLine ? (
+                            <p className="mt-2 text-xs font-medium text-amber-800/90">{rankLine}</p>
+                          ) : null}
                           <div className="mt-3 flex-1 space-y-4 border-t border-slate-100 pt-4">
                             <div>
                               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">

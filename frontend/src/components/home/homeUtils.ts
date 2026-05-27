@@ -45,11 +45,6 @@ const REPLICATION_TIER_LABEL: Record<string, string> = {
   C: "低可复刻",
 };
 
-/** 仅应用（apps）列表展示可复刻性；资讯卡片不展示。 */
-export function showReplicationTierOnCard(feedKind: string | null | undefined): boolean {
-  return (feedKind || "").trim().toLowerCase() === "apps";
-}
-
 /** 列表卡片可复刻性档位徽章；无档位时返回 null。 */
 export function replicationTierLabel(tier: string | null | undefined): string | null {
   const k = (tier || "").trim().toUpperCase();

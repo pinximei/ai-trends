@@ -89,6 +89,22 @@ def _article_matches_public_feed(a: Article, feed: str) -> bool:
     return lane == feed
 
 
+def _article_replication_complete(a: Article, *, min_worth: int = 7) -> bool:
+    from ..domain.replication_analysis import (
+        parse_replication_analysis_json,
+        validate_replication_analysis_for_publish,
+    )
+
+    repl = parse_replication_analysis_json(getattr(a, "replication_analysis_json", None))
+    if not validate_replication_analysis_for_publish(repl):
+        return False
+    try:
+        worth = int(repl.get("worth_score") or 0)
+    except (TypeError, ValueError):
+        return False
+    return worth >= int(min_worth)
+
+
 def _feed_row_matches_list_filters(
     a: Article,
     *,
@@ -97,6 +113,7 @@ def _feed_row_matches_list_filters(
     source_filter: str | None,
     search_n: str | None,
     tier_filter: frozenset[str] | None = None,
+    replication_complete: bool = False,
 ) -> bool:
     """与公开列表一致的泳道 / 类别 / 数据源 / 搜索 / 可复刻档位筛选。"""
     if not _article_matches_public_feed(a, feed):
@@ -110,6 +127,8 @@ def _feed_row_matches_list_filters(
         t = (getattr(a, "replication_tier", None) or "").strip().upper()
         if t not in tier_filter:
             return False
+    if replication_complete and not _article_replication_complete(a):
+        return False
     if search_n and not _article_title_summary_matches(a, search_n):
         return False
     return True
@@ -156,6 +175,7 @@ def _build_feed_fingerprint_winner_ids(
     source_filter: str | None,
     search_n: str | None,
     tier_filter: frozenset[str] | None = None,
+    replication_complete: bool = False,
     max_scan_rows: int = 48_000,
     batch: int = 500,
 ) -> frozenset[int]:
@@ -184,6 +204,7 @@ def _build_feed_fingerprint_winner_ids(
                 source_filter=source_filter,
                 search_n=search_n,
                 tier_filter=tier_filter,
+                replication_complete=replication_complete,
             ):
                 continue
             fp = art.display_fingerprint(a.title, a.summary or "")
@@ -517,12 +538,14 @@ def list_articles_feed_by_day_page(
     search: str | None = None,
     days_per_page: int = DAYS_PER_PAGE_DEFAULT,
     replication_tiers: str | None = None,
+    replication_complete: bool = False,
 ) -> dict:
     """按 UTC 自然日分页：每页连续 ``days_per_page`` 个有内容的日历日（默认 3），第 1 页为最新一段。"""
     cat_filter = (category or "").strip() or None
     source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
     tier_filter = _tier_filter_from_csv(replication_tiers)
+    repl_complete = bool(replication_complete)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -558,6 +581,7 @@ def list_articles_feed_by_day_page(
         source_filter=source_filter,
         search_n=n,
         tier_filter=tier_filter,
+        replication_complete=repl_complete,
     )
 
     ordered_days, truncated = _collect_ordered_days_for_feed(
@@ -611,6 +635,7 @@ def list_articles_feed_by_day_page(
             source_filter=source_filter,
             search_n=n,
             tier_filter=tier_filter,
+            replication_complete=repl_complete,
         ):
             continue
         if a.id not in winner_ids:
@@ -651,6 +676,7 @@ def list_articles_feed_by_heat_top(
     heat_page_size: int = HEAT_PAGE_DEFAULT,
     heat_max_ranked: int = HEAT_FEED_MAX,
     replication_tiers: str | None = None,
+    replication_complete: bool = False,
     sort_replicable: bool = False,
     sort_monetization: bool = False,
 ) -> dict:
@@ -662,7 +688,8 @@ def list_articles_feed_by_heat_top(
     source_filter = normalize_source_filter(source)
     n = normalize_feed_search(search)
     tier_filter = _tier_filter_from_csv(replication_tiers)
-    sort_rep = bool(sort_replicable or tier_filter)
+    repl_complete = bool(replication_complete)
+    sort_rep = bool(sort_replicable or tier_filter or repl_complete)
     sort_mon = bool(sort_monetization or (cat_filter in art.MONETIZATION_APPS_CATEGORIES))
     ps = max(1, min(int(heat_page_size or HEAT_PAGE_DEFAULT), HEAT_PAGE_MAX))
     off = max(0, int(heat_offset or 0))
@@ -697,6 +724,7 @@ def list_articles_feed_by_heat_top(
         source_filter=source_filter,
         search_n=n,
         tier_filter=tier_filter,
+        replication_complete=repl_complete,
     )
     if not winner_ids:
         return empty
@@ -752,9 +780,11 @@ def list_article_category_facets(
     source: str | None = None,
     search: str | None = None,
     replication_tiers: str | None = None,
+    replication_complete: bool = False,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，由 AI categories 聚合出的可选筛选项。"""
     tier_filter = _tier_filter_from_csv(replication_tiers)
+    repl_complete = bool(replication_complete)
     ind, q = _base_article_query_for_scope(
         db,
         industry_slug=industry_slug,
@@ -775,6 +805,7 @@ def list_article_category_facets(
         source_filter=source_filter,
         search_n=n,
         tier_filter=tier_filter,
+        replication_complete=repl_complete,
     )
     rows = db.scalars(q.order_by(desc(_freshness_expr()), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
@@ -786,6 +817,7 @@ def list_article_category_facets(
             source_filter=source_filter,
             search_n=n,
             tier_filter=tier_filter,
+            replication_complete=repl_complete,
         ):
             continue
         if a.id not in winner_ids:
@@ -809,9 +841,11 @@ def list_article_source_facets(
     category: str | None = None,
     search: str | None = None,
     replication_tiers: str | None = None,
+    replication_complete: bool = False,
 ) -> list[dict]:
     """当前时间/板块范围内、指定泳道下，按 admin_source_key 聚合的数据源筛选项。"""
     tier_filter = _tier_filter_from_csv(replication_tiers)
+    repl_complete = bool(replication_complete)
     ind, q = _base_article_query_for_scope(
         db,
         industry_slug=industry_slug,
@@ -833,6 +867,7 @@ def list_article_source_facets(
         source_filter=None,
         search_n=n,
         tier_filter=tier_filter,
+        replication_complete=repl_complete,
     )
     rows = db.scalars(q.order_by(desc(_freshness_expr()), desc(Article.id)).limit(4000)).all()
     ctr: Counter[str] = Counter()
@@ -844,6 +879,7 @@ def list_article_source_facets(
             source_filter=None,
             search_n=n,
             tier_filter=tier_filter,
+            replication_complete=repl_complete,
         ):
             continue
         if a.id not in winner_ids:
@@ -875,11 +911,13 @@ def list_articles_feed(
     source: str | None = None,
     search: str | None = None,
     replication_tiers: str | None = None,
+    replication_complete: bool = False,
 ) -> dict:
     scan_limit = 280
     cat_filter = (category or "").strip() or None
     source_filter = normalize_source_filter(source)
     tier_filter = _tier_filter_from_csv(replication_tiers)
+    repl_complete = bool(replication_complete)
 
     ind, q = _base_article_query_for_scope(
         db,
@@ -902,6 +940,7 @@ def list_articles_feed(
         source_filter=source_filter,
         search_n=n,
         tier_filter=tier_filter,
+        replication_complete=repl_complete,
     )
 
     exclude = art.parse_exclude_fingerprints(exclude_fp)
@@ -926,6 +965,7 @@ def list_articles_feed(
                 source_filter=source_filter,
                 search_n=n,
                 tier_filter=tier_filter,
+                replication_complete=repl_complete,
             ):
                 continue
             if a.id not in winner_ids:
