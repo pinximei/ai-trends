@@ -12,9 +12,6 @@ export type {
   ArticlesFeedDayResponse,
   ArticlesFeedCursorResponse,
   ArticlesFeedHeatResponse,
-  TrendMomentumItem,
-  TrendMomentumResponse,
-  TrendMomentumTopic,
 } from "./types";
 
 export const publicApi = {
@@ -174,6 +171,7 @@ export const publicApi = {
       apps_source_lanes: Array<{ source_key: string; source_label: string; items: ArticleFeedCard[] }>;
       source_facets: Array<{ key: string; label: string; news_count: number; apps_count: number }>;
       top_categories: Array<{ label: string; count: number }>;
+      industry_wind: import("@/components/home/IndustryWindPanel").IndustryWindData;
       active_source_count: number;
       active_source_keys: string[];
     }>(`/api/public/v1/home/dashboard${qs ? `?${qs}` : ""}`);
@@ -218,21 +216,5 @@ export const publicApi = {
       apps_growth_pct: number | null;
       news_growth_pct: number | null;
     }>(`/api/public/v1/home/trend-overview${qs ? `?${qs}` : ""}`);
-  },
-  trendMomentum: (opts?: {
-    industry_slug?: string;
-    period_days?: number;
-    limit_per_track?: number;
-    topic_limit?: number;
-  }) => {
-    const sp = new URLSearchParams();
-    if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
-    if (opts?.period_days != null) sp.set("period_days", String(opts.period_days));
-    if (opts?.limit_per_track != null) sp.set("limit_per_track", String(opts.limit_per_track));
-    if (opts?.topic_limit != null) sp.set("topic_limit", String(opts.topic_limit));
-    const qs = sp.toString();
-    return publicGet<import("./types").TrendMomentumResponse>(
-      `/api/public/v1/trends/momentum${qs ? `?${qs}` : ""}`,
-    );
   },
 };

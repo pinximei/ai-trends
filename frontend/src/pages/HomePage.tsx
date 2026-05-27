@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
+import { IndustryWindPanel, type IndustryWindData } from "@/components/home/IndustryWindPanel";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
 import { HomeSection } from "@/components/home/HomeSection";
 import { mergeSourceLanes, platformAccent, radarGridClass, type SourceLane } from "@/components/home/homeUtils";
@@ -124,11 +125,6 @@ function TrendSparkline({ points, tall = false }: { points: SparkPoint[]; tall?:
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{t("homeTrendLegend")}</p>
         <p className="mt-0.5 text-xs text-slate-400">{t("homeTrendDataNote")}</p>
-        <p className="mt-2">
-          <Link to="/trends" className="text-sm font-semibold text-violet-600 hover:text-violet-800 hover:underline">
-            {t("homeTrendsLink")}
-          </Link>
-        </p>
       </header>
 
       <div className="relative mt-4 w-full">
@@ -321,6 +317,7 @@ function applyHomeDashboardPayload(
     setActiveSourceCount: (v: number) => void;
     setActiveSourceKeys: (v: string[]) => void;
     setTrendOverview: (v: HomeTrendOverview | null) => void;
+    setIndustryWind: (v: IndustryWindData | null) => void;
   },
 ) {
   set.setNews(p.news);
@@ -336,6 +333,7 @@ function applyHomeDashboardPayload(
   set.setActiveSourceCount(p.activeSourceCount);
   set.setActiveSourceKeys(p.activeSourceKeys);
   set.setTrendOverview(p.trendOverview);
+  set.setIndustryWind(p.industryWind);
 }
 
 export function HomePage() {
@@ -363,6 +361,9 @@ export function HomePage() {
   const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>(() => initialHomeCache?.editorialNews ?? []);
   const [trendOverview, setTrendOverview] = useState<HomeTrendOverview | null>(
     () => initialHomeCache?.trendOverview ?? null,
+  );
+  const [industryWind, setIndustryWind] = useState<IndustryWindData | null>(
+    () => initialHomeCache?.industryWind ?? null,
   );
 
   const sparkSummary = useMemo(() => {
@@ -402,6 +403,7 @@ export function HomePage() {
       setActiveSourceCount,
       setActiveSourceKeys,
       setTrendOverview,
+      setIndustryWind,
     };
 
     const commitPayload = (payload: HomeDashboardCachePayload) => {
@@ -467,6 +469,7 @@ export function HomePage() {
           appsLanes: data.apps_source_lanes ?? [],
           sourceFacets: data.source_facets ?? [],
           topCategories: data.top_categories ?? [],
+          industryWind: data.industry_wind ?? null,
           activeSourceCount: data.active_source_count ?? data.active_source_keys?.length ?? 6,
           activeSourceKeys: data.active_source_keys ?? [],
           trendOverview: data.trend ?? null,
@@ -492,6 +495,7 @@ export function HomePage() {
             appsLanes: [],
             sourceFacets: [],
             topCategories: [],
+            industryWind: null,
             activeSourceCount: 6,
             activeSourceKeys: [],
             trendOverview: null,
@@ -552,6 +556,8 @@ export function HomePage() {
           </div>
         </div>
       </section>
+
+      <IndustryWindPanel data={industryWind} loading={loading && !industryWind} />
 
       <HomeSection title={t("homeEditorialPicksTitle")} subtitle={t("homeEditorialPicksSub")} icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}>
         {loading ? (
@@ -679,22 +685,6 @@ export function HomePage() {
                 </>
               ) : null}
 
-              {topCategories.length > 0 ? (
-                <>
-                  <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">{t("homeTopicsLabel")}</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {topCategories.slice(0, 6).map((c) => (
-                      <div
-                        key={c.label}
-                        className="rounded-lg border border-violet-100 bg-violet-50/90 px-2.5 py-2 ring-1 ring-violet-100/80"
-                      >
-                        <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-violet-900">{c.label}</p>
-                        <p className="mt-1 text-sm font-bold tabular-nums text-violet-700">{c.count}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : null}
             </div>
           ) : loading ? (
             <div className="flex min-h-[8rem] items-center justify-center text-sm text-slate-500">{t("homeLoading")}</div>

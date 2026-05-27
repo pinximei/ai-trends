@@ -1,0 +1,142 @@
+import { Link } from "react-router-dom";
+import { TrendingUp } from "lucide-react";
+import { useI18n } from "@/i18n";
+
+export type IndustryWindRow = {
+  label: string;
+  rank: number;
+  momentum_pct: number;
+  raw_momentum: number;
+  article_count: number;
+  prior_count: number;
+  growth_pct: number | null;
+  signal: "升温" | "稳定" | "降温" | "偏冷" | string;
+  heat_avg: number;
+  top_pick: { id: number; title: string; feed_kind: "news" | "apps" } | null;
+};
+
+export type IndustryWindData = {
+  recent_days: number;
+  industries: IndustryWindRow[];
+  note?: string;
+};
+
+const SIGNAL_STYLE: Record<string, { bar: string; badge: string; text: string }> = {
+  升温: {
+    bar: "from-orange-500 to-rose-500",
+    badge: "bg-orange-100 text-orange-800 ring-orange-200/80",
+    text: "text-orange-700",
+  },
+  稳定: {
+    bar: "from-violet-500 to-indigo-500",
+    badge: "bg-violet-100 text-violet-800 ring-violet-200/80",
+    text: "text-violet-700",
+  },
+  降温: {
+    bar: "from-slate-400 to-slate-500",
+    badge: "bg-slate-100 text-slate-600 ring-slate-200/80",
+    text: "text-slate-600",
+  },
+  偏冷: {
+    bar: "from-slate-200 to-slate-300",
+    badge: "bg-slate-50 text-slate-400 ring-slate-200/80",
+    text: "text-slate-400",
+  },
+};
+
+function formatGrowth(pct: number | null): string {
+  if (pct == null) return "—";
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct}%`;
+}
+
+type Props = {
+  data: IndustryWindData | null;
+  loading?: boolean;
+};
+
+export function IndustryWindPanel({ data, loading }: Props) {
+  const { t } = useI18n();
+
+  return (
+    <section id="industry-wind" className="ui-card scroll-mt-24 overflow-hidden p-5 sm:p-6">
+      <div className="flex flex-wrap items-start gap-3 border-b border-slate-100 pb-4">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white shadow-md">
+          <TrendingUp className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{t("homeIndustryWindTitle")}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">{t("homeIndustryWindSub")}</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-slate-500">{t("homeLoading")}</p>
+      ) : !data?.industries?.length ? (
+        <p className="mt-4 text-sm text-slate-500">{t("homeIndustryWindEmpty")}</p>
+      ) : (
+        <div className="mt-5 space-y-4">
+          {data.industries.map((row) => {
+            const style = SIGNAL_STYLE[row.signal] ?? SIGNAL_STYLE["稳定"];
+            const barPct = Math.max(row.momentum_pct, row.article_count > 0 ? 8 : 0);
+            return (
+              <div
+                key={row.label}
+                className="rounded-xl border border-slate-200/80 bg-slate-50/50 px-3 py-3 sm:px-4"
+              >
+                <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                  <span className="w-6 text-center text-xs font-bold tabular-nums text-slate-400">{row.rank}</span>
+                  <span className="min-w-[5.5rem] text-sm font-bold text-slate-900 sm:min-w-[6.5rem]">{row.label}</span>
+                  <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ring-1 ${style.badge}`}>
+                    {row.signal}
+                  </span>
+                  <span className={`ml-auto text-xs font-semibold tabular-nums ${style.text}`}>
+                    {formatGrowth(row.growth_pct)}
+                    <span className="mx-1 font-normal text-slate-300">·</span>
+                    <span className="font-normal text-slate-500">
+                      {row.article_count} {t("homeIndustryWindArticlesUnit")}
+                    </span>
+                  </span>
+                </div>
+                <div className="mt-2.5 flex items-center gap-3 pl-8">
+                  <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/80">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${style.bar} transition-all duration-500`}
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
+                    {row.heat_avg > 0 ? `${t("homeIndustryWindHeat")} ${row.heat_avg}` : "—"}
+                  </span>
+                </div>
+                {row.top_pick ? (
+                  <p className="mt-2 pl-8 text-xs text-slate-500">
+                    <span className="text-slate-400">{t("homeIndustryWindExample")} </span>
+                    <Link
+                      to={`/resources/${row.top_pick.id}`}
+                      className="font-medium text-violet-600 hover:underline"
+                    >
+                      {row.top_pick.title}
+                    </Link>
+                    <span className="mx-1 text-slate-300">·</span>
+                    <Link
+                      to={row.top_pick.feed_kind === "apps" ? "/apps" : "/news"}
+                      state={{ category: row.label }}
+                      className="text-violet-600 hover:underline"
+                    >
+                      {t("homeIndustryWindMore")}
+                    </Link>
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+          {data.note ? <p className="text-[11px] leading-relaxed text-slate-400">{data.note}</p> : null}
+          <p className="text-center text-[11px] text-slate-400">
+            {t("homeIndustryWindPeriod")} {data.recent_days} {t("trendsPeriodDaysUnit")}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}

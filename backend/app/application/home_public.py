@@ -687,6 +687,10 @@ def get_home_dashboard(
     apps_sources = list_article_source_facets(db, feed="apps", **facet_kw)
     top_categories = list_article_category_facets(db, feed="news", **facet_kw)[:10]
 
+    from .industry_wind_public import get_industry_wind_overview
+
+    industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug, recent_days=14)
+
     return {
         "news": news_items,
         "apps": apps_items,
@@ -712,6 +716,7 @@ def get_home_dashboard(
         ),
         "source_facets": _merge_source_facets(news_sources, apps_sources),
         "top_categories": top_categories,
+        "industry_wind": industry_wind,
         "active_source_count": len(HOME_MAIN_SOURCE_KEYS),
         "active_source_keys": list(HOME_MAIN_SOURCE_KEYS),
     }

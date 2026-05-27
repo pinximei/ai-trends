@@ -39,12 +39,11 @@ export function Layout() {
   const location = useLocation();
   const path = location.pathname;
   const isHome = path === "/";
-  const isTrends = path === "/trends";
   const isFeedHub = path === "/apps" || path === "/news";
   const isResourceDetail = /^\/resources\/[^/]+$/.test(path);
   /** 资讯/应用 feed 与文章详情：整页高度锁定，左栏固定、右栏独立滚动 */
   const isSplitScrollPage = isResourceDetail || isFeedHub;
-  const isWideHub = isHome || isTrends || isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
+  const isWideHub = isHome || isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
   const useWideShell = isWideHub;
   const hideSidebar = isWideHub;
   const isHubTightTop = isFeedHub || path === "/downloads" || path === "/about" || isResourceDetail;
@@ -68,10 +67,6 @@ export function Layout() {
       "/": {
         title: `${brand} · ${t("tagline")}`,
         description: t("seoHomeDescription"),
-      },
-      "/trends": {
-        title: `${t("navTrends")} · ${brand}`,
-        description: t("seoTrendsDescription"),
       },
       "/news": {
         title: `${t("navNews")} · ${brand}`,
@@ -196,7 +191,7 @@ export function Layout() {
 
         <main
           className={
-            isHome || isTrends
+            isHome
               ? "min-w-0 flex-1 py-6 pb-4 sm:py-8 sm:pb-5 xl:py-10"
               : isSplitScrollPage
                 ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 pt-2 pb-0 sm:pt-3 lg:bg-[#eef0f4] lg:pt-2"
