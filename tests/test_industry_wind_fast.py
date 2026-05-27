@@ -64,7 +64,7 @@ def test_stale_cache_served_on_fast_path() -> None:
         "industry_slug": "ai",
         "recent_days": 15,
         "compare_mode": "period_half",
-        "generated_at": (datetime.utcnow() - timedelta(hours=12)).isoformat(timespec="seconds"),
+        "generated_at": (datetime.utcnow() - timedelta(hours=25)).isoformat(timespec="seconds"),
         "industries": [
             {
                 "headline": "Cached headline",

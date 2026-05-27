@@ -21,9 +21,10 @@ SCAN_LIMIT = 120
 LLM_CANDIDATE_LIMIT = 55
 MAX_TRENDS = 6
 MIN_TRENDS = 3
-CACHE_KEY = "industry_wind_cache_v4"
-CACHE_TTL_SECONDS = 6 * 3600
+CACHE_KEY = "industry_wind_cache_v5"
+CACHE_TTL_SECONDS = 24 * 3600
 CACHE_STALE_MAX_SECONDS = 7 * 24 * 3600
+WIND_LLM_MIN_INTERVAL_SECONDS = 24 * 3600
 WIND_HALF_PERIOD_DAYS = 15
 WIND_TOTAL_DAYS = 30
 WIND_COMPARE_MODE = "period_half"
@@ -631,9 +632,19 @@ def get_industry_wind_overview(
         )
         if stale:
             stale_note = str(stale.get("note") or note)
-            if "更新中" not in stale_note:
-                stale_note = f"{stale_note}（AI 归纳缓存更新中，稍后自动刷新）"
+            if "每日" not in stale_note:
+                stale_note = f"{stale_note}（完整 AI 归纳每日自动更新一次）"
             return {**stale, "note": stale_note}
+
+    if allow_llm:
+        recent_llm = _load_cache(
+            db,
+            industry_slug=industry_slug,
+            recent_days=recent,
+            max_age_seconds=WIND_LLM_MIN_INTERVAL_SECONDS,
+        )
+        if recent_llm and str(recent_llm.get("source") or "") in ("llm", "fallback"):
+            return recent_llm
 
     industry_ids = _industry_article_ids(db, industry_slug=industry_slug)
     if not industry_ids:
@@ -681,7 +692,7 @@ def get_industry_wind_overview(
         "this_week_start": this_week_start,
         "last_week_start": last_week_start,
         "industries": industries,
-        "note": note if allow_llm else f"{note}（当前为快速聚类预览，完整 AI 归纳将后台更新）",
+        "note": note if allow_llm else f"{note}（当前为快速聚类预览；完整 AI 归纳每日自动更新）",
         "source": source,
     }
     if allow_llm and source in ("llm", "fallback"):

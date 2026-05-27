@@ -180,10 +180,9 @@ export const publicApi = {
       active_source_keys: string[];
     }>(`/api/public/v1/home/dashboard${qs ? `?${qs}` : ""}`);
   },
-  homeIndustryWind: (opts?: { industry_slug?: string; refresh?: boolean }) => {
+  homeIndustryWind: (opts?: { industry_slug?: string }) => {
     const sp = new URLSearchParams();
     if (opts?.industry_slug) sp.set("industry_slug", opts.industry_slug);
-    if (opts?.refresh) sp.set("refresh", "true");
     const qs = sp.toString();
     return publicGet<import("@/components/home/IndustryWindPanel").IndustryWindData>(
       `/api/public/v1/home/industry-wind${qs ? `?${qs}` : ""}`,

@@ -452,34 +452,19 @@ export function HomePage() {
       writeHomeDashboardCache({ ...prev, industryWind: wind });
     };
 
-    const fetchIndustryWind = async (opts?: { refresh?: boolean }) => {
+    const fetchIndustryWind = async () => {
       try {
-        if (!opts?.refresh) setWindLoading(true);
-        const wind = await publicApi.homeIndustryWind({
-          industry_slug: INDUSTRY,
-          refresh: opts?.refresh,
-        });
+        setWindLoading(true);
+        const wind = await publicApi.homeIndustryWind({ industry_slug: INDUSTRY });
         if (cancelled) return;
         if (wind) {
           setIndustryWind(wind);
           mergeWindIntoCache(wind);
         }
-        if (!opts?.refresh) {
-          setWindLoading(false);
-          const src = wind?.source;
-          const needsFull =
-            src === "stale_cache" ||
-            src === "fallback" ||
-            src === "empty" ||
-            !(wind?.industries?.length);
-          if (needsFull) {
-            window.setTimeout(() => {
-              if (!cancelled) void fetchIndustryWind({ refresh: true });
-            }, 400);
-          }
-        }
       } catch {
-        if (!cancelled && !opts?.refresh) setWindLoading(false);
+        /* keep SSR/cache */
+      } finally {
+        if (!cancelled) setWindLoading(false);
       }
     };
 

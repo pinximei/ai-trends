@@ -469,7 +469,7 @@ def reschedule_newsletter_digest_job() -> None:
 
 
 def _job_industry_wind_warm() -> None:
-    """定时用 LLM 刷新行业风向缓存，避免用户请求阻塞在归纳上。"""
+    """每日一次：用 LLM 刷新行业风向缓存（用户请求只读缓存，不触发 LLM）。"""
     db = SessionLocal()
     try:
         from .application.industry_wind_public import get_industry_wind_overview
@@ -526,12 +526,14 @@ def _start_scheduler() -> None:
     )
     _scheduler.add_job(
         _job_industry_wind_warm,
-        IntervalTrigger(hours=4),
+        CronTrigger(hour=7, minute=15, timezone="America/New_York"),
         id="industry_wind_warm",
+        misfire_grace_time=7200,
         coalesce=True,
         max_instances=1,
     )
     _scheduler.start()
+    logger.info("industry wind LLM warm scheduled daily at America/New_York 07:15")
     db2 = SessionLocal()
     try:
         h, m = _newsletter_digest_schedule(db2)

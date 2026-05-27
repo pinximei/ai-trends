@@ -30,15 +30,10 @@ def home_trend_overview(
 @router.get("/home/industry-wind")
 def home_industry_wind(
     industry_slug: str = "ai",
-    refresh: bool = False,
     db: Session = Depends(get_db),
 ):
-    """行业风向：默认快速路径；``refresh=true`` 时允许 LLM 归纳并写缓存。"""
-    data = get_industry_wind_overview(
-        db,
-        industry_slug=industry_slug,
-        allow_llm=bool(refresh),
-    )
+    """行业风向：只读缓存/快速聚类，不在用户请求时调用 LLM（每日定时任务生成）。"""
+    data = get_industry_wind_overview(db, industry_slug=industry_slug, allow_llm=False)
     return success(data)
 
 
