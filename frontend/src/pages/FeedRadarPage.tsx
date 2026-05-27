@@ -30,8 +30,8 @@ function defaultTimeKeyForMode(mode: "news" | "apps"): TimeKey {
   return mode === "apps" ? "d7" : "d2";
 }
 
-function defaultReplicationForMode(mode: "news" | "apps"): ReplicationTierFilter {
-  return mode === "apps" ? "all" : "all";
+function defaultReplicationFilter(): ReplicationTierFilter {
+  return "all";
 }
 
 function timeKeyToArticleParams(timeKey: TimeKey): {
@@ -157,9 +157,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [sourceOptions, setSourceOptions] = useState<Array<{ key: string; label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
-  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(() =>
-    defaultReplicationForMode(mode),
-  );
+  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(defaultReplicationFilter);
   const listApiParams = useMemo(() => {
     const base = replicationTierApiParams(mode, replicationFilter);
     if (mode === "apps" && categoryKey && MONETIZATION_CATEGORIES.has(categoryKey)) {
