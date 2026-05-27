@@ -77,7 +77,7 @@ const STRINGS: Record<string, string> = {
   homeSourceRadarSub: "六路内置源各 1 条（与上方精选区不重复 id，按源单独取热度最高）",
   homeSourceRadarNoData: "近 30 天暂无内容，请在后台检查该源 URL 与连接器同步",
   homeNewsWall: "资讯情报墙",
-  homeNewsWallSub: "近 30 日跨源热度资讯预览；更多请进入资讯雷达",
+  homeNewsWallSub: "近 30 日跨源热度资讯预览（最多 8 条）；更多请进入资讯雷达",
   homeAppsLeaderboard: "更多高热应用",
   homeAppsLeaderboardSub: "按热度排序，已排除上方「亮点应用」；进入应用雷达可看全部",
   homeHighlightReplicableApps: "亮点应用 · 高可复刻",

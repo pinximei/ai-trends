@@ -3,10 +3,8 @@
 # 详见 docs/deploy-tencent-cvm.md §2.1 / §2.2。
 name: deploy-vm
 
+# push 已关闭：生产由本地 scripts/deploy_ssh.py 部署；需要时在 Actions 页手动 Run workflow。
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:

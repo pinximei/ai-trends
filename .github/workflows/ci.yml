@@ -1,7 +1,7 @@
 name: ci
+# 已改为本地部署；需要时在 Actions 页手动 Run workflow。
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:

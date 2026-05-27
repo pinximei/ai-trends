@@ -10,6 +10,9 @@ import { useI18n } from "@/i18n";
 
 const INDUSTRY = "ai";
 
+/** 首页资讯情报墙展示条数（与侧栏应用榜高度大致对齐） */
+const HOME_NEWS_WALL_LIMIT = 8;
+
 /** 首页邮件订阅条：功能未对公众开放前保持隐藏；与后台 newsletter 就绪后可改为 true */
 const HOME_NEWSLETTER_VISIBLE = false;
 
@@ -356,7 +359,7 @@ export function HomePage() {
     Promise.all([
       publicApi.homeDashboard({
         industry_slug: INDUSTRY,
-        news_limit: 8,
+        news_limit: HOME_NEWS_WALL_LIMIT,
         apps_limit: 10,
         replicable_apps_limit: 4,
         monetization_apps_limit: 4,
@@ -375,7 +378,7 @@ export function HomePage() {
         let nextApps = data.apps ?? [];
         if (nextNews.length === 0) {
           try {
-            nextNews = await loadFeedFallback("news", 8);
+            nextNews = await loadFeedFallback("news", HOME_NEWS_WALL_LIMIT);
           } catch {
             /* keep empty */
           }
@@ -406,7 +409,7 @@ export function HomePage() {
         if (cancelled) return;
         try {
           const [nextNews, nextApps] = await Promise.all([
-            loadFeedFallback("news", 8),
+            loadFeedFallback("news", HOME_NEWS_WALL_LIMIT),
             loadFeedFallback("apps", 10),
           ]);
           if (cancelled) return;
@@ -438,7 +441,7 @@ export function HomePage() {
     };
   }, []);
 
-  const newsWall = news.slice(0, 4);
+  const newsWall = news.slice(0, HOME_NEWS_WALL_LIMIT);
   const appLeaderboard = apps.slice(0, 6);
   const totalInWindow = (trendOverview?.news_count ?? 0) + (trendOverview?.apps_count ?? 0);
 
