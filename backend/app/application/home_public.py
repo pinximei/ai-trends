@@ -85,6 +85,11 @@ def get_home_trend_overview(
     ).all()
     by_day = {str(r.d): int(r[1]) for r in rows if r.d is not None}
     sparkline = [{"day": d, "count": by_day.get(d, 0)} for d in _day_range_utc(days, end=now)]
+    week_n = 7
+    this_week_spark = sparkline[-week_n:] if len(sparkline) >= week_n else sparkline
+    last_week_spark = sparkline[-week_n * 2 : -week_n] if len(sparkline) >= week_n * 2 else []
+    this_week_total = sum(int(p.get("count") or 0) for p in this_week_spark)
+    last_week_total = sum(int(p.get("count") or 0) for p in last_week_spark)
 
     cur_since = now - timedelta(days=period)
     prev_since = now - timedelta(days=period * 2)
@@ -118,6 +123,10 @@ def get_home_trend_overview(
         "news_count": news_cur,
         "apps_growth_pct": _growth_pct(apps_cur, apps_prev),
         "news_growth_pct": _growth_pct(news_cur, news_prev),
+        "this_week_total": this_week_total,
+        "last_week_total": last_week_total,
+        "week_total_growth_pct": _growth_pct(this_week_total, last_week_total),
+        "compare_mode": "week_over_week",
     }
 
 
@@ -689,7 +698,7 @@ def get_home_dashboard(
 
     from .industry_wind_public import get_industry_wind_overview
 
-    industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug, recent_days=14)
+    industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug, recent_days=7)
 
     return {
         "news": news_items,

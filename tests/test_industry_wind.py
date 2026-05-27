@@ -146,7 +146,8 @@ def test_industry_wind_dynamic_not_fixed_tracks() -> None:
         ]
     )
     db.commit()
-    out = get_industry_wind_overview(db, industry_slug="ai", recent_days=14)
+    out = get_industry_wind_overview(db, industry_slug="ai", recent_days=7)
+    assert out.get("compare_mode") == "week_over_week"
     labels = {x.get("headline") or x.get("label") for x in out["industries"]}
     assert "政策市场" not in labels
     assert "安全合规" not in labels

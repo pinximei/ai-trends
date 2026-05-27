@@ -19,6 +19,10 @@ export type IndustryWindRow = {
 
 export type IndustryWindData = {
   recent_days: number;
+  compare_mode?: string;
+  period_label?: string;
+  this_week_start?: string;
+  last_week_start?: string;
   industries: IndustryWindRow[];
   note?: string;
   source?: string;
@@ -110,7 +114,9 @@ export function IndustryWindPanel({ data, loading }: Props) {
                     {formatGrowth(row.growth_pct)}
                     <span className="mx-1 font-normal text-slate-300">·</span>
                     <span className="font-normal text-slate-500">
-                      {row.article_count} {t("homeIndustryWindArticlesUnit")}
+                      {t("homeIndustryWindThisWeek")} {row.article_count}
+                      <span className="mx-1 text-slate-300">/</span>
+                      {t("homeIndustryWindLastWeek")} {row.prior_count}
                     </span>
                   </span>
                 </div>
@@ -148,7 +154,7 @@ export function IndustryWindPanel({ data, loading }: Props) {
           })}
           {data.note ? <p className="text-[11px] leading-relaxed text-slate-400">{data.note}</p> : null}
           <p className="text-center text-[11px] text-slate-400">
-            {t("homeIndustryWindPeriod")} {data.recent_days} {t("trendsPeriodDaysUnit")}
+            {data.period_label || `${t("homeIndustryWindPeriod")} ${data.recent_days} ${t("trendsPeriodDaysUnit")}`}
           </p>
         </div>
       )}

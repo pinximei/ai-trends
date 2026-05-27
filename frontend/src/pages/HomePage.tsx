@@ -15,6 +15,7 @@ import {
   type HomeDashboardCachePayload,
   type HomeTrendOverview,
 } from "@/lib/homeDashboardCache";
+import { readSsrHomeBootstrap } from "@/lib/ssrHomeBootstrap";
 
 const INDUSTRY = "ai";
 
@@ -299,7 +300,7 @@ function formatGrowth(pct: number | null | undefined): string | null {
   return `${sign}${pct}%`;
 }
 
-const initialHomeCache = readHomeDashboardCache();
+const initialHomeCache = readSsrHomeBootstrap() ?? readHomeDashboardCache();
 
 function applyHomeDashboardPayload(
   p: HomeDashboardCachePayload,
