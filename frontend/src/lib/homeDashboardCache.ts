@@ -3,7 +3,7 @@ import type { IndustryWindData } from "@/components/home/IndustryWindPanel";
 import type { SourceLane } from "@/components/home/homeUtils";
 import { readSsrHomeBootstrap } from "@/lib/ssrHomeBootstrap";
 
-const CACHE_KEY = "aitrends_home_dashboard_v12";
+const CACHE_KEY = "aitrends_home_dashboard_v13";
 /** 同一会话内复用首页数据（含今日精选），减少切页回首页时的重复加载 */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -40,7 +40,66 @@ export type HomeDashboardCachePayload = {
 
 type Stored = HomeDashboardCachePayload & { fetchedAt: number };
 
+/** 路由切走再回首页时仍保留（不随 HomePage 卸载清空） */
+let memorySnapshot: Stored | null = null;
+
+function isFresh(stored: Stored): boolean {
+  return Date.now() - stored.fetchedAt <= CACHE_TTL_MS;
+}
+
+function pickNonEmpty<T>(next: T[] | undefined, prev: T[] | undefined): T[] {
+  const n = next ?? [];
+  if (n.length > 0) return n;
+  return prev ?? [];
+}
+
+function pickTrend(
+  next: HomeTrendOverview | null | undefined,
+  prev: HomeTrendOverview | null | undefined,
+): HomeTrendOverview | null {
+  if (next?.sparkline?.length) return next;
+  return prev ?? next ?? null;
+}
+
+function pickWind(
+  next: IndustryWindData | null | undefined,
+  prev: IndustryWindData | null | undefined,
+): IndustryWindData | null {
+  if ((next?.industries?.length ?? 0) > 0) return next ?? null;
+  return prev ?? next ?? null;
+}
+
+/** 刷新时用新数据覆盖，但避免 API 某字段暂时为空时把已展示的卡片清空 */
+export function mergeHomeDashboardPayload(
+  prev: HomeDashboardCachePayload | null | undefined,
+  incoming: Partial<HomeDashboardCachePayload>,
+): HomeDashboardCachePayload {
+  const p = prev;
+  return {
+    news: pickNonEmpty(incoming.news, p?.news),
+    apps: pickNonEmpty(incoming.apps, p?.apps),
+    editorialNews: pickNonEmpty(incoming.editorialNews, p?.editorialNews),
+    editorialApps: pickNonEmpty(incoming.editorialApps, p?.editorialApps),
+    highlightApps: pickNonEmpty(incoming.highlightApps, p?.highlightApps),
+    highlightMonetization: pickNonEmpty(incoming.highlightMonetization, p?.highlightMonetization),
+    newsLanes: pickNonEmpty(incoming.newsLanes, p?.newsLanes),
+    appsLanes: pickNonEmpty(incoming.appsLanes, p?.appsLanes),
+    sourceFacets: pickNonEmpty(incoming.sourceFacets, p?.sourceFacets),
+    topCategories: pickNonEmpty(incoming.topCategories, p?.topCategories),
+    industryWind: pickWind(incoming.industryWind, p?.industryWind),
+    activeSourceCount: incoming.activeSourceCount ?? p?.activeSourceCount ?? 6,
+    activeSourceKeys:
+      (incoming.activeSourceKeys?.length ?? 0) > 0
+        ? incoming.activeSourceKeys!
+        : (p?.activeSourceKeys ?? []),
+    trendOverview: pickTrend(incoming.trendOverview, p?.trendOverview),
+  };
+}
+
 export function readHomeDashboardCacheAgeMs(): number | null {
+  if (memorySnapshot && isFresh(memorySnapshot)) {
+    return Date.now() - memorySnapshot.fetchedAt;
+  }
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -53,15 +112,21 @@ export function readHomeDashboardCacheAgeMs(): number | null {
 }
 
 export function readHomeDashboardCache(): HomeDashboardCachePayload | null {
+  if (memorySnapshot && isFresh(memorySnapshot)) {
+    const { fetchedAt: _at, ...payload } = memorySnapshot;
+    return payload;
+  }
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Stored;
     if (!parsed || typeof parsed.fetchedAt !== "number") return null;
-    if (Date.now() - parsed.fetchedAt > CACHE_TTL_MS) {
+    if (!isFresh(parsed)) {
       sessionStorage.removeItem(CACHE_KEY);
+      memorySnapshot = null;
       return null;
     }
+    memorySnapshot = parsed;
     const { fetchedAt: _at, ...payload } = parsed;
     return payload;
   } catch {
@@ -69,9 +134,16 @@ export function readHomeDashboardCache(): HomeDashboardCachePayload | null {
   }
 }
 
-/** 每次进入首页时调用：勿在模块顶层缓存，否则 React 路由切回时读不到已写入的 session。 */
+/** 每次进入首页时调用：优先内存快照，再 SSR / session。 */
 export function readHomePageBoot(): HomeDashboardCachePayload | null {
-  return readSsrHomeBootstrap() ?? readHomeDashboardCache();
+  const mem = readHomeDashboardCache();
+  if (mem) return mem;
+  const ssr = readSsrHomeBootstrap();
+  if (ssr) {
+    writeHomeDashboardCache(ssr);
+    return ssr;
+  }
+  return null;
 }
 
 export function homePayloadHasContent(p: HomeDashboardCachePayload | null | undefined): boolean {
@@ -80,13 +152,20 @@ export function homePayloadHasContent(p: HomeDashboardCachePayload | null | unde
     (p.editorialApps?.length ?? 0) > 0 ||
     (p.editorialNews?.length ?? 0) > 0 ||
     (p.news?.length ?? 0) > 0 ||
-    (p.apps?.length ?? 0) > 0
+    (p.apps?.length ?? 0) > 0 ||
+    (p.highlightApps?.length ?? 0) > 0 ||
+    (p.highlightMonetization?.length ?? 0) > 0 ||
+    (p.newsLanes?.length ?? 0) > 0 ||
+    (p.appsLanes?.length ?? 0) > 0 ||
+    (p.trendOverview?.sparkline?.length ?? 0) > 0 ||
+    (p.industryWind?.industries?.length ?? 0) > 0
   );
 }
 
 export function writeHomeDashboardCache(payload: HomeDashboardCachePayload): void {
+  const stored: Stored = { ...payload, fetchedAt: Date.now() };
+  memorySnapshot = stored;
   try {
-    const stored: Stored = { ...payload, fetchedAt: Date.now() };
     sessionStorage.setItem(CACHE_KEY, JSON.stringify(stored));
   } catch {
     /* quota / private mode */

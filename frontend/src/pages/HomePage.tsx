@@ -11,6 +11,7 @@ import { useI18n } from "@/i18n";
 import { NEWSLETTER_SUBSCRIBE_ENABLED } from "@/lib/newsletterConfig";
 import {
   homePayloadHasContent,
+  mergeHomeDashboardPayload,
   readHomeDashboardCache,
   readHomeDashboardCacheAgeMs,
   readHomePageBoot,
@@ -401,13 +402,32 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const ssrBootstrap = readHomePageBoot();
-    if (ssrBootstrap) {
-      writeHomeDashboardCache(ssrBootstrap);
+    const instant = readHomePageBoot();
+    if (instant && homePayloadHasContent(instant)) {
+      applyHomeDashboardPayload(instant, {
+        setNews,
+        setApps,
+        setEditorialNews,
+        setEditorialApps,
+        setHighlightApps,
+        setHighlightMonetization,
+        setNewsLanes,
+        setAppsLanes,
+        setSourceFacets,
+        setTopCategories,
+        setActiveSourceCount,
+        setActiveSourceKeys,
+        setTrendOverview,
+        setIndustryWind,
+      });
+      setLoading(false);
+      if ((instant.industryWind?.industries?.length ?? 0) > 0) {
+        setWindLoading(false);
+      }
     }
     const sessionCache = readHomeDashboardCache();
     const cacheAgeMs = readHomeDashboardCacheAgeMs();
-    const hadInstant = Boolean(ssrBootstrap ?? sessionCache);
+    const hadInstant = Boolean(instant ?? sessionCache);
     const cacheFresh = cacheAgeMs != null && cacheAgeMs < 90_000;
 
     const stateSetters = {
@@ -427,19 +447,14 @@ export function HomePage() {
       setIndustryWind,
     };
 
-    const commitPayload = (payload: HomeDashboardCachePayload) => {
-      const cachedWind = readHomeDashboardCache()?.industryWind;
-      const windKeep =
-        cachedWind && (cachedWind.industries?.length ?? 0) > 0 ? cachedWind : payload.industryWind;
-      const merged: HomeDashboardCachePayload = {
-        ...payload,
-        ...(windKeep && (windKeep.industries?.length ?? 0) > 0 ? { industryWind: windKeep } : {}),
-      };
+    const commitPayload = (incoming: Partial<HomeDashboardCachePayload>) => {
+      const prev = readHomeDashboardCache();
+      const merged = mergeHomeDashboardPayload(prev, incoming);
       applyHomeDashboardPayload(merged, stateSetters);
-      writeHomeDashboardCache({
-        ...merged,
-        industryWind: windKeep ?? cachedWind ?? merged.industryWind ?? null,
-      });
+      writeHomeDashboardCache(merged);
+      if ((merged.industryWind?.industries?.length ?? 0) > 0) {
+        setWindLoading(false);
+      }
     };
 
     const loadFeedFallback = async (feed: "news" | "apps", limit: number) => {
@@ -455,23 +470,8 @@ export function HomePage() {
     };
 
     const mergeWindIntoCache = (wind: IndustryWindData) => {
-      const prev = readHomeDashboardCache();
-      writeHomeDashboardCache({
-        news: prev?.news ?? [],
-        apps: prev?.apps ?? [],
-        editorialNews: prev?.editorialNews ?? [],
-        editorialApps: prev?.editorialApps ?? [],
-        highlightApps: prev?.highlightApps ?? [],
-        highlightMonetization: prev?.highlightMonetization ?? [],
-        newsLanes: prev?.newsLanes ?? [],
-        appsLanes: prev?.appsLanes ?? [],
-        sourceFacets: prev?.sourceFacets ?? [],
-        topCategories: prev?.topCategories ?? [],
-        industryWind: wind,
-        activeSourceCount: prev?.activeSourceCount ?? 6,
-        activeSourceKeys: prev?.activeSourceKeys ?? [],
-        trendOverview: prev?.trendOverview ?? null,
-      });
+      const merged = mergeHomeDashboardPayload(readHomeDashboardCache(), { industryWind: wind });
+      writeHomeDashboardCache(merged);
     };
 
     const fetchIndustryWind = async () => {
@@ -588,7 +588,7 @@ export function HomePage() {
 
     setLoading(false);
     if (cacheFresh) {
-      const delayMs = ssrBootstrap ? 2500 : 8000;
+      const delayMs = instant ? 2500 : 8000;
       const timer = window.setTimeout(() => {
         if (!cancelled) {
           setRefreshing(true);
@@ -868,7 +868,7 @@ export function HomePage() {
       <section className="ui-card overflow-hidden p-4 sm:p-5">
         <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeDataOverviewTitle")}</p>
         <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
-          {!loading && trendOverview ? (
+          {trendOverview ? (
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("homeLiveStats")}</p>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{t("homeLiveStatsSub")}</p>

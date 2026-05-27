@@ -60,6 +60,10 @@ export function Layout() {
     };
   }, []);
 
+  useEffect(() => {
+    void import("@/pages/HomePage");
+  }, []);
+
   const pageSeo = useMemo(() => {
     if (isResourceDetail) return null;
     const brand = t("brand");
