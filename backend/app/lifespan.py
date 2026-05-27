@@ -384,6 +384,47 @@ def _job_newsletter_daily() -> None:
         db.close()
 
 
+def _job_newsletter_feishu_retry() -> None:
+    """早间主任务飞书限流失败后，每 30 分钟补推一次（仅飞书、沿用已生成摘要）。"""
+    db = SessionLocal()
+    try:
+        from sqlalchemy import select
+
+        from .application.newsletter_daily_digest import run_daily_newsletter_digest_job
+        from .models import NewsletterDailyDigest
+        from .newsletter_settings_service import get_newsletter_settings_merged
+        from .us_content_calendar import us_calendar_today
+
+        s = get_newsletter_settings_merged(db)
+        if not s.get("daily_digest_job_enabled", True):
+            return
+        feishu_on = bool(s.get("feishu_enabled")) and bool((s.get("feishu_webhook_url") or "").strip())
+        if not feishu_on:
+            return
+        digest_key = us_calendar_today().isoformat()
+        row = db.scalar(
+            select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key)
+        )
+        if not row or row.status != "ready" or not (row.body_md or "").strip():
+            return
+        if row.feishu_sent_at is not None:
+            return
+        out = run_daily_newsletter_digest_job(
+            db=db,
+            settings=s,
+            digest_date=digest_key,
+            push_only=True,
+        )
+        if out.get("feishu_sent"):
+            logger.info("newsletter feishu retry succeeded: %s", out)
+        elif not out.get("skipped"):
+            logger.warning("newsletter feishu retry: %s", out)
+    except Exception as e:
+        logger.exception("newsletter feishu retry job failed: %s", e)
+    finally:
+        db.close()
+
+
 def reschedule_newsletter_digest_job() -> None:
     """后台修改推送时刻后无需重启进程即可更新 Cron。"""
     global _scheduler
@@ -440,6 +481,13 @@ def _start_scheduler() -> None:
         digest_trigger,
         id="newsletter_daily_digest",
         misfire_grace_time=7200,
+        coalesce=True,
+        max_instances=1,
+    )
+    _scheduler.add_job(
+        _job_newsletter_feishu_retry,
+        IntervalTrigger(minutes=30),
+        id="newsletter_feishu_retry",
         coalesce=True,
         max_instances=1,
     )

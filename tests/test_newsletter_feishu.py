@@ -24,6 +24,26 @@ def test_send_feishu_text_ok(mock_urlopen: MagicMock) -> None:
     mock_urlopen.assert_called_once()
 
 
+@patch("backend.app.newsletter_feishu.time.sleep")
+@patch("backend.app.newsletter_feishu.urllib.request.urlopen")
+def test_send_feishu_text_retries_on_rate_limit(mock_urlopen: MagicMock, _sleep: MagicMock) -> None:
+    limited = MagicMock()
+    limited.read.return_value = b'{"code":9499,"msg":"frequency limited psm test"}'
+    limited.__enter__ = lambda s: limited
+    limited.__exit__ = MagicMock(return_value=False)
+    ok = MagicMock()
+    ok.read.return_value = b'{"code":0,"msg":"success"}'
+    ok.__enter__ = lambda s: ok
+    ok.__exit__ = MagicMock(return_value=False)
+    mock_urlopen.side_effect = [limited, ok]
+    send_feishu_text(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+        "hello",
+        retry_delays_s=(0,),
+    )
+    assert mock_urlopen.call_count == 2
+
+
 @patch("backend.app.newsletter_feishu.urllib.request.urlopen")
 def test_send_daily_digest_feishu(mock_urlopen: MagicMock) -> None:
     resp = MagicMock()
