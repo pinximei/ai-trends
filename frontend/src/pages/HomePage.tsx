@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Flame, Mail, Radar, Sparkles, TrendingUp, Wrench } from "lucide-react";
 import { publicApi, type ArticleFeedCard } from "@/api/public";
 import { HomeArticleTile } from "@/components/home/HomeArticleTile";
+import { HeroAmbientPanel } from "@/components/ambient/HeroAmbientPanel";
 import { HomeSection } from "@/components/home/HomeSection";
 import { mergeSourceLanes, platformAccent, radarGridClass, type SourceLane } from "@/components/home/homeUtils";
 import { useI18n } from "@/i18n";
@@ -471,28 +472,34 @@ export function HomePage() {
 
   return (
     <div className="w-full space-y-5 lg:space-y-6">
-      <section className="ui-card overflow-hidden p-5 sm:p-6" data-testid="home-hero">
-        <div className="min-w-0 text-center sm:text-left">
-          <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
-            {t("homeMainHeroTitle")}
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:mx-0 sm:text-[15px] lg:text-base">
-            {t("homeMainHeroDesc")}
-          </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
-            <Link
-              to="/apps"
-              state={{ replicationFilter: "complete" }}
-              className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
-            >
-              {t("homeMainHeroCta2")}
-            </Link>
-            <Link
-              to="/news"
-              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              {t("homeMainHeroCta1")}
-            </Link>
+      <section className="ui-card relative overflow-hidden p-5 sm:p-6" data-testid="home-hero">
+        <HeroAmbientPanel className="pointer-events-none absolute right-0 top-1/2 w-[58%] max-w-[14rem] -translate-y-1/2 opacity-[0.32] sm:hidden" />
+        <div className="relative z-10 grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6 lg:gap-8">
+          <div className="min-w-0 text-center sm:text-left">
+            <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
+              {t("homeMainHeroTitle")}
+            </h1>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:mx-0 sm:text-[15px] lg:text-base">
+              {t("homeMainHeroDesc")}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+              <Link
+                to="/apps"
+                state={{ replicationFilter: "complete" }}
+                className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
+              >
+                {t("homeMainHeroCta2")}
+              </Link>
+              <Link
+                to="/news"
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                {t("homeMainHeroCta1")}
+              </Link>
+            </div>
+          </div>
+          <div className="relative hidden min-h-[9.5rem] sm:block" aria-hidden>
+            <HeroAmbientPanel className="mx-auto" />
           </div>
         </div>
       </section>
