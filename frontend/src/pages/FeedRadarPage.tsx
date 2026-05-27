@@ -16,6 +16,7 @@ const FEED_CARD_GRID_CLASS = "mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-
 const DAYS_PER_PAGE = 3;
 
 type TimeKey = "d2" | "all" | "d7" | "d30" | "d90";
+type ReplicationTierFilter = "complete" | "sa" | "s" | "all";
 
 const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
   { key: "d2", labelKey: "resourcesDays2" },
@@ -24,6 +25,14 @@ const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
   { key: "d90", labelKey: "resourcesDays90" },
   { key: "all", labelKey: "resourcesTimeAll" },
 ];
+
+function defaultTimeKeyForMode(mode: "news" | "apps"): TimeKey {
+  return mode === "apps" ? "d7" : "d2";
+}
+
+function defaultReplicationForMode(mode: "news" | "apps"): ReplicationTierFilter {
+  return mode === "apps" ? "all" : "all";
+}
 
 function timeKeyToArticleParams(timeKey: TimeKey): {
   published_within_days?: number;
@@ -94,7 +103,6 @@ function isHeatFeedResponse(d: unknown): d is ArticlesFeedHeatResponse {
 }
 
 type ListDisplayMode = "date" | "heat";
-type ReplicationTierFilter = "complete" | "sa" | "s" | "all";
 
 const CLONE_APP_CATEGORIES = [
   "开源客户端(好抄)",
@@ -120,7 +128,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const [timeKey, setTimeKey] = useState<TimeKey>("d2");
+  const [timeKey, setTimeKey] = useState<TimeKey>(() => defaultTimeKeyForMode(mode));
   const [feedPage, setFeedPage] = useState(1);
   const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>("date");
   const [heatHasMore, setHeatHasMore] = useState(false);
@@ -149,8 +157,8 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
   const [sourceOptions, setSourceOptions] = useState<Array<{ key: string; label: string; count: number }>>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQ, setSearchQ] = useState("");
-  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(
-    mode === "apps" ? "complete" : "all",
+  const [replicationFilter, setReplicationFilter] = useState<ReplicationTierFilter>(() =>
+    defaultReplicationForMode(mode),
   );
   const listApiParams = useMemo(() => {
     const base = replicationTierApiParams(mode, replicationFilter);
@@ -553,10 +561,10 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [
+                { key: "all" as const, label: t("resourcesReplicationAll") },
                 { key: "complete" as const, label: t("resourcesReplicationComplete") },
                 { key: "sa" as const, label: t("resourcesReplicationSa") },
                 { key: "s" as const, label: t("resourcesReplicationS") },
-                { key: "all" as const, label: t("resourcesReplicationAll") },
               ] as const
             ).map((f) => (
               <button
