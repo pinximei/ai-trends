@@ -155,6 +155,8 @@ export const publicApi = {
     return publicGet<{
       news: ArticleFeedCard[];
       apps: ArticleFeedCard[];
+      editorial_news?: ArticleFeedCard[];
+      editorial_apps?: ArticleFeedCard[];
       highlight_replicable_apps: ArticleFeedCard[];
       highlight_monetization_apps: ArticleFeedCard[];
       featured_news_id: number | null;

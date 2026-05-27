@@ -8,13 +8,19 @@ from sqlalchemy.orm import Session
 
 from ..domain import articles as art
 from ..domain.articles import FEED_APPS_KEYS
-from ..product_models import Article, Industry
+from ..product_models import Article, Industry, ProductSetting
 
 # 首页「亮点应用」：仅展示完整复刻评估且 worth≥7 的 S/A 档
 HOME_REPLICABLE_TIERS: tuple[str, ...] = ("S", "A")
 HOME_REPLICABLE_MIN_WORTH = 7
 HOME_REPLICABLE_HIGHLIGHT_DEFAULT = 4
 HOME_MONETIZATION_HIGHLIGHT_DEFAULT = 4
+# 首页热度池：缩小指纹扫描上限（原 96×2 过重）
+HOME_HEAT_POOL_CAP = 36
+HOME_HEAT_PAGE_SIZE = 24
+HOME_EDITORIAL_PICK_DAYS = 14
+HOME_DASHBOARD_CACHE_KEY = "home_dashboard_public"
+HOME_DASHBOARD_CACHE_TTL_SECONDS = 120
 
 
 def _industry_article_ids(db: Session, *, industry_slug: str) -> list[int]:
@@ -214,6 +220,33 @@ def _select_home_picks(items: list[dict], limit: int) -> list[dict]:
     return picked[:lim]
 
 
+def _parse_feed_card_iso_dt(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        s = str(raw).strip().replace("Z", "")
+        if "+" in s:
+            s = s.split("+", 1)[0]
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _filter_feed_items_within_days(items: list[dict], *, within_days: int) -> list[dict]:
+    cutoff = datetime.utcnow() - timedelta(days=max(1, int(within_days)))
+    out: list[dict] = []
+    for it in items:
+        dt = _parse_feed_card_iso_dt(it.get("published_at")) or _parse_feed_card_iso_dt(it.get("display_at"))
+        if dt is None or dt >= cutoff:
+            out.append(it)
+    return out
+
+
+def _editorial_from_heat_pool(items: list[dict], *, limit: int, within_days: int) -> list[dict]:
+    lim = max(1, min(int(limit), 20))
+    return _select_home_picks(_filter_feed_items_within_days(items, within_days=within_days), lim)
+
+
 def get_home_editorial_picks(
     db: Session,
     *,
@@ -242,8 +275,8 @@ def get_home_editorial_picks(
         published_within_days=days,
         published_on_latest_day=False,
         heat_offset=0,
-        heat_page_size=nl * 2,
-        heat_max_ranked=min(100, nl * 4),
+        heat_page_size=min(HOME_HEAT_PAGE_SIZE, nl * 2),
+        heat_max_ranked=min(HOME_HEAT_POOL_CAP, nl * 4),
     )
     apps_raw = list_articles_feed_by_heat_top(
         db,
@@ -254,8 +287,8 @@ def get_home_editorial_picks(
         published_within_days=days,
         published_on_latest_day=False,
         heat_offset=0,
-        heat_page_size=al * 2,
-        heat_max_ranked=min(100, al * 4),
+        heat_page_size=min(HOME_HEAT_PAGE_SIZE, al * 2),
+        heat_max_ranked=min(HOME_HEAT_POOL_CAP, al * 4),
     )
     news_items = _select_home_picks(news_raw.get("items") or [], nl)
     apps_items = _select_home_picks(apps_raw.get("items") or [], al)
@@ -607,21 +640,71 @@ def list_highlight_monetization_apps(
     return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
 
 
-def get_home_dashboard(
+def _home_dashboard_cache_params(
+    *,
+    industry_slug: str,
+    news_limit: int,
+    apps_limit: int,
+    replicable_apps_limit: int,
+    monetization_apps_limit: int,
+    published_within_days: int,
+) -> dict:
+    return {
+        "v": 2,
+        "industry_slug": industry_slug.strip().lower(),
+        "news_limit": int(news_limit),
+        "apps_limit": int(apps_limit),
+        "replicable_apps_limit": int(replicable_apps_limit),
+        "monetization_apps_limit": int(monetization_apps_limit),
+        "published_within_days": int(published_within_days),
+    }
+
+
+def _load_home_dashboard_cache(db: Session, params: dict) -> dict | None:
+    row = db.get(ProductSetting, HOME_DASHBOARD_CACHE_KEY)
+    if not row or not isinstance(row.value_json, dict):
+        return None
+    blob = row.value_json
+    if blob.get("params") != params:
+        return None
+    gen = blob.get("generated_at")
+    if not gen:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(gen).replace("Z", ""))
+    except ValueError:
+        return None
+    if (datetime.utcnow() - ts).total_seconds() > HOME_DASHBOARD_CACHE_TTL_SECONDS:
+        return None
+    data = blob.get("data")
+    return data if isinstance(data, dict) else None
+
+
+def _save_home_dashboard_cache(db: Session, params: dict, data: dict) -> None:
+    row = db.get(ProductSetting, HOME_DASHBOARD_CACHE_KEY)
+    if not row:
+        row = ProductSetting(key=HOME_DASHBOARD_CACHE_KEY, value_json={})
+        db.add(row)
+    row.value_json = {
+        "params": params,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "data": data,
+    }
+    db.commit()
+
+
+def _build_home_dashboard(
     db: Session,
     *,
-    industry_slug: str = "ai",
-    news_limit: int = 8,
-    apps_limit: int = 10,
-    replicable_apps_limit: int = HOME_REPLICABLE_HIGHLIGHT_DEFAULT,
-    monetization_apps_limit: int = HOME_MONETIZATION_HIGHLIGHT_DEFAULT,
-    published_within_days: int = 30,
+    industry_slug: str,
+    news_limit: int,
+    apps_limit: int,
+    replicable_apps_limit: int,
+    monetization_apps_limit: int,
+    published_within_days: int,
+    editorial_news_limit: int = 3,
+    editorial_apps_limit: int = 3,
 ) -> dict:
-    """
-    首页一站式数据：亮点应用、资讯/应用精选、六路雷达、趋势与统计。
-
-    雷达与精选区互斥 article id；每路按源单独查询，避免 NewsAPI/TheNewsAPI 等仅 1 篇且在精选时雷达误显空。
-    """
     from .article_public import (
         list_article_category_facets,
         list_article_source_facets,
@@ -631,38 +714,35 @@ def get_home_dashboard(
     days = max(1, min(int(published_within_days), 120))
     nl = max(1, min(int(news_limit), 20))
     al = max(1, min(int(apps_limit), 20))
+    en = max(1, min(int(editorial_news_limit), 6))
+    ea = max(1, min(int(editorial_apps_limit), 6))
 
     trend = get_home_trend_overview(
         db, industry_slug=industry_slug, sparkline_days=14, period_days=days
     )
 
-    news_raw = list_articles_feed_by_heat_top(
-        db,
-        feed="news",
+    heat_kw = dict(
         industry_slug=industry_slug,
         segment_id=None,
         segment_ids=None,
         published_within_days=days,
         published_on_latest_day=False,
         heat_offset=0,
-        heat_page_size=48,
-        heat_max_ranked=96,
+        heat_page_size=HOME_HEAT_PAGE_SIZE,
+        heat_max_ranked=HOME_HEAT_POOL_CAP,
     )
-    apps_raw = list_articles_feed_by_heat_top(
-        db,
-        feed="apps",
-        industry_slug=industry_slug,
-        segment_id=None,
-        segment_ids=None,
-        published_within_days=days,
-        published_on_latest_day=False,
-        heat_offset=0,
-        heat_page_size=48,
-        heat_max_ranked=96,
-    )
+    news_raw = list_articles_feed_by_heat_top(db, feed="news", **heat_kw)
+    apps_raw = list_articles_feed_by_heat_top(db, feed="apps", **heat_kw)
 
     news_raw_items = news_raw.get("items") or []
     apps_raw_items = apps_raw.get("items") or []
+
+    editorial_news = _editorial_from_heat_pool(
+        news_raw_items, limit=en, within_days=HOME_EDITORIAL_PICK_DAYS
+    )
+    editorial_apps = _editorial_from_heat_pool(
+        apps_raw_items, limit=ea, within_days=HOME_EDITORIAL_PICK_DAYS
+    )
 
     highlight_replicable_apps = list_highlight_replicable_apps(
         db,
@@ -700,14 +780,18 @@ def get_home_dashboard(
 
     industry_wind = get_industry_wind_overview(db, industry_slug=industry_slug, recent_days=7)
 
+    scoring = "heat_score: platform engagement + connector rank + recency; weak snippet-length signal"
     return {
         "news": news_items,
         "apps": apps_items,
+        "editorial_news": editorial_news,
+        "editorial_apps": editorial_apps,
         "highlight_replicable_apps": highlight_replicable_apps,
         "highlight_monetization_apps": highlight_monetization_apps,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
-        "scoring_note": "heat_score: platform engagement + connector rank + recency; weak snippet-length signal",
+        "editorial_pick_window_days": HOME_EDITORIAL_PICK_DAYS,
+        "scoring_note": scoring,
         "trend": trend,
         "news_source_lanes": _home_radar_lanes_for_feed(
             db,
@@ -729,6 +813,55 @@ def get_home_dashboard(
         "active_source_count": len(HOME_MAIN_SOURCE_KEYS),
         "active_source_keys": list(HOME_MAIN_SOURCE_KEYS),
     }
+
+
+def get_home_dashboard(
+    db: Session,
+    *,
+    industry_slug: str = "ai",
+    news_limit: int = 8,
+    apps_limit: int = 10,
+    replicable_apps_limit: int = HOME_REPLICABLE_HIGHLIGHT_DEFAULT,
+    monetization_apps_limit: int = HOME_MONETIZATION_HIGHLIGHT_DEFAULT,
+    published_within_days: int = 30,
+    editorial_news_limit: int = 3,
+    editorial_apps_limit: int = 3,
+    use_cache: bool = True,
+) -> dict:
+    """
+    首页一站式数据：亮点应用、资讯/应用精选、今日精选、六路雷达、趋势与统计。
+
+    雷达与精选区互斥 article id；每路按源单独查询，避免 NewsAPI/TheNewsAPI 等仅 1 篇且在精选时雷达误显空。
+    """
+    params = _home_dashboard_cache_params(
+        industry_slug=industry_slug,
+        news_limit=news_limit,
+        apps_limit=apps_limit,
+        replicable_apps_limit=replicable_apps_limit,
+        monetization_apps_limit=monetization_apps_limit,
+        published_within_days=published_within_days,
+    )
+    if use_cache:
+        hit = _load_home_dashboard_cache(db, params)
+        if hit:
+            return hit
+    payload = _build_home_dashboard(
+        db,
+        industry_slug=industry_slug,
+        news_limit=news_limit,
+        apps_limit=apps_limit,
+        replicable_apps_limit=replicable_apps_limit,
+        monetization_apps_limit=monetization_apps_limit,
+        published_within_days=published_within_days,
+        editorial_news_limit=editorial_news_limit,
+        editorial_apps_limit=editorial_apps_limit,
+    )
+    if use_cache:
+        try:
+            _save_home_dashboard_cache(db, params, payload)
+        except Exception:
+            db.rollback()
+    return payload
 
 
 def _day_range_utc(n_days: int, *, end: datetime | None = None) -> list[str]:

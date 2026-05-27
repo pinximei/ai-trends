@@ -11,6 +11,7 @@ import { useI18n } from "@/i18n";
 import { NEWSLETTER_SUBSCRIBE_ENABLED } from "@/lib/newsletterConfig";
 import {
   readHomeDashboardCache,
+  readHomeDashboardCacheAgeMs,
   writeHomeDashboardCache,
   type HomeDashboardCachePayload,
   type HomeTrendOverview,
@@ -386,9 +387,14 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const hadCache = !!readHomeDashboardCache();
-    if (!hadCache) setLoading(true);
-    else setRefreshing(true);
+    const ssrBootstrap = readSsrHomeBootstrap();
+    if (ssrBootstrap) {
+      writeHomeDashboardCache(ssrBootstrap);
+    }
+    const sessionCache = readHomeDashboardCache();
+    const cacheAgeMs = readHomeDashboardCacheAgeMs();
+    const hadInstant = Boolean(ssrBootstrap ?? sessionCache);
+    const cacheFresh = cacheAgeMs != null && cacheAgeMs < 90_000;
 
     const stateSetters = {
       setNews,
@@ -424,61 +430,57 @@ export function HomePage() {
       return "items" in res && Array.isArray(res.items) ? res.items : [];
     };
 
-    Promise.all([
-      publicApi.homeDashboard({
-        industry_slug: INDUSTRY,
-        news_limit: HOME_NEWS_WALL_LIMIT,
-        apps_limit: 10,
-        replicable_apps_limit: 4,
-        monetization_apps_limit: 4,
-        published_within_days: 30,
-      }),
-      publicApi.editorialPicks({
-        industry_slug: INDUSTRY,
-        news_limit: 3,
-        apps_limit: 3,
-        published_within_days: 14,
-      }),
-    ])
-      .then(async ([data, picks]) => {
-        if (cancelled) return;
-        let nextNews = data.news ?? [];
-        let nextApps = data.apps ?? [];
-        if (nextNews.length === 0) {
-          try {
-            nextNews = await loadFeedFallback("news", HOME_NEWS_WALL_LIMIT);
-          } catch {
-            /* keep empty */
+    const fetchDashboard = () =>
+      publicApi
+        .homeDashboard({
+          industry_slug: INDUSTRY,
+          news_limit: HOME_NEWS_WALL_LIMIT,
+          apps_limit: 10,
+          replicable_apps_limit: 4,
+          monetization_apps_limit: 4,
+          published_within_days: 30,
+        })
+        .then(async (data) => {
+          if (cancelled) return;
+          let nextNews = data.news ?? [];
+          let nextApps = data.apps ?? [];
+          if (nextNews.length === 0) {
+            try {
+              nextNews = await loadFeedFallback("news", HOME_NEWS_WALL_LIMIT);
+            } catch {
+              /* keep empty */
+            }
           }
-        }
-        if (nextApps.length === 0) {
-          try {
-            nextApps = await loadFeedFallback("apps", 10);
-          } catch {
-            /* keep empty */
+          if (nextApps.length === 0) {
+            try {
+              nextApps = await loadFeedFallback("apps", 10);
+            } catch {
+              /* keep empty */
+            }
           }
-        }
-        if (cancelled) return;
-        commitPayload({
-          news: nextNews,
-          apps: nextApps,
-          editorialNews: picks.news ?? [],
-          editorialApps: picks.apps ?? [],
-          highlightApps: data.highlight_replicable_apps ?? [],
-          highlightMonetization: data.highlight_monetization_apps ?? [],
-          newsLanes: data.news_source_lanes ?? [],
-          appsLanes: data.apps_source_lanes ?? [],
-          sourceFacets: data.source_facets ?? [],
-          topCategories: data.top_categories ?? [],
-          industryWind: data.industry_wind ?? null,
-          activeSourceCount: data.active_source_count ?? data.active_source_keys?.length ?? 6,
-          activeSourceKeys: data.active_source_keys ?? [],
-          trendOverview: data.trend ?? null,
+          if (cancelled) return;
+          commitPayload({
+            news: nextNews,
+            apps: nextApps,
+            editorialNews: data.editorial_news ?? [],
+            editorialApps: data.editorial_apps ?? [],
+            highlightApps: data.highlight_replicable_apps ?? [],
+            highlightMonetization: data.highlight_monetization_apps ?? [],
+            newsLanes: data.news_source_lanes ?? [],
+            appsLanes: data.apps_source_lanes ?? [],
+            sourceFacets: data.source_facets ?? [],
+            topCategories: data.top_categories ?? [],
+            industryWind: data.industry_wind ?? null,
+            activeSourceCount: data.active_source_count ?? data.active_source_keys?.length ?? 6,
+            activeSourceKeys: data.active_source_keys ?? [],
+            trendOverview: data.trend ?? null,
+          });
         });
-      })
-      .catch(async () => {
+
+    const runFetch = () => {
+      fetchDashboard().catch(async () => {
         if (cancelled) return;
-        if (hadCache) return;
+        if (hadInstant) return;
         try {
           const [nextNews, nextApps] = await Promise.all([
             loadFeedFallback("news", HOME_NEWS_WALL_LIMIT),
@@ -508,13 +510,39 @@ export function HomePage() {
             setHighlightApps([]);
           }
         }
-      })
-      .finally(() => {
+      }).finally(() => {
         if (!cancelled) {
           setLoading(false);
           setRefreshing(false);
         }
       });
+    };
+
+    if (!hadInstant) {
+      setLoading(true);
+      runFetch();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(false);
+    if (cacheFresh) {
+      const delayMs = ssrBootstrap ? 2500 : 8000;
+      const timer = window.setTimeout(() => {
+        if (!cancelled) {
+          setRefreshing(true);
+          runFetch();
+        }
+      }, delayMs);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }
+
+    setRefreshing(true);
+    runFetch();
     return () => {
       cancelled = true;
     };

@@ -2,9 +2,9 @@ import type { ArticleFeedCard } from "@/api/public";
 import type { IndustryWindData } from "@/components/home/IndustryWindPanel";
 import type { SourceLane } from "@/components/home/homeUtils";
 
-const CACHE_KEY = "aitrends_home_dashboard_v7";
+const CACHE_KEY = "aitrends_home_dashboard_v8";
 /** 同一会话内复用首页数据，减少往返与「加载中」闪烁 */
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 10 * 60 * 1000;
 
 export type HomeTrendOverview = {
   sparkline: Array<{ day: string; count: number }>;
@@ -36,6 +36,18 @@ export type HomeDashboardCachePayload = {
 };
 
 type Stored = HomeDashboardCachePayload & { fetchedAt: number };
+
+export function readHomeDashboardCacheAgeMs(): number | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Stored;
+    if (!parsed || typeof parsed.fetchedAt !== "number") return null;
+    return Date.now() - parsed.fetchedAt;
+  } catch {
+    return null;
+  }
+}
 
 export function readHomeDashboardCache(): HomeDashboardCachePayload | null {
   try {

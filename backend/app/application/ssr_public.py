@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .home_public import get_home_dashboard, get_home_editorial_picks
+from .home_public import get_home_dashboard
 
 _SSR_BOOTSTRAP_ID = "aitrends-ssr-home"
 _INDEX_CANDIDATES = (
@@ -28,18 +28,11 @@ def _repo_index_html() -> Path | None:
 def build_home_ssr_bootstrap(db: Session, *, industry_slug: str = "ai") -> dict[str, Any]:
     """与前端 ``HomeDashboardCachePayload`` 字段对齐。"""
     dash = get_home_dashboard(db, industry_slug=industry_slug, published_within_days=30)
-    picks = get_home_editorial_picks(
-        db,
-        industry_slug=industry_slug,
-        news_limit=3,
-        apps_limit=3,
-        published_within_days=14,
-    )
     return {
         "news": dash.get("news") or [],
         "apps": dash.get("apps") or [],
-        "editorialNews": picks.get("news") or [],
-        "editorialApps": picks.get("apps") or [],
+        "editorialNews": dash.get("editorial_news") or [],
+        "editorialApps": dash.get("editorial_apps") or [],
         "highlightApps": dash.get("highlight_replicable_apps") or [],
         "highlightMonetization": dash.get("highlight_monetization_apps") or [],
         "newsLanes": dash.get("news_source_lanes") or [],
