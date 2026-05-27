@@ -16,6 +16,7 @@ const HOME_NEWSLETTER_VISIBLE = false;
 
 /** 倾斜星环平面内的圆轨道半径（rem）；越大越贴近外圈光晕、离中心 AI 越远 */
 const HERO_ORBIT_REM = 9.52;
+const HERO_ORBIT_REM_COMPACT = 5.25;
 const HERO_ORBIT_SEC = 52;
 /** 主光晕慢旋周期（秒），与 index.css 中 .hero-halo-spin 默认值一致 */
 const HERO_HALO_ROT_SEC = 88;
@@ -42,11 +43,13 @@ function OrbitSatellite({
   angleDeg,
   orbitRem,
   reduce,
+  compact,
   children,
 }: {
   angleDeg: number;
   orbitRem: number;
   reduce: boolean;
+  compact?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -57,7 +60,11 @@ function OrbitSatellite({
       }}
     >
       <div className={reduce ? "flex -translate-x-1/2 -translate-y-1/2" : "hero-sat-counter flex"}>
-        <span className="pointer-events-auto relative flex h-11 w-11 items-center justify-center text-indigo-600 drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] sm:h-12 sm:w-12">
+        <span
+          className={`pointer-events-auto relative flex items-center justify-center text-indigo-600 drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] ${
+            compact ? "h-8 w-8" : "h-11 w-11 sm:h-12 sm:w-12"
+          }`}
+        >
           {children}
         </span>
       </div>
@@ -69,12 +76,15 @@ function OrbitSatellite({
  * 天体星环：圆环放在 rotateX 倾斜的 3D 平面上，透视下呈椭圆；
  * 整层 rotateZ 公转，肉眼即「绕中心转」。
  */
-function HeroGraphic() {
+function HeroGraphic({ compact = false }: { compact?: boolean }) {
   const { t } = useI18n();
   const reduce = usePrefersReducedMotion();
-  const orbitRem = HERO_ORBIT_REM;
+  const orbitRem = compact ? HERO_ORBIT_REM_COMPACT : HERO_ORBIT_REM;
   const tilt = reduce ? 0 : HERO_RING_TILT_DEG;
   const orbitStepDeg = 360 / TOP_NAV_ITEMS.length;
+  const ringMax = compact ? "max-w-[168px]" : "max-w-[min(100%,310px)] sm:max-w-[334px]";
+  const shellMax = compact ? "max-w-[188px]" : "max-w-[min(100%,392px)] sm:max-w-[416px]";
+  const squareMax = compact ? "max-w-[176px]" : "max-w-[352px] sm:max-w-[380px]";
 
   const heroMotionStyle = {
     ["--hero-orbit-sec" as string]: `${HERO_ORBIT_SEC}s`,
@@ -84,12 +94,12 @@ function HeroGraphic() {
   return (
     <div
       data-testid="hero-graphic"
-      className="relative mx-auto w-full max-w-[min(100%,392px)] shrink-0 overflow-visible px-0 py-0 sm:max-w-[416px] sm:px-0.5"
+      className={`relative mx-auto w-full shrink-0 overflow-visible px-0 py-0 ${shellMax}`}
       style={heroMotionStyle}
     >
       <div
         data-orbit-square
-        className="relative isolate mx-auto aspect-square w-full max-w-[352px] overflow-visible [perspective:1000px] [perspective-origin:50%_50%] sm:max-w-[380px]"
+        className={`relative isolate mx-auto aspect-square w-full overflow-visible [perspective:1000px] [perspective-origin:50%_50%] ${squareMax}`}
       >
         {/* 背面大环境光（不倾斜） */}
         <div
@@ -106,7 +116,7 @@ function HeroGraphic() {
             {/* 慢旋柔光（与环同平面） */}
             <div
               data-testid="hero-halo-primary"
-              className={`pointer-events-none absolute aspect-square w-[90%] max-w-[min(100%,310px)] rounded-full sm:max-w-[334px] ${reduce ? "" : "hero-halo-spin"}`}
+              className={`pointer-events-none absolute aspect-square w-[90%] rounded-full ${ringMax} ${reduce ? "" : "hero-halo-spin"}`}
               aria-hidden
               style={{
                 background:
@@ -120,17 +130,26 @@ function HeroGraphic() {
             <div
               className={`pointer-events-none absolute inset-0 flex items-center justify-center [transform-style:preserve-3d] ${reduce ? "" : "hero-orbit-spin"}`}
             >
-              <div className="relative aspect-square w-[90%] max-w-[min(100%,310px)] sm:max-w-[334px]">
+              <div className={`relative aspect-square w-[90%] ${ringMax}`}>
                 {TOP_NAV_ITEMS.map((item, i) => {
                   const Icon = item.icon;
                   return (
-                    <OrbitSatellite key={item.to} angleDeg={orbitStepDeg * i} orbitRem={orbitRem} reduce={reduce}>
+                    <OrbitSatellite
+                      key={item.to}
+                      angleDeg={orbitStepDeg * i}
+                      orbitRem={orbitRem}
+                      reduce={reduce}
+                      compact={compact}
+                    >
                       <Link
                         to={item.to}
                         className="flex h-full w-full items-center justify-center rounded-full text-indigo-600 outline-none ring-violet-400/40 transition hover:bg-white/35 hover:text-violet-700 focus-visible:ring-2"
                         aria-label={t(item.key)}
                       >
-                        <Icon className="h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7" strokeWidth={2.2} />
+                        <Icon
+                          className={compact ? "h-4 w-4" : "h-[1.2rem] w-[1.2rem] sm:h-7 sm:w-7"}
+                          strokeWidth={2.2}
+                        />
                       </Link>
                     </OrbitSatellite>
                   );
@@ -144,13 +163,17 @@ function HeroGraphic() {
             className="absolute left-1/2 top-1/2 z-20 [transform-style:preserve-3d]"
             style={
               tilt
-                ? { transform: `translate(-50%, -50%) translateZ(4.35rem) rotateX(-${tilt}deg)` }
+                ? {
+                    transform: `translate(-50%, -50%) translateZ(${compact ? "2.5rem" : "4.35rem"}) rotateX(-${tilt}deg)`,
+                  }
                 : { transform: "translate(-50%, -50%)" }
             }
           >
             <div
-              className="relative h-[5.75rem] w-[5.75rem] overflow-hidden rounded-2xl ring-1 ring-white/30 sm:h-[6.5rem] sm:w-[6.5rem]"
-              style={{ boxShadow: HERO_AI_CARD_SHADOW }}
+              className={`relative overflow-hidden rounded-2xl ring-1 ring-white/30 ${
+                compact ? "h-[3.75rem] w-[3.75rem]" : "h-[5.75rem] w-[5.75rem] sm:h-[6.5rem] sm:w-[6.5rem]"
+              }`}
+              style={{ boxShadow: compact ? "0 12px 32px -8px rgba(49,46,129,0.45), 0 0 24px rgba(34,211,238,0.22)" : HERO_AI_CARD_SHADOW }}
             >
               <div
                 className={`absolute inset-0 bg-[length:200%_200%] bg-[linear-gradient(125deg,#5b21b6_0%,#6366f1_22%,#0ea5e9_48%,#a855f7_72%,#5b21b6_100%)] ${reduce ? "" : "hero-ai-gradient-shift"}`}
@@ -162,10 +185,14 @@ function HeroGraphic() {
               <div className="absolute inset-x-0 top-0 h-[46%] rounded-t-2xl bg-gradient-to-b from-white/36 to-transparent" />
               <div className="relative flex h-full w-full items-center justify-center">
                 <Brain
-                  className="absolute -right-0.5 -top-0.5 z-10 h-7 w-7 text-cyan-100 drop-shadow sm:h-8 sm:w-8"
+                  className={`absolute -right-0.5 -top-0.5 z-10 text-cyan-100 drop-shadow ${compact ? "h-5 w-5" : "h-7 w-7 sm:h-8 sm:w-8"}`}
                   strokeWidth={1.75}
                 />
-                <span className="relative z-10 text-[1.7rem] font-black tracking-tight text-white drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] sm:text-4xl">
+                <span
+                  className={`relative z-10 font-black tracking-tight text-white drop-shadow-[0_2px_12px_rgba(15,23,42,0.55)] ${
+                    compact ? "text-2xl" : "text-[1.7rem] sm:text-4xl"
+                  }`}
+                >
                   AI
                 </span>
               </div>
@@ -600,8 +627,7 @@ export function HomePage() {
     };
   }, []);
 
-  const featured = news[0];
-  const newsWall = news.slice(1, 5);
+  const newsWall = news.slice(0, 4);
   const appLeaderboard = apps.slice(0, 6);
   const totalInWindow = (trendOverview?.news_count ?? 0) + (trendOverview?.apps_count ?? 0);
 
@@ -632,27 +658,32 @@ export function HomePage() {
   return (
     <div className="w-full space-y-5 lg:space-y-6">
       <section className="ui-card overflow-hidden p-5 sm:p-6">
-        <div className="relative z-10 min-w-0 text-center lg:text-left">
-          <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
-            {t("homeMainHeroTitle")}
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px] lg:mx-0 lg:text-base">
-            {t("homeMainHeroDesc")}
-          </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-            <Link
-              to="/apps"
-              state={{ replicationFilter: "complete" }}
-              className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
-            >
-              {t("homeMainHeroCta2")}
-            </Link>
-            <Link
-              to="/news"
-              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              {t("homeMainHeroCta1")}
-            </Link>
+        <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 lg:gap-8">
+          <div className="relative z-10 min-w-0 text-center sm:text-left">
+            <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
+              {t("homeMainHeroTitle")}
+            </h1>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:mx-0 sm:text-[15px] lg:text-base">
+              {t("homeMainHeroDesc")}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+              <Link
+                to="/apps"
+                state={{ replicationFilter: "complete" }}
+                className="inline-flex items-center rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700"
+              >
+                {t("homeMainHeroCta2")}
+              </Link>
+              <Link
+                to="/news"
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                {t("homeMainHeroCta1")}
+              </Link>
+            </div>
+          </div>
+          <div className="hidden shrink-0 items-center justify-center sm:flex sm:w-[11.5rem] lg:w-[13rem]">
+            <HeroGraphic compact />
           </div>
         </div>
       </section>
@@ -683,14 +714,6 @@ export function HomePage() {
           </div>
         )}
       </HomeSection>
-
-      <section className="hidden lg:block">
-        <div className="flex justify-center py-2 opacity-80">
-          <div className="w-full max-w-[280px]">
-            <HeroGraphic />
-          </div>
-        </div>
-      </section>
 
       <section className="ui-card overflow-hidden p-4 sm:p-5">
         <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
@@ -941,22 +964,7 @@ export function HomePage() {
 
       <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
         <div className="space-y-6 lg:col-span-8 lg:space-y-8">
-          <HomeSection
-            title={t("homeTodayFocus")}
-            subtitle={t("homeNewsWallSub")}
-            icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}
-            action={featured ? { label: t("homeFeaturedCta"), to: `/resources/${featured.id}` } : undefined}
-          >
-            {loading ? (
-              <p className="text-sm text-slate-500">{t("homeLoading")}</p>
-            ) : !featured ? (
-              <p className="text-sm text-slate-500">{t("homeEmpty")}</p>
-            ) : (
-              <HomeArticleTile item={featured} variant="spotlight" />
-            )}
-          </HomeSection>
-
-          <HomeSection title={t("homeNewsWall")}>
+          <HomeSection title={t("homeNewsWall")} subtitle={t("homeNewsWallSub")}>
             {loading ? (
               <p className="text-sm text-slate-500">{t("homeLoading")}</p>
             ) : newsWall.length === 0 ? (
