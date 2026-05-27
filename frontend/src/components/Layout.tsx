@@ -4,7 +4,6 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useI18n } from "@/i18n";
 import { TOP_NAV_ITEMS } from "@/navConfig";
 import { SITE_NAME, usePageSeo } from "@/lib/seo";
-import { SiteAmbientBackdrop } from "@/components/ambient/SiteAmbientBackdrop";
 import { SITE_GITHUB_REPO_URL } from "@/siteLinks";
 
 function apiBasePrefix(): string {
@@ -94,15 +93,13 @@ export function Layout() {
   const shell = contentShellClass(useWideShell);
 
   return (
-    <>
-      <SiteAmbientBackdrop />
-      <div
-        className={
-          isSplitScrollPage
-            ? "flex h-svh max-h-svh min-h-0 flex-col overflow-hidden"
-            : "flex min-h-screen flex-col"
-        }
-      >
+    <div
+      className={
+        isSplitScrollPage
+          ? "flex h-svh max-h-svh min-h-0 flex-col overflow-hidden"
+          : "flex min-h-screen flex-col"
+      }
+    >
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/92 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-xl">
         <div className={`relative flex flex-col gap-3 py-3.5 sm:gap-3.5 md:flex-row md:items-center md:justify-between ${shell}`}>
           <Link to="/" className="flex shrink-0 items-center gap-3 transition-opacity hover:opacity-95">
@@ -204,7 +201,7 @@ export function Layout() {
         </main>
       </div>
 
-      <footer className="relative shrink-0 border-t border-slate-200/70 bg-white/80 backdrop-blur-md">
+      <footer className="shrink-0 border-t border-slate-200/70 bg-white/95">
         <div
           className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 py-2 text-[10px] leading-snug text-slate-500 sm:py-2.5 ${shell}`}
         >
@@ -250,7 +247,6 @@ export function Layout() {
           </nav>
         </div>
       </footer>
-      </div>
-    </>
+    </div>
   );
 }
