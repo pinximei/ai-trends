@@ -26,6 +26,11 @@ export type NewsletterSettingsResponse = {
   has_feishu_webhook: boolean;
   bcc_batch: number;
   footer_note: string;
+  /** 库内未填时实际用于退订链接等的站根（只读提示） */
+  effective_public_site_base_url?: string;
+  /** 合并 env/库后 SMTP 是否足以发信 */
+  effective_smtp_ready?: boolean;
+  effective_feishu_ready?: boolean;
 };
 
 /** FastAPI：detail 可能是字符串或校验错误数组，直接塞进 Error 会显示 [object Object] */

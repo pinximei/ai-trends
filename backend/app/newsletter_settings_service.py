@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from .product_models import ProductSetting
+from .public_site import DEFAULT_PUBLIC_SITE_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +74,36 @@ def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _apply_newsletter_env_and_defaults(m: dict[str, Any]) -> dict[str, Any]:
+    """库内为空时：环境变量 → 内置默认（退订链接、SMTP 等），供发信/生成使用。"""
+    out = dict(m)
+    env_base = (os.getenv("AITRENDS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if env_base:
+        out["public_site_base_url"] = env_base
+    elif not out.get("public_site_base_url"):
+        out["public_site_base_url"] = DEFAULT_PUBLIC_SITE_BASE_URL
+
+    if not out.get("smtp_host") and (os.getenv("NEWSLETTER_SMTP_HOST") or "").strip():
+        out["smtp_host"] = (os.getenv("NEWSLETTER_SMTP_HOST") or "").strip()
+    if not int(out.get("smtp_port") or 0):
+        out["smtp_port"] = int(os.getenv("NEWSLETTER_SMTP_PORT", "465") or 465)
+    if not out.get("smtp_user") and (os.getenv("NEWSLETTER_SMTP_USER") or "").strip():
+        out["smtp_user"] = (os.getenv("NEWSLETTER_SMTP_USER") or "").strip()
+    if not out.get("smtp_password") and (os.getenv("NEWSLETTER_SMTP_PASSWORD") or "").strip():
+        out["smtp_password"] = (os.getenv("NEWSLETTER_SMTP_PASSWORD") or "").strip()
+    if not out.get("mail_from"):
+        mf = (os.getenv("NEWSLETTER_MAIL_FROM") or out.get("smtp_user") or "").strip()
+        if mf:
+            out["mail_from"] = mf
+    if not out.get("feishu_webhook_url") and (os.getenv("NEWSLETTER_FEISHU_WEBHOOK_URL") or "").strip():
+        out["feishu_webhook_url"] = (os.getenv("NEWSLETTER_FEISHU_WEBHOOK_URL") or "").strip()
+    return out
+
+
 def get_newsletter_settings_merged(db: Session) -> dict[str, Any]:
-    """运行时使用：仅数据库配置。"""
-    return _normalize_merged(_merged_stored(db))
+    """运行时使用：数据库 + 环境变量 + 内置默认。"""
+    base = _normalize_merged(_merged_stored(db))
+    return _normalize_merged(_apply_newsletter_env_and_defaults(base))
 
 
 def _mask_secret(value: str) -> str:
@@ -86,8 +115,14 @@ def _mask_secret(value: str) -> str:
     return f"{v[:4]}...{v[-4:]}"
 
 
+def _smtp_ready(settings: dict[str, Any]) -> bool:
+    host = str(settings.get("smtp_host") or "").strip()
+    mail_from = str(settings.get("mail_from") or "").strip() or str(settings.get("smtp_user") or "").strip()
+    return bool(host and mail_from and str(settings.get("smtp_password") or "").strip())
+
+
 def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
-    """管理端展示：密码 / Webhook 脱敏。"""
+    """管理端展示：密码 / Webhook 脱敏；附带运行时生效值提示（非必填项）。"""
     m = dict(_normalize_merged(_merged_stored(db)))
     pw = str(m.pop("smtp_password", "") or "")
     m["smtp_password_masked"] = "****" if pw else ""
@@ -95,6 +130,10 @@ def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
     wh = str(m.pop("feishu_webhook_url", "") or "")
     m["feishu_webhook_masked"] = _mask_secret(wh)
     m["has_feishu_webhook"] = bool(wh)
+    effective = get_newsletter_settings_merged(db)
+    m["effective_public_site_base_url"] = effective["public_site_base_url"]
+    m["effective_smtp_ready"] = _smtp_ready(effective)
+    m["effective_feishu_ready"] = bool(str(effective.get("feishu_webhook_url") or "").strip())
     return m
 
 
@@ -203,7 +242,10 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
             cur[k] = int(patch[k])
     for k in str_keys:
         if k in patch:
-            cur[k] = str(patch[k] or "").strip()
+            v = str(patch[k] or "").strip()
+            # 留空表示不修改已存值（运行时会用 env / 默认）
+            if v:
+                cur[k] = v
     if "smtp_password" in patch and patch["smtp_password"] is not None:
         nk = str(patch["smtp_password"]).strip()
         if nk:

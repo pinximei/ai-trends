@@ -835,24 +835,6 @@ export function App() {
       setErr("请至少启用邮件或飞书其一。");
       return;
     }
-    if (emailOn) {
-      if (!newsletterForm.public_site_base_url.trim()) {
-        setErr("启用邮件时请填写站点根 URL（用于退订链接）。");
-        return;
-      }
-      if (!newsletterForm.smtp_host.trim() || !newsletterForm.smtp_user.trim() || !newsletterForm.mail_from.trim()) {
-        setErr("启用邮件时请填写 SMTP 主机、用户名与发件人。");
-        return;
-      }
-      if (!newsletterSettings?.has_smtp_password && !newsletterForm.smtp_password.trim()) {
-        setErr("启用邮件时请填写 SMTP 密码。");
-        return;
-      }
-    }
-    if (feishuOn && !newsletterSettings?.has_feishu_webhook && !newsletterForm.feishu_webhook_url.trim()) {
-      setErr("启用飞书时请填写 Webhook URL。");
-      return;
-    }
     setNewsletterSaving(true);
     setErr("");
     try {
@@ -866,11 +848,15 @@ export function App() {
         daily_digest_job_enabled: anyOn,
       };
       if (emailOn) {
-        payload.public_site_base_url = newsletterForm.public_site_base_url.trim();
-        payload.smtp_host = newsletterForm.smtp_host.trim();
+        const site = newsletterForm.public_site_base_url.trim();
+        const host = newsletterForm.smtp_host.trim();
+        const user = newsletterForm.smtp_user.trim();
+        const from = newsletterForm.mail_from.trim();
+        if (site) payload.public_site_base_url = site;
+        if (host) payload.smtp_host = host;
+        if (user) payload.smtp_user = user;
+        if (from) payload.mail_from = from;
         payload.smtp_port = port;
-        payload.smtp_user = newsletterForm.smtp_user.trim();
-        payload.mail_from = newsletterForm.mail_from.trim();
         payload.smtp_use_tls = port !== 465;
       }
       if (newsletterForm.smtp_password.trim()) payload.smtp_password = newsletterForm.smtp_password.trim();
@@ -2592,18 +2578,28 @@ export function App() {
                       {newsletterForm.email_enabled ? (
                         <div className="push-channel-card__body">
                           <div className="form-field">
-                            <label>站点根 URL（退订链接，必填）</label>
+                            <label>站点根 URL（退订链接，选填）</label>
                             <input
                               value={newsletterForm.public_site_base_url}
                               onChange={(e) =>
                                 setNewsletterForm((p) => ({ ...p, public_site_base_url: e.target.value }))
                               }
-                              placeholder="https://www.ai-trends.news"
+                              placeholder={
+                                newsletterSettings?.effective_public_site_base_url ||
+                                "https://www.ai-trends.news"
+                              }
                               autoComplete="off"
                             />
+                            {!newsletterForm.public_site_base_url.trim() &&
+                            newsletterSettings?.effective_public_site_base_url ? (
+                              <p className="form-hint" style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+                                留空将使用：{newsletterSettings.effective_public_site_base_url}
+                                （或环境变量 AITRENDS_PUBLIC_BASE_URL）
+                              </p>
+                            ) : null}
                           </div>
                           <div className="form-field">
-                            <label>SMTP 主机（必填）</label>
+                            <label>SMTP 主机（选填）</label>
                             <input
                               value={newsletterForm.smtp_host}
                               onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_host: e.target.value }))}
@@ -2612,7 +2608,7 @@ export function App() {
                             />
                           </div>
                           <div className="form-field" style={{ maxWidth: 140 }}>
-                            <label>SMTP 端口（必填）</label>
+                            <label>SMTP 端口</label>
                             <input
                               type="number"
                               min={1}
@@ -2624,7 +2620,7 @@ export function App() {
                             />
                           </div>
                           <div className="form-field">
-                            <label>SMTP 用户名（必填）</label>
+                            <label>SMTP 用户名（选填）</label>
                             <input
                               value={newsletterForm.smtp_user}
                               onChange={(e) => setNewsletterForm((p) => ({ ...p, smtp_user: e.target.value }))}
@@ -2633,8 +2629,13 @@ export function App() {
                           </div>
                           <div className="form-field">
                             <label>
-                              SMTP 密码（必填
-                              {newsletterSettings?.has_smtp_password ? "，留空保留已存" : ""}）
+                              SMTP 密码（选填
+                              {newsletterSettings?.has_smtp_password ? "，留空保留已存" : ""}
+                              {newsletterSettings?.effective_smtp_ready &&
+                              !newsletterSettings?.has_smtp_password
+                                ? "；也可配环境变量 NEWSLETTER_SMTP_PASSWORD"
+                                : ""}
+                              ）
                             </label>
                             <input
                               type="password"
@@ -2646,7 +2647,7 @@ export function App() {
                             />
                           </div>
                           <div className="form-field">
-                            <label>发件人 From（必填）</label>
+                            <label>发件人 From（选填，默认同用户名）</label>
                             <input
                               value={newsletterForm.mail_from}
                               onChange={(e) => setNewsletterForm((p) => ({ ...p, mail_from: e.target.value }))}
@@ -2701,8 +2702,13 @@ export function App() {
                         <div className="push-channel-card__body">
                           <div className="form-field">
                             <label>
-                              群机器人 Webhook URL（必填
-                              {newsletterSettings?.has_feishu_webhook ? "，留空保留已存" : ""}）
+                              群机器人 Webhook URL（选填
+                              {newsletterSettings?.has_feishu_webhook ? "，留空保留已存" : ""}
+                              {newsletterSettings?.effective_feishu_ready &&
+                              !newsletterSettings?.has_feishu_webhook
+                                ? "；也可配 NEWSLETTER_FEISHU_WEBHOOK_URL"
+                                : ""}
+                              ）
                             </label>
                             <input
                               value={newsletterForm.feishu_webhook_url}
