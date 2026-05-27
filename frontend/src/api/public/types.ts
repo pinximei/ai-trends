@@ -33,6 +33,15 @@ export type ArticleCard = {
   replication_mvp_hours?: string | null;
 };
 
+export type ReplicationMarketPosition = {
+  target_user: string;
+  vertical_niche: string;
+  market_saturation: "红海" | "竞争适中" | "细分蓝海" | string;
+  competitors: { name: string; note: string }[];
+  differentiation: string;
+  monetization_hypothesis: string;
+};
+
 export type ReplicationAnalysis = {
   verdict: string;
   worth_score: number;
@@ -41,6 +50,8 @@ export type ReplicationAnalysis = {
   estimated_hours_label?: { mvp: string; production: string };
   tier_rationale: string;
   value_summary: string;
+  market_position?: ReplicationMarketPosition;
+  ai_usage_steps?: string[];
   tech_stack: string[];
   implementation_plan: string[];
   implementation_details: string[];

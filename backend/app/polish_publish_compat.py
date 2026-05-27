@@ -247,6 +247,29 @@ def _ensure_replication_analysis_object(
         ra["worth_score"] = max(1, min(10, int(ra.get("worth_score") or 6)))
     except (TypeError, ValueError):
         ra["worth_score"] = 6
+    mp = ra.get("market_position")
+    if not isinstance(mp, dict):
+        mp = {}
+    title_guess = str(out.get("title") or "该产品").strip()[:80]
+    if len(str(mp.get("target_user") or "")) < 10:
+        mp["target_user"] = f"关注 {title_guess} 所解决场景的小型团队与个人开发者"
+    if len(str(mp.get("vertical_niche") or "")) < 10:
+        mp["vertical_niche"] = f"围绕「{title_guess}」的垂直场景，需结合原文核对是否够窄"
+    if str(mp.get("market_saturation") or "") not in ("红海", "竞争适中", "细分蓝海"):
+        mp["market_saturation"] = "竞争适中"
+    if not isinstance(mp.get("competitors"), list) or not [c for c in mp.get("competitors") if isinstance(c, dict)]:
+        mp["competitors"] = [{"name": "同类 Web/SaaS 竞品（需自行检索）", "note": "差异化见 differentiation 字段"}]
+    if len(str(mp.get("differentiation") or "")) < 12:
+        mp["differentiation"] = _merge_text(repl.get("summary") or "", str(ra.get("value_summary") or ""), min_len=12)[:800]
+    if len(str(mp.get("monetization_hypothesis") or "")) < 10:
+        mp["monetization_hypothesis"] = "订阅或买断；优先验证 20 个目标用户付费意愿后再扩功能"
+    ra["market_position"] = mp
+    ai_steps = ra.get("ai_usage_steps")
+    if not isinstance(ai_steps, list) or len([x for x in ai_steps if str(x).strip()]) < 2:
+        ra["ai_usage_steps"] = [
+            "用 LLM 根据原文生成 MVP 功能清单与文案草稿（人工删减）",
+            "编码阶段：核心数据流用确定性逻辑，仅辅助环节调用模型 API",
+        ]
     out["replication_analysis"] = ra
     out["replication_tier"] = tier
 

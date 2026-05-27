@@ -317,14 +317,20 @@ def polish_connector_article(
         structure_hint = (
             "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「复刻评估」「数据支撑」（勿用「功能亮点」等旧名）。"
             f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字：产品是什么、目标用户与变现线索。"
-            f"「复刻评估」summary≥{th_gate['repl_summary']} 字、body_md≥{th_gate['repl_body']} 字：是否值得复刻、技术栈、步骤、风险。"
+            f"「复刻评估」summary≥{th_gate['repl_summary']} 字、body_md≥{th_gate['repl_body']} 字："
+            "须按顺序写清——①目标用户与垂直场景 ②市场饱和度与竞品 ③差异化 ④变现假设 "
+            "⑤开源可复用性 ⑥分步实现路径 ⑦AI 用在哪些环节（勿替代核心逻辑）⑧风险。"
             f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字：中文表格写可核对指标（链接、star、定价等）；禁止 ```json。"
             "另须输出 replication_analysis 对象（与 tabs 一致、可机器解析），键："
             "verdict（值得复刻|观望|不建议）、worth_score（1-10 整数）、difficulty（低|中|高）、"
             "estimated_hours（mvp_min/mvp_max/prod_min/prod_max 均为整数小时）、tier_rationale、value_summary、"
-            "tech_stack（字符串数组）、implementation_plan（步骤数组）、implementation_details（细节数组）、"
+            "market_position（对象：target_user、vertical_niche、market_saturation 仅能为 红海|竞争适中|细分蓝海、"
+            "competitors 数组每项 name+note、differentiation、monetization_hypothesis）、"
+            "ai_usage_steps（字符串数组，至少 2 条，说明哪一步用 AI、输入输出是什么）、"
+            "tech_stack（字符串数组）、implementation_plan（工程实施步骤数组，至少 3 条）、"
+            "implementation_details（细节数组）、"
             "open_source（has_support 布尔、projects 数组每项 name/url/role、gaps 字符串）、risks（字符串数组）。"
-            "replication_tier 须与 replication_analysis 自洽。"
+            "replication_tier 须与 replication_analysis 自洽；竞争/饱和判断须写入 market_position，勿只写空泛「市场大」。"
         )
     else:
         stream_hint = (
@@ -444,7 +450,7 @@ def polish_connector_article(
             f"「描述」summary≥{th_gate['desc_summary']}、body≥{th_gate['desc_body']}；"
             f"「复刻评估」summary≥{th_gate.get('repl_summary', 64)}、body≥{th_gate.get('repl_body', 180)}；"
             f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}；"
-            "并含完整 replication_analysis 对象（verdict、worth_score、difficulty、estimated_hours、tech_stack、implementation_plan 等）。"
+            "并含完整 replication_analysis 对象（含 market_position、ai_usage_steps、implementation_plan 等全部键）。"
             if fk == "apps"
             else (
                 "tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"

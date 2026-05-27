@@ -7,6 +7,7 @@ from backend.app.domain.replication_analysis import (
     validate_replication_analysis_for_publish,
 )
 from backend.app.domain.articles import required_feed_card_tab_labels, validate_llm_polish_for_publish
+from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
 
 
 def test_required_tabs_apps_includes_replication() -> None:
@@ -31,6 +32,8 @@ def test_normalize_and_validate_replication_analysis() -> None:
             "gaps": "支付与邮件需自研",
         },
         "risks": ["竞品多"],
+        "market_position": sample_market_position(),
+        "ai_usage_steps": sample_ai_usage_steps(),
     }
     norm = normalize_replication_analysis(raw)
     assert norm is not None
@@ -51,6 +54,8 @@ def test_validate_llm_polish_apps_three_tabs() -> None:
             "implementation_details": ["先做只读演示"],
             "open_source": {"has_support": False, "projects": [], "gaps": "核心推理无开源替代"},
             "risks": ["合规"],
+            "market_position": sample_market_position(),
+            "ai_usage_steps": sample_ai_usage_steps(),
         }
     )
     data = {
@@ -80,3 +85,20 @@ def test_validate_llm_polish_apps_three_tabs() -> None:
         ],
     }
     assert validate_llm_polish_for_publish(data, admin_source_key="product_hunt")
+
+
+def test_validate_rejects_incomplete_market_position() -> None:
+    raw = {
+        "verdict": "值得复刻",
+        "worth_score": 8,
+        "difficulty": "中",
+        "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 200, "prod_max": 400},
+        "tier_rationale": "产品边界清晰，可用 React + FastAPI 快速搭 MVP。",
+        "value_summary": "面向独立开发者的订阅工具，有明确付费场景。",
+        "tech_stack": ["React"],
+        "implementation_plan": ["搭建鉴权"],
+        "ai_usage_steps": sample_ai_usage_steps(),
+    }
+    norm = normalize_replication_analysis(raw)
+    assert norm is not None
+    assert not validate_replication_analysis_for_publish(norm)

@@ -34,6 +34,7 @@ def test_parse_replication_tiers_csv() -> None:
 
 def test_feed_row_matches_replication_complete() -> None:
     from backend.app.domain.replication_analysis import normalize_replication_analysis
+    from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
 
     repl = normalize_replication_analysis(
         {
@@ -47,6 +48,8 @@ def test_feed_row_matches_replication_complete() -> None:
             "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
             "open_source": {"has_support": False, "projects": [], "gaps": ""},
             "risks": [],
+            "market_position": sample_market_position(),
+            "ai_usage_steps": sample_ai_usage_steps(),
         }
     )
     a = Article(
@@ -267,6 +270,7 @@ def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
     import json
 
     from backend.app.domain.replication_analysis import normalize_replication_analysis
+    from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
 
     repl = normalize_replication_analysis(
         {
@@ -280,6 +284,8 @@ def test_list_highlight_replicable_apps_includes_github_news_lane() -> None:
             "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
             "open_source": {"has_support": True, "projects": [], "gaps": ""},
             "risks": [],
+            "market_position": sample_market_position(),
+            "ai_usage_steps": sample_ai_usage_steps(),
         }
     )
     db = _session()

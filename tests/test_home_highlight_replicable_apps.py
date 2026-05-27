@@ -12,6 +12,7 @@ from backend.app.application.home_public import list_highlight_replicable_apps
 from backend.app.db import Base
 from backend.app.domain.replication_analysis import normalize_replication_analysis
 from backend.app.product_models import Article, Industry, Segment
+from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
 
 
 def _session() -> Session:
@@ -33,6 +34,8 @@ def _deep_replication_json(*, worth: int = 8) -> str:
             "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
             "open_source": {"has_support": False, "projects": [], "gaps": ""},
             "risks": [],
+            "market_position": sample_market_position(),
+            "ai_usage_steps": sample_ai_usage_steps(),
         }
     )
     return json.dumps(repl, ensure_ascii=False)

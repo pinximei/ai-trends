@@ -42,6 +42,7 @@ def test_build_body_shows_tier_only_with_deep_replication() -> None:
     import json
 
     from backend.app.domain.replication_analysis import normalize_replication_analysis
+    from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
 
     repl = normalize_replication_analysis(
         {
@@ -55,6 +56,8 @@ def test_build_body_shows_tier_only_with_deep_replication() -> None:
             "estimated_hours": {"mvp_min": 40, "mvp_max": 80, "prod_min": 120, "prod_max": 200},
             "open_source": {"has_support": False, "projects": [], "gaps": ""},
             "risks": [],
+            "market_position": sample_market_position(),
+            "ai_usage_steps": sample_ai_usage_steps(),
         }
     )
     apps = [

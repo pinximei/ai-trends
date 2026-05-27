@@ -8,6 +8,7 @@ FEED_CARD_TAB_REPLICATION = "复刻评估"
 
 _VERDICT_VALUES = frozenset({"值得复刻", "观望", "不建议"})
 _DIFFICULTY_VALUES = frozenset({"低", "中", "高"})
+_MARKET_SATURATION_VALUES = frozenset({"红海", "竞争适中", "细分蓝海"})
 
 
 def _clip(s: object, n: int) -> str:
@@ -47,6 +48,43 @@ def _normalize_hours_block(raw: object) -> dict[str, int]:
     if base["prod_max"] and base["prod_min"] > base["prod_max"]:
         base["prod_min"], base["prod_max"] = base["prod_max"], base["prod_min"]
     return base
+
+
+def _normalize_competitors(raw: object, *, max_items: int = 6) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = _clip(item.get("name"), 120)
+        if not name:
+            continue
+        out.append({"name": name, "note": _clip(item.get("note"), 400)})
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _normalize_market_position(raw: object) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raw = {}
+    saturation = _clip(raw.get("market_saturation"), 16)
+    if saturation not in _MARKET_SATURATION_VALUES:
+        for v in _MARKET_SATURATION_VALUES:
+            if v in saturation:
+                saturation = v
+                break
+        else:
+            saturation = "竞争适中"
+    return {
+        "target_user": _clip(raw.get("target_user"), 400),
+        "vertical_niche": _clip(raw.get("vertical_niche"), 400),
+        "market_saturation": saturation,
+        "competitors": _normalize_competitors(raw.get("competitors")),
+        "differentiation": _clip(raw.get("differentiation"), 800),
+        "monetization_hypothesis": _clip(raw.get("monetization_hypothesis"), 800),
+    }
 
 
 def _normalize_open_source(raw: object) -> dict[str, Any]:
@@ -95,6 +133,7 @@ def normalize_replication_analysis(raw: object) -> dict[str, Any] | None:
     if not plan and raw.get("implementation_plan"):
         plan = [_clip(raw.get("implementation_plan"), 2000)]
     details = _as_str_list(raw.get("implementation_details"), max_items=10, item_max=500)
+    ai_steps = _as_str_list(raw.get("ai_usage_steps"), max_items=8, item_max=400)
     return {
         "verdict": verdict,
         "worth_score": worth,
@@ -102,6 +141,8 @@ def normalize_replication_analysis(raw: object) -> dict[str, Any] | None:
         "estimated_hours": _normalize_hours_block(raw.get("estimated_hours")),
         "tier_rationale": _clip(raw.get("tier_rationale"), 1200),
         "value_summary": _clip(raw.get("value_summary"), 1200),
+        "market_position": _normalize_market_position(raw.get("market_position")),
+        "ai_usage_steps": ai_steps,
         "tech_stack": _as_str_list(raw.get("tech_stack"), max_items=12, item_max=80),
         "implementation_plan": plan,
         "implementation_details": details,
@@ -146,6 +187,25 @@ def describe_replication_analysis_reject(data: dict | None) -> str:
     stack = data.get("tech_stack") or []
     if not stack:
         parts.append("tech_stack为空")
+    mp = data.get("market_position")
+    if not isinstance(mp, dict):
+        parts.append("market_position缺失")
+    else:
+        if len(_clip(mp.get("target_user"), 500)) < 10:
+            parts.append("target_user过短(需≥10)")
+        if len(_clip(mp.get("vertical_niche"), 500)) < 10:
+            parts.append("vertical_niche过短(需≥10)")
+        if _clip(mp.get("market_saturation"), 32) not in _MARKET_SATURATION_VALUES:
+            parts.append("market_saturation无效")
+        if not _normalize_competitors(mp.get("competitors")):
+            parts.append("competitors为空")
+        if len(_clip(mp.get("differentiation"), 900)) < 12:
+            parts.append("differentiation过短(需≥12)")
+        if len(_clip(mp.get("monetization_hypothesis"), 900)) < 10:
+            parts.append("monetization_hypothesis过短(需≥10)")
+    ai_steps = data.get("ai_usage_steps") or []
+    if len([x for x in ai_steps if str(x).strip()]) < 2:
+        parts.append("ai_usage_steps不足(需≥2条)")
     return "；".join(parts) if parts else "未分类"
 
 
@@ -168,6 +228,24 @@ def validate_replication_analysis_for_publish(data: dict | None) -> bool:
         return False
     stack = data.get("tech_stack") or []
     if not stack:
+        return False
+    mp = data.get("market_position")
+    if not isinstance(mp, dict):
+        return False
+    if len(_clip(mp.get("target_user"), 500)) < 10:
+        return False
+    if len(_clip(mp.get("vertical_niche"), 500)) < 10:
+        return False
+    if _clip(mp.get("market_saturation"), 32) not in _MARKET_SATURATION_VALUES:
+        return False
+    if not _normalize_competitors(mp.get("competitors")):
+        return False
+    if len(_clip(mp.get("differentiation"), 900)) < 12:
+        return False
+    if len(_clip(mp.get("monetization_hypothesis"), 900)) < 10:
+        return False
+    ai_steps = data.get("ai_usage_steps") or []
+    if len([x for x in ai_steps if str(x).strip()]) < 2:
         return False
     return True
 

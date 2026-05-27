@@ -5,6 +5,7 @@ import json
 
 from backend.app.domain import articles as art
 from backend.app.domain.replication_analysis import FEED_CARD_TAB_REPLICATION
+from tests.replication_fixtures import sample_ai_usage_steps, sample_market_position
 
 _VALID_SUMMARY = "OpenAI 发布新模型系列，面向多模态与代码场景；核心提升上下文与推理能力；适合开发者与产品团队跟进。"
 _VALID_BODY = "## 一句话看懂\n\n" + "背景与进展说明。" * 40
@@ -46,6 +47,8 @@ def _valid_replication_analysis() -> dict:
             "projects": [{"name": "FastAPI", "url": "https://fastapi.tiangolo.com", "role": "API 框架"}],
         },
         "risks": ["竞品多"],
+        "market_position": sample_market_position(),
+        "ai_usage_steps": sample_ai_usage_steps(),
     }
 
 

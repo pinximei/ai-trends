@@ -8,6 +8,12 @@ const VERDICT_CLASS: Record<string, string> = {
   不建议: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
+const SATURATION_CLASS: Record<string, string> = {
+  红海: "bg-rose-100 text-rose-800 border-rose-200",
+  竞争适中: "bg-amber-100 text-amber-800 border-amber-200",
+  细分蓝海: "bg-emerald-100 text-emerald-800 border-emerald-200",
+};
+
 type Props = {
   analysis: ReplicationAnalysis;
   replicationTier?: string | null;
@@ -18,6 +24,8 @@ export function ArticleReplicationPanel({ analysis, replicationTier }: Props) {
   const tierLabel = replicationTierLabel(replicationTier);
   const verdictCls = VERDICT_CLASS[analysis.verdict] ?? VERDICT_CLASS["观望"];
   const hours = analysis.estimated_hours_label;
+  const mp = analysis.market_position;
+  const saturationCls = SATURATION_CLASS[mp?.market_saturation ?? ""] ?? SATURATION_CLASS["竞争适中"];
 
   return (
     <div className="space-y-5" data-testid="replication-analysis-panel">
@@ -62,6 +70,78 @@ export function ArticleReplicationPanel({ analysis, replicationTier }: Props) {
         <div>
           <h3 className="text-sm font-bold text-slate-900">{t("replTierWhy")}</h3>
           <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{analysis.tier_rationale}</p>
+        </div>
+      ) : null}
+
+      {mp &&
+      (mp.target_user ||
+        mp.vertical_niche ||
+        mp.market_saturation ||
+        mp.competitors?.length ||
+        mp.differentiation ||
+        mp.monetization_hypothesis) ? (
+        <div className="rounded-xl border border-slate-200/90 bg-white px-4 py-4">
+          <h3 className="text-sm font-bold text-slate-900">{t("replMarketSection")}</h3>
+          <div className="mt-3 space-y-3 text-sm text-slate-600">
+            {mp.target_user ? (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t("replTargetUser")}</p>
+                <p className="mt-1 leading-relaxed">{mp.target_user}</p>
+              </div>
+            ) : null}
+            {mp.vertical_niche ? (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t("replVerticalNiche")}</p>
+                <p className="mt-1 leading-relaxed">{mp.vertical_niche}</p>
+              </div>
+            ) : null}
+            {mp.market_saturation ? (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t("replMarketSaturation")}</p>
+                <span
+                  className={`mt-1.5 inline-block rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${saturationCls}`}
+                >
+                  {mp.market_saturation}
+                </span>
+              </div>
+            ) : null}
+            {mp.competitors?.length ? (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t("replCompetitors")}</p>
+                <ul className="mt-2 space-y-2">
+                  {mp.competitors.map((c) => (
+                    <li key={c.name} className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2">
+                      <span className="font-semibold text-slate-800">{c.name}</span>
+                      {c.note ? <p className="mt-0.5 text-xs text-slate-500">{c.note}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {mp.differentiation ? (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t("replDifferentiation")}</p>
+                <p className="mt-1 leading-relaxed">{mp.differentiation}</p>
+              </div>
+            ) : null}
+            {mp.monetization_hypothesis ? (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t("replMonetization")}</p>
+                <p className="mt-1 leading-relaxed">{mp.monetization_hypothesis}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {analysis.ai_usage_steps?.length ? (
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">{t("replAiUsage")}</h3>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm text-slate-600">
+            {analysis.ai_usage_steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
         </div>
       ) : null}
 
