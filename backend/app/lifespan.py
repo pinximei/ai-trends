@@ -1,4 +1,4 @@
-"""应用生命周期：建表、种子、调度器（约三天热门快照、异动扫描、连接器批量同步）。"""
+"""应用生命周期：建表、种子、调度器（每日热门快照、异动扫描、连接器批量同步）。"""
 from __future__ import annotations
 
 import logging
@@ -136,11 +136,12 @@ def _startup_sync() -> None:
 
 
 def _job_scheduled_hot() -> None:
+    """每日一次：规则重建热门快照（不调 LLM）。"""
     db = SessionLocal()
     try:
         from .hot_service import rebuild_hot_snapshot
 
-        rebuild_hot_snapshot(db, trigger="three_day_cron")
+        rebuild_hot_snapshot(db, trigger="daily_cron")
     except Exception as e:
         logger.exception("scheduled hot snapshot failed: %s", e)
     finally:
@@ -492,7 +493,14 @@ def _start_scheduler() -> None:
         return
 
     _scheduler = BackgroundScheduler(timezone="America/New_York")
-    _scheduler.add_job(_job_scheduled_hot, IntervalTrigger(days=3), id="hot_snapshot_3d")
+    _scheduler.add_job(
+        _job_scheduled_hot,
+        CronTrigger(hour=7, minute=0, timezone="America/New_York"),
+        id="hot_snapshot_daily",
+        misfire_grace_time=7200,
+        coalesce=True,
+        max_instances=1,
+    )
     _scheduler.add_job(_job_anomaly, "interval", hours=1, id="hourly_anomaly")
     _scheduler.add_job(
         _job_connector_sync_gate,
@@ -533,6 +541,7 @@ def _start_scheduler() -> None:
         max_instances=1,
     )
     _scheduler.start()
+    logger.info("hot snapshot rebuild scheduled daily at America/New_York 07:00")
     logger.info("industry wind LLM warm scheduled daily at America/New_York 07:15")
     db2 = SessionLocal()
     try:
