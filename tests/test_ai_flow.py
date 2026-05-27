@@ -7,11 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.domain import articles as art
-from backend.app.llm_service import (
-    chat_completion,
-    generate_inspiration_body,
-    polish_connector_article,
-)
+from backend.app.llm_service import chat_completion, polish_connector_article
 from backend.app.polish_publish_compat import coerce_polish_output
 from backend.app.main import app
 
@@ -86,19 +82,6 @@ def test_rule_value_score_accepts_long_json_snippet() -> None:
     snippet = '{"origin": "1.2.3.4", "headers": {"User-Agent": "test"}, "args": {}, ' + '"data": "' + ("y" * 400) + '"}'
     score = art.rule_value_score(snippet=snippet, summary=("摘要" * 30)[:200], http_status=200)
     assert score >= art.VALUE_SCORE_MIN
-
-
-def test_generate_inspiration_fallback_without_key() -> None:
-    db = MagicMock()
-    with patch("backend.app.llm_service.resolve_llm_http_config", return_value=("https://api.deepseek.com/v1", "", "m")):
-        body = generate_inspiration_body(
-            db,
-            context_md="ctx",
-            username="admin",
-            inspiration_id=1,
-            version_no=1,
-        )
-    assert "未配置 LLM" in body or "规则回退" in body
 
 
 def test_admin_llm_settings_has_pipeline(client: TestClient) -> None:

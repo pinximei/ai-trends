@@ -1,4 +1,4 @@
-"""产品管理扩展 API：板块/指标/文章/连接器/配置/异动/灵感/用量。"""
+"""产品管理扩展 API：板块/指标/文章/连接器/配置/异动/用量。"""
 from __future__ import annotations
 
 import time
@@ -19,14 +19,11 @@ from ..llm_settings_service import get_llm_settings_public, save_llm_settings_pa
 from ..runtime_settings_service import get_runtime_settings_public, save_runtime_settings_patch
 from ..newsletter_settings_service import get_newsletter_settings_public, save_newsletter_settings_patch
 from ..scheduler_settings_service import get_scheduler_settings_public, save_scheduler_settings_patch
-from ..llm_service import generate_inspiration_body
 from ..models import AdminSession, AdminSourceConfig, NewsletterDailyDigest, NewsletterSubscriber
 from ..product_models import (
     Article,
     HotSnapshot,
     Industry,
-    Inspiration,
-    InspirationVersion,
     LlmUsageLog,
     MetricDefinition,
     MetricPoint,
@@ -1599,147 +1596,6 @@ def post_anomaly_scan(
     n = compute_anomalies(db)
     audit(db, actor=session.username, action="product.anomaly.scan", detail=str(n))
     return ok({"created": n})
-
-
-@router.get("/product/inspirations")
-def list_inspirations(
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    rows = db.scalars(select(Inspiration).order_by(desc(Inspiration.id)).limit(100)).all()
-    seg_names = {s.id: s.name for s in db.scalars(select(Segment)).all()}
-    return ok(
-        [
-            {
-                "id": r.id,
-                "segment_id": r.segment_id,
-                "segment_name": seg_names.get(r.segment_id, ""),
-                "title": r.title,
-                "current_version_id": r.current_version_id,
-            }
-            for r in rows
-        ]
-    )
-
-
-@router.get("/product/inspirations/{inspiration_id}/versions")
-def list_inspiration_versions(
-    inspiration_id: int,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("viewer")),
-):
-    rows = db.scalars(
-        select(InspirationVersion).where(InspirationVersion.inspiration_id == inspiration_id).order_by(InspirationVersion.version_no)
-    ).all()
-    return ok(
-        [
-            {
-                "id": r.id,
-                "version_no": r.version_no,
-                "body": r.body,
-                "context_snapshot_json": r.context_snapshot_json or {},
-                "status": r.status,
-                "created_by_username": r.created_by_username,
-                "created_at": r.created_at.isoformat() + "Z",
-            }
-            for r in rows
-        ]
-    )
-
-
-class InspirationCreate(BaseModel):
-    segment_id: int
-    title: str = ""
-
-
-@router.post("/product/inspirations")
-def create_inspiration(
-    payload: InspirationCreate,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    insp = Inspiration(segment_id=payload.segment_id, title=payload.title or "未命名灵感")
-    db.add(insp)
-    db.flush()
-    ver = InspirationVersion(
-        inspiration_id=insp.id,
-        version_no=1,
-        body="",
-        context_snapshot_json={},
-        created_by_username=session.username,
-        status="draft",
-    )
-    db.add(ver)
-    db.flush()
-    insp.current_version_id = ver.id
-    db.commit()
-    audit(db, actor=session.username, action="product.inspiration.create", target=str(insp.id))
-    return ok({"id": insp.id, "version_id": ver.id})
-
-
-class InspirationGenerate(BaseModel):
-    context_md: str = ""
-
-
-@router.post("/product/inspirations/{inspiration_id}/generate")
-def generate_inspiration(
-    inspiration_id: int,
-    payload: InspirationGenerate,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    insp = db.get(Inspiration, inspiration_id)
-    if not insp:
-        raise HTTPException(404, "not found")
-    max_no = db.scalar(select(func.max(InspirationVersion.version_no)).where(InspirationVersion.inspiration_id == inspiration_id))
-    next_no = (max_no or 0) + 1
-    body = generate_inspiration_body(
-        db,
-        context_md=payload.context_md or "",
-        username=session.username,
-        inspiration_id=inspiration_id,
-        version_no=next_no,
-        admin_user_id=session.user_id,
-    )
-    ver = InspirationVersion(
-        inspiration_id=inspiration_id,
-        version_no=next_no,
-        body=body,
-        context_snapshot_json={"context_md": (payload.context_md or "")[:8000]},
-        created_by_username=session.username,
-        status="draft",
-    )
-    db.add(ver)
-    db.flush()
-    insp.current_version_id = ver.id
-    db.commit()
-    audit(db, actor=session.username, action="product.inspiration.generate", target=f"{inspiration_id}:v{next_no}")
-    return ok({"version_id": ver.id, "version_no": next_no})
-
-
-class InspirationVersionPatch(BaseModel):
-    body: str | None = None
-    status: str | None = None
-
-
-@router.patch("/product/inspirations/{inspiration_id}/versions/{version_id}")
-def patch_inspiration_version(
-    inspiration_id: int,
-    version_id: int,
-    payload: InspirationVersionPatch,
-    db: Session = Depends(get_db),
-    session: AdminSession = Depends(require_role("operator")),
-):
-    ver = db.get(InspirationVersion, version_id)
-    if not ver or ver.inspiration_id != inspiration_id:
-        raise HTTPException(404, "not found")
-    if payload.body is not None:
-        ver.body = payload.body
-    if payload.status is not None:
-        ver.status = payload.status
-    db.commit()
-    audit(db, actor=session.username, action="product.inspiration.version.patch", target=str(version_id))
-    return ok({"id": ver.id})
 
 
 @router.get("/product/llm-usage")

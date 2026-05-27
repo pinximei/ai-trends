@@ -18,8 +18,6 @@ from ..product_models import (
     CmsPage,
     HotSnapshot,
     Industry,
-    Inspiration,
-    InspirationVersion,
     LlmUsageLog,
     MetricDefinition,
     MetricPoint,
@@ -126,17 +124,6 @@ _TABLES: dict[str, dict[str, Any]] = {
         "label": "行业",
         "model": Industry,
         "time_attr": None,
-    },
-    "inspirations": {
-        "label": "灵感",
-        "model": Inspiration,
-        "time_attr": None,
-        "segment": True,
-    },
-    "inspiration_versions": {
-        "label": "灵感版本",
-        "model": InspirationVersion,
-        "time_attr": "created_at",
     },
     "llm_usage_logs": {
         "label": "大模型用量",

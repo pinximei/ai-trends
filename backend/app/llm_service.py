@@ -1,4 +1,4 @@
-"""大模型调用：灵感生成、连接器文章润色；未配置 API 时回退模板。"""
+"""大模型调用：连接器文章润色等场景；未配置 API 时回退模板。"""
 from __future__ import annotations
 
 import json
@@ -557,32 +557,3 @@ def polish_connector_article(
         except Exception:
             pass
         return None, f"unexpected: {err}"
-
-
-def generate_inspiration_body(
-    db: Session,
-    *,
-    context_md: str,
-    username: str,
-    inspiration_id: int,
-    version_no: int,
-    admin_user_id: int | None = None,
-) -> str:
-    """生成灵感正文；无 API Key 时返回结构化占位。"""
-    if not resolve_llm_http_config(db)[1]:
-        return (
-            f"## 灵感草稿（未配置 LLM，规则回退）\n\n"
-            f"操作者：{username}\n\n### 上下文摘要\n\n{context_md[:4000]}\n"
-        )
-    system = "你是产业分析助手，根据给定数据摘要输出简洁的灵感要点（Markdown），不要编造未提供的数据。"
-    user = f"请基于以下上下文输出 3～5 条可验证的灵感方向：\n\n{context_md}"
-    text, _, _ = chat_completion(
-        db,
-        system=system,
-        user=user,
-        scenario="inspiration_generate",
-        ref_type="inspiration",
-        ref_id=f"{inspiration_id}:{version_no}",
-        admin_user_id=admin_user_id,
-    )
-    return text

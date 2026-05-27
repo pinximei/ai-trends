@@ -204,22 +204,18 @@ def segment_ids_with_public_content_for_industry(db: Session, industry_id: int) 
 
 
 def clear_merged_domains_taxonomy(db: Session) -> dict[str, int]:
-    """删除 slug=``domains`` 的合并行业及其下属板块、指标定义、关联异常与灵感（数据源同步生成的分类树）。
+    """删除 slug=``domains`` 的合并行业及其下属板块、指标定义、关联异常（数据源同步生成的分类树）。
 
     不影响演示/种子用的 ``ai`` 等行业。调用方须已删除引用板块的文章与指标点。"""
     from .product_models import (
         AnomalyEvent,
         Industry,
-        Inspiration,
-        InspirationVersion,
         MetricDefinition,
         Segment,
     )
 
     empty = {
         "product_domains_anomaly_events": 0,
-        "product_domains_inspiration_versions": 0,
-        "product_domains_inspirations": 0,
         "product_domains_metric_definitions": 0,
         "product_domains_segments": 0,
         "product_domains_industry_removed": 0,
@@ -241,24 +237,12 @@ def clear_merged_domains_taxonomy(db: Session) -> dict[str, int]:
         conds.append(AnomalyEvent.metric_id.in_(metric_ids))
     n_anom = int(db.query(AnomalyEvent).filter(or_(*conds)).delete(synchronize_session=False) or 0)
 
-    insp_ids = [int(x) for x in db.scalars(select(Inspiration.id).where(Inspiration.segment_id.in_(seg_ids))).all()]
-    n_iv = 0
-    n_insp = 0
-    if insp_ids:
-        n_iv = int(
-            db.query(InspirationVersion).filter(InspirationVersion.inspiration_id.in_(insp_ids)).delete(synchronize_session=False)
-            or 0
-        )
-        n_insp = int(db.query(Inspiration).filter(Inspiration.id.in_(insp_ids)).delete(synchronize_session=False) or 0)
-
     n_md = int(db.query(MetricDefinition).filter(MetricDefinition.segment_id.in_(seg_ids)).delete(synchronize_session=False) or 0)
     n_seg = int(db.query(Segment).filter(Segment.id.in_(seg_ids)).delete(synchronize_session=False) or 0)
     db.delete(ind)
 
     return {
         "product_domains_anomaly_events": n_anom,
-        "product_domains_inspiration_versions": n_iv,
-        "product_domains_inspirations": n_insp,
         "product_domains_metric_definitions": n_md,
         "product_domains_segments": n_seg,
         "product_domains_industry_removed": 1,

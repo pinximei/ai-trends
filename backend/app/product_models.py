@@ -183,28 +183,6 @@ class LlmUsageLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
-class Inspiration(Base):
-    __tablename__ = "product_inspirations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    segment_id: Mapped[int] = mapped_column(Integer, ForeignKey("product_segments.id"), index=True)
-    title: Mapped[str] = mapped_column(String(512), default="")
-    current_version_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-
-class InspirationVersion(Base):
-    __tablename__ = "product_inspiration_versions"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    inspiration_id: Mapped[int] = mapped_column(Integer, ForeignKey("product_inspirations.id"), index=True)
-    version_no: Mapped[int] = mapped_column(Integer)
-    body: Mapped[str] = mapped_column(Text, default="")
-    context_snapshot_json: Mapped[dict] = mapped_column(JSONType, default=dict)
-    created_by_username: Mapped[str] = mapped_column(String(64), default="")
-    status: Mapped[str] = mapped_column(String(16), default="draft")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
 class ProductSetting(Base):
     """键值配置：hot / anomaly 等"""
 
