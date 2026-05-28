@@ -286,6 +286,8 @@ def _strip_github_api_junk_lines(text: str) -> str:
             continue
         if any(m in t for m in api_markers):
             continue
+        if re.search(r"\bnode_id\s*=", t, re.I) or re.search(r"^\s*id\s*=\s*\d", t, re.I):
+            continue
         if t.startswith('{"id":') or t.startswith("| {") or t.startswith("|{"):
             continue
         if re.search(r'"\w+"\s*:\s*', t) and re.search(
@@ -582,7 +584,13 @@ def prepare_data_tab_body(
         url = (source_original_url or "").strip()
         return _rows_to_data_tab_markdown([("原文链接", url)]) if url else ""
 
-    snippet = _extract_json_snippet_from_body(raw) or (snippet or "").strip()
+    passed_snippet = (snippet or "").strip()
+    if passed_snippet and (admin_source_key or "").strip().lower() == "github":
+        rebuilt = build_connector_data_tab_markdown(admin_source_key, passed_snippet)
+        if rebuilt.strip():
+            return rebuilt
+
+    snippet = _extract_json_snippet_from_body(raw) or passed_snippet
     if snippet:
         rebuilt = build_connector_data_tab_markdown(admin_source_key, snippet)
         if rebuilt.strip():
