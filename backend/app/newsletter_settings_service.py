@@ -27,9 +27,10 @@ def default_newsletter_json() -> dict[str, Any]:
         "news_limit": 12,
         "llm_apps_limit": 3,
         "llm_news_limit": 3,
-        # 美东 21:12（夏令时）≈ 北京时间次日 09:12，错开飞书整点限流
-        "daily_hour": 21,
-        "daily_minute": 12,
+        # 北京时间每日 09:00 推送（摘要内容日仍按美东日历）
+        "digest_send_timezone": "Asia/Shanghai",
+        "daily_hour": 9,
+        "daily_minute": 0,
         "public_site_base_url": "",
         "smtp_host": "",
         "smtp_port": 465,
@@ -68,6 +69,8 @@ def _normalize_merged(m: dict[str, Any]) -> dict[str, Any]:
     out["news_limit"] = max(1, min(40, int(out.get("news_limit") or min(12, out["article_limit"] // 2 or 12))))
     out["llm_apps_limit"] = max(0, min(8, int(out.get("llm_apps_limit", 3))))
     out["llm_news_limit"] = max(0, min(8, int(out.get("llm_news_limit", 3))))
+    tz = str(out.get("digest_send_timezone") or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    out["digest_send_timezone"] = tz
     out["daily_hour"] = max(0, min(23, int(out.get("daily_hour") or 9)))
     out["daily_minute"] = max(0, min(59, int(out.get("daily_minute") or 0)))
     out["smtp_port"] = max(1, min(65535, int(out.get("smtp_port") or 465)))
@@ -150,6 +153,11 @@ def get_newsletter_settings_public(db: Session) -> dict[str, Any]:
     m["feishu_push_cadence"] = str(m.get("feishu_push_cadence") or "daily")
     m["feishu_weekly_weekday"] = int(m.get("feishu_weekly_weekday", 0))
     m["feishu_last_sent_period"] = str(m.get("feishu_last_sent_period") or "")
+    m["digest_send_timezone"] = str(m.get("digest_send_timezone") or "Asia/Shanghai")
+    m["schedule_display"] = (
+        f"北京时间 {int(m.get('daily_hour', 9)):02d}:{int(m.get('daily_minute', 0)):02d} "
+        f"（{m['digest_send_timezone']}）"
+    )
     return m
 
 
@@ -181,6 +189,24 @@ def repair_newsletter_cn_morning_schedule_once(db: Session) -> bool:
     if changed:
         logger.info("newsletter schedule migrated to US 21:00 (approx Beijing 09:00)")
     return changed
+
+
+def repair_newsletter_beijing_0900_schedule_once(db: Session) -> bool:
+    """一次性：推送时刻改为北京时间 09:00（定时任务每日强制重发）。"""
+    row = db.get(ProductSetting, NEWSLETTER_KEY)
+    if not row:
+        return False
+    cur = _merged_stored(db)
+    if cur.get("digest_schedule_beijing_0900_v1"):
+        return False
+    cur["digest_send_timezone"] = "Asia/Shanghai"
+    cur["daily_hour"] = 9
+    cur["daily_minute"] = 0
+    cur["digest_schedule_beijing_0900_v1"] = True
+    row.value_json = _normalize_merged(cur)
+    db.commit()
+    logger.info("newsletter schedule set to Asia/Shanghai 09:00 daily")
+    return True
 
 
 def repair_newsletter_feishu_stagger_minute_once(db: Session) -> bool:
@@ -266,6 +292,7 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
         "feishu_webhook_url",
         "feishu_push_cadence",
         "feishu_last_sent_period",
+        "digest_send_timezone",
     )
     for k in bool_keys:
         if k in patch:
@@ -297,6 +324,7 @@ def save_newsletter_settings_patch(db: Session, patch: dict[str, Any]) -> dict[s
     if patch.keys() & {
         "daily_hour",
         "daily_minute",
+        "digest_send_timezone",
         "cron_enabled",
         "daily_digest_job_enabled",
         "send_enabled",

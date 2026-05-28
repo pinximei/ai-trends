@@ -46,12 +46,14 @@ def _startup_sync() -> None:
         if seeded.get("llm_model_flash"):
             logger.info("LLM model migrated to deepseek-v4-flash (was pro/legacy alias)")
         from .newsletter_settings_service import (
+            repair_newsletter_beijing_0900_schedule_once,
             repair_newsletter_cn_morning_schedule_once,
             repair_newsletter_feishu_stagger_minute_once,
         )
 
         repair_newsletter_cn_morning_schedule_once(db)
         repair_newsletter_feishu_stagger_minute_once(db)
+        repair_newsletter_beijing_0900_schedule_once(db)
         refresh_runtime_snapshot(db)
         assert_production_security()
         ensure_default_admin(db)
@@ -355,21 +357,22 @@ def _job_custom_source_sync_gate() -> None:
         db.close()
 
 
-def _newsletter_digest_schedule(db) -> tuple[int, int]:
+def _newsletter_digest_schedule(db) -> tuple[str, int, int]:
     from .newsletter_settings_service import get_newsletter_settings_merged
 
     s = get_newsletter_settings_merged(db)
+    tz = str(s.get("digest_send_timezone") or "Asia/Shanghai").strip() or "Asia/Shanghai"
     h = max(0, min(23, int(s.get("daily_hour", 9))))
     m = max(0, min(59, int(s.get("daily_minute", 0))))
-    return h, m
+    return tz, h, m
 
 
 def _newsletter_digest_cron_trigger(db) -> CronTrigger:
-    """美东每日定点；misfire_grace_time 允许重启后补跑，避免 5 分钟轮询窗口错过。"""
-    from .us_content_calendar import US_CONTENT_TZ
+    """北京时间（可配置）每日定点；misfire_grace_time 允许重启后补跑。"""
+    from zoneinfo import ZoneInfo
 
-    h, m = _newsletter_digest_schedule(db)
-    return CronTrigger(hour=h, minute=m, timezone=US_CONTENT_TZ)
+    tz_name, h, m = _newsletter_digest_schedule(db)
+    return CronTrigger(hour=h, minute=m, timezone=ZoneInfo(tz_name))
 
 
 def _job_newsletter_daily() -> None:
@@ -383,7 +386,7 @@ def _job_newsletter_daily() -> None:
             return
         if not s.get("cron_enabled", True):
             return
-        out = run_daily_newsletter_digest_job(db=db, settings=s)
+        out = run_daily_newsletter_digest_job(db=db, settings=s, scheduled_run=True)
         logger.info("newsletter daily cron finished: %s", out)
         from .application.newsletter_period_digest import run_scheduled_feishu_period_push
 
@@ -463,10 +466,10 @@ def reschedule_newsletter_digest_job() -> None:
         _scheduler.add_job(_job_newsletter_daily, id="newsletter_daily_digest", **kwargs)
     db2 = SessionLocal()
     try:
-        h, m = _newsletter_digest_schedule(db2)
+        tz_name, h, m = _newsletter_digest_schedule(db2)
     finally:
         db2.close()
-    logger.info("newsletter digest cron rescheduled (America/New_York %s:%02d)", h, m)
+    logger.info("newsletter digest cron rescheduled (%s %s:%02d)", tz_name, h, m)
 
 
 def _job_industry_wind_warm() -> None:
@@ -545,11 +548,12 @@ def _start_scheduler() -> None:
     logger.info("industry wind LLM warm scheduled daily at America/New_York 07:15")
     db2 = SessionLocal()
     try:
-        h, m = _newsletter_digest_schedule(db2)
+        tz_name, h, m = _newsletter_digest_schedule(db2)
     finally:
         db2.close()
     logger.info(
-        "newsletter digest cron started (America/New_York %s:%02d, misfire_grace=7200s)",
+        "newsletter digest cron started (%s %s:%02d, misfire_grace=7200s)",
+        tz_name,
         h,
         m,
     )

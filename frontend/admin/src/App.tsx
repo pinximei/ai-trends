@@ -2536,8 +2536,8 @@ export function App() {
               <p className="muted tiny" style={{ marginTop: 6, lineHeight: 1.6 }}>
                 按<strong>美东（America/New_York）当天</strong>已发布应用/资讯拼一篇摘要，写入{" "}
                 <code className="inline-code">newsletter_daily_digests</code>（每天一篇）。
-                连接器在<strong>美东当日 23:00–24:00</strong>整批拉取（便于对齐 NewsAPI 等按 US 日切分的数据）；摘要默认定时{" "}
-                <strong>21:12</strong> 美东（≈ 北京时间次日 9:12，可在配置中改，建议避开整点防飞书限流）。正文与公开站一致：「高价值应用」仅含价值分≥8 且结论为「高价值」；按价值分排序。「立即推送」：无今日摘要则生成再推；已有摘要则直接推飞书/邮件。
+                连接器在<strong>美东当日 23:00–24:00</strong>整批拉取（便于对齐 NewsAPI 等按 US 日切分的数据）；摘要/飞书默认定时{" "}
+                <strong>每天北京时间 9:00</strong>（定时任务会<strong>重新生成并推送</strong>，不因下午已推过而跳过）。正文与公开站一致：「高价值应用」仅含价值分≥8 且结论为「高价值」；按价值分排序。「立即推送」：无今日摘要则生成再推；已有摘要则直接推飞书/邮件。
               </p>
               {canOperate ? (
                 <form className="newsletter-push-form" onSubmit={onSaveNewsletter}>

@@ -549,12 +549,13 @@ def run_daily_newsletter_digest_job(
     manual_run: bool = False,
     regenerate: bool = False,
     push_only: bool = False,
+    scheduled_run: bool = False,
 ) -> dict[str, Any]:
     """
-    定时/手动：按上海日历日在 ``newsletter_daily_digests`` 存一篇摘要（非新建站点文章）。
-    - 库中已有当日 ready 摘要且未要求 regenerate：不重复生成，仅推送未发渠道。
+    定时/手动：按美东日历日在 ``newsletter_daily_digests`` 存一篇摘要（非新建站点文章）。
+    - scheduled_run=True：每日到点强制重新生成并推送（不因已发过而跳过）。
     - regenerate=True：强制按当日已发布内容重写摘要后再推送。
-    - manual_run=True：跳过后台定时总开关检查（管理端手动触发）。
+    - manual_run=True：跳过后台定时总开关检查（管理端手动触发）；可沿用库内稿仅推送。
     """
     own_session = db is None
     db = db or SessionLocal()
@@ -565,6 +566,9 @@ def run_daily_newsletter_digest_job(
             return {"skipped": True, "reason": "daily_digest_job_disabled"}
         if not settings.get("cron_enabled", True) and not manual_run:
             return {"skipped": True, "reason": "cron_disabled"}
+
+        if scheduled_run:
+            regenerate = True
 
         d = date.fromisoformat(digest_date) if digest_date else shanghai_calendar_today()
         digest_key = d.isoformat()
@@ -595,12 +599,19 @@ def run_daily_newsletter_digest_job(
                 "error": "今日摘要尚未生成，请先「生成并推送」或等待定时任务。",
             }
 
-        if not manual_run and not regenerate and row and _digest_delivery_complete(row, settings):
+        if (
+            manual_run
+            and not scheduled_run
+            and not regenerate
+            and not push_only
+            and row
+            and _digest_delivery_complete(row, settings)
+        ):
             return {
                 "skipped": True,
                 "reason": "already_delivered",
                 "digest_date": digest_key,
-                "message": "今日摘要已生成且已推送，定时任务跳过。",
+                "message": "今日摘要已生成且已推送，手动任务跳过（定时任务每日仍会重发）。",
             }
 
         apps_limit = int(settings.get("apps_limit") or 12)
@@ -703,9 +714,11 @@ def run_daily_newsletter_digest_job(
             db.expire_all()
             row = db.scalar(select(NewsletterDailyDigest).where(NewsletterDailyDigest.digest_date == digest_key))
             already_feishu = bool(row and row.feishu_sent_at is not None)
-            should_send_feishu = row and (row.feishu_sent_at is None or manual_run)
+            should_send_feishu = row and (
+                row.feishu_sent_at is None or manual_run or scheduled_run
+            )
             if should_send_feishu:
-                if manual_run and already_feishu:
+                if (manual_run or scheduled_run) and already_feishu:
                     row.feishu_sent_at = None
                     db.commit()
                 try:
