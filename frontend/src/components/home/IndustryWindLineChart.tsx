@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n";
-import type { IndustryWindRow } from "@/components/home/IndustryWindPanel";
+import { formatWindGrowth, type IndustryWindRow } from "@/components/home/IndustryWindPanel";
 
 /** 宽 viewBox，配合 w-full 横向铺满 */
 const CHART_W = 1000;
@@ -31,12 +31,6 @@ function rowHeadline(row: IndustryWindRow): string {
 
 function seriesKey(row: IndustryWindRow): string {
   return `${row.rank}-${rowHeadline(row)}`;
-}
-
-function formatGrowth(pct: number | null): string {
-  if (pct == null) return "—";
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${pct}%`;
 }
 
 function mergeDayAxis(rows: IndustryWindRow[]): string[] {
@@ -305,7 +299,7 @@ export function IndustryWindLineChart({ rows }: Props) {
                   style={{ background: on ? p.color.stroke : "rgb(203 213 225)" }}
                 />
                 <span className="line-clamp-1 font-medium">{rowHeadline(p.row)}</span>
-                <span className="shrink-0 tabular-nums text-slate-500">{formatGrowth(p.row.growth_pct)}</span>
+                <span className="shrink-0 tabular-nums text-slate-500">{formatWindGrowth(p.row, t)}</span>
               </button>
             </li>
           );

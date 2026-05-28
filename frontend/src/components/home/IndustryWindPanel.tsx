@@ -62,10 +62,16 @@ const SIGNAL_STYLE: Record<string, { bar: string; badge: string; text: string }>
   },
 };
 
-function formatGrowth(pct: number | null): string {
-  if (pct == null) return "—";
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${pct}%`;
+export function formatWindGrowth(
+  row: Pick<IndustryWindRow, "growth_pct" | "article_count" | "prior_count">,
+  t: (key: string) => string,
+): string {
+  if (row.prior_count <= 0 && row.article_count > 0) {
+    return t("homeIndustryWindGrowthNew");
+  }
+  if (row.growth_pct == null) return "—";
+  const sign = row.growth_pct > 0 ? "+" : "";
+  return `${sign}${row.growth_pct}%`;
 }
 
 function rowHeadline(row: IndustryWindRow): string {
@@ -189,7 +195,7 @@ export function IndustryWindPanel({ data, loading }: Props) {
                     {row.signal}
                   </span>
                   <span className={`w-full text-right text-xs font-semibold tabular-nums sm:ml-auto sm:w-auto ${style.text}`}>
-                    {formatGrowth(row.growth_pct)}
+                    {formatWindGrowth(row, t)}
                     <span className="mx-1 font-normal text-slate-300">·</span>
                     <span className="font-normal text-slate-500">
                       {t("homeIndustryWindThisWeek")} {row.article_count}

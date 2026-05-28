@@ -21,7 +21,7 @@ SCAN_LIMIT = 120
 LLM_CANDIDATE_LIMIT = 55
 MAX_TRENDS = 6
 MIN_TRENDS = 3
-CACHE_KEY = "industry_wind_cache_v5"
+CACHE_KEY = "industry_wind_cache_v6"
 CACHE_TTL_SECONDS = 24 * 3600
 CACHE_STALE_MAX_SECONDS = 7 * 24 * 3600
 WIND_LLM_MIN_INTERVAL_SECONDS = 24 * 3600
@@ -142,9 +142,18 @@ def compute_article_momentum(a: Article, *, now: datetime | None = None) -> floa
     return round(heat * update_boost * sustained_boost * star_boost, 2)
 
 
+def _wind_article_period_dt(a: Article, *, now: datetime) -> datetime:
+    """环比与按日曲线用发布时间，不用连接器刷新后的 updated_at。"""
+    if a.published_at is not None:
+        return a.published_at
+    return art.article_freshness_for_row(a) or a.updated_at or now
+
+
 def _growth_pct(current: int, previous: int) -> float | None:
     if previous <= 0:
-        return None if current <= 0 else 100.0
+        return None
+    if current <= 0:
+        return round(-100.0, 1)
     return round((current - previous) / previous * 100.0, 1)
 
 
@@ -177,10 +186,10 @@ def _daily_series_for_article_ids(
         a = articles_by_id.get(aid)
         if a is None:
             continue
-        fresh = art.article_freshness_for_row(a) or a.published_at or now
-        if fresh < window_start or fresh >= window_end:
+        period_dt = _wind_article_period_dt(a, now=now)
+        if period_dt < window_start or period_dt >= window_end:
             continue
-        dk = fresh.replace(hour=0, minute=0, second=0, microsecond=0).date().isoformat()
+        dk = period_dt.replace(hour=0, minute=0, second=0, microsecond=0).date().isoformat()
         if dk in counts:
             counts[dk] += 1
     return [{"day": k, "count": counts[k]} for k in day_keys]
@@ -542,15 +551,15 @@ def _enrich_trends(
         for aid in ids:
             a = articles_by_id[aid]
             mom = momentum_by_id.get(aid, 0.0)
-            fresh = art.article_freshness_for_row(a) or a.published_at or now
-            if fresh >= recent_since:
+            period_dt = _wind_article_period_dt(a, now=now)
+            if period_dt >= recent_since:
                 recent_count += 1
                 raw_momentum += mom
                 heat_sum += float(a.heat_score or 0)
                 if mom > best_mom:
                     best_mom = mom
                     best_article = a
-            elif prior_since <= fresh < recent_since:
+            elif prior_since <= period_dt < recent_since:
                 prior_count += 1
         growth = _growth_pct(recent_count, prior_count)
         signal = _wind_signal(growth_pct=growth, recent_count=recent_count, raw_momentum=raw_momentum)

@@ -35,6 +35,7 @@ const STRINGS: Record<string, string> = {
   homeIndustryWindArticlesUnit: "篇",
   homeIndustryWindThisWeek: "近15日",
   homeIndustryWindLastWeek: "前15日",
+  homeIndustryWindGrowthNew: "新增",
   homeIndustryWindHeat: "均热",
   homeIndustryWindExample: "代表条目：",
   homeIndustryWindMore: "看更多同类",
