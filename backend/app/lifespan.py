@@ -44,7 +44,7 @@ def _startup_sync() -> None:
         ensure_newsletter_settings_row(db)
         seeded = seed_product_settings_from_environment(db)
         if seeded.get("llm_model_flash"):
-            logger.info("LLM model migrated to deepseek-v4-flash (was pro/legacy alias)")
+            logger.info("LLM model locked to %s", "deepseek-v4-flash")
         from .newsletter_settings_service import (
             repair_newsletter_beijing_0900_schedule_once,
             repair_newsletter_cn_morning_schedule_once,

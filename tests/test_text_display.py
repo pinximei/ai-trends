@@ -5,10 +5,12 @@ from backend.app.text_display import (
     is_degraded_data_tab_body,
     markdown_to_plain_preview,
     normalize_article_tabs_for_display,
+    polish_content_has_connector_api_leak,
     prepare_data_tab_body,
     prepare_description_tab_body,
     prepare_detail_data_tab_body,
     repair_utf8_mojibake,
+    sanitize_polish_tab_text,
     tab_text_role_from_label,
 )
 from backend.app.domain.articles import build_connector_data_tab_markdown
@@ -114,6 +116,18 @@ def test_prepare_description_strips_connector_snapshot() -> None:
     assert "连接器同步快照" not in md
     assert "foo:" not in md
     assert "正常段落" in md
+
+
+def test_polish_content_has_connector_api_leak() -> None:
+    assert polish_content_has_connector_api_leak('"node_id": "x"')
+    assert not polish_content_has_connector_api_leak("| 指标 | Star |\n| --- | --- |\n| 仓库 | 6.1万 |")
+
+
+def test_sanitize_polish_tab_text_removes_json_block() -> None:
+    raw = "说明段落。\n\n```json\n{\"node_id\": \"x\"}\n```\n\n结尾。"
+    out = sanitize_polish_tab_text(raw)
+    assert "node_id" not in out
+    assert "说明段落" in out
 
 
 def test_strip_inline_github_api_json_from_description() -> None:

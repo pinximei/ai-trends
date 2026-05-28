@@ -9,7 +9,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .llm_settings_service import DEFAULT_LLM, _merged_stored as _llm_merged, normalize_deepseek_model_name, repair_llm_model_to_flash
+from .llm_settings_service import (
+    DEFAULT_LLM,
+    DEFAULT_LLM_MODEL,
+    _merged_stored as _llm_merged,
+    repair_llm_model_locked_flash,
+)
 from .newsletter_settings_service import NEWSLETTER_KEY, default_newsletter_json, ensure_newsletter_settings_row
 from .product_models import ProductSetting
 from .runtime_settings_service import RUNTIME_KEY, _env_defaults as _runtime_env_defaults, _normalize as _norm_runtime, ensure_runtime_settings_row
@@ -63,9 +68,7 @@ def seed_llm_from_env_if_empty(db: Session) -> bool:
     ev_base = (os.getenv("AITRENDS_LLM_BASE_URL") or os.getenv("AISOU_LLM_BASE_URL") or "").strip()
     if ev_base:
         cur["base_url"] = ev_base.rstrip("/")
-    ev_model = (os.getenv("AITRENDS_LLM_MODEL") or os.getenv("AISOU_LLM_MODEL") or "").strip()
-    if ev_model:
-        cur["model"] = normalize_deepseek_model_name(ev_model)
+    cur["model"] = DEFAULT_LLM_MODEL
     row.value_json = cur
     db.commit()
     return True
@@ -156,6 +159,6 @@ def seed_product_settings_from_environment(db: Session) -> dict[str, bool]:
         "runtime_demo_seed": demo_m,
         "runtime": seed_runtime_from_env_if_empty(db),
         "llm": seed_llm_from_env_if_empty(db),
-        "llm_model_flash": repair_llm_model_to_flash(db),
+        "llm_model_flash": repair_llm_model_locked_flash(db),
         "newsletter": seed_newsletter_from_env_if_needed(db),
     }

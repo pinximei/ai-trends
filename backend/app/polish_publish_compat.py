@@ -73,10 +73,12 @@ def coerce_polish_output(out: dict) -> dict:
 
 
 def _merge_text(*parts: str, min_len: int = 0) -> str:
+    from .text_display import sanitize_polish_tab_text
+
     chunks: list[str] = []
     seen: set[str] = set()
     for p in parts:
-        s = (p or "").strip()
+        s = sanitize_polish_tab_text(p)
         if not s or s in seen:
             continue
         seen.add(s)

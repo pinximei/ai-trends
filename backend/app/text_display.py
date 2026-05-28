@@ -330,6 +330,43 @@ def _strip_inline_json_blobs(text: str) -> str:
     return _strip_github_api_junk_lines(cleaned)
 
 
+_API_JSON_LEAK_MARKERS: tuple[str, ...] = (
+    '"node_id"',
+    '"stargazers_count"',
+    '"followers_url"',
+    '"gravatar_id"',
+    '"avatar_url"',
+    '"subscriptions_url"',
+)
+
+
+def polish_content_has_connector_api_leak(text: str) -> bool:
+    """润色结果是否仍含连接器 API 原始 JSON 残渣（入库应拒绝或清洗）。"""
+    s = (text or "").strip()
+    if not s:
+        return False
+    if any(m in s for m in _API_JSON_LEAK_MARKERS):
+        return True
+    if s.startswith('{"id":') or s.startswith("| {"):
+        return True
+    if re.search(r'^\s*\{\s*"id"\s*:', s, re.M):
+        return True
+    if re.search(r'\bnode_id\s*=', s, re.I) and re.search(r'\bhtml_url\s*=', s, re.I):
+        return True
+    return False
+
+
+def sanitize_polish_tab_text(text: str) -> str:
+    """入库修复/合并前：去掉 API JSON，保留中文叙述与表格。"""
+    s = (text or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r"```json\s*[\s\S]*?```", "", s, flags=re.IGNORECASE)
+    s = _strip_inline_json_blobs(s)
+    s = _strip_github_api_junk_lines(s)
+    return re.sub(r"\n{4,}", "\n\n\n", s).strip()
+
+
 def _extract_json_snippet_from_body(body: str) -> str:
     m = re.search(r"```json\s*([\s\S]*?)\s*```", body, re.IGNORECASE)
     if m:

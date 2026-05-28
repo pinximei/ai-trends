@@ -242,6 +242,10 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
             return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
         if len(body) < min_body:
             return f"tab_{lab}_body_short len={len(body)} need>={min_body}"
+        from .text_display import polish_content_has_connector_api_leak
+
+        if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
+            return f"tab_{lab}_api_json_leak"
     if labels != list(need_labels):
         return f"tab_labels={labels!r} need={list(need_labels)!r}"
     if fk == "apps" and len(need_labels) == 3:
@@ -260,6 +264,10 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
         return f"tab_body_total_short len={tab_body_total} need>={th['tab_body_total']}"
     if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
         return f"body_md_short body={len(body_md)} tabs_total={tab_body_total}"
+    from .text_display import polish_content_has_connector_api_leak
+
+    if polish_content_has_connector_api_leak(body_md):
+        return "body_md_api_json_leak"
     return "validate_unknown"
 
 
@@ -318,7 +326,8 @@ def polish_connector_article(
             "分两大块写——**一、变现价值**（谁付钱、怎么收钱、竞品与风险）；**二、实施与工时拆解**（必须含 Markdown 表格列出各阶段工时）。"
             "变现块：目标用户、付费动机、定价/营收线索、差异化、主要风险。"
             "工时块：用表格列「阶段|工时(小时)|交付物」，至少 3 行阶段；合计 MVP 须≥8 小时；可注明团队形态（如 1 人业余 20h/周）。"
-            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字：中文表格写可核对指标（链接、star、定价等）；禁止 ```json。"
+            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字：中文表格写可核对指标（链接、star、定价等）；"
+            "禁止 ```json、禁止粘贴 API 字段名（如 node_id、followers_url、gravatar_id、html_url 等），禁止整段 {{...}} JSON。"
             "另须输出 replication_analysis 对象（与 tabs 一致、可机器解析），键："
             "verdict（高价值|观望|不建议）、"
             "worth_score（1-10，**仅表示变现价值**，与 star 无关）、"
@@ -343,7 +352,7 @@ def polish_connector_article(
         structure_hint = (
             "【资讯稿结构】tabs 只能是「描述」「数据支撑」。"
             f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字，分段写事件与启示。"
-            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字，用表格/列表写关键数字与链接。"
+            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字，用表格/列表写关键数字与链接；禁止粘贴原始 JSON。"
         )
     system = (
         "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL。"
@@ -363,8 +372,9 @@ def polish_connector_article(
         "categories 为恰好 1 个元素的字符串数组，元素必须是上述规范大类之一；"
         'feed_kind 只能为 "news" 或 "apps"；replication_tier 必须为 S/A/B/C 之一。'
         f"tabs：恰好 {len(required_feed_card_tab_labels(fk))} 个；label 见上文结构要求；每项含 summary、body_md（Markdown）。"
-        "若片段为 JSON/数组，须翻译成中文叙述或表格/列表，保留 repo 名、版本号、star、链接等可核对信息；"
-        "禁止在 body_md 或 tabs 中输出 ```json 代码块或整段原始 API 响应。"
+        "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留 repo 名、版本号、star、链接等可核对信息；"
+        "禁止在 body_md 或任一 tab 的 body_md/summary 中输出 ```json、整段原始 API 响应、或未翻译的键值对 JSON。"
+        "GitHub/Product Hunt/Acquire 等源同样适用：读者只能看到中文说明，不能看到 API 字段名堆砌。"
         "禁止输出空洞 tab（仅重复 summary、无新信息）。"
     )
     user = (
@@ -455,11 +465,13 @@ def polish_connector_article(
             f"「变现评估」summary≥{th_gate.get('repl_summary', 64)}、body≥{th_gate.get('repl_body', 180)}；"
             f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}；"
             "并含完整 replication_analysis（含 phases≥3、mvp_max≥8、monetization_hypothesis、risks≥1）。"
+            "禁止在 tabs 中残留 API JSON（node_id、followers_url 等）。"
             if fk == "apps"
             else (
                 "tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
                 f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
                 f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字；"
+                "禁止粘贴原始 JSON。"
             )
         )
         repair_user = (

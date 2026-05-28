@@ -391,7 +391,7 @@ export function App() {
   const sourceFormShowsAppSecret = sourceFormPreset?.show_app_secret_field === true;
 
   const [llmSettings, setLlmSettings] = useState<LlmSettingsView | null>(null);
-  const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", model: "", api_key: "" });
+  const [llmForm, setLlmForm] = useState({ provider: "deepseek", base_url: "", api_key: "" });
   const [llmSaving, setLlmSaving] = useState(false);
   const [schedulerSettings, setSchedulerSettings] = useState<SchedulerSettingsView | null>(null);
   const [schedulerForm, setSchedulerForm] = useState({ enabled: true, hours: 6 });
@@ -598,7 +598,6 @@ export function App() {
         ...p,
         provider: llm.provider,
         base_url: llm.base_url,
-        model: llm.model,
         api_key: "",
       }));
     } else if (tab === "software") {
@@ -786,10 +785,9 @@ export function App() {
     setLlmSaving(true);
     setErr("");
     try {
-      const payload: { provider?: string; base_url?: string; model?: string; api_key?: string } = {
+      const payload: { provider?: string; base_url?: string; api_key?: string } = {
         provider: llmForm.provider.trim() || undefined,
         base_url: llmForm.base_url.trim() || undefined,
-        model: llmForm.model.trim() || undefined,
       };
       if (llmForm.api_key.trim()) payload.api_key = llmForm.api_key.trim();
       const out = await adminApi.saveLlmSettings(payload);
@@ -799,7 +797,6 @@ export function App() {
         api_key: "",
         provider: out.provider,
         base_url: out.base_url,
-        model: out.model,
       }));
     } catch (error) {
       setErr(friendlyErr(error instanceof Error ? error.message : "save llm failed"));
@@ -2883,8 +2880,9 @@ export function App() {
                 DeepSeek / 兼容端点
               </h3>
               <p className="muted tiny" style={{ marginTop: 6 }}>
-                默认 <code className="inline-code">https://api.deepseek.com/v1</code> 与{" "}
-                <code className="inline-code">deepseek-v4-flash</code>（推荐，快且省）。连接器同步、行业风向、日报/飞书摘要等均走此模型；Pro/旧别名保存时会自动改为 Flash。Key 写入 <code className="inline-code">product_settings_kv.llm</code>。
+                默认 <code className="inline-code">https://api.deepseek.com/v1</code>；模型固定为{" "}
+                <code className="inline-code">deepseek-v4-flash</code>（全站写死，无需配置）。连接器同步、行业风向、日报/飞书摘要等均走 Flash。仅需在本页配置 API Key（写入{" "}
+                <code className="inline-code">product_settings_kv.llm</code>）。
               </p>
               <form className="create-user-form" onSubmit={onSaveLlm} style={{ marginTop: 16 }}>
                 <div className="form-field">
@@ -2907,14 +2905,11 @@ export function App() {
                   />
                 </div>
                 <div className="form-field">
-                  <label>模型名</label>
-                  <input
-                    value={llmForm.model}
-                    onChange={(e) => setLlmForm((p) => ({ ...p, model: e.target.value }))}
-                    disabled={!canOperate}
-                    placeholder="deepseek-v4-flash"
-                    autoComplete="off"
-                  />
+                  <label>模型</label>
+                  <p className="muted tiny" style={{ marginTop: 4 }}>
+                    固定 <code className="inline-code">deepseek-v4-flash</code>
+                    {llmSettings?.model ? `（${llmSettings.model}）` : null}
+                  </p>
                 </div>
                 <div className="form-field">
                   <label>API Key（Bearer）</label>

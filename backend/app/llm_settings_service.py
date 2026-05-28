@@ -7,52 +7,33 @@ from sqlalchemy.orm import Session
 
 from .product_models import ProductSetting
 
-FLASH_MODEL = "deepseek-v4-flash"
+# 全站固定 Flash，不读后台/环境变量中的其它模型名
+DEFAULT_LLM_MODEL = "deepseek-v4-flash"
+FLASH_MODEL = DEFAULT_LLM_MODEL
 
 DEFAULT_LLM: dict = {
     "provider": "deepseek",
     "base_url": "https://api.deepseek.com/v1",
-    "model": FLASH_MODEL,
+    "model": DEFAULT_LLM_MODEL,
     "api_key": "",
 }
 
-# 历史别名 / Pro·推理档 → Flash（非思考，更省、更快）
-_LEGACY_DEEPSEEK_MODELS_TO_FLASH: frozenset[str] = frozenset(
-    {
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "deepseek-v4-pro",
-        "deepseek-pro",
-    }
-)
+
+def resolve_llm_model_name(_model: str = "") -> str:
+    """固定 Flash；参数仅保留以兼容旧调用。"""
+    return DEFAULT_LLM_MODEL
 
 
-def normalize_deepseek_model_name(model: str) -> str:
-    """将 DeepSeek Pro/旧别名统一为 ``deepseek-v4-flash``；非 deepseek 模型原样返回。"""
-    m = (model or "").strip()
-    if not m:
-        return FLASH_MODEL
-    ml = m.lower()
-    if "flash" in ml:
-        return m
-    if not ml.startswith("deepseek"):
-        return m
-    if ml in _LEGACY_DEEPSEEK_MODELS_TO_FLASH or "pro" in ml or "reasoner" in ml:
-        return FLASH_MODEL
-    return m
-
-
-def repair_llm_model_to_flash(db: Session) -> bool:
-    """若库内仍为 Pro/旧别名，一次性改为 Flash（返回是否写入）。"""
+def repair_llm_model_locked_flash(db: Session) -> bool:
+    """库内若存了其它模型名，启动时改回 Flash。"""
     row = db.get(ProductSetting, "llm")
     if not row or not isinstance(row.value_json, dict):
         return False
     cur = dict(row.value_json)
     before = str(cur.get("model") or "").strip()
-    after = normalize_deepseek_model_name(before)
-    if not before or before == after:
+    if before == DEFAULT_LLM_MODEL:
         return False
-    cur["model"] = after
+    cur["model"] = DEFAULT_LLM_MODEL
     row.value_json = cur
     row.updated_at = datetime.utcnow()
     db.commit()
@@ -72,8 +53,9 @@ def _merged_stored(db: Session) -> dict:
     row = db.get(ProductSetting, "llm")
     m = {**DEFAULT_LLM, **((row.value_json if row else {}) or {})}
     for k in ("provider", "base_url", "model"):
-        if not str(m.get(k) or "").strip():
+        if not str(m.get(k) or "").strip() and k != "model":
             m[k] = DEFAULT_LLM[k]
+    m["model"] = DEFAULT_LLM_MODEL
     m["api_key"] = str(m.get("api_key") or "").strip()
     return m
 
@@ -85,7 +67,7 @@ def get_llm_settings_public(db: Session) -> dict:
     return {
         "provider": str(m.get("provider") or DEFAULT_LLM["provider"]),
         "base_url": str(m.get("base_url") or DEFAULT_LLM["base_url"]),
-        "model": normalize_deepseek_model_name(str(m.get("model") or DEFAULT_LLM["model"])),
+        "model": DEFAULT_LLM_MODEL,
         "api_key_masked": _mask_key(key),
         "has_api_key": bool(key),
     }
@@ -94,27 +76,27 @@ def get_llm_settings_public(db: Session) -> dict:
 def resolve_llm_http_config(db: Session) -> tuple[str, str, str]:
     """
     返回 (base_url, api_key, model)。
-    仅使用库内 product_settings_kv.llm；请在后台「LLM」页配置。
+    model 恒为 ``deepseek-v4-flash``；仅 base_url / api_key 来自库配置。
     """
     m = _merged_stored(db)
     base = (m.get("base_url") or "").strip() or DEFAULT_LLM["base_url"].strip()
     key = (m.get("api_key") or "").strip()
-    model = normalize_deepseek_model_name((m.get("model") or "").strip() or DEFAULT_LLM["model"].strip())
-    return base.rstrip("/"), key, model
+    return base.rstrip("/"), key, DEFAULT_LLM_MODEL
 
 
 def save_llm_settings_patch(db: Session, patch: dict) -> dict:
-    """patch 可含 provider, base_url, model, api_key；api_key 空串表示不修改已存密钥。"""
+    """patch 可含 provider, base_url, api_key；model 忽略，恒为 Flash。"""
     row = db.get(ProductSetting, "llm")
     cur = _merged_stored(db)
     if not row:
         row = ProductSetting(key="llm", value_json={})
         db.add(row)
-    for k in ("provider", "base_url", "model"):
+    for k in ("provider", "base_url"):
         if k in patch and patch[k] is not None:
             v = str(patch[k]).strip()
             if v:
-                cur[k] = normalize_deepseek_model_name(v) if k == "model" else v
+                cur[k] = v
+    cur["model"] = DEFAULT_LLM_MODEL
     if "api_key" in patch and patch["api_key"] is not None:
         nk = str(patch["api_key"]).strip()
         if nk:

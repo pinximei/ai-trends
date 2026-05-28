@@ -102,10 +102,12 @@ def load_thenewsapi_credentials() -> str:
 
 
 def load_llm_credentials() -> tuple[str, str, str]:
+    from backend.app.llm_settings_service import DEFAULT_LLM_MODEL
+
     return (
         _kv("AITRENDS_LLM_API_KEY", "AISOU_LLM_API_KEY"),
         _kv("AITRENDS_LLM_BASE_URL", "AISOU_LLM_BASE_URL") or "https://api.deepseek.com/v1",
-        _kv("AITRENDS_LLM_MODEL", "AISOU_LLM_MODEL") or "deepseek-v4-flash",
+        DEFAULT_LLM_MODEL,
     )
 
 
@@ -125,8 +127,7 @@ def apply_llm_credentials(db) -> bool:
     cur["api_key"] = key
     if base:
         cur["base_url"] = base.rstrip("/")
-    if model:
-        cur["model"] = model
+    cur["model"] = model
     row.value_json = cur
     db.commit()
     return True

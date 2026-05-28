@@ -1451,6 +1451,8 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
         return False
     if len(tabs) != len(need_labels):
         return False
+    from .text_display import polish_content_has_connector_api_leak
+
     tab_body_total = 0
     labels: list[str] = []
     for t in tabs:
@@ -1468,6 +1470,8 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
             min_summ, min_body = th["hi_summary"], th["hi_body"]
         if len(lab) < 2 or len(summ) < min_summ or len(body) < min_body:
             return False
+        if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
+            return False
         tab_body_total += len(body)
     if labels != list(need_labels):
         return False
@@ -1478,6 +1482,8 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     if tab_body_total < th["tab_body_total"]:
         return False
     if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
+        return False
+    if polish_content_has_connector_api_leak(body_md):
         return False
     return True
 
