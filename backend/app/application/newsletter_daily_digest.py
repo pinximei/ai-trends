@@ -335,9 +335,19 @@ def _get_or_create_digest(db: Session, digest_date: str) -> NewsletterDailyDiges
     return row
 
 
+_MIN_DIGEST_BODY_LEN = 400
+
+
+def _digest_body_substantive(row: NewsletterDailyDigest | None) -> bool:
+    """过短正文视为未成功推送（避免午后误触飞书后阻塞次日早间定时）。"""
+    return bool(row and len((row.body_md or "").strip()) >= _MIN_DIGEST_BODY_LEN)
+
+
 def _digest_delivery_complete(row: NewsletterDailyDigest, settings: dict[str, Any]) -> bool:
     from .newsletter_period_digest import normalize_feishu_cadence
 
+    if row.status != "ready" or not _digest_body_substantive(row):
+        return False
     email_needed = bool(settings.get("send_enabled")) and _smtp_config_from_settings(settings)
     feishu_cadence = normalize_feishu_cadence(settings.get("feishu_push_cadence"))
     feishu_needed = (
@@ -347,15 +357,15 @@ def _digest_delivery_complete(row: NewsletterDailyDigest, settings: dict[str, An
     )
     if email_needed and row.sent_at is None:
         return False
-    if feishu_needed and row.feishu_sent_at is None:
+    if feishu_needed and (row.feishu_sent_at is None or not _digest_body_substantive(row)):
         return False
     if not email_needed and not feishu_needed:
-        return row.status == "ready"
+        return True
     return True
 
 
 def _digest_has_content(row: NewsletterDailyDigest | None) -> bool:
-    return bool(row and row.status == "ready" and (row.body_md or "").strip())
+    return bool(row and row.status == "ready" and _digest_body_substantive(row))
 
 
 def _article_counts_from_row(row: NewsletterDailyDigest | None) -> tuple[int, int]:
