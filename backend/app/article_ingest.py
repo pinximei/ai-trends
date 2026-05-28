@@ -52,12 +52,15 @@ def _snippet_title_preview(snippet: str, *, max_len: int = 100) -> str:
 
 
 def _strip_raw_json_from_markdown(text: str) -> str:
+    from .text_display import _strip_inline_json_blobs
+
     s = (text or "").strip()
     if not s:
         return ""
     s = re.sub(r"```json\s*[\s\S]*?```", "", s, flags=re.IGNORECASE)
     s = re.sub(r"<details>[\s\S]*?</details>", "", s, flags=re.IGNORECASE)
     s = re.sub(r">\s*\*\*原始摘录\*\*[\s\S]*?(?=\n##\s|\n#\s|$)", "", s, flags=re.IGNORECASE)
+    s = _strip_inline_json_blobs(s)
     return re.sub(r"\n{4,}", "\n\n\n", s).strip()
 
 

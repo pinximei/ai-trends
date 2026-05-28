@@ -196,21 +196,104 @@ def _rows_to_data_tab_markdown(rows: list[tuple[str, str]], *, extra_links: list
     return "\n".join(md)
 
 
+def _find_json_object_spans(text: str, *, min_len: int = 40) -> list[tuple[int, int]]:
+    """按括号深度定位 JSON 对象片段（用于剥离内联 GitHub/API 响应）。"""
+    spans: list[tuple[int, int]] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] != "{":
+            i += 1
+            continue
+        depth = 0
+        for j in range(i, n):
+            ch = text[j]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    if j - i + 1 >= min_len:
+                        spans.append((i, j + 1))
+                    i = j + 1
+                    break
+        else:
+            i += 1
+    return spans
+
+
+def _is_connector_api_json(obj: object) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    api_keys = frozenset(
+        {
+            "node_id",
+            "html_url",
+            "stargazers_count",
+            "full_name",
+            "avatar_url",
+            "gravatar_id",
+            "followers_url",
+            "private",
+            "owner",
+            "license",
+            "default_branch",
+        }
+    )
+    return len(api_keys & obj.keys()) >= 3
+
+
+def _strip_inline_json_blobs(text: str) -> str:
+    """去掉正文里整段连接器/API JSON（常见于 GitHub 润色泄漏）。"""
+    s = text or ""
+    if not s or "{" not in s:
+        return s.strip()
+    spans = _find_json_object_spans(s, min_len=80)
+    if not spans:
+        return s.strip()
+    remove: list[tuple[int, int]] = []
+    for start, end in spans:
+        chunk = s[start:end]
+        try:
+            obj = json.loads(chunk)
+        except json.JSONDecodeError:
+            continue
+        if _is_connector_api_json(obj) or (isinstance(obj, dict) and len(chunk) > 400):
+            remove.append((start, end))
+    if not remove:
+        return s.strip()
+    out: list[str] = []
+    pos = 0
+    for start, end in remove:
+        out.append(s[pos:start])
+        pos = end
+    out.append(s[pos:])
+    cleaned = "".join(out)
+    cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)
+    return cleaned.strip()
+
+
 def _extract_json_snippet_from_body(body: str) -> str:
     m = re.search(r"```json\s*([\s\S]*?)\s*```", body, re.IGNORECASE)
     if m:
         return m.group(1).strip()
     s = body.strip()
     if s.startswith("{") and s.endswith("}"):
-        return s
-    for m2 in re.finditer(r"\{[\s\S]{20,8000}\}", s):
-        chunk = m2.group(0)
+        try:
+            json.loads(s)
+            return s
+        except json.JSONDecodeError:
+            pass
+    best = ""
+    for start, end in _find_json_object_spans(s, min_len=20):
+        chunk = s[start:end]
         try:
             json.loads(chunk)
-            return chunk
         except json.JSONDecodeError:
             continue
-    return ""
+        if len(chunk) > len(best):
+            best = chunk
+    return best
 
 
 def _extract_rows_from_degraded_body(body: str) -> list[tuple[str, str]]:
@@ -304,6 +387,7 @@ def _strip_tab_markdown_junk(body: str) -> str:
     s = re.sub(r"```json\s*[\s\S]*?```", "", s, flags=re.IGNORECASE)
     s = re.sub(r"<details>[\s\S]*?</details>", "", s, flags=re.IGNORECASE)
     s = re.sub(r"##\s*连接器同步快照[\s\S]*?(?=\n##\s|$)", "", s)
+    s = _strip_inline_json_blobs(s)
     kept: list[str] = []
     for line in s.splitlines():
         t = line.strip()
@@ -344,6 +428,15 @@ def prepare_description_tab_body(body_md: str, *, admin_source_key: str = "") ->
         return ""
     cleaned = _strip_tab_markdown_junk(raw)
     cleaned = _strip_tab_section_headings(cleaned)
+    if is_degraded_data_tab_body(cleaned):
+        snippet = _extract_json_snippet_from_body(raw)
+        if snippet:
+            plain = format_connector_snippet_plain(snippet, admin_source_key=admin_source_key or "github")
+            if plain and len(re.findall(r"[\u4e00-\u9fff]", cleaned)) >= 24:
+                cleaned = f"{cleaned.rstrip()}\n\n---\n\n**仓库要点**\n\n{plain}"
+            elif plain:
+                cleaned = plain
+        cleaned = _strip_inline_json_blobs(cleaned)
     if is_degraded_data_tab_body(cleaned) and len(re.findall(r"[\u4e00-\u9fff]", cleaned)) < 24:
         rows = _extract_rows_from_degraded_body(cleaned)
         if rows:

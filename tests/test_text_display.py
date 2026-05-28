@@ -113,3 +113,36 @@ def test_prepare_description_strips_connector_snapshot() -> None:
     assert "连接器同步快照" not in md
     assert "foo:" not in md
     assert "正常段落" in md
+
+
+def test_strip_inline_github_api_json_from_description() -> None:
+    snippet = (
+        '{"id": 1, "node_id": "R_kg", "name": "MoneyPrinterTurbo", '
+        '"full_name": "harry0703/MoneyPrinterTurbo", "private": false, '
+        '"html_url": "https://github.com/harry0703/MoneyPrinterTurbo", '
+        '"stargazers_count": 61700, "language": "Python", '
+        '"owner": {"login": "harry0703", "html_url": "https://github.com/harry0703"}}'
+    )
+    raw = (
+        "MoneyPrinterTurbo 是开源 AI 短视频生成工具，支持多模型与 Web 界面。\n\n"
+        f"{snippet}\n"
+    )
+    md = prepare_description_tab_body(raw, admin_source_key="github")
+    assert "node_id" not in md
+    assert "followers_url" not in md
+    assert "MoneyPrinterTurbo" in md
+    assert "开源" in md or "短视频" in md
+
+
+def test_prepare_data_tab_rebuilds_from_inline_github_json() -> None:
+    snippet = (
+        '{"full_name":"harry0703/MoneyPrinterTurbo","stargazers_count":61700,'
+        '"language":"Python","html_url":"https://github.com/harry0703/MoneyPrinterTurbo",'
+        '"description":"Auto video generator"}'
+    )
+    body = f"| 指标 | 内容 |\n| --- | --- |\n| 原始 | {snippet} |\n"
+    md = prepare_data_tab_body(body, admin_source_key="github")
+    assert "| 指标 | 内容 |" in md
+    assert "harry0703/MoneyPrinterTurbo" in md
+    assert "61700" in md
+    assert "node_id" not in md
