@@ -79,6 +79,30 @@ def sanitize_stored_text_field(text: str, *, max_len: int = 50000) -> str:
     return s
 
 
+def github_connector_snippet_from_article_fields(
+    *,
+    source_original_url: str = "",
+    summary: str = "",
+    engagement_stars_total: int | None = None,
+    title: str = "",
+) -> str:
+    """GitHub 稿详情页：用已入库字段拼连接器 snippet，重建「数据支撑」表。"""
+    url = (source_original_url or "").strip()
+    full_name = ""
+    if "github.com/" in url:
+        parts = url.split("github.com/", 1)[-1].strip("/").split("/")
+        if len(parts) >= 2:
+            full_name = f"{parts[0]}/{parts[1]}"
+    payload: dict[str, object] = {
+        "full_name": full_name or None,
+        "html_url": url or None,
+        "stargazers_count": engagement_stars_total,
+        "description": (summary or title or "").strip()[:500] or None,
+    }
+    clean = {k: v for k, v in payload.items() if v is not None and str(v).strip()}
+    return json.dumps(clean, ensure_ascii=False) if clean else ""
+
+
 def format_connector_snippet_plain(snippet: str, *, admin_source_key: str = "", max_len: int = 4000) -> str:
     """连接器 JSON → 中文可读要点（避免 json.dumps 整段塞进「数据支撑」）。"""
     text = (snippet or "").strip()[: max_len + 2000]
@@ -243,6 +267,37 @@ def _is_connector_api_json(obj: object) -> bool:
     return len(api_keys & obj.keys()) >= 3
 
 
+def _strip_github_api_junk_lines(text: str) -> str:
+    """剥离无法 json.loads 的 GitHub API 残片（表格单元格、断行 JSON）。"""
+    api_markers = (
+        '"node_id"',
+        '"stargazers_count"',
+        '"followers_url"',
+        '"gravatar_id"',
+        '"avatar_url"',
+        '"stargazers_url"',
+        '"subscriptions_url"',
+    )
+    kept: list[str] = []
+    for line in (text or "").splitlines():
+        t = line.strip()
+        if not t:
+            kept.append(line)
+            continue
+        if any(m in t for m in api_markers):
+            continue
+        if t.startswith('{"id":') or t.startswith("| {") or t.startswith("|{"):
+            continue
+        if re.search(r'"\w+"\s*:\s*', t) and re.search(
+            r"(node_id|html_url|full_name|private|owner\s*:)",
+            t,
+        ):
+            continue
+        kept.append(line)
+    out = "\n".join(kept)
+    return re.sub(r"\n{4,}", "\n\n\n", out).strip()
+
+
 def _strip_inline_json_blobs(text: str) -> str:
     """去掉正文里整段连接器/API JSON（常见于 GitHub 润色泄漏）。"""
     s = text or ""
@@ -250,7 +305,7 @@ def _strip_inline_json_blobs(text: str) -> str:
         return s.strip()
     spans = _find_json_object_spans(s, min_len=80)
     if not spans:
-        return s.strip()
+        return _strip_github_api_junk_lines(s)
     remove: list[tuple[int, int]] = []
     for start, end in spans:
         chunk = s[start:end]
@@ -261,7 +316,7 @@ def _strip_inline_json_blobs(text: str) -> str:
         if _is_connector_api_json(obj) or (isinstance(obj, dict) and len(chunk) > 400):
             remove.append((start, end))
     if not remove:
-        return s.strip()
+        return _strip_github_api_junk_lines(s)
     out: list[str] = []
     pos = 0
     for start, end in remove:
@@ -270,7 +325,7 @@ def _strip_inline_json_blobs(text: str) -> str:
     out.append(s[pos:])
     cleaned = "".join(out)
     cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)
-    return cleaned.strip()
+    return _strip_github_api_junk_lines(cleaned)
 
 
 def _extract_json_snippet_from_body(body: str) -> str:
@@ -388,6 +443,7 @@ def _strip_tab_markdown_junk(body: str) -> str:
     s = re.sub(r"<details>[\s\S]*?</details>", "", s, flags=re.IGNORECASE)
     s = re.sub(r"##\s*连接器同步快照[\s\S]*?(?=\n##\s|$)", "", s)
     s = _strip_inline_json_blobs(s)
+    s = _strip_github_api_junk_lines(s)
     kept: list[str] = []
     for line in s.splitlines():
         t = line.strip()

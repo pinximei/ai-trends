@@ -1138,12 +1138,24 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
             admin_source_key=ak,
         )
     if tabs:
-        from ..text_display import normalize_article_tabs_for_display
+        from ..text_display import (
+            github_connector_snippet_from_article_fields,
+            normalize_article_tabs_for_display,
+        )
 
+        connector_snippet = ""
+        if ak == "github":
+            connector_snippet = github_connector_snippet_from_article_fields(
+                source_original_url=src_url or "",
+                summary=a.summary or "",
+                engagement_stars_total=getattr(a, "engagement_stars_total", None),
+                title=a.title or "",
+            )
         tabs = normalize_article_tabs_for_display(
             tabs,
             admin_source_key=ak,
             source_original_url=src_url or "",
+            snippet=connector_snippet,
         )
     if not tabs and (a.body or "").strip():
         tabs = [

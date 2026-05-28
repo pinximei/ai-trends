@@ -1,6 +1,7 @@
 """文本展示：乱码修复与 Markdown 卡片摘要。"""
 from backend.app.text_display import (
     format_connector_snippet_plain,
+    github_connector_snippet_from_article_fields,
     is_degraded_data_tab_body,
     markdown_to_plain_preview,
     normalize_article_tabs_for_display,
@@ -132,6 +133,19 @@ def test_strip_inline_github_api_json_from_description() -> None:
     assert "followers_url" not in md
     assert "MoneyPrinterTurbo" in md
     assert "开源" in md or "短视频" in md
+
+
+def test_github_snippet_from_article_fields() -> None:
+    sn = github_connector_snippet_from_article_fields(
+        source_original_url="https://github.com/harry0703/MoneyPrinterTurbo",
+        summary="AI video tool",
+        engagement_stars_total=61700,
+        title="MoneyPrinterTurbo",
+    )
+    assert "harry0703/MoneyPrinterTurbo" in sn
+    md = prepare_data_tab_body("||| junk", admin_source_key="github", snippet=sn)
+    assert "61700" in md
+    assert "node_id" not in md
 
 
 def test_prepare_data_tab_rebuilds_from_inline_github_json() -> None:
