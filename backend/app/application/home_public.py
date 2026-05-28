@@ -456,7 +456,7 @@ def _pick_highlight_replicable_articles(
                 fe >= since,
             )
             .order_by(
-                desc(_worth_score_sql_expr()),
+                desc(_worth_score_sql_expr(bind=db.get_bind())),
                 desc(Article.heat_score),
                 desc(fe),
                 desc(Article.id),
@@ -584,7 +584,7 @@ def _pick_highlight_monetization_articles(
                 ),
             )
             .order_by(
-                desc(_worth_score_sql_expr()),
+                desc(_worth_score_sql_expr(bind=db.get_bind())),
                 desc(Article.heat_score),
                 desc(fe),
                 desc(Article.id),

@@ -186,10 +186,27 @@ def _freshness_at(a: Article) -> datetime:
     return art.article_freshness_for_row(a) or datetime.utcnow()
 
 
-def _worth_score_sql_expr():
-    """从 replication_analysis_json 提取 worth_score（1–10）；无评估字段视为 -1，排在有分条目之后。"""
+def _worth_score_sql_expr(*, dialect_name: str | None = None, bind=None):
+    """从 replication_analysis_json 提取 worth_score（1–10）；无评估字段视为 -1，排在有分条目之后。
+
+    SQLite 用 json_extract；PostgreSQL 用 jsonb ->>（生产库为 PG，误用 json_extract 会导致 500）。
+    优先使用 ``bind``（Session.get_bind()），避免测试 SQLite 会话却读到全局 PG engine 配置。
+    """
+    from ..db import engine
+
+    col = Article.replication_analysis_json
+    if dialect_name is None and bind is not None:
+        dialect_name = bind.dialect.name
+    dialect = (dialect_name or engine.dialect.name or "").lower()
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import JSONB
+
+        empty = or_(col.is_(None), func.trim(col) == "")
+        extracted = func.cast(func.nullif(func.trim(col), ""), JSONB).op("->>")("worth_score")
+        score = case((empty, None), else_=func.cast(extracted, Float))
+        return func.coalesce(score, -1.0)
     return func.coalesce(
-        func.cast(func.json_extract(Article.replication_analysis_json, "$.worth_score"), Float),
+        func.cast(func.json_extract(col, "$.worth_score"), Float),
         -1.0,
     )
 
@@ -199,11 +216,12 @@ def _heat_order_by(
     sort_replicable: bool = False,
     sort_by_value: bool = False,
     sort_monetization: bool = False,
+    bind=None,
 ):
     fe = _freshness_expr()
     order: list = []
     if sort_by_value or sort_replicable:
-        order.append(desc(_worth_score_sql_expr()))
+        order.append(desc(_worth_score_sql_expr(bind=bind)))
         if sort_monetization:
             order.append(
                 case(
@@ -343,7 +361,12 @@ def list_articles_home_radar_source_top(
     if not winner_ids:
         return []
     label_by_key = _admin_source_label_by_key(db)
-    order = _heat_order_by(sort_by_value=sort_by_value) if sort_by_value else _heat_order_by()
+    db_bind = db.get_bind()
+    order = (
+        _heat_order_by(sort_by_value=sort_by_value, bind=db_bind)
+        if sort_by_value
+        else _heat_order_by(bind=db_bind)
+    )
     rows = db.scalars(
         select(Article).where(Article.id.in_(winner_ids)).order_by(*order).limit(lim)
     ).all()
@@ -439,11 +462,16 @@ def _base_article_query_for_scope(
     return ind, q
 
 
-def _feed_day_inner_order_by(feed: str):
+def _feed_day_inner_order_by(feed: str, *, bind=None):
     """按 UTC 日分页时同一天内排序：应用泳道先变现价值分，再热度。"""
     fe = _freshness_expr()
     if feed == "apps":
-        return (desc(_worth_score_sql_expr()), desc(Article.heat_score), desc(fe), desc(Article.id))
+        return (
+            desc(_worth_score_sql_expr(bind=bind)),
+            desc(Article.heat_score),
+            desc(fe),
+            desc(Article.id),
+        )
     return (desc(fe), desc(Article.id))
 
 
@@ -698,7 +726,7 @@ def list_articles_feed_by_day_page(
 
     fe = _freshness_expr()
     q_day = q.where(fe >= day_start, fe < day_end)
-    rows = db.scalars(q_day.order_by(*_feed_day_inner_order_by(feed))).all()
+    rows = db.scalars(q_day.order_by(*_feed_day_inner_order_by(feed, bind=db.get_bind()))).all()
 
     seen_fp: set[str] = set()
     out: list[dict] = []
@@ -821,7 +849,13 @@ def list_articles_feed_by_heat_top(
     ranked_pool = (
         select(Article.id.label("rid"))
         .where(pool_where)
-        .order_by(*_heat_order_by(sort_by_value=sort_val, sort_monetization=sort_mon))
+        .order_by(
+            *_heat_order_by(
+                sort_by_value=sort_val,
+                sort_monetization=sort_mon,
+                bind=db.get_bind(),
+            )
+        )
         .limit(cap)
         .subquery()
     )
