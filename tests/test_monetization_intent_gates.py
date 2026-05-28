@@ -23,8 +23,36 @@ def _session() -> Session:
     return sessionmaker(bind=engine)()
 
 
-def test_apps_feed_rejects_tier_only_without_value_assessment() -> None:
-    """Criterion 4/6: replication_tiers 不能绕过 worth≥7。"""
+def test_apps_feed_tier_filter_allowed_when_show_all_without_assessment() -> None:
+    """应用雷达默认「全部」：档位筛选不能单独挡稿，未评估条目也可展示。"""
+    a = Article(
+        industry_id=1,
+        segment_id=1,
+        title="S tier no repl",
+        status="published",
+        feed_kind="apps",
+        third_party_source="product_hunt / daily",
+        ai_categories_json='["应用产品"]',
+        replication_tier="S",
+        heat_score=100.0,
+    )
+    assert (
+        ap._feed_row_matches_list_filters(
+            a,
+            feed="apps",
+            cat_filter=None,
+            source_filter=None,
+            search_n=None,
+            tier_filter=frozenset({"S"}),
+            replication_complete=False,
+            replication_high_value=False,
+        )
+        is True
+    )
+
+
+def test_apps_feed_replication_complete_still_requires_worth_assessment() -> None:
+    """选择「有价值」时仍须 worth≥7，档位不能绕过。"""
     a = Article(
         industry_id=1,
         segment_id=1,
@@ -42,7 +70,7 @@ def test_apps_feed_rejects_tier_only_without_value_assessment() -> None:
             source_filter=None,
             search_n=None,
             tier_filter=frozenset({"S"}),
-            replication_complete=False,
+            replication_complete=True,
         )
         is False
     )

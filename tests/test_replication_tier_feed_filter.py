@@ -319,6 +319,7 @@ def test_list_articles_feed_by_heat_top_filters_sa_and_orders_by_worth() -> None
         published_within_days=30,
         published_on_latest_day=False,
         replication_tiers="S,A",
+        replication_complete=True,
         sort_by_value=True,
         heat_offset=0,
         heat_page_size=10,

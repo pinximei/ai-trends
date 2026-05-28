@@ -192,10 +192,9 @@ const STRINGS: Record<string, string> = {
   resourcesReplicationFilter: "变现价值筛选",
   resourcesReplicationComplete: "有价值（≥7 分）",
   resourcesReplicationHighValue: "高价值（≥8 分）",
-  resourcesReplicationAll: "全部应用",
+  resourcesReplicationAll: "全部",
   resourcesReplicationHint:
-    "默认按变现价值分排序。筛选「有价值」看价值分≥7；「高价值」须≥8 分且结论为「高价值」。工时仅在详情页参考。",
-  resourcesAppsCloneCategories: "变现向常用分类",
+    "默认「全部」展示应用泳道内所有条目（仍按变现价值分排序）。可选「有价值」（≥7 分）或「高价值」（≥8 分且结论为高价值）。工时仅在详情页参考。",
   homeHighlightMonetizationApps: "变现线索",
   homeHighlightMonetizationAppsSub: "价值分≥7 的变现案例/已验证变现；按价值分与数据源优先展示",
   homeHighlightMonetizationAppsEmpty: "近 30 日暂无达标的变现线索；请到应用雷达打开「有价值」筛选。",

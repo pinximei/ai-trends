@@ -156,14 +156,16 @@ def _feed_row_matches_list_filters(
         t = (getattr(a, "replication_tier", None) or "").strip().upper()
         if t not in tier_filter:
             return False
-    # 应用泳道：公开列表一律要求价值评估达标（tier 仅作附加筛选，不能绕过 worth≥7）
+    # 应用泳道：仅在选择「有价值/高价值」筛选时要求价值评估达标；默认「全部」不挡未评估稿
     if feed == "apps":
         if replication_high_value:
             if not _article_replication_complete(
                 a, min_worth=8, require_high_value=True
             ):
                 return False
-        elif not _article_replication_complete(a, min_worth=7, require_high_value=False):
+        elif replication_complete and not _article_replication_complete(
+            a, min_worth=7, require_high_value=False
+        ):
             return False
     elif replication_high_value and not _article_replication_complete(
         a, min_worth=8, require_high_value=True

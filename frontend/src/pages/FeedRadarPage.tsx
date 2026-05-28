@@ -16,7 +16,7 @@ const FEED_CARD_GRID_CLASS = "mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-
 const DAYS_PER_PAGE = 3;
 
 type TimeKey = "d2" | "all" | "d7" | "d30" | "d90";
-type ReplicationTierFilter = "complete" | "high_value";
+type ReplicationTierFilter = "all" | "complete" | "high_value";
 
 const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
   { key: "d2", labelKey: "resourcesDays2" },
@@ -27,12 +27,11 @@ const TIME_FILTERS: Array<{ key: TimeKey; labelKey: string }> = [
 ];
 
 function defaultTimeKeyForMode(mode: "news" | "apps"): TimeKey {
-  return mode === "apps" ? "d7" : "d2";
+  return "d2";
 }
 
 function defaultReplicationFilter(mode: "news" | "apps"): ReplicationTierFilter {
-  void mode;
-  return "complete";
+  return mode === "apps" ? "all" : "complete";
 }
 
 function timeKeyToArticleParams(timeKey: TimeKey): {
@@ -96,18 +95,6 @@ function isHeatFeedResponse(d: unknown): d is ArticlesFeedHeatResponse {
 
 type ListDisplayMode = "date" | "heat";
 
-const CLONE_APP_CATEGORIES = [
-  "开源客户端(好抄)",
-  "应用产品",
-  "高价值复刻",
-  "已验证变现",
-  "变现案例",
-] as const;
-
-const CLONE_APP_CATEGORY_LABELS: Record<string, string> = {
-  "开源客户端(好抄)": "开源客户端",
-};
-
 const MONETIZATION_CATEGORIES = new Set<string>(["已验证变现", "变现案例"]);
 
 function replicationTierApiParams(
@@ -123,7 +110,10 @@ function replicationTierApiParams(
   if (filter === "high_value") {
     return { replication_high_value: true, sort_by_value: true };
   }
-  return { replication_complete: true, sort_by_value: true };
+  if (filter === "complete") {
+    return { replication_complete: true, sort_by_value: true };
+  }
+  return { sort_by_value: true };
 }
 
 export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
@@ -563,6 +553,7 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [
+                { key: "all" as const, label: t("resourcesReplicationAll") },
                 { key: "complete" as const, label: t("resourcesReplicationComplete") },
                 { key: "high_value" as const, label: t("resourcesReplicationHighValue") },
               ] as const
@@ -582,23 +573,6 @@ export function FeedRadarPage({ mode }: { mode: "news" | "apps" }) {
           <p className="muted tiny mt-2" style={{ lineHeight: 1.5 }}>
             {t("resourcesReplicationHint")}
           </p>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mt-4">
-            {t("resourcesAppsCloneCategories")}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {CLONE_APP_CATEGORIES.map((label) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setCategoryKey(label)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  categoryKey === label ? "pill-active shadow-md" : "pill-idle"
-                }`}
-              >
-                {CLONE_APP_CATEGORY_LABELS[label] ?? label}
-              </button>
-            ))}
-          </div>
         </div>
       ) : null}
 
