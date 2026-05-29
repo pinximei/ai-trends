@@ -18,7 +18,12 @@ from .domain.articles import (
 from .polish_publish_compat import coerce_polish_output, ensure_publishable_polish
 from .domain.replication_analysis import FEED_CARD_TAB_REPLICATION, normalize_replication_analysis
 from .llm_settings_service import resolve_llm_http_config
+from .llm_snippet_compact import compact_snippet_for_llm
 from .product_models import LlmUsageLog
+
+# 连接器润色：单次输出与修复次数上限（无多轮对话，仅失败时 1 次修复）
+POLISH_MAX_OUTPUT_TOKENS = 4096
+POLISH_REPAIR_SNIPPET_MAX = 3_500
 
 
 def _log_usage(
@@ -144,6 +149,90 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
             "「数据支撑」列：产品/接口名、版本、配额或定价线索、文档链接。"
         )
     return ""
+
+
+def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, int]) -> str:
+    """短 system：规则一次说明，避免每条重复超长模板。"""
+    category_rule = (
+        "categories 为恰好 1 个元素的数组，元素须为固定大类之一："
+        "模型层(谨慎)、开源客户端(好抄)、应用产品、高价值复刻、已验证变现、变现案例、"
+        "数据算力、安全合规、政策市场、Agent、多模态、其他。"
+    )
+    commercial = (
+        "独立开发者变现向：写清谁付钱、定价/营收线索；star 多≠值得做；禁止 API 字段名与 ```json。"
+    )
+    src_hint = _source_detail_structure_hint(admin_source_key)
+    if fk == "apps":
+        tabs = (
+            f"tabs 恰好 3 个：描述、变现评估、数据支撑。"
+            f"描述 summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}；"
+            f"变现评估 summary≥{th_gate['repl_summary']} body≥{th_gate['repl_body']}（含变现+工时表）；"
+            f"数据支撑 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
+            "另输出 replication_analysis：verdict、worth_score(1-10)、difficulty、phases≥3、"
+            "estimated_hours、market_position.monetization_hypothesis、risks≥1、platform_fit 等，与 tabs 一致。"
+        )
+    else:
+        tabs = (
+            f"tabs 恰好 2 个：描述、数据支撑。"
+            f"描述 summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}；"
+            f"数据支撑 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
+        )
+    return (
+        "只根据用户提供的压缩片段写稿，禁止编造片段外事实；不足处写「原文未提供」。"
+        f"{commercial} {category_rule} "
+        f"输出单个 JSON：title, summary, body_md, categories, feed_kind, replication_tier(S/A/B/C), tabs"
+        + ("；apps 另含 replication_analysis。" if fk == "apps" else "")
+        + f"。{tabs} "
+        f"{src_hint}"
+        "feed_kind 仅 news 或 apps；title/summary 信息密度高、勿重复。"
+    )
+
+
+def _build_polish_user(
+    *,
+    snippet_cut: str,
+    admin_source_key: str,
+    connector_name: str,
+    segment_label: str,
+    rule_title: str,
+    rule_summary: str,
+    value_score: float,
+    fk: str,
+    repair_note: str = "",
+) -> str:
+    base = (
+        f"feed_hint={fk}（news=资讯/apps=应用，输出 feed_kind 须自洽）。\n"
+        f"数据源: {admin_source_key} / 连接器: {connector_name} / 板块: {segment_label}\n"
+        f"规则价值分(0-100): {value_score:.0f}\n"
+        f"占位标题: {rule_title}\n"
+        f"占位摘要: {rule_summary}\n\n"
+        f"压缩原文（仅此一份，勿要求更多上下文）:\n```\n{snippet_cut}\n```"
+    )
+    if repair_note:
+        return f"{base}\n\n{repair_note}"
+    return base
+
+
+def _polish_llm_call(
+    db: Session,
+    *,
+    system: str,
+    user: str,
+    ref_id: str,
+    response_json: bool,
+    max_tokens: int = POLISH_MAX_OUTPUT_TOKENS,
+) -> str:
+    raw, _, _ = chat_completion(
+        db,
+        system=system,
+        user=user,
+        scenario="article_ingest_polish",
+        ref_type="connector_article",
+        ref_id=ref_id[:64],
+        response_json=response_json,
+        max_tokens=max_tokens,
+    )
+    return raw
 
 
 def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | None, str]:
@@ -298,127 +387,49 @@ def polish_connector_article(
     elif fk not in ("news", "apps"):
         fk = "news"
     th_gate = publish_polish_length_thresholds(admin_source_key)
-    # 指纹与解析在 article_ingest 使用完整片段；模型侧仅取前段以控制 token。
-    snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
-    category_rule = (
-        "categories **只能是包含恰好 1 个字符串的数组**，且该字符串必须从下列固定大类中选其一（禁止自造近义词）："
-        "模型层(谨慎)、开源客户端(好抄)、应用产品、高价值复刻、已验证变现、变现案例、"
-        "数据算力、安全合规、政策市场、Agent、多模态、其他。"
-        "独立开发者视角优先：有清晰付费路径/定价/营收线索的应用选「高价值复刻」或「已验证变现」；"
-        "纯开源仓库、无商业模式的 GitHub 趋势项勿标「高价值复刻」，宜归「应用产品」或留在资讯泳道。"
+    # 指纹/去重仍用完整 snippet；送模型前压成编辑摘要（无对话历史）。
+    snippet_compact = compact_snippet_for_llm(snippet, admin_source_key=admin_source_key)
+    snippet_cut = snippet_compact[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
+    system = _build_polish_system(fk=fk, admin_source_key=admin_source_key, th_gate=th_gate)
+    system_json = system + " 只输出一个 JSON 对象，不要其它文字。"
+    user = _build_polish_user(
+        snippet_cut=snippet_cut,
+        admin_source_key=admin_source_key,
+        connector_name=connector_name,
+        segment_label=segment_label,
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        value_score=value_score,
+        fk=fk,
     )
-    commercial_hint = (
-        "你是「独立开发者 AI 产品与变现灵感库」主编。读者只关心一件事：**做这个产品能不能赚钱、谁愿意付钱**。"
-        "必须写清：谁付钱、付多少、为什么现在付、你怎么卖；次要才提技术实现。"
-        "禁止用「可复刻性高/易抄」作为主结论；star 多不等于值得做。"
-        "语气务实、可执行，避免空泛「颠覆行业」。"
-    )
-    if fk == "apps":
-        stream_hint = (
-            f"{commercial_hint}"
-            "当前条目归类为 **应用/产品** 泳道：侧重可运行产品、上架工具与变现灵感。"
-            f"{category_rule}"
-        )
-        structure_hint = (
-            "【应用稿结构】tabs **必须恰好 3 个**，label 只能是「描述」「变现评估」「数据支撑」（勿用「复刻评估」「功能亮点」等旧名）。"
-            f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字：产品是什么、**谁愿意付钱**、现有定价/营收线索。"
-            f"「变现评估」summary≥{th_gate['repl_summary']} 字、body_md≥{th_gate['repl_body']} 字："
-            "分两大块写——**一、变现价值**（谁付钱、怎么收钱、竞品与风险）；**二、实施与工时拆解**（必须含 Markdown 表格列出各阶段工时）。"
-            "变现块：目标用户、付费动机、定价/营收线索、差异化、主要风险。"
-            "工时块：用表格列「阶段|工时(小时)|交付物」，至少 3 行阶段；合计 MVP 须≥8 小时；可注明团队形态（如 1 人业余 20h/周）。"
-            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字：中文表格写可核对指标（链接、star、定价等）；"
-            "禁止 ```json、禁止粘贴 API 字段名（如 node_id、followers_url、gravatar_id、html_url 等），禁止整段 {{...}} JSON。"
-            "另须输出 replication_analysis 对象（与 tabs 一致、可机器解析），键："
-            "verdict（高价值|观望|不建议）、"
-            "worth_score（1-10，**仅表示变现价值**，与 star 无关）、"
-            "difficulty（低|中|高）、"
-            "phases（**必填**数组≥3项，每项 name、hours_min、hours_max 整数、deliverable 交付物描述、depends_on 可选）、"
-            "estimated_hours（mvp_min/mvp_max/prod_min/prod_max 整数，须与 phases 合计大致一致）、"
-            "team_shape（如「1 人全职」）、assumptions（工时前提）、"
-            "platform_fit（windows|mac_only|web|extension|cli|cross_platform|unknown）、"
-            "tier_rationale、value_summary（一句话：谁付钱+为何现在）、"
-            "market_position（target_user、vertical_niche、market_saturation、competitors、differentiation、"
-            "monetization_hypothesis 必填≥16字）、"
-            "implementation_plan（可选补充步骤）、implementation_details、tech_stack、ai_usage_steps、"
-            "open_source、risks（≥1条）。"
-            "replication_tier=变现价值档位 S/A/B/C，须与 worth_score 自洽。"
-        )
-    else:
-        stream_hint = (
-            f"{commercial_hint}"
-            "当前条目归类为 **资讯/社区** 泳道：侧重动态、讨论与行业信号，仍须点出对独立开发者的行动启示。"
-            f"{category_rule}"
-        )
-        structure_hint = (
-            "【资讯稿结构】tabs 只能是「描述」「数据支撑」。"
-            f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字，分段写事件与启示。"
-            f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字，用表格/列表写关键数字与链接；禁止粘贴原始 JSON。"
-        )
-    system = (
-        "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL。"
-        "若片段信息不足，用「原文未提供」说明缺口，但仍须把已有字段写全。"
-        f"{stream_hint}"
-        f"{structure_hint}"
-        f"{_source_detail_structure_hint(admin_source_key)}"
-        "输出一个 JSON 对象，键必须为：title, summary, body_md, categories, feed_kind, replication_tier, tabs"
-        + ('；应用稿另须 replication_analysis 对象（见上文）。' if fk == "apps" else "")
-        + "。"
-        "replication_tier 只能是 S、A、B、C 之一，表示**变现价值档位**（与 worth_score 一致，非 star 热度）："
-        "S=高变现价值（清晰付费用户+定价/营收线索或强订阅假设），"
-        "A=较高变现价值，B=中等，C=低变现/难收钱（纯开源无商业模式、政策风险、巨头碾压）。"
-        "title：单行中文标题，含主体名，避免「同步资源·板块·连接器」类占位风格。"
-        "summary：列表卡片与详情页首屏用，信息密度高，不可与 title 重复同一句。"
-        "body_md：详情页「总览」区 Markdown，须含二级标题，与 tabs 内容互补（总览讲脉络，tabs 讲展开），勿整段复制 tabs。"
-        "categories 为恰好 1 个元素的字符串数组，元素必须是上述规范大类之一；"
-        'feed_kind 只能为 "news" 或 "apps"；replication_tier 必须为 S/A/B/C 之一。'
-        f"tabs：恰好 {len(required_feed_card_tab_labels(fk))} 个；label 见上文结构要求；每项含 summary、body_md（Markdown）。"
-        "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留 repo 名、版本号、star、链接等可核对信息；"
-        "禁止在 body_md 或任一 tab 的 body_md/summary 中输出 ```json、整段原始 API 响应、或未翻译的键值对 JSON。"
-        "GitHub/Product Hunt/Acquire 等源同样适用：读者只能看到中文说明，不能看到 API 字段名堆砌。"
-        "禁止输出空洞 tab（仅重复 summary、无新信息）。"
-    )
-    user = (
-        f"数据源规则推断的参考泳道 feed_hint={fk}（news=资讯 / apps=应用）。请阅读片段后在输出中给出 feed_kind，"
-        f"仅允许 news 或 apps；允许与 feed_hint 不一致，但 title、summary、categories 必须与 feed_kind 自洽。\n"
-        f"数据源: {admin_source_key} / 连接器: {connector_name} / 板块: {segment_label}\n"
-        f"规则价值分(0-100): {value_score:.0f}\n"
-        f"占位标题: {rule_title}\n"
-        f"占位摘要: {rule_summary}\n\n"
-        f"原始片段:\n```\n{snippet_cut}\n```"
-    )
-    from .llm_settings_service import FLASH_MODEL
+    snippet_for_compat = snippet_cut
 
-    model = _model or FLASH_MODEL
+    def _try_publish(data: dict | None) -> tuple[dict | None, str]:
+        if not data:
+            return None, ""
+        fixed = ensure_publishable_polish(
+            data,
+            admin_source_key=admin_source_key,
+            snippet=snippet_for_compat,
+            rule_title=rule_title,
+            rule_summary=rule_summary,
+        )
+        return (fixed, "") if fixed else (None, _describe_polish_reject(data, admin_source_key=admin_source_key))
+
     try:
         try:
-            raw, _, _ = chat_completion(
-                db,
-                system=system,
-                user=user,
-                scenario="article_ingest_polish",
-                ref_type="connector_article",
-                ref_id=ref_id[:64],
-                response_json=True,
-                max_tokens=8192,
-            )
+            raw = _polish_llm_call(db, system=system, user=user, ref_id=ref_id, response_json=True)
         except Exception as e1:
             try:
-                raw, _, _ = chat_completion(
-                    db,
-                    system=system + " 请只输出一个 JSON 对象，不要其它文字。",
-                    user=user,
-                    scenario="article_ingest_polish",
-                    ref_type="connector_article",
-                    ref_id=ref_id[:64],
-                    response_json=False,
-                    max_tokens=8192,
+                raw = _polish_llm_call(
+                    db, system=system_json, user=user, ref_id=ref_id, response_json=False
                 )
             except Exception as e2:
                 err = f"{type(e2).__name__}: {str(e2)[:240]}"
                 _log_usage(
                     db,
                     "article_ingest_polish",
-                    model,
+                    _model,
                     0,
                     0,
                     False,
@@ -430,17 +441,10 @@ def polish_connector_article(
         out, parse_err = _parse_polish_response(raw, default_feed_kind=fk)
         if not out:
             return None, parse_err
-        out_parsed = out
-        out_ready = ensure_publishable_polish(
-            out_parsed,
-            admin_source_key=admin_source_key,
-            snippet=snippet_cut,
-            rule_title=rule_title,
-            rule_summary=rule_summary,
-        )
-        if out_ready:
-            return out_ready, ""
-        reject = _describe_polish_reject(out_parsed, admin_source_key=admin_source_key)
+        published, reject = _try_publish(out)
+        if published:
+            return published, ""
+
         try:
             from .connector_ingest_diagnostics import diagnose_polish_failure
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
@@ -450,7 +454,7 @@ def polish_connector_article(
                 level="error",
                 step="llm_polish_retry",
                 message=(
-                    f"source={admin_source_key} ref={ref_id[:32]} 首次校验未通过，将自动重试："
+                    f"source={admin_source_key} ref={ref_id[:32]} 首次校验未通过，修复重试 1 次："
                     f"{diagnose_polish_failure(out, reject, admin_source_key=admin_source_key, phase='first_pass')}"
                 ),
                 source_key=(admin_source_key or "").strip().lower() or None,
@@ -459,95 +463,48 @@ def polish_connector_article(
             commit_diagnostics(db)
         except Exception:
             pass
-        tab_hint = (
-            "tabs 恰好 3 个，label 只能是「描述」「变现评估」「数据支撑」；"
-            f"「描述」summary≥{th_gate['desc_summary']}、body≥{th_gate['desc_body']}；"
-            f"「变现评估」summary≥{th_gate.get('repl_summary', 64)}、body≥{th_gate.get('repl_body', 180)}；"
-            f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}；"
-            "并含完整 replication_analysis（含 phases≥3、mvp_max≥8、monetization_hypothesis、risks≥1）。"
-            "禁止在 tabs 中残留 API JSON（node_id、followers_url 等）。"
-            if fk == "apps"
-            else (
-                "tabs 恰好 2 个，label 只能是「描述」「数据支撑」；"
-                f"「描述」summary≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
-                f"「数据支撑」summary≥{th_gate['hi_summary']} 字、body_md≥{th_gate['hi_body']} 字；"
-                "禁止粘贴原始 JSON。"
-            )
+
+        repair_snip = snippet_cut[:POLISH_REPAIR_SNIPPET_MAX]
+        repair_note = (
+            f"【校验未通过】{reject}\n"
+            f"请重新输出完整 JSON，满足字数门槛与 tab 结构。"
+            f"categories 须为 1 个元素，取自：{', '.join(sorted(FACET_ALL_LABELS))}。"
         )
-        repair_user = (
-            f"{user}\n\n【上次输出未通过校验】{reject}\n"
-            f"请重新输出完整 JSON：{tab_hint}"
-            f"categories 为恰好 1 个元素的数组，元素必须是下列之一：{', '.join(sorted(FACET_ALL_LABELS))}。"
+        repair_user = _build_polish_user(
+            snippet_cut=repair_snip,
+            admin_source_key=admin_source_key,
+            connector_name=connector_name,
+            segment_label=segment_label,
+            rule_title=rule_title,
+            rule_summary=rule_summary,
+            value_score=value_score,
+            fk=fk,
+            repair_note=repair_note,
         )
         try:
-            raw2, _, _ = chat_completion(
+            raw2 = _polish_llm_call(
                 db,
-                system=system + " 请只输出一个 JSON 对象，不要其它文字。",
+                system=system_json,
                 user=repair_user,
-                scenario="article_ingest_polish",
-                ref_type="connector_article",
                 ref_id=(ref_id[:60] + ":r1")[:64],
                 response_json=False,
-                max_tokens=8192,
             )
         except Exception as e2:
             return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
         out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
         if not out2:
             return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
-        out2_parsed = out2
-        out2_ready = ensure_publishable_polish(
-            out2_parsed,
-            admin_source_key=admin_source_key,
-            snippet=snippet_cut,
-            rule_title=rule_title,
-            rule_summary=rule_summary,
-        )
-        if out2_ready:
-            return out2_ready, ""
-        reject2 = _describe_polish_reject(out2_parsed, admin_source_key=admin_source_key)
-        out3_parsed = None
-        # 仅差若干字时再做一次极短修复（避免 deepseek 等模型反复输出 68 字而门槛 72）
-        if "_short" in reject2:
-            repair2_user = (
-                f"{repair_user}\n\n【第二次修复】{reject2}\n"
-                f"请在「描述」summary 写满≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
-                f"「变现评估」summary≥{th_gate['repl_summary']}、body≥{th_gate['repl_body']}；"
-                f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}（含表格与链接）。只输出 JSON。"
-            )
-            try:
-                raw3, _, _ = chat_completion(
-                    db,
-                    system=system + " 请只输出一个 JSON 对象，不要其它文字。",
-                    user=repair2_user,
-                    scenario="article_ingest_polish",
-                    ref_type="connector_article",
-                    ref_id=(ref_id[:60] + ":r2")[:64],
-                    response_json=False,
-                    max_tokens=8192,
-                )
-                out3_parsed, parse_err3 = _parse_polish_response(raw3, default_feed_kind=fk)
-                if out3_parsed:
-                    out3_ready = ensure_publishable_polish(
-                        out3_parsed,
-                        admin_source_key=admin_source_key,
-                        snippet=snippet_cut,
-                        rule_title=rule_title,
-                        rule_summary=rule_summary,
-                    )
-                    if out3_ready:
-                        return out3_ready, ""
-                    reject2 = _describe_polish_reject(out3_parsed, admin_source_key=admin_source_key)
-            except Exception:
-                pass
-        # 最后一层：对已有解析结果做规则兼容，避免丢弃
-        for candidate in (out3_parsed, out2_parsed, out_parsed):
+        published2, reject2 = _try_publish(out2)
+        if published2:
+            return published2, ""
+        # 不再第三次调 LLM；规则层尽量补齐，避免 token 翻倍
+        for candidate in (out2, out):
             if not candidate:
                 continue
             fixed = ensure_publishable_polish(
                 candidate,
                 admin_source_key=admin_source_key,
-                snippet=snippet_cut,
+                snippet=snippet_for_compat,
                 rule_title=rule_title,
                 rule_summary=rule_summary,
             )

@@ -41,7 +41,8 @@ _GITHUB_TRENDING_SKIP_SLUGS = frozenset(
 
 # 单条详情写入 pack 前的上限，避免 10 条撑爆总 snippet
 _PER_ITEM_SNIPPET_MAX = min(48_000, CONNECTOR_SNIPPET_MAX_CHARS // 10)
-_README_MD_MAX = 24_000
+# 写入 connector snippet 的 README 上限（LLM 侧会再压到约 4k）
+_README_MD_MAX = 8_000
 
 # GitHub Trending：仅保留「可复刻客户端 / 桌面 / 插件」向仓库
 GITHUB_CLIENT_KEYWORDS: tuple[str, ...] = (
