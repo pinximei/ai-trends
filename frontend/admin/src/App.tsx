@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { adminApi } from "./api";
 import { DataQueryPanel } from "./DataQueryPanel";
+import { ConnectorStatsPanel } from "./ConnectorStatsPanel";
 
 function zhRole(role: string | undefined) {
   if (!role) return "—";
@@ -202,7 +203,7 @@ type AdminUser = {
 type Health = { status: string; db: string; time: string; metrics: Record<string, number> };
 type Settings = { password_min_length: number };
 type DbInfo = { mode: string; database_url: string; test_url: string; prod_url: string };
-type TabKey = "overview" | "queries" | "sources" | "ai" | "software" | "logs" | "settings";
+type TabKey = "overview" | "queries" | "sources" | "ai" | "connector-stats" | "software" | "logs" | "settings";
 
 type SwPkgRow = {
   id: number;
@@ -1359,6 +1360,14 @@ export function App() {
             title="含 LLM、定时同步、清空资源入库数据"
           >
             AI 资讯与数据
+          </button>
+          <button
+            type="button"
+            className={tab === "connector-stats" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"}
+            onClick={() => setTab("connector-stats")}
+            title="连接器同步次数、入库与 LLM 图表"
+          >
+            连接器统计
           </button>
           <button
             type="button"
@@ -2936,6 +2945,10 @@ export function App() {
               </form>
             </div>
           </section>
+        ) : null}
+
+        {tab === "connector-stats" ? (
+          <ConnectorStatsPanel onError={(m) => setErr(friendlyErr(m))} />
         ) : null}
 
         {tab === "software" ? (

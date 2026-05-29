@@ -353,6 +353,17 @@ def _mask_config_for_response(cfg: dict) -> dict:
     return out
 
 
+@router.get("/product/connectors/stats")
+def connector_stats(
+    days: int = Query(14, ge=1, le=90),
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    from ..application.connector_stats import connector_stats_overview
+
+    return ok(connector_stats_overview(db, days=days))
+
+
 @router.get("/product/connectors")
 def list_connectors(
     db: Session = Depends(get_db),

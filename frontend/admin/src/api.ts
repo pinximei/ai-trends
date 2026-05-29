@@ -512,4 +512,49 @@ export const adminApi = {
     request<{ deleted: number }>(`/api/admin/v1/product/software/packages/${packageId}`, {
       method: "DELETE",
     }),
+  connectorStats: (days = 14) =>
+    request<ConnectorStatsOverview>(
+      `/api/admin/v1/product/connectors/stats?days=${encodeURIComponent(String(days))}`,
+    ),
+};
+
+export type ConnectorStatsOverview = {
+  days: number;
+  since: string;
+  summary: {
+    sync_runs: number;
+    ok_runs: number;
+    error_runs: number;
+    success_rate: number | null;
+    rows_ingested: number;
+    articles_created: number;
+    connectors_total: number;
+    connectors_enabled: number;
+    llm_polish_calls: number;
+    llm_polish_ok: number;
+    llm_polish_fail: number;
+    llm_input_tokens: number;
+    llm_output_tokens: number;
+  };
+  daily: Array<{
+    date: string;
+    sync_runs: number;
+    rows_ingested: number;
+    errors: number;
+    articles_created: number;
+  }>;
+  by_connector: Array<{
+    connector_id: number;
+    name: string;
+    admin_source_key: string | null;
+    enabled: boolean;
+    sync_runs: number;
+    ok_runs: number;
+    error_runs: number;
+    rows_ingested: number;
+    articles_created?: number;
+    last_sync_at: string | null;
+    last_error: string | null;
+  }>;
+  by_source: Array<{ source_key: string; articles_created: number }>;
 };
