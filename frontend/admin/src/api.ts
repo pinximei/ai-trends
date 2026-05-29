@@ -512,49 +512,47 @@ export const adminApi = {
     request<{ deleted: number }>(`/api/admin/v1/product/software/packages/${packageId}`, {
       method: "DELETE",
     }),
-  connectorStats: (days = 14) =>
-    request<ConnectorStatsOverview>(
-      `/api/admin/v1/product/connectors/stats?days=${encodeURIComponent(String(days))}`,
+  publishingStats: (days = 30) =>
+    request<PublishingOpsOverview>(
+      `/api/admin/v1/product/publishing/stats?days=${encodeURIComponent(String(days))}`,
     ),
 };
 
-export type ConnectorStatsOverview = {
+export type PublishingOpsOverview = {
   days: number;
   since: string;
+  scope: string;
+  external_channels_note?: string;
   summary: {
-    sync_runs: number;
-    ok_runs: number;
-    error_runs: number;
-    success_rate: number | null;
-    rows_ingested: number;
-    articles_created: number;
-    connectors_total: number;
-    connectors_enabled: number;
-    llm_polish_calls: number;
-    llm_polish_ok: number;
-    llm_polish_fail: number;
-    llm_input_tokens: number;
-    llm_output_tokens: number;
+    published_in_period: number;
+    draft_count: number;
+    today_articles_on_site: number;
+    today_videos_on_site: number;
   };
   daily: Array<{
     date: string;
-    sync_runs: number;
-    rows_ingested: number;
-    errors: number;
-    articles_created: number;
+    sites: Record<string, { label: string; articles: number; videos: number }>;
   }>;
-  by_connector: Array<{
-    connector_id: number;
-    name: string;
-    admin_source_key: string | null;
+  categories: Array<{ category: string; count: number }>;
+  categories_by_site: Array<{
+    site_key: string;
+    site_label: string;
+    items: Array<{ category: string; count: number }>;
+  }>;
+  site_last_published: Array<{ site_key: string; site_label: string; last_published_at: string | null }>;
+  sources_maintenance: Array<{
+    source_key: string;
+    connector_name: string;
     enabled: boolean;
-    sync_runs: number;
-    ok_runs: number;
-    error_runs: number;
-    rows_ingested: number;
-    articles_created?: number;
+    articles_in_period: number;
+    last_published_at: string | null;
+    stale: boolean;
     last_sync_at: string | null;
     last_error: string | null;
   }>;
-  by_source: Array<{ source_key: string; articles_created: number }>;
+  digest_maintenance: {
+    digest_date: string;
+    status: string;
+    updated_at: string | null;
+  } | null;
 };

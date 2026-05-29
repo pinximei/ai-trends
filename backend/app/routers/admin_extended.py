@@ -353,15 +353,27 @@ def _mask_config_for_response(cfg: dict) -> dict:
     return out
 
 
-@router.get("/product/connectors/stats")
-def connector_stats(
-    days: int = Query(14, ge=1, le=90),
+@router.get("/product/publishing/stats")
+def publishing_stats(
+    days: int = Query(30, ge=1, le=90),
     db: Session = Depends(get_db),
     session: AdminSession = Depends(require_role("viewer")),
 ):
-    from ..application.connector_stats import connector_stats_overview
+    from ..application.content_publish_stats import publishing_ops_overview
 
-    return ok(connector_stats_overview(db, days=days))
+    return ok(publishing_ops_overview(db, days=days))
+
+
+@router.get("/product/connectors/stats")
+def connector_stats_deprecated(
+    days: int = Query(30, ge=1, le=90),
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(require_role("viewer")),
+):
+    """已弃用：请用 /product/publishing/stats。保留兼容旧前端。"""
+    from ..application.content_publish_stats import publishing_ops_overview
+
+    return ok(publishing_ops_overview(db, days=days))
 
 
 @router.get("/product/connectors")

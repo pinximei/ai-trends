@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { adminApi } from "./api";
 import { DataQueryPanel } from "./DataQueryPanel";
-import { ConnectorStatsPanel } from "./ConnectorStatsPanel";
+import { PublishingOpsPanel } from "./PublishingOpsPanel";
 
 function zhRole(role: string | undefined) {
   if (!role) return "—";
@@ -1365,9 +1365,9 @@ export function App() {
             type="button"
             className={tab === "connector-stats" ? "admin-nav-tab admin-nav-tab--active" : "admin-nav-tab"}
             onClick={() => setTab("connector-stats")}
-            title="连接器同步次数、入库与 LLM 图表"
+            title="各站每日发文、分类与数据源维护"
           >
-            连接器统计
+            发布统计
           </button>
           <button
             type="button"
@@ -2948,7 +2948,7 @@ export function App() {
         ) : null}
 
         {tab === "connector-stats" ? (
-          <ConnectorStatsPanel onError={(m) => setErr(friendlyErr(m))} />
+          <PublishingOpsPanel onError={(m) => setErr(friendlyErr(m))} />
         ) : null}
 
         {tab === "software" ? (
