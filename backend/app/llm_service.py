@@ -43,7 +43,7 @@ def _log_usage(
             ref_type=ref_type,
             ref_id=ref_id,
             success=success,
-            error_code=err,
+            error_code=(err or "")[:64] or None,
         )
     )
     db.commit()

@@ -1451,7 +1451,7 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
         return False
     if len(tabs) != len(need_labels):
         return False
-    from .text_display import polish_content_has_connector_api_leak
+    from ..text_display import polish_content_has_connector_api_leak
 
     tab_body_total = 0
     labels: list[str] = []
