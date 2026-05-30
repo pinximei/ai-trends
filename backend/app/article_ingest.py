@@ -1,4 +1,7 @@
-"""连接器同步等场景下写入「资源」文章（product_articles），供公开站使用。"""
+"""连接器同步等场景下写入「资源」文章（product_articles），供公开站使用。
+
+无实质正文（仅链接/占位摘要）一律不入库，见 ``domain.articles.polish_payload_has_substantive_content``。
+"""
 from __future__ import annotations
 
 import json
@@ -374,13 +377,20 @@ def _create_one_published_article_from_connector_targets(
         return 0
     polished = ready
 
-    from .domain.articles import polish_payload_has_substantive_content, polish_substantive_char_count, collect_polish_text_blob
+    from .domain.articles import (
+        PUBLISH_MIN_SUBSTANTIVE_CHARS,
+        collect_polish_text_blob,
+        polish_payload_has_substantive_content,
+        polish_substantive_char_count,
+        substantive_content_reject_message,
+    )
 
     if not polish_payload_has_substantive_content(polished):
         got = polish_substantive_char_count(collect_polish_text_blob(polished))
         _skip(
-            "skip_link_only",
-            f"跳过：正文除链接外不足（实测 {got} 字，需 ≥80）。请在 Soul 核对连接器是否拉到 PH/GitHub 详情，或 LLM 润色是否失败。",
+            "skip_no_content",
+            f"跳过：{substantive_content_reject_message(got=got, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS)}"
+            " 请核对 Product Hunt/GitHub 是否走专用打包、LLM Key 与润色日志。",
         )
         return 0
 

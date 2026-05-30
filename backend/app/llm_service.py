@@ -365,7 +365,7 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
 
     if not polish_payload_has_substantive_content(data):
         got = polish_substantive_char_count(collect_polish_text_blob(data))
-        return f"link_only_substantive got={got} need>=80"
+        return f"no_content_substantive got={got} need>=80"
     return "validate_unknown"
 
 

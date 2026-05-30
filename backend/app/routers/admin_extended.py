@@ -1526,6 +1526,25 @@ def create_article(
 ):
     if payload.content_type == "application" and not (payload.third_party_source or "").strip():
         raise HTTPException(400, "application-type articles require third_party_source")
+    if payload.status == "published":
+        from ..domain.articles import (
+            PUBLISH_MIN_SUBSTANTIVE_CHARS,
+            polish_substantive_char_count,
+            stored_article_has_substantive_content,
+            stored_article_text_blob,
+            substantive_content_reject_message,
+        )
+
+        if not stored_article_has_substantive_content(
+            title=payload.title, summary=payload.summary, body=payload.body
+        ):
+            got = polish_substantive_char_count(
+                stored_article_text_blob(title=payload.title, summary=payload.summary, body=payload.body)
+            )
+            raise HTTPException(
+                400,
+                substantive_content_reject_message(got=got, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS),
+            )
     heat_val = payload.heat_score
     if heat_val is None:
         heat_val = unified_editorial_heat(sync_unix=time.time()) if payload.status == "published" else 0.0
@@ -1571,6 +1590,33 @@ def patch_article(
         data["source_external_id"] = (v or "").strip() or None
     for k, v in data.items():
         setattr(a, k, v)
+    if a.status == "published":
+        from ..domain.articles import (
+            PUBLISH_MIN_SUBSTANTIVE_CHARS,
+            polish_substantive_char_count,
+            stored_article_has_substantive_content,
+            stored_article_text_blob,
+            substantive_content_reject_message,
+        )
+
+        if not stored_article_has_substantive_content(
+            title=a.title or "",
+            summary=a.summary or "",
+            body=a.body or "",
+            ai_tabs_json=a.ai_tabs_json,
+        ):
+            got = polish_substantive_char_count(
+                stored_article_text_blob(
+                    title=a.title or "",
+                    summary=a.summary or "",
+                    body=a.body or "",
+                    ai_tabs_json=a.ai_tabs_json,
+                )
+            )
+            raise HTTPException(
+                400,
+                substantive_content_reject_message(got=got, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS),
+            )
     if data.get("status") == "published" and not a.published_at:
         a.published_at = datetime.utcnow()
     if old_status != "published" and a.status == "published" and "heat_score" not in data:

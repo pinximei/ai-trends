@@ -1389,6 +1389,9 @@ _NEWS_API_RELAXED_SOURCES = frozenset(
 
 _URL_IN_TEXT_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]+\)")
+# 发布/连接器入库：去掉 URL 与链接占位后，至少须有的可读字数（汉字或 ≥3 字母英文词）。
+PUBLISH_MIN_SUBSTANTIVE_CHARS = 80
+
 _LINK_ONLY_BOILERPLATE_PHRASES = (
     "相关链接",
     "原文链接",
@@ -1444,10 +1447,55 @@ def collect_polish_text_blob(data: dict) -> str:
     return "\n".join(parts)
 
 
-def polish_payload_has_substantive_content(data: dict, *, min_chars: int = 80) -> bool:
-    """入库前：除链接/占位摘要外须有可读正文（与 VideoShortsAgent middle 阈值对齐）。"""
+def polish_payload_has_substantive_content(
+    data: dict, *, min_chars: int = PUBLISH_MIN_SUBSTANTIVE_CHARS
+) -> bool:
+    """润色 JSON 入库前：除链接/占位摘要外须有可读正文。"""
     blob = collect_polish_text_blob(data)
     return polish_substantive_char_count(blob) >= int(min_chars)
+
+
+def stored_article_text_blob(
+    *,
+    title: str = "",
+    summary: str = "",
+    body: str = "",
+    ai_tabs_json: str | None = None,
+) -> str:
+    """已存文章字段合并为一段文本，供实质内容检测。"""
+    parts: list[str] = []
+    for v in (title, summary, body):
+        s = str(v or "").strip()
+        if s:
+            parts.append(s)
+    for t in parse_article_tabs_json(ai_tabs_json):
+        for key in ("summary", "body_md"):
+            s = str(t.get(key) or "").strip()
+            if s:
+                parts.append(s)
+    return "\n".join(parts)
+
+
+def stored_article_has_substantive_content(
+    *,
+    title: str = "",
+    summary: str = "",
+    body: str = "",
+    ai_tabs_json: str | None = None,
+    min_chars: int = PUBLISH_MIN_SUBSTANTIVE_CHARS,
+) -> bool:
+    """后台发布或读库校验：无实质内容不得 status=published。"""
+    blob = stored_article_text_blob(
+        title=title, summary=summary, body=body, ai_tabs_json=ai_tabs_json
+    )
+    return polish_substantive_char_count(blob) >= int(min_chars)
+
+
+def substantive_content_reject_message(*, got: int, min_chars: int = PUBLISH_MIN_SUBSTANTIVE_CHARS) -> str:
+    return (
+        f"无实质内容不能入库/发布：去掉链接与 URL 后正文仅 {got} 字，"
+        f"至少需要 {min_chars} 字可读说明。"
+    )
 
 
 def publish_polish_length_thresholds(admin_source_key: str | None = None) -> dict[str, int]:

@@ -42,6 +42,22 @@ def test_polish_substantive_rejects_link_only() -> None:
     assert art.polish_payload_has_substantive_content(data) is False
 
 
+def test_stored_article_rejects_link_only() -> None:
+    assert art.stored_article_has_substantive_content(
+        title="XY",
+        summary="https://ph.com/x " * 12,
+        body="\n".join(f"https://example.com/p/{i}" for i in range(20)),
+    ) is False
+
+
+def test_stored_article_accepts_body_text() -> None:
+    assert art.stored_article_has_substantive_content(
+        title="产品名",
+        summary="这是一段足够长的中文摘要，说明产品做什么、面向谁、为何值得关注。",
+        body="## 正文\n\n" + "实现细节与使用场景。" * 20,
+    ) is True
+
+
 def test_validate_llm_polish_rejects_link_only_when_tabs_meet_length() -> None:
     """字数门槛满足但去 URL 后无正文时仍拒绝。"""
     link_blob = "\n".join(f"https://example.com/p/{i}" for i in range(40))
