@@ -1387,6 +1387,69 @@ _NEWS_API_RELAXED_SOURCES = frozenset(
 )
 
 
+_URL_IN_TEXT_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]+\)")
+_LINK_ONLY_BOILERPLATE_PHRASES = (
+    "相关链接",
+    "原文链接",
+    "完整拆解见",
+    "连接器同步快照",
+    "HTTP 200",
+    "HTTP 404",
+    "暂无返回内容",
+)
+
+
+def strip_urls_and_markdown_links(text: str) -> str:
+    """去掉 Markdown 链接与裸 URL，用于判断「仅链接」稿。"""
+    s = (text or "").strip()
+    if not s:
+        return ""
+    s = _MD_LINK_RE.sub(r"\1", s)
+    s = _URL_IN_TEXT_RE.sub(" ", s)
+    for phrase in _LINK_ONLY_BOILERPLATE_PHRASES:
+        s = s.replace(phrase, " ")
+    s = re.sub(r"```[\s\S]*?```", " ", s)
+    s = re.sub(r"`[^`]+`", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def polish_substantive_char_count(text: str) -> int:
+    """去 URL/链接后的有效字数：汉字 + 连续英文词（≥3 字母）。"""
+    s = strip_urls_and_markdown_links(text)
+    if not s:
+        return 0
+    cjk = len(re.findall(r"[\u4e00-\u9fff]", s))
+    latin = sum(len(w) for w in re.findall(r"[A-Za-z]{3,}", s))
+    return cjk + latin
+
+
+def collect_polish_text_blob(data: dict) -> str:
+    """合并标题、摘要、正文与各 Tab 文案。"""
+    parts: list[str] = []
+    for key in ("title", "summary", "body_md"):
+        v = str(data.get(key) or "").strip()
+        if v:
+            parts.append(v)
+    tabs = data.get("tabs")
+    if isinstance(tabs, list):
+        for t in tabs:
+            if not isinstance(t, dict):
+                continue
+            for key in ("label", "summary", "body_md"):
+                v = str(t.get(key) or "").strip()
+                if v:
+                    parts.append(v)
+    return "\n".join(parts)
+
+
+def polish_payload_has_substantive_content(data: dict, *, min_chars: int = 80) -> bool:
+    """入库前：除链接/占位摘要外须有可读正文（与 VideoShortsAgent middle 阈值对齐）。"""
+    blob = collect_polish_text_blob(data)
+    return polish_substantive_char_count(blob) >= int(min_chars)
+
+
 def publish_polish_length_thresholds(admin_source_key: str | None = None) -> dict[str, int]:
     """返回 validate_llm_polish_for_publish / 诊断文案共用的最低字数。"""
     sk = (admin_source_key or "").strip().lower()
@@ -1484,6 +1547,8 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
         return False
     if polish_content_has_connector_api_leak(body_md):
+        return False
+    if not polish_payload_has_substantive_content(data):
         return False
     return True
 

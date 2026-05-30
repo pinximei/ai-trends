@@ -1,0 +1,61 @@
+"""入库前「仅链接」正文检测。"""
+from __future__ import annotations
+
+from backend.app.domain import articles as art
+from tests.test_article_public_shape import (
+    _VALID_BODY,
+    _VALID_DESC_SUMMARY,
+    _VALID_SUMMARY,
+    _valid_tabs_apps,
+    _valid_tabs_news,
+)
+
+
+def test_polish_substantive_accepts_normal_article() -> None:
+    data = {
+        "title": "某 AI 产品发布",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "tabs": _valid_tabs_news(),
+    }
+    assert art.polish_payload_has_substantive_content(data) is True
+
+
+def test_polish_substantive_rejects_link_only() -> None:
+    data = {
+        "title": "Foo Bar",
+        "summary": "https://example.com/a",
+        "body_md": "**相关链接**\n\n- [GitHub](https://github.com/o/r)\n- [原文](https://ph.com/p)",
+        "tabs": [
+            {
+                "label": "描述",
+                "summary": "见链接",
+                "body_md": "[Product Hunt](https://www.producthunt.com/posts/x)",
+            },
+            {
+                "label": "数据支撑",
+                "summary": "链接",
+                "body_md": "- [仓库](https://github.com/o/r)",
+            },
+        ],
+    }
+    assert art.polish_payload_has_substantive_content(data) is False
+
+
+def test_validate_llm_polish_rejects_link_only_when_tabs_meet_length() -> None:
+    """字数门槛满足但去 URL 后无正文时仍拒绝。"""
+    link_blob = "\n".join(f"https://example.com/p/{i}" for i in range(40))
+    short_link_summary = "https://ph.com/x " * 12
+    data = {
+        "title": "XY",
+        "summary": short_link_summary,
+        "body_md": link_blob,
+        "categories": ["应用产品"],
+        "feed_kind": "news",
+        "tabs": [
+            {"label": "描述", "summary": short_link_summary, "body_md": link_blob},
+            {"label": "数据支撑", "summary": short_link_summary, "body_md": link_blob},
+        ],
+    }
+    assert art.polish_payload_has_substantive_content(data) is False
+    assert art.validate_llm_polish_for_publish(data, admin_source_key="github") is False

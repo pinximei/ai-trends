@@ -168,6 +168,15 @@ def diagnose_polish_failure(
             lines.append("已触发自动修复仍不足：请核对 LlmUsageLog scenario=article_ingest_polish 同 ref 的 r1/r2 记录。")
         return " ".join(lines)
 
+    if code.startswith("link_only_substantive"):
+        lines.append(
+            "根因=正文几乎只有链接或占位摘要（去 URL 后不足 80 字），已拒绝入库。"
+            "请确认：① Product Hunt / GitHub 数据源 api_base 为预设 GraphQL / Trending 地址；"
+            "② 连接器已绑定 admin_source_key；③ LLM Key 有效且润色未失败。"
+            f" {code}"
+        )
+        return " ".join(lines)
+
     if code.startswith("tab_labels="):
         lines.append(f"根因=Tab 名称/顺序不符合规范。{code}")
         return " ".join(lines)

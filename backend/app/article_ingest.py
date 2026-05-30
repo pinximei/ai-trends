@@ -374,6 +374,16 @@ def _create_one_published_article_from_connector_targets(
         return 0
     polished = ready
 
+    from .domain.articles import polish_payload_has_substantive_content, polish_substantive_char_count, collect_polish_text_blob
+
+    if not polish_payload_has_substantive_content(polished):
+        got = polish_substantive_char_count(collect_polish_text_blob(polished))
+        _skip(
+            "skip_link_only",
+            f"跳过：正文除链接外不足（实测 {got} 字，需 ≥80）。请在 Soul 核对连接器是否拉到 PH/GitHub 详情，或 LLM 润色是否失败。",
+        )
+        return 0
+
     tabs = polished.get("tabs") or []
     source_original_url = extract_connector_primary_url(src_tag, safe)
     if isinstance(tabs, list):

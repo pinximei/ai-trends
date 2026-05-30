@@ -239,6 +239,39 @@ def repair_short_probe_admin_sources(db: Session) -> None:
         db.commit()
 
 
+def build_connector_sync_request_cfg(db: Session, connector: ProductConnector) -> dict:
+    """合并连接器 config 与绑定数据源的 api_base / 密钥 / 拉取条数（同步与「测试连接」共用）。"""
+    from .source_query_auth import apply_connector_auth_defaults, load_stored_api_key_for_source, source_uses_query_key_auth
+
+    cfg = dict(connector.config_json or {})
+    ask = (connector.admin_source_key or "").strip().lower()
+    if not ask:
+        return cfg
+    src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask))
+    if not src:
+        cfg.setdefault("source_key", ask)
+        return cfg
+    cfg.setdefault("source_key", ask)
+    api_base = (src.api_base or "").strip()
+    if api_base:
+        cfg["url"] = api_base
+    if ask == "newsapi":
+        cfg.setdefault("auth_mode", "query_key")
+        cfg.setdefault("key_param", "apiKey")
+    elif ask == "thenewsapi":
+        cfg.setdefault("auth_mode", "query_key")
+        cfg.setdefault("key_param", "api_token")
+    else:
+        cfg.setdefault("auth_mode", "bearer")
+    if int(src.fetch_limit or 0) > 0:
+        cfg["fetch_limit"] = int(src.fetch_limit)
+    if source_uses_query_key_auth(ask) and not str(cfg.get("api_key") or "").strip():
+        stored = load_stored_api_key_for_source(db, ask)
+        if stored:
+            cfg["api_key"] = stored
+    return apply_connector_auth_defaults(ask, cfg)
+
+
 def repair_connector_urls_from_admin_sources(db: Session) -> int:
     """绑定数据源的连接器 ``config_json.url`` 与 ``admin_source_configs.api_base`` 对齐（避免仍请求 /zen 等旧地址）。"""
     n = 0

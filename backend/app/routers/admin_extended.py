@@ -622,6 +622,12 @@ def _run_connector_request(
     url = (cfg or {}).get("url") or "https://httpbin.org/get"
     method = ((cfg or {}).get("method") or "GET").upper()
     source_key = ((cfg or {}).get("source_key") or source_key or "").strip().lower()
+    if not source_key:
+        ul = (url or "").lower()
+        if "producthunt.com" in ul or "api.producthunt.com" in ul:
+            source_key = "product_hunt"
+        elif "github.com" in ul or "api.github.com" in ul:
+            source_key = "github"
     sk = source_key
     auth_mode = ((cfg or {}).get("auth_mode") or "bearer").strip().lower()
     api_key = ((cfg or {}).get("api_key") or "").strip()
@@ -675,7 +681,21 @@ def _run_connector_request(
                     db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
-            if source_key == "github" and github_trending_is_discovery_url(url):
+            if source_key == "github":
+                from ..connector_heat_fetch import GITHUB_TRENDING_DEFAULT
+
+                if not github_trending_is_discovery_url(url):
+                    _connector_req_diag(
+                        db,
+                        level="error",
+                        step="github_url_repair",
+                        message=(
+                            f"GitHub 数据源 URL 非 Trending 发现页，已改用默认日榜：{GITHUB_TRENDING_DEFAULT}"
+                        ),
+                        connector_id=connector_id,
+                        source_key=sk,
+                    )
+                    url = GITHUB_TRENDING_DEFAULT
                 code, text = sync_github_trending_top_details(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_log_fetch_outcome(
@@ -809,26 +829,10 @@ def run_connector_sync(
     db.add(log)
     db.flush()
 
-    cfg = dict(c.config_json or {})
+    from ..product_connectors_bootstrap import build_connector_sync_request_cfg
+
+    cfg = build_connector_sync_request_cfg(db, c)
     ask = (c.admin_source_key or "").strip().lower()
-    if ask:
-        src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == ask))
-        if src:
-            cfg.setdefault("source_key", ask)
-            api_base = (src.api_base or "").strip()
-            if api_base:
-                cfg["url"] = api_base
-            # 真实密钥以数据源保存为准：见 DataApiService.upsert_admin_source 写入各绑定连接器的 config_json.api_key。
-            if ask == "newsapi":
-                cfg.setdefault("auth_mode", "query_key")
-                cfg.setdefault("key_param", "apiKey")
-            elif ask == "thenewsapi":
-                cfg.setdefault("auth_mode", "query_key")
-                cfg.setdefault("key_param", "api_token")
-            else:
-                cfg.setdefault("auth_mode", "bearer")
-            if int(src.fetch_limit or 0) > 0:
-                cfg["fetch_limit"] = int(src.fetch_limit)
 
     if ask:
         from ..source_query_auth import (
@@ -1231,8 +1235,11 @@ def test_connector(
     if not c:
         raise HTTPException(404, "not found")
     ask = (c.admin_source_key or "").strip().lower()
+    from ..product_connectors_bootstrap import build_connector_sync_request_cfg
+
+    cfg = build_connector_sync_request_cfg(db, c)
     status_code, snippet = _run_connector_request(
-        c.config_json or {}, db, connector_id=connector_id, source_key=ask,
+        cfg, db, connector_id=connector_id, source_key=ask,
     )
     return ok({"http_status": status_code, "snippet": snippet})
 

@@ -332,7 +332,11 @@ class DataApiService:
 
                     r = _Resp()
                     url = "https://api.producthunt.com/v2/api/graphql"
-                elif sk == "github" and github_trending_is_discovery_url(url):
+                elif sk == "github":
+                    from .connector_heat_fetch import GITHUB_TRENDING_DEFAULT
+
+                    if not github_trending_is_discovery_url(url):
+                        url = GITHUB_TRENDING_DEFAULT
                     code, body_text = sync_github_trending_top_details(url, headers)
                     class _RespGh:
                         status_code = code
@@ -382,7 +386,7 @@ class DataApiService:
             cap = (
                 8000
                 if sk == "product_hunt"
-                or (sk == "github" and github_trending_is_discovery_url(url))
+                or sk == "github"
                 or (sk == "hacker_news" and hacker_news_algolia_is_search_url(url))
                 or (sk == "newsapi" and newsapi_is_v2_url(url))
                 or (sk == "thenewsapi" and thenewsapi_is_news_url(url))
