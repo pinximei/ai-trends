@@ -364,7 +364,18 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
     )
 
     if not polish_payload_has_substantive_content(data):
-        got = polish_substantive_char_count(collect_polish_text_blob(data))
+        from .domain.articles import (
+            collect_polish_text_blob,
+            polish_substantive_cjk_count,
+            strip_urls_and_markdown_links,
+        )
+
+        stripped = strip_urls_and_markdown_links(collect_polish_text_blob(data))
+        got = polish_substantive_char_count(stripped)
+        cjk = polish_substantive_cjk_count(stripped)
+        fk = str(data.get("feed_kind") or "news").strip().lower()
+        if fk == "news" and cjk < 48:
+            return f"no_content_substantive_cjk got_cjk={cjk} need>=48"
         return f"no_content_substantive got={got} need>=80"
     return "validate_unknown"
 

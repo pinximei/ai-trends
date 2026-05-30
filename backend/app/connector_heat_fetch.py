@@ -15,6 +15,7 @@ import httpx
 
 from .admin_source_fetch import normalize_fetch_limit, per_item_snippet_max
 from .domain.articles import CONNECTOR_HEAT_TOP_N, CONNECTOR_SNIPPET_MAX_CHARS
+from .news_wire_enrich import enrich_news_wire_items
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
 # Product Hunt 日榜按旧金山日历日计；与官网 Daily / 邮件 Top10 对齐，勿用 order:RANKING（全局历史排名）。
@@ -707,6 +708,12 @@ def _news_fetch_diag_message(source: str, note: str, stats: dict[str, int]) -> s
         "skip_no_title_url",
         "skip_ai_filter",
         "packed",
+        "enrich_candidates",
+        "enrich_skip_ok",
+        "enrich_hn_firebase",
+        "enrich_url_fetch",
+        "enrich_skip_no_url",
+        "enrich_fail",
     ):
         if k in stats:
             parts.append(f"{k}={stats[k]}")
@@ -747,6 +754,8 @@ def sync_newsapi_top_headlines(url: str, headers: dict[str, str], *, limit: int 
                     continue
                 normed, last_note, last_stats = _newsapi_pack_from_body(body, n=n)
                 if normed:
+                    normed, enrich_stats = enrich_news_wire_items(normed, "newsapi", client=client)
+                    last_stats = {**last_stats, **enrich_stats}
                     pack = {
                         "connector_sync_items_v1": [
                             {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in normed
@@ -822,6 +831,8 @@ def sync_thenewsapi_top_news(url: str, headers: dict[str, str], *, limit: int | 
                     {"connector_sync_items_v1": [], "note": note, "diag": stats},
                     ensure_ascii=False,
                 )
+            normed, enrich_stats = enrich_news_wire_items(normed, "thenewsapi", client=client)
+            stats = {**stats, **enrich_stats}
             stats["api_row_cap"] = 3
             pack = {
                 "connector_sync_items_v1": [
@@ -903,11 +914,13 @@ def sync_hacker_news_top_details(url: str, headers: dict[str, str], *, limit: in
             payloads = [_hn_normalize_hit(x) for x in ranked if (x.get("title") or "").strip()]
             if not payloads:
                 return 200, json.dumps({"connector_sync_items_v1": [], "note": "no_titled_hits"}, ensure_ascii=False)
+            payloads, enrich_stats = enrich_news_wire_items(payloads, "hacker_news", client=client)
             pack = {
                 "connector_sync_items_v1": [
                     {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in payloads
                 ],
                 "note": "hn_algolia_front_page",
+                "diag": enrich_stats,
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:

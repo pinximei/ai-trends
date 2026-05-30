@@ -1535,15 +1535,21 @@ def create_article(
             substantive_content_reject_message,
         )
 
+        blob = stored_article_text_blob(title=payload.title, summary=payload.summary, body=payload.body)
+        fk_pub = str(getattr(payload, "feed_kind", None) or "news").strip().lower()
         if not stored_article_has_substantive_content(
-            title=payload.title, summary=payload.summary, body=payload.body
+            title=payload.title, summary=payload.summary, body=payload.body, feed_kind=fk_pub
         ):
-            got = polish_substantive_char_count(
-                stored_article_text_blob(title=payload.title, summary=payload.summary, body=payload.body)
-            )
+            from ..domain.articles import polish_substantive_cjk_count, strip_urls_and_markdown_links
+
+            stripped = strip_urls_and_markdown_links(blob)
+            got = polish_substantive_char_count(stripped)
+            got_cjk = polish_substantive_cjk_count(stripped)
             raise HTTPException(
                 400,
-                substantive_content_reject_message(got=got, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS),
+                substantive_content_reject_message(
+                    got=got, got_cjk=got_cjk, feed_kind=fk_pub, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS
+                ),
             )
     heat_val = payload.heat_score
     if heat_val is None:
@@ -1599,23 +1605,30 @@ def patch_article(
             substantive_content_reject_message,
         )
 
+        blob = stored_article_text_blob(
+            title=a.title or "",
+            summary=a.summary or "",
+            body=a.body or "",
+            ai_tabs_json=a.ai_tabs_json,
+        )
+        fk_pub = str(a.feed_kind or "news").strip().lower()
         if not stored_article_has_substantive_content(
             title=a.title or "",
             summary=a.summary or "",
             body=a.body or "",
             ai_tabs_json=a.ai_tabs_json,
+            feed_kind=fk_pub,
         ):
-            got = polish_substantive_char_count(
-                stored_article_text_blob(
-                    title=a.title or "",
-                    summary=a.summary or "",
-                    body=a.body or "",
-                    ai_tabs_json=a.ai_tabs_json,
-                )
-            )
+            from ..domain.articles import polish_substantive_cjk_count, strip_urls_and_markdown_links
+
+            stripped = strip_urls_and_markdown_links(blob)
+            got = polish_substantive_char_count(stripped)
+            got_cjk = polish_substantive_cjk_count(stripped)
             raise HTTPException(
                 400,
-                substantive_content_reject_message(got=got, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS),
+                substantive_content_reject_message(
+                    got=got, got_cjk=got_cjk, feed_kind=fk_pub, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS
+                ),
             )
     if data.get("status") == "published" and not a.published_at:
         a.published_at = datetime.utcnow()

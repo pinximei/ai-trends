@@ -140,12 +140,6 @@ def format_connector_snippet_plain(snippet: str, *, admin_source_key: str = "", 
             desc = str(obj.get("description") or "").strip()
             if desc:
                 rows.append(("简介", markdown_to_plain_preview(desc, max_len=280)))
-        elif k == "hacker_news":
-            add("标题", obj.get("title"))
-            add("票数", obj.get("points"))
-            add("评论", obj.get("num_comments"))
-            add("作者", obj.get("author"))
-            add("链接", obj.get("url"))
         elif k == "product_hunt":
             add("产品", obj.get("name") or obj.get("title"))
             add("标语", obj.get("tagline"))
@@ -155,6 +149,24 @@ def format_connector_snippet_plain(snippet: str, *, admin_source_key: str = "", 
             add("标题", obj.get("title"))
             add("来源", obj.get("source") or obj.get("source_name"))
             add("时间", obj.get("publishedAt") or obj.get("published_at") or obj.get("date"))
+            desc = str(
+                obj.get("article_body")
+                or obj.get("description")
+                or obj.get("snippet")
+                or obj.get("content")
+                or ""
+            ).strip()
+            if desc:
+                rows.append(("摘要", markdown_to_plain_preview(desc, max_len=1200)))
+            add("链接", obj.get("url"))
+        elif k == "hacker_news":
+            add("标题", obj.get("title"))
+            add("票数", obj.get("points"))
+            add("评论", obj.get("num_comments"))
+            add("作者", obj.get("author"))
+            story = str(obj.get("story_text") or "").strip()
+            if story:
+                rows.append(("正文节选", markdown_to_plain_preview(story, max_len=1200)))
             add("链接", obj.get("url"))
         elif k == "acquire":
             add("标题", obj.get("title") or obj.get("name"))

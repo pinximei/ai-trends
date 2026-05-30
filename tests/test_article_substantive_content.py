@@ -58,6 +58,50 @@ def test_stored_article_accepts_body_text() -> None:
     ) is True
 
 
+def test_news_rejects_english_metadata_without_cjk() -> None:
+    """资讯稿：英文字段名凑满 80 字仍须有足够汉字。"""
+    filler_en = "publishedAt source_name description title url author " * 8
+    data = {
+        "title": "AI Policy Update",
+        "summary": filler_en,
+        "body_md": filler_en,
+        "feed_kind": "news",
+        "tabs": [
+            {"label": "描述", "summary": filler_en, "body_md": filler_en},
+            {"label": "数据支撑", "summary": filler_en, "body_md": filler_en},
+        ],
+    }
+    assert art.polish_payload_has_substantive_content(data) is False
+
+
+def test_connector_upstream_rejects_thin_newsapi() -> None:
+    snippet = (
+        '{"source":"newsapi","title":"Foo","url":"https://example.com/a",'
+        '"description":"","publishedAt":"2026-05-30T00:00:00Z"}'
+    )
+    ok, msg = art.connector_upstream_has_ingest_material(snippet, "newsapi")
+    assert ok is False
+    assert "上游素材过薄" in msg
+
+
+def test_connector_upstream_accepts_newsapi_with_english_description() -> None:
+    snippet = (
+        '{"source":"newsapi","title":"Foo","url":"https://example.com/a",'
+        '"description":"' + "A major AI vendor announced new enterprise APIs and pricing tiers for developers. " * 3 + '"}'
+    )
+    ok, _ = art.connector_upstream_has_ingest_material(snippet, "newsapi")
+    assert ok is True
+
+
+def test_connector_upstream_accepts_newsapi_with_chinese_description() -> None:
+    snippet = (
+        '{"source":"newsapi","title":"Foo","url":"https://example.com/a",'
+        '"description":"' + "这是一段足够长的中文资讯摘要，说明事件背景与对 AI 行业的影响，供编辑扩写与发布。" * 3 + '"}'
+    )
+    ok, _ = art.connector_upstream_has_ingest_material(snippet, "newsapi")
+    assert ok is True
+
+
 def test_validate_llm_polish_rejects_link_only_when_tabs_meet_length() -> None:
     """字数门槛满足但去 URL 后无正文时仍拒绝。"""
     link_blob = "\n".join(f"https://example.com/p/{i}" for i in range(40))

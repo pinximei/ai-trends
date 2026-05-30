@@ -280,6 +280,13 @@ def _create_one_published_article_from_connector_targets(
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
 
+    from .domain.articles import connector_upstream_has_ingest_material
+
+    upstream_ok, upstream_msg = connector_upstream_has_ingest_material(safe, src_tag)
+    if not upstream_ok:
+        _skip("skip_thin_upstream", f"跳过：{upstream_msg}")
+        return 0
+
     vs = rule_value_score(snippet=safe, summary=summary_base, http_status=http_status or 0)
     if vs < VALUE_SCORE_MIN:
         hint = ""
@@ -386,10 +393,15 @@ def _create_one_published_article_from_connector_targets(
     )
 
     if not polish_payload_has_substantive_content(polished):
-        got = polish_substantive_char_count(collect_polish_text_blob(polished))
+        blob = collect_polish_text_blob(polished)
+        from .domain.articles import polish_substantive_cjk_count, strip_urls_and_markdown_links
+
+        stripped = strip_urls_and_markdown_links(blob)
+        got = polish_substantive_char_count(stripped)
+        got_cjk = polish_substantive_cjk_count(stripped)
         _skip(
             "skip_no_content",
-            f"跳过：{substantive_content_reject_message(got=got, min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS)}"
+            f"跳过：{substantive_content_reject_message(got=got, got_cjk=got_cjk, feed_kind=str(polished.get('feed_kind') or fk), min_chars=PUBLISH_MIN_SUBSTANTIVE_CHARS)}"
             " 请核对 Product Hunt/GitHub 是否走专用打包、LLM Key 与润色日志。",
         )
         return 0

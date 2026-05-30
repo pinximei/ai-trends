@@ -1386,6 +1386,30 @@ _NEWS_API_RELAXED_SOURCES = frozenset(
     {"newsapi", "thenewsapi", "finnhub", "hacker_news", "arxiv"}
 )
 
+# 快讯类上游：仅有 title/url、无正文摘要时不应调用 LLM（避免入库后前台只剩链接表）。
+NEWS_WIRE_UPSTREAM_SOURCES = frozenset(
+    {"newsapi", "thenewsapi", "finnhub", "hacker_news", "youtube_data", "mapbox"}
+)
+
+# 上游素材（description / story_text / 二次拉取正文）至少可读字数（汉字 + 英文词），不含标题与 URL。
+# 快讯多为英文，不能用「仅汉字」衡量。
+NEWS_WIRE_UPSTREAM_MIN_CHARS = 60
+# 兼容旧名（测试/脚本引用）
+NEWS_WIRE_UPSTREAM_MIN_CJK = NEWS_WIRE_UPSTREAM_MIN_CHARS
+
+# 润色稿 feed_kind=news 时，去 URL 后除总字数外还须达到的汉字数（避免英文字段名凑字数）。
+PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS = 48
+
+_CONNECTOR_UPSTREAM_TEXT_KEYS = (
+    "description",
+    "story_text",
+    "content",
+    "snippet",
+    "abstract",
+    "summary",
+    "article_body",
+)
+
 
 _URL_IN_TEXT_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]+\)")
@@ -1418,6 +1442,14 @@ def strip_urls_and_markdown_links(text: str) -> str:
     return s
 
 
+def polish_substantive_cjk_count(text: str) -> int:
+    """去 URL/链接后的汉字数。"""
+    s = strip_urls_and_markdown_links(text)
+    if not s:
+        return 0
+    return len(re.findall(r"[\u4e00-\u9fff]", s))
+
+
 def polish_substantive_char_count(text: str) -> int:
     """去 URL/链接后的有效字数：汉字 + 连续英文词（≥3 字母）。"""
     s = strip_urls_and_markdown_links(text)
@@ -1426,6 +1458,53 @@ def polish_substantive_char_count(text: str) -> int:
     cjk = len(re.findall(r"[\u4e00-\u9fff]", s))
     latin = sum(len(w) for w in re.findall(r"[A-Za-z]{3,}", s))
     return cjk + latin
+
+
+def connector_snippet_upstream_text_blob(snippet: str) -> str:
+    """连接器单条 JSON 中可供扩写的上游正文字段（不含 title/url 占位）。"""
+    s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
+    if not s:
+        return ""
+    try:
+        obj = json.loads(s)
+    except Exception:
+        return s[:4000]
+    if not isinstance(obj, dict):
+        return ""
+    parts: list[str] = []
+    for key in _CONNECTOR_UPSTREAM_TEXT_KEYS:
+        v = obj.get(key)
+        if isinstance(v, str) and v.strip():
+            parts.append(v.strip())
+    return "\n".join(parts)
+
+
+def connector_upstream_material_char_count(snippet: str) -> int:
+    """快讯 snippet 上游正文字段的可读字数（汉字 + 英文词）。"""
+    return polish_substantive_char_count(connector_snippet_upstream_text_blob(snippet))
+
+
+def connector_upstream_has_ingest_material(
+    snippet: str,
+    admin_source_key: str,
+    *,
+    min_chars: int = NEWS_WIRE_UPSTREAM_MIN_CHARS,
+) -> tuple[bool, str]:
+    """
+    快讯源入库前：上游须有可读摘要/正文，避免 LLM 从 title+url 硬凑「仅链接」稿。
+    非 NEWS_WIRE 源不校验（GitHub/PH 等由专用打包提供厚素材）。
+    """
+    sk = (admin_source_key or "").strip().lower()
+    if sk not in NEWS_WIRE_UPSTREAM_SOURCES:
+        return True, ""
+    got = connector_upstream_material_char_count(snippet)
+    if got >= int(min_chars):
+        return True, ""
+    return (
+        False,
+        f"上游素材过薄（description/story_text 等去 URL 后仅 {got} 字可读内容，"
+        f"快讯源至少需 {min_chars} 字才入库）",
+    )
 
 
 def collect_polish_text_blob(data: dict) -> str:
@@ -1452,7 +1531,16 @@ def polish_payload_has_substantive_content(
 ) -> bool:
     """润色 JSON 入库前：除链接/占位摘要外须有可读正文。"""
     blob = collect_polish_text_blob(data)
-    return polish_substantive_char_count(blob) >= int(min_chars)
+    stripped = strip_urls_and_markdown_links(blob)
+    total = polish_substantive_char_count(stripped)
+    if total < int(min_chars):
+        return False
+    fk = str(data.get("feed_kind") or "news").strip().lower()
+    if fk == "news":
+        cjk = polish_substantive_cjk_count(stripped)
+        if cjk < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+            return False
+    return True
 
 
 def stored_article_text_blob(
@@ -1482,19 +1570,39 @@ def stored_article_has_substantive_content(
     summary: str = "",
     body: str = "",
     ai_tabs_json: str | None = None,
+    feed_kind: str = "news",
     min_chars: int = PUBLISH_MIN_SUBSTANTIVE_CHARS,
 ) -> bool:
     """后台发布或读库校验：无实质内容不得 status=published。"""
     blob = stored_article_text_blob(
         title=title, summary=summary, body=body, ai_tabs_json=ai_tabs_json
     )
-    return polish_substantive_char_count(blob) >= int(min_chars)
+    stripped = strip_urls_and_markdown_links(blob)
+    if polish_substantive_char_count(stripped) < int(min_chars):
+        return False
+    fk = (feed_kind or "news").strip().lower()
+    if fk == "news" and polish_substantive_cjk_count(stripped) < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+        return False
+    return True
 
 
-def substantive_content_reject_message(*, got: int, min_chars: int = PUBLISH_MIN_SUBSTANTIVE_CHARS) -> str:
+def substantive_content_reject_message(
+    *,
+    got: int,
+    min_chars: int = PUBLISH_MIN_SUBSTANTIVE_CHARS,
+    got_cjk: int | None = None,
+    feed_kind: str = "news",
+) -> str:
+    fk = (feed_kind or "news").strip().lower()
+    extra = ""
+    if fk == "news" and got_cjk is not None and got_cjk < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+        extra = (
+            f" 资讯稿还须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS} 个汉字（当前 {got_cjk}），"
+            "不能仅靠英文元数据或链接表凑字数。"
+        )
     return (
         f"无实质内容不能入库/发布：去掉链接与 URL 后正文仅 {got} 字，"
-        f"至少需要 {min_chars} 字可读说明。"
+        f"至少需要 {min_chars} 字可读说明。{extra}"
     )
 
 
