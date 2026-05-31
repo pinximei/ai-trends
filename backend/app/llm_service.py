@@ -18,13 +18,12 @@ from .domain.articles import (
 from .polish_publish_compat import coerce_polish_output, ensure_publishable_polish
 from .domain.replication_analysis import FEED_CARD_TAB_REPLICATION, normalize_replication_analysis
 from .llm_settings_service import resolve_llm_http_config
-from .llm_snippet_compact import compact_snippet_for_llm
 from .product_models import LlmUsageLog
 
 # 连接器润色：输出上限（4096 易截断长 JSON tabs，恢复 8192）
 POLISH_MAX_OUTPUT_TOKENS = 8192
-# 修复重试时仍送足量片段（曾压到 3500 导致字数校验反复失败）
-POLISH_REPAIR_SNIPPET_MAX = 16_384
+# 修复重试与首次送模使用同一片段上限（78b3a4b 曾单独压到 3500）
+POLISH_REPAIR_SNIPPET_MAX = CONNECTOR_LLM_SNIPPET_MAX_CHARS
 
 
 def _log_usage(
@@ -153,7 +152,7 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
 
 
 def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, int]) -> str:
-    """短 system：规则一次说明，避免每条重复超长模板。"""
+    """连接器润色 system（各数据源共用；含简体中文与反 JSON 泄漏约束）。"""
     category_rule = (
         "categories 为恰好 1 个元素的数组，元素须为固定大类之一："
         "模型层(谨慎)、开源客户端(好抄)、应用产品、高价值复刻、已验证变现、变现案例、"
@@ -179,15 +178,18 @@ def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, i
             f"数据支撑 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
         )
     return (
-        "只根据用户提供的压缩片段写稿，禁止编造片段外事实；不足处写「原文未提供」。"
+        "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL；"
+        "不足处写「原文未提供」，但仍须把已有字段写全。"
         "全文必须使用简体中文：title、summary、body_md、各 tab 的 summary 与 body_md 均用中文撰写；"
         "专有名词/产品名/仓库名可保留英文，但说明句须为中文。"
+        "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留可核对链接与数字；"
+        "禁止在 body_md 或任一 tab 中输出 ```json、整段原始 API 或未翻译的键值对 JSON。"
         f"{commercial} {category_rule} "
         f"输出单个 JSON：title, summary, body_md, categories, feed_kind, replication_tier(S/A/B/C), tabs"
         + ("；apps 另含 replication_analysis。" if fk == "apps" else "")
         + f"。{tabs} "
         f"{src_hint}"
-        "feed_kind 仅 news 或 apps；title/summary 信息密度高、勿重复。"
+        "feed_kind 仅 news 或 apps；title/summary 信息密度高、勿重复；禁止空洞 tab。"
     )
 
 
@@ -209,7 +211,7 @@ def _build_polish_user(
         f"规则价值分(0-100): {value_score:.0f}\n"
         f"占位标题: {rule_title}\n"
         f"占位摘要: {rule_summary}\n\n"
-        f"压缩原文（仅此一份，勿要求更多上下文）:\n```\n{snippet_cut}\n```"
+        f"原始片段:\n```\n{snippet_cut}\n```"
     )
     if repair_note:
         return f"{base}\n\n{repair_note}"
@@ -410,9 +412,8 @@ def polish_connector_article(
     elif fk not in ("news", "apps"):
         fk = "news"
     th_gate = publish_polish_length_thresholds(admin_source_key)
-    # 指纹/去重仍用完整 snippet；送模型前压成编辑摘要（无对话历史）。
-    snippet_compact = compact_snippet_for_llm(snippet, admin_source_key=admin_source_key)
-    snippet_cut = snippet_compact[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
+    # 指纹/去重仍用完整 snippet；送模型与 78b3a4b 前一致为截断后的完整 JSON（不做 per-source compact 白名单裁剪）。
+    snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
     system = _build_polish_system(fk=fk, admin_source_key=admin_source_key, th_gate=th_gate)
     system_json = system + " 只输出一个 JSON 对象，不要其它文字。"
     user = _build_polish_user(
