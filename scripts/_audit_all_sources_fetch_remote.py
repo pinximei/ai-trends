@@ -45,10 +45,12 @@ from backend.app.product_models import ProductConnector, ProductConnectorLog, Pr
 from backend.app.product_connectors_bootstrap import build_connector_sync_request_cfg, mainstream_heat_fetch_url_ok
 from backend.app.routers.admin_extended import _run_connector_request, _snippet_pack_diag
 from backend.app.domain.articles import (
+    CONNECTOR_SNIPPET_MAX_CHARS,
     connector_upstream_has_ingest_material,
     connector_upstream_material_char_count,
     parse_connector_sync_item_snippets,
 )
+import json as _json
 
 
 def main() -> None:
@@ -90,11 +92,17 @@ def main() -> None:
 
             code, snippet = _run_connector_request(cfg, db=None, connector_id=c.id, source_key=sk)
             diag = _snippet_pack_diag(snippet or "")
-            items = parse_connector_sync_item_snippets((snippet or "")[:120000]) or []
-            print(f"  fetch HTTP={code} {diag}")
-            if code and 200 <= code < 300 and not items:
+            items = parse_connector_sync_item_snippets((snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]) or []
+            json_ok = False
+            try:
+                _json.loads((snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS])
+                json_ok = True
+            except _json.JSONDecodeError:
+                json_ok = False
+            print(f"  fetch HTTP={code} {diag} json_valid={json_ok}")
+            if code and 200 <= code < 300 and (not items or not json_ok):
                 preview = (snippet or "")[:280].replace("\n", " ")
-                print(f"  ISSUE: 拉取成功但 pack 为空 preview={preview!r}")
+                print(f"  ISSUE: 拉取异常 pack不可解析 items={len(items)} preview={preview!r}")
 
             for i, snip in enumerate(items[:3]):
                 ok, msg = connector_upstream_has_ingest_material(snip, sk)
@@ -140,9 +148,49 @@ def main() -> None:
             print()
 
         from backend.app.llm_settings_service import resolve_llm_http_config
+        from backend.app.routers.admin_extended import resolve_admin_source_key_to_segments
 
         _b, key, model = resolve_llm_http_config(db)
         print(f"LLM configured={bool(key)} model={model}")
+
+        print("\n=== pipeline checklist ===")
+        checks: list[tuple[str, bool, str]] = []
+        for c in conns:
+            sk = (c.admin_source_key or "").strip().lower()
+            targets = resolve_admin_source_key_to_segments(db, sk) if sk else []
+            cfg = build_connector_sync_request_cfg(db, c)
+            code, snippet = _run_connector_request(cfg, db=None, connector_id=c.id, source_key=sk)
+            items = parse_connector_sync_item_snippets((snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]) or []
+            try:
+                _json.loads((snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS])
+                jok = True
+            except _json.JSONDecodeError:
+                jok = False
+            ingestible = 0
+            for piece in items[:15]:
+                ok, _ = connector_upstream_has_ingest_material(piece, sk)
+                if ok:
+                    ingestible += 1
+            fetch_ok = bool(code and 200 <= code < 300 and items and jok)
+            seg_ok = bool(targets)
+            key_ok = sk in ("hacker_news", "acquire") or bool(str((cfg or {}).get("api_key") or "").strip())
+            llm_ok = bool(key)
+            all_ok = fetch_ok and seg_ok and key_ok and llm_ok and ingestible > 0
+            checks.append(
+                (
+                    sk,
+                    all_ok,
+                    f"fetch={fetch_ok} json={jok} pack={len(items)} ingestible={ingestible}/{len(items)} "
+                    f"segments={len(targets)} key={key_ok}",
+                )
+            )
+        for sk, ok, detail in checks:
+            flag = "PASS" if ok else "FAIL"
+            print(f"  [{flag}] {sk}: {detail}")
+        n_pass = sum(1 for _, ok, _ in checks if ok)
+        print(f"\nSUMMARY {n_pass}/{len(checks)} sources pipeline-ready")
+        if n_pass < len(checks):
+            print("FAIL 源请按 detail 修：fetch/json=拉取与 pack；segments=数据源领域未映射板块；key=缺 API Key")
     finally:
         db.close()
 

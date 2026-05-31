@@ -190,6 +190,10 @@ def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, i
         + f"。{tabs} "
         f"{src_hint}"
         "feed_kind 仅 news 或 apps；title/summary 信息密度高、勿重复；禁止空洞 tab。"
+        "summary 第一句必须是吸引点击的钩子（疑问/反差/数字/利益），≤36 汉字，禁止「据悉」「据报道」开头；"
+        "禁止把 value_summary 原样当作 summary 首句（须改写为更短、更有悬念的问句）；"
+        "「描述」tab 的 body_md 第一段须先抛结论或悬念，再展开细节；"
+        "card_value_hook 若填写须 ≤28 字且含疑问或数字，与 summary 首句可呼应但不得长段说明体。"
     )
 
 
