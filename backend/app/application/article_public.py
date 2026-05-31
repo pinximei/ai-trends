@@ -372,7 +372,11 @@ def list_articles_home_radar_source_top(
     rows = db.scalars(
         select(Article).where(Article.id.in_(winner_ids)).order_by(*order).limit(lim)
     ).all()
-    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
+    return [
+        c
+        for a in rows
+        if (c := _feed_card_from_article(a, label_by_key=label_by_key)) is not None
+    ]
 
 
 def _public_industry_ids_for_slug(db: Session, ind: Industry) -> list[int]:
@@ -490,12 +494,39 @@ def _apply_freshness_keyset(stmt: Select, pos: tuple[datetime, int] | None) -> S
     )
 
 
-def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict:
+def _article_passes_public_quality_gate(a: Article) -> bool:
+    """公开列表/详情：无实质中文（资讯）或仅链接堆砌的已发文章不展示。"""
+    lane = _row_feed_lane(a)
+    return art.stored_article_has_substantive_content(
+        title=a.title or "",
+        summary=a.summary or "",
+        body=a.body or "",
+        ai_tabs_json=getattr(a, "ai_tabs_json", None),
+        feed_kind=lane,
+    )
+
+
+def _connector_snippet_for_display(a: Article, *, ak: str, src_url: str) -> str:
+    from ..text_display import connector_snippet_from_article_row
+
+    return connector_snippet_from_article_row(
+        admin_source_key=ak,
+        source_original_url=src_url,
+        summary=a.summary or "",
+        engagement_stars_total=getattr(a, "engagement_stars_total", None),
+        title=a.title or "",
+    )
+
+
+def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict | None:
+    if not _article_passes_public_quality_gate(a):
+        return None
     ak = art.admin_source_key(a.third_party_source)
     row_lane = _row_feed_lane(a)
     plat = label_by_key.get(ak) or (ak.replace("_", " ").title() if ak else "")
     tabs_parsed = art.parse_article_tabs_json(getattr(a, "ai_tabs_json", None))
     src_url_card = (getattr(a, "source_original_url", None) or "")[:2048]
+    connector_snippet = _connector_snippet_for_display(a, ak=ak, src_url=src_url_card)
     if tabs_parsed:
         from ..text_display import normalize_article_tabs_for_display
 
@@ -503,23 +534,30 @@ def _feed_card_from_article(a: Article, *, label_by_key: dict[str, str]) -> dict
             tabs_parsed,
             admin_source_key=ak,
             source_original_url=src_url_card,
+            snippet=connector_snippet,
         )
     tab_summaries = (
         [{"label": x["label"], "summary": (x["summary"] or "")[:420]} for x in tabs_parsed[:6]] if tabs_parsed else []
     )
     tab_labels = art.required_feed_card_tab_labels(row_lane)
     desc_label = tab_labels[0]
-    from ..text_display import markdown_to_plain_preview
+    from ..text_display import markdown_to_plain_preview, pick_feed_card_description
 
-    card_description = markdown_to_plain_preview((a.summary or "")[:960], max_len=960)
+    card_description = pick_feed_card_description(
+        title=a.title or "",
+        summary=a.summary or "",
+        tabs=tabs_parsed,
+        admin_source_key=ak,
+        snippet=connector_snippet,
+        feed_kind=row_lane,
+        desc_label=desc_label,
+    )
     card_highlights = ""
     if tabs_parsed:
         for x in tabs_parsed:
             lab = (x.get("label") or "").strip()
             sm = (x.get("summary") or "").strip()
-            if lab == desc_label and sm:
-                card_description = markdown_to_plain_preview(sm, max_len=960)
-            elif art.feed_card_highlights_tab_label(lab):
+            if art.feed_card_highlights_tab_label(lab):
                 card_highlights = markdown_to_plain_preview(sm, max_len=200)
     cats_list = art.display_categories_for_article(getattr(a, "ai_categories_json", None))
     fp = art.display_fingerprint(a.title, a.summary or "")
@@ -750,7 +788,9 @@ def list_articles_feed_by_day_page(
         if fp in seen_fp:
             continue
         seen_fp.add(fp)
-        out.append(_feed_card_from_article(a, label_by_key=label_by_key))
+        card = _feed_card_from_article(a, label_by_key=label_by_key)
+        if card:
+            out.append(card)
 
     return {
         "items": out,
@@ -878,7 +918,11 @@ def list_articles_feed_by_heat_top(
     rows = db.scalars(select(Article).where(Article.id.in_(slice_ids))).all()
     pos = {i: p for p, i in enumerate(slice_ids)}
     rows_sorted = sorted(rows, key=lambda a: pos[a.id])
-    out = [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows_sorted]
+    out = [
+        c
+        for a in rows_sorted
+        if (c := _feed_card_from_article(a, label_by_key=label_by_key)) is not None
+    ]
     has_more = off + len(out) < total_ranked
     return {
         "items": out,
@@ -1109,7 +1153,9 @@ def list_articles_feed(
             if fp in seen_fp:
                 continue
             seen_fp.add(fp)
-            out.append(_feed_card_from_article(a, label_by_key=label_by_key))
+            card = _feed_card_from_article(a, label_by_key=label_by_key)
+            if card:
+                out.append(card)
             if len(out) >= page_size:
                 break
         internal = last_scanned
@@ -1127,6 +1173,8 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
     a = db.get(Article, article_id)
     if not a or a.status != "published":
         return None
+    if not _article_passes_public_quality_gate(a):
+        return None
     ak = art.admin_source_key(a.third_party_source)
     lane = _row_feed_lane(a)
     label_by_key = _admin_source_label_by_key(db)
@@ -1139,25 +1187,27 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
             source_original_url=src_url,
             admin_source_key=ak,
         )
+    connector_snippet = _connector_snippet_for_display(a, ak=ak, src_url=src_url or "")
+    public_summary = (a.summary or "")[:512]
     if tabs:
-        from ..text_display import (
-            github_connector_snippet_from_article_fields,
-            normalize_article_tabs_for_display,
-        )
+        from ..text_display import normalize_article_tabs_for_display, pick_feed_card_description
 
-        connector_snippet = ""
-        if ak == "github":
-            connector_snippet = github_connector_snippet_from_article_fields(
-                source_original_url=src_url or "",
-                summary=a.summary or "",
-                engagement_stars_total=getattr(a, "engagement_stars_total", None),
-                title=a.title or "",
-            )
         tabs = normalize_article_tabs_for_display(
             tabs,
             admin_source_key=ak,
             source_original_url=src_url or "",
             snippet=connector_snippet,
+        )
+        desc_labels = art.required_feed_card_tab_labels(lane)
+        public_summary = pick_feed_card_description(
+            title=a.title or "",
+            summary=a.summary or "",
+            tabs=tabs,
+            admin_source_key=ak,
+            snippet=connector_snippet,
+            feed_kind=lane,
+            desc_label=desc_labels[0],
+            max_len=512,
         )
     if not tabs and (a.body or "").strip():
         tabs = [
@@ -1171,7 +1221,7 @@ def get_published_article(db: Session, article_id: int) -> dict | None:
         "id": a.id,
         "slug": a.slug,
         "title": a.title,
-        "summary": a.summary,
+        "summary": public_summary,
         "body": a.body,
         "segment_id": a.segment_id,
         "content_type": a.content_type,

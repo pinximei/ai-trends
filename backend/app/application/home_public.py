@@ -515,7 +515,11 @@ def list_highlight_replicable_apps(
     since = datetime.utcnow() - timedelta(days=days)
     rows = _pick_highlight_replicable_articles(db, industry_ids=industry_ids, since=since, limit=lim)
     label_by_key = _admin_source_label_by_key(db)
-    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
+    return [
+        c
+        for a in rows
+        if (c := _feed_card_from_article(a, label_by_key=label_by_key)) is not None
+    ]
 
 
 def _monetization_highlight_rank(a: Article) -> int:
@@ -669,7 +673,11 @@ def list_highlight_monetization_apps(
     since = datetime.utcnow() - timedelta(days=days)
     rows = _pick_highlight_monetization_articles(db, industry_ids=industry_ids, since=since, limit=lim)
     label_by_key = _admin_source_label_by_key(db)
-    return [_feed_card_from_article(a, label_by_key=label_by_key) for a in rows]
+    return [
+        c
+        for a in rows
+        if (c := _feed_card_from_article(a, label_by_key=label_by_key)) is not None
+    ]
 
 
 def _home_dashboard_cache_params(

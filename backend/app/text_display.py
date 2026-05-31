@@ -79,6 +79,92 @@ def sanitize_stored_text_field(text: str, *, max_len: int = 50000) -> str:
     return s
 
 
+def connector_snippet_from_article_row(
+    *,
+    admin_source_key: str,
+    source_original_url: str = "",
+    summary: str = "",
+    engagement_stars_total: int | None = None,
+    title: str = "",
+) -> str:
+    """列表/详情展示：从已存文章字段重建连接器 JSON，供 Tab 与卡片摘要修复。"""
+    ak = (admin_source_key or "").strip().lower()
+    if ak == "github":
+        return github_connector_snippet_from_article_fields(
+            source_original_url=source_original_url,
+            summary=summary,
+            engagement_stars_total=engagement_stars_total,
+            title=title,
+        )
+    if ak in ("newsapi", "thenewsapi", "hacker_news", "acquire", "product_hunt"):
+        payload = {
+            "title": (title or "").strip()[:500] or None,
+            "description": (summary or "").strip()[:2000] or None,
+            "url": (source_original_url or "").strip()[:2048] or None,
+        }
+        clean = {k: v for k, v in payload.items() if v}
+        return json.dumps(clean, ensure_ascii=False) if clean else ""
+    return ""
+
+
+def pick_feed_card_description(
+    *,
+    title: str,
+    summary: str,
+    tabs: list[dict],
+    admin_source_key: str,
+    snippet: str,
+    feed_kind: str,
+    desc_label: str,
+    max_len: int = 960,
+) -> str:
+    """
+    列表卡片摘要：优先中文可读 Tab/摘要；资讯稿汉字不足时不用纯英文元数据糊屏。
+    """
+    from .domain.articles import polish_substantive_cjk_count, strip_urls_and_markdown_links
+
+    fk = (feed_kind or "news").strip().lower()
+    min_cjk = 48 if fk == "news" else 10
+
+    def readable(text: str) -> bool:
+        plain = markdown_to_plain_preview(text, max_len=max_len)
+        if not plain or plain == "—":
+            return False
+        stripped = strip_urls_and_markdown_links(plain)
+        if polish_substantive_cjk_count(stripped) >= min_cjk:
+            return True
+        if fk == "apps" and len(stripped) >= 40 and not stripped.startswith("http"):
+            return True
+        return False
+
+    ordered: list[str] = []
+    for x in tabs:
+        if (x.get("label") or "").strip() == desc_label:
+            sm = (x.get("summary") or "").strip()
+            if sm:
+                ordered.append(sm)
+    if summary.strip():
+        ordered.append(summary.strip())
+    if snippet.strip() and admin_source_key:
+        plain = format_connector_snippet_plain(snippet, admin_source_key=admin_source_key, max_len=max_len)
+        if plain:
+            ordered.append(plain)
+
+    for raw in ordered:
+        if readable(raw):
+            return markdown_to_plain_preview(raw, max_len=max_len)
+
+    title_s = (title or "").strip()
+    if title_s:
+        if snippet.strip() and admin_source_key:
+            head = format_connector_snippet_plain(snippet, admin_source_key=admin_source_key, max_len=320)
+            first = (head.split("\n")[0] if head else "").strip()
+            combo = f"{title_s}。{first}" if first and first not in title_s else title_s
+            return markdown_to_plain_preview(combo, max_len=max_len)
+        return markdown_to_plain_preview(title_s, max_len=max_len)
+    return "—"
+
+
 def github_connector_snippet_from_article_fields(
     *,
     source_original_url: str = "",
