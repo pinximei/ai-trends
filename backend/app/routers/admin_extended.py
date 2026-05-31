@@ -486,19 +486,22 @@ def apply_theme_to_connector_url(url: str, theme: str) -> str:
 def _snippet_pack_diag(snippet: str) -> str:
     import json
 
-    s = (snippet or "")[:120000]
+    s = (snippet or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
     n = len(parse_connector_sync_item_snippets(s) or [])
     note = ""
     diag_s = ""
+    if n == 0:
+        note = "not_json_or_empty_pack"
     try:
-        obj = json.loads(s[:12000])
+        obj = json.loads(s)
         if isinstance(obj, dict):
-            note = str(obj.get("note") or "").strip()
+            note = str(obj.get("note") or "").strip() or note
             diag = obj.get("diag")
             if isinstance(diag, dict) and diag:
                 diag_s = " " + " ".join(f"{k}={v}" for k, v in diag.items())
     except json.JSONDecodeError:
-        note = "not_json"
+        if not note:
+            note = "not_json"
     return f"pack_items={n}" + (f" note={note}" if note else "") + diag_s
 
 

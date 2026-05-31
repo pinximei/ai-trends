@@ -14,7 +14,11 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from .admin_source_fetch import normalize_fetch_limit, per_item_snippet_max
-from .domain.articles import CONNECTOR_HEAT_TOP_N, CONNECTOR_SNIPPET_MAX_CHARS
+from .domain.articles import (
+    CONNECTOR_HEAT_TOP_N,
+    CONNECTOR_SNIPPET_MAX_CHARS,
+    CONNECTOR_SYNC_ITEMS_V1_KEY,
+)
 from .news_wire_enrich import enrich_news_wire_items
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
@@ -465,18 +469,48 @@ def huggingface_api_spaces_is_list_index(url: str) -> bool:
 
 
 def _trim_pack_json(obj: dict[str, Any]) -> str:
-    raw = json.dumps(obj, ensure_ascii=False)
-    if len(raw) <= CONNECTOR_SNIPPET_MAX_CHARS:
-        return raw
-    items = obj.get("connector_sync_items_v1")
+    """序列化 pack；超 CONNECTOR_SNIPPET_MAX_CHARS 时减条数或缩短内层 snippet，禁止截断半截 JSON。"""
+    pack = dict(obj)
+    items = pack.get("connector_sync_items_v1")
     if not isinstance(items, list):
-        return raw[:CONNECTOR_SNIPPET_MAX_CHARS]
-    while len(items) > 1 and len(raw) > CONNECTOR_SNIPPET_MAX_CHARS:
-        items.pop()
-        raw = json.dumps(obj, ensure_ascii=False)
-    if len(raw) > CONNECTOR_SNIPPET_MAX_CHARS:
-        return raw[:CONNECTOR_SNIPPET_MAX_CHARS]
-    return raw
+        raw = json.dumps(pack, ensure_ascii=False)
+        if len(raw) <= CONNECTOR_SNIPPET_MAX_CHARS:
+            return raw
+        return json.dumps(
+            {CONNECTOR_SYNC_ITEMS_V1_KEY: [], "note": "pack_too_large_non_list"},
+            ensure_ascii=False,
+        )
+
+    working: list = list(items)
+    pack[CONNECTOR_SYNC_ITEMS_V1_KEY] = working
+    while len(working) > 1:
+        raw = json.dumps(pack, ensure_ascii=False)
+        if len(raw) <= CONNECTOR_SNIPPET_MAX_CHARS:
+            return raw
+        working.pop()
+
+    while working:
+        raw = json.dumps(pack, ensure_ascii=False)
+        if len(raw) <= CONNECTOR_SNIPPET_MAX_CHARS:
+            return raw
+        last = working[-1]
+        if isinstance(last, dict) and isinstance(last.get("snippet"), str):
+            snip = last["snippet"]
+            if len(snip) <= 2000:
+                working.pop()
+                continue
+            last["snippet"] = snip[: max(2000, int(len(snip) * 0.82))]
+        else:
+            working.pop()
+
+    return json.dumps(
+        {
+            CONNECTOR_SYNC_ITEMS_V1_KEY: [],
+            "note": str(pack.get("note") or "pack_too_large"),
+            "diag": pack.get("diag") if isinstance(pack.get("diag"), dict) else {},
+        },
+        ensure_ascii=False,
+    )
 
 
 def _post_ph_graphql(client: httpx.Client, headers: dict[str, str], query: str) -> tuple[int, dict[str, Any] | None]:
