@@ -179,6 +179,8 @@ def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, i
         )
     return (
         "只根据用户提供的压缩片段写稿，禁止编造片段外事实；不足处写「原文未提供」。"
+        "全文必须使用简体中文：title、summary、body_md、各 tab 的 summary 与 body_md 均用中文撰写；"
+        "专有名词/产品名/仓库名可保留英文，但说明句须为中文。"
         f"{commercial} {category_rule} "
         f"输出单个 JSON：title, summary, body_md, categories, feed_kind, replication_tier(S/A/B/C), tabs"
         + ("；apps 另含 replication_analysis。" if fk == "apps" else "")
@@ -487,7 +489,7 @@ def polish_connector_article(
         repair_snip = snippet_cut[:POLISH_REPAIR_SNIPPET_MAX]
         repair_note = (
             f"【校验未通过】{reject}\n"
-            f"请重新输出完整 JSON，满足字数门槛与 tab 结构。"
+            f"请重新输出完整 JSON，满足字数门槛与 tab 结构；全文简体中文。"
             f"categories 须为 1 个元素，取自：{', '.join(sorted(FACET_ALL_LABELS))}。"
         )
         repair_user = _build_polish_user(

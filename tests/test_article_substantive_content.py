@@ -93,6 +93,20 @@ def test_connector_upstream_accepts_newsapi_with_english_description() -> None:
     assert ok is True
 
 
+def test_connector_upstream_github_requires_readme_or_text() -> None:
+    thin = '{"full_name":"o/r","description":"short","html_url":"https://github.com/o/r"}'
+    ok, msg = art.connector_upstream_has_ingest_material(thin, "github")
+    assert ok is False
+    assert "GitHub" in msg
+
+    with_readme = (
+        '{"full_name":"o/r","description":"x",'
+        '"readme_md":"# Demo\\n\\n这是一个面向开发者的开源桌面客户端，支持多平台。"}'
+    )
+    ok2, _ = art.connector_upstream_has_ingest_material(with_readme, "github")
+    assert ok2 is True
+
+
 def test_connector_upstream_accepts_newsapi_with_chinese_description() -> None:
     snippet = (
         '{"source":"newsapi","title":"Foo","url":"https://example.com/a",'

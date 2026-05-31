@@ -1402,6 +1402,7 @@ PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS = 48
 
 _CONNECTOR_UPSTREAM_TEXT_KEYS = (
     "description",
+    "readme_md",
     "story_text",
     "content",
     "snippet",
@@ -1495,6 +1496,24 @@ def connector_upstream_has_ingest_material(
     非 NEWS_WIRE 源不校验（GitHub/PH 等由专用打包提供厚素材）。
     """
     sk = (admin_source_key or "").strip().lower()
+    if sk == "github":
+        got = connector_upstream_material_char_count(snippet)
+        has_readme = False
+        try:
+            obj = json.loads((snippet or "").strip())
+            if isinstance(obj, dict):
+                has_readme = bool(str(obj.get("readme_md") or "").strip())
+        except json.JSONDecodeError:
+            pass
+        if got >= 40:
+            return True, ""
+        if has_readme and got >= 12:
+            return True, ""
+        return (
+            False,
+            f"GitHub 上游过薄（去 URL 后 {got} 字；无 readme_md 或 description 过短），"
+            "请配置 GitHub Token 并确认 Trending 拉取成功",
+        )
     if sk not in NEWS_WIRE_UPSTREAM_SOURCES:
         return True, ""
     got = connector_upstream_material_char_count(snippet)

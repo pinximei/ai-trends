@@ -281,6 +281,13 @@ def format_fetch_empty_message(snippet_diag: str, *, source_key: str) -> str:
     sk = (source_key or "").strip().lower()
     if "note=no_posts" in d or "note=no_slugs" in d:
         return f"[{sk}] API 返回成功但当日无上榜产品（no_posts）。"
+    if "note=repo_api_empty" in d or '"note": "repo_api_empty"' in d:
+        return (
+            f"[{sk}] Trending 有榜单但 API 拉仓+客户端关键词过滤后 0 条（repo_api_empty）。"
+            "请配置 GitHub Personal Access Token；无 Token 时仅能用 HTML 降级且易无 README。"
+        )
+    if "note=trending_parse_empty" in d:
+        return f"[{sk}] 无法解析 GitHub Trending 页面（HTML 结构变化或网络拦截）。"
     if "note=detail_fetch_empty" in d:
         return f"[{sk}] 拉到列表但详情接口均未返回内容（detail_fetch_empty），常见：限流 429 或 slug 失效。"
     if "note=acquire_parse_empty" in d or "note=taaft_parse_empty" in d:

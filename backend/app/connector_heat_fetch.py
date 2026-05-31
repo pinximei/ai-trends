@@ -412,9 +412,31 @@ def sync_github_trending_top_details(
                 _github_backfill_payloads_from_ranked(
                     payloads, ranked, n=n, since=since, discovery_url=url
                 )
+            if has_auth:
+                for repo in payloads:
+                    if str(repo.get("readme_md") or "").strip():
+                        continue
+                    slug = str(repo.get("full_name") or "").strip()
+                    if slug:
+                        _attach_github_readme(
+                            client, f"https://api.github.com/repos/{slug}", api_headers, repo
+                        )
+            readme_n = sum(1 for p in payloads if str(p.get("readme_md") or "").strip())
+            filter_n = sum(
+                1 for p in payloads if (p.get("_aisoul_trending") or {}).get("filter_fallback")
+            )
             if not payloads:
                 return r.status_code, json.dumps(
-                    {"connector_sync_items_v1": [], "note": "repo_api_empty", "since": since},
+                    {
+                        "connector_sync_items_v1": [],
+                        "note": "repo_api_empty",
+                        "since": since,
+                        "diag": {
+                            "trending_parsed": len(ranked),
+                            "has_auth": has_auth,
+                            "hint": "客户端关键词过滤后为空；检查 GitHub Token 或放宽关键词",
+                        },
+                    },
                     ensure_ascii=False,
                 )
             pack = {
@@ -422,6 +444,13 @@ def sync_github_trending_top_details(
                     {"snippet": json.dumps(p, ensure_ascii=False)[:item_max]} for p in payloads
                 ],
                 "note": f"github_trending_{since}",
+                "diag": {
+                    "packed": len(payloads),
+                    "readme_attached": readme_n,
+                    "filter_fallback": filter_n,
+                    "has_auth": has_auth,
+                    "trending_parsed": len(ranked),
+                },
             }
             return 200, _trim_pack_json(pack)
     except Exception as e:
