@@ -32,7 +32,7 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
         "api_key_masked": "",
         "scope_label": "AI｜客户端·开源",
         "content_role": "daily_editorial",
-        "notes": "Trending 日榜 → 仅保留 desktop/tauri/electron/flutter/chrome-extension/client/gui 等客户端向仓库。",
+        "notes": "Trending 日榜 → 仅保留 desktop/tauri/electron/flutter/chrome-extension/client/gui 等客户端向仓库。建议在卡片填写 GitHub PAT（Bearer），用于拉取仓库详情与 README。",
         "fetch_limit": PRESET_FETCH_LIMIT["github"],
     },
     {
@@ -144,7 +144,6 @@ assert not DISCONTINUED_BOOTSTRAP_ADMIN_SOURCES.intersection(
 # 其余预置（如 product_hunt）及运营自增的任意标识默认显示密钥框。
 ADMIN_SOURCE_PRESETS_HIDE_CARD_API_KEY: frozenset[str] = frozenset(
     {
-        "github",
         "hacker_news",
         "acquire",
     }

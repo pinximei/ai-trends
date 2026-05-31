@@ -1529,7 +1529,7 @@ export function App() {
                   本身只有元数据、计数、行情或目录字段，结果就会像「统计/目录」而非报道。要拉<strong>可读的条目型内容</strong>，请优先配置<strong>RSS/Atom</strong>或<strong>带标题/摘要/链接（或正文）字段的官方 API</strong>；整站爬取、无头浏览器、复杂登录流不在当前内置范围内。
                 </p>
                 <p className="muted tiny" style={{ margin: "10px 0 0" }}>
-                  <strong>密钥与同步</strong>：公开/免 Key 的预置模板卡片<strong>不展示</strong>密钥输入，仅在有掩码时显示一行脱敏；需 Token 的预置（如 Product Hunt 需 <strong>Bearer access_token</strong>，且可另存 <strong>OAuth Client Secret</strong>）及<strong>自定义标识</strong>可在卡片上填写。亦可始终在页面下方<strong>保存数据源</strong>表单维护：保存时写入绑定连接器的 <code>config_json.api_key</code> / <code>oauth_client_secret</code>（后者仅 Product Hunt 等），留空表示<strong>不修改</strong>已有值。「连接器 Token」显示各连接器内是否已有 api_key 与（若适用）OAuth Secret。
+                  <strong>密钥与同步</strong>：<strong>GitHub</strong>、Product Hunt 等需在卡片填写 Token（GitHub 为可选 PAT，用于 README/仓库 API；Trending 页本身可不填）。Hacker News 等免 Key 预置<strong>不展示</strong>密钥框。保存时写入绑定连接器的 <code>config_json.api_key</code>；Product Hunt 还可存 <code>oauth_client_secret</code>。留空保存表示<strong>不修改</strong>已有值。「连接器 Token」显示各连接器是否已填 api_key。
                 </p>
               </div>
               {sourcePresetsLoading ? <p className="muted tiny" style={{ marginTop: 12 }}>正在加载数据源列表…</p> : null}
@@ -1744,17 +1744,25 @@ export function App() {
                               <>
                                 {showApiKey ? (
                                   <div className="source-card__meta-row" style={{ marginTop: 10 }}>
-                                    <dt>{showAppSecret ? "Bearer Access Token" : "API Key"}</dt>
+                                    <dt>
+                                      {p.source === "github"
+                                        ? "GitHub Token（PAT）"
+                                        : showAppSecret
+                                          ? "Bearer Access Token"
+                                          : "API Key"}
+                                    </dt>
                                     <dd style={{ margin: 0 }}>
                                       <input
                                         type="password"
                                         autoComplete="off"
                                         placeholder={
-                                          showAppSecret && p.source === "product_hunt" && phTokenDirect
-                                            ? "粘贴 Product Hunt Access Token"
-                                            : showAppSecret
-                                              ? "OAuth 换到的 access_token；留空保存不修改"
-                                              : "填写新密钥；留空并保存表示不修改已有密钥"
+                                          p.source === "github"
+                                            ? "ghp_… 或 fine-grained token；留空保存不修改"
+                                            : showAppSecret && p.source === "product_hunt" && phTokenDirect
+                                              ? "粘贴 Product Hunt Access Token"
+                                              : showAppSecret
+                                                ? "OAuth 换到的 access_token；留空保存不修改"
+                                                : "填写新密钥；留空并保存表示不修改已有密钥"
                                         }
                                         style={{
                                           width: "100%",
@@ -1780,11 +1788,13 @@ export function App() {
                                         </div>
                                       ) : (
                                         <div className="muted tiny" style={{ marginTop: 8 }}>
-                                          {showAppSecret && p.source === "product_hunt" && phTokenDirect
-                                            ? "在 Product Hunt 开发者后台创建 Access Token，粘贴到上方并保存。"
-                                            : showAppSecret
-                                              ? "Client ID 在 Product Hunt 开发者后台查看；此处填换到的 Bearer Token。"
-                                              : "保存后在此显示首尾掩码；留空保存不改动已有密钥。"}
+                                          {p.source === "github"
+                                            ? "GitHub → Settings → Developer settings → Personal access tokens；公开仓库读权限即可（拉 Trending 详情与 README）。"
+                                            : showAppSecret && p.source === "product_hunt" && phTokenDirect
+                                              ? "在 Product Hunt 开发者后台创建 Access Token，粘贴到上方并保存。"
+                                              : showAppSecret
+                                                ? "Client ID 在 Product Hunt 开发者后台查看；此处填换到的 Bearer Token。"
+                                                : "保存后在此显示首尾掩码；留空保存不改动已有密钥。"}
                                         </div>
                                       )}
                                     </dd>
