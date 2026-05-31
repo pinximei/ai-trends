@@ -21,7 +21,8 @@ from ..product_models import Article
 CONNECTOR_SNIPPET_MAX_CHARS = 524_288
 
 # 送入大模型润色的片段上限（经 llm_snippet_compact 压缩后仍受此限制）。
-CONNECTOR_LLM_SNIPPET_MAX_CHARS = 10_240
+# 2026-05-29 曾降至 10240 省 token，导致 GitHub README/长稿润色不足；恢复 32768。
+CONNECTOR_LLM_SNIPPET_MAX_CHARS = 32_768
 
 # 连接器「热度榜」条数：先拉榜单再逐条拉详情后入库（Product Hunt / Hugging Face Spaces 等）。
 CONNECTOR_HEAT_TOP_N = 10

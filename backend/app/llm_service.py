@@ -21,9 +21,10 @@ from .llm_settings_service import resolve_llm_http_config
 from .llm_snippet_compact import compact_snippet_for_llm
 from .product_models import LlmUsageLog
 
-# 连接器润色：单次输出与修复次数上限（无多轮对话，仅失败时 1 次修复）
-POLISH_MAX_OUTPUT_TOKENS = 4096
-POLISH_REPAIR_SNIPPET_MAX = 3_500
+# 连接器润色：输出上限（4096 易截断长 JSON tabs，恢复 8192）
+POLISH_MAX_OUTPUT_TOKENS = 8192
+# 修复重试时仍送足量片段（曾压到 3500 导致字数校验反复失败）
+POLISH_REPAIR_SNIPPET_MAX = 16_384
 
 
 def _log_usage(
@@ -519,8 +520,42 @@ def polish_connector_article(
         published2, reject2 = _try_publish(out2)
         if published2:
             return published2, ""
-        # 不再第三次调 LLM；规则层尽量补齐，避免 token 翻倍
-        for candidate in (out2, out):
+        out3 = None
+        if "_short" in reject2:
+            repair2_note = (
+                f"【第二次修复】{reject2}\n"
+                f"请在「描述」summary 写满≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
+                f"「变现评估」summary≥{th_gate['repl_summary']}、body≥{th_gate['repl_body']}；"
+                f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}（含表格与链接）。"
+                "全文简体中文。只输出 JSON。"
+            )
+            repair2_user = _build_polish_user(
+                snippet_cut=snippet_cut[:POLISH_REPAIR_SNIPPET_MAX],
+                admin_source_key=admin_source_key,
+                connector_name=connector_name,
+                segment_label=segment_label,
+                rule_title=rule_title,
+                rule_summary=rule_summary,
+                value_score=value_score,
+                fk=fk,
+                repair_note=repair2_note,
+            )
+            try:
+                raw3 = _polish_llm_call(
+                    db,
+                    system=system_json,
+                    user=repair2_user,
+                    ref_id=(ref_id[:60] + ":r2")[:64],
+                    response_json=False,
+                )
+                out3, _ = _parse_polish_response(raw3, default_feed_kind=fk)
+                if out3:
+                    published3, reject2 = _try_publish(out3)
+                    if published3:
+                        return published3, ""
+            except Exception:
+                pass
+        for candidate in (out3, out2, out):
             if not candidate:
                 continue
             fixed = ensure_publishable_polish(

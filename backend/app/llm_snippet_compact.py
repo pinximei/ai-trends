@@ -9,7 +9,8 @@ from .domain.articles import CONNECTOR_LLM_SNIPPET_MAX_CHARS
 
 # 单字段与 README 在摘要中的上限（不影响 CONNECTOR_SNIPPET_MAX_CHARS 存储）
 _LLM_FIELD_STR_MAX = 1_200
-_LLM_README_MAX = 4_000
+# 送 LLM 的 readme 上限（须 ≤ connector _README_MD_MAX；过短会导致描述空洞）
+_LLM_README_MAX = 12_000
 _LLM_LIST_ITEMS_MAX = 12
 _DROP_KEY_SUBSTR = (
     "gravatar",

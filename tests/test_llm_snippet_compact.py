@@ -23,7 +23,7 @@ def test_github_compact_drops_noise_and_caps_readme() -> None:
     assert data["full_name"] == "org/demo"
     assert "node_id" not in out
     assert "followers_url" not in out
-    assert len(data["readme_md"]) <= 4_001
+    assert len(data["readme_md"]) <= 12_001
 
 
 def test_product_hunt_compact_keeps_core_fields() -> None:
@@ -45,4 +45,4 @@ def test_non_json_snippet_passes_through_truncated() -> None:
     plain = "plain text " * 500
     out = compact_snippet_for_llm(plain, admin_source_key="github")
     assert out.startswith("plain text")
-    assert len(out) <= 10_240
+    assert len(out) <= 32_768
