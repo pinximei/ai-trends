@@ -1400,6 +1400,11 @@ NEWS_WIRE_UPSTREAM_MIN_CJK = NEWS_WIRE_UPSTREAM_MIN_CHARS
 
 # 润色稿 feed_kind=news 时，去 URL 后除总字数外还须达到的汉字数（避免英文字段名凑字数）。
 PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS = 48
+# apps 稿：「描述」「变现评估」tab 单独验汉字（勿用全文或其它 tab 凑过）。
+PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC = 48
+PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL = 24
+# Product Hunt 入库前：上游 tagline/description 等可读字数下限。
+PRODUCT_HUNT_UPSTREAM_MIN_CHARS = 35
 
 _CONNECTOR_UPSTREAM_TEXT_KEYS = (
     "description",
@@ -1515,6 +1520,15 @@ def connector_upstream_has_ingest_material(
             f"GitHub 上游过薄（去 URL 后 {got} 字；无 readme_md 或 description 过短），"
             "请配置 GitHub Token 并确认 Trending 拉取成功",
         )
+    if sk == "product_hunt":
+        got = connector_upstream_material_char_count(snippet)
+        if got >= int(PRODUCT_HUNT_UPSTREAM_MIN_CHARS):
+            return True, ""
+        return (
+            False,
+            f"Product Hunt 上游过薄（description/tagline 等去 URL 后仅 {got} 字，"
+            f"至少需 {PRODUCT_HUNT_UPSTREAM_MIN_CHARS} 字才润色入库）",
+        )
     if sk not in NEWS_WIRE_UPSTREAM_SOURCES:
         return True, ""
     got = connector_upstream_material_char_count(snippet)
@@ -1525,6 +1539,20 @@ def connector_upstream_has_ingest_material(
         f"上游素材过薄（description/story_text 等去 URL 后仅 {got} 字可读内容，"
         f"快讯源至少需 {min_chars} 字才入库）",
     )
+
+
+def polish_tab_body_by_label(data: dict, label: str) -> str:
+    """润色 JSON 中指定 Tab 的 body_md。"""
+    tabs = data.get("tabs")
+    if not isinstance(tabs, list):
+        return ""
+    want = (label or "").strip()
+    for t in tabs:
+        if not isinstance(t, dict):
+            continue
+        if str(t.get("label") or "").strip() == want:
+            return str(t.get("body_md") or "").strip()
+    return ""
 
 
 def collect_polish_text_blob(data: dict) -> str:
@@ -1559,6 +1587,21 @@ def polish_payload_has_substantive_content(
     if fk == "news":
         cjk = polish_substantive_cjk_count(stripped)
         if cjk < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+            return False
+    if fk == "apps":
+        from ..text_display import body_is_connector_kv_metadata
+
+        desc_body = polish_tab_body_by_label(data, FEED_CARD_TAB_DESCRIPTION)
+        if polish_substantive_cjk_count(desc_body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC:
+            return False
+        if body_is_connector_kv_metadata(desc_body):
+            return False
+        from .replication_analysis import FEED_CARD_TAB_REPLICATION
+
+        repl_body = polish_tab_body_by_label(data, FEED_CARD_TAB_REPLICATION)
+        if polish_substantive_cjk_count(repl_body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
+            return False
+        if body_is_connector_kv_metadata(repl_body):
             return False
     return True
 
@@ -1619,6 +1662,12 @@ def substantive_content_reject_message(
         extra = (
             f" 资讯稿还须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS} 个汉字（当前 {got_cjk}），"
             "不能仅靠英文元数据或链接表凑字数。"
+        )
+    elif fk == "apps":
+        extra = (
+            f" 应用稿「描述」须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC} 个汉字，"
+            f"「变现评估」须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL} 个汉字，"
+            "且不得用产品/标语/投票/官网等字段表充当正文。"
         )
     return (
         f"无实质内容不能入库/发布：去掉链接与 URL 后正文仅 {got} 字，"
@@ -1690,7 +1739,10 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
         return False
     if len(tabs) != len(need_labels):
         return False
-    from ..text_display import polish_content_has_connector_api_leak
+    from ..text_display import (
+        body_is_connector_kv_metadata,
+        polish_content_has_connector_api_leak,
+    )
 
     tab_body_total = 0
     labels: list[str] = []
@@ -1711,6 +1763,19 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
             return False
         if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
             return False
+        if lab in (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_REPLICATION):
+            if body_is_connector_kv_metadata(body):
+                return False
+            min_cjk = (
+                PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC
+                if lab == FEED_CARD_TAB_DESCRIPTION
+                else PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL
+            )
+            if fk == "apps" and polish_substantive_cjk_count(body) < min_cjk:
+                return False
+            if fk == "news" and lab == FEED_CARD_TAB_DESCRIPTION:
+                if polish_substantive_cjk_count(body) < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+                    return False
         tab_body_total += len(body)
     if labels != list(need_labels):
         return False

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from backend.app.domain import articles as art
+from backend.app.domain.replication_analysis import FEED_CARD_TAB_REPLICATION
+from backend.app.text_display import body_is_connector_kv_metadata
 from tests.test_article_public_shape import (
     _VALID_BODY,
     _VALID_DESC_SUMMARY,
@@ -114,6 +116,40 @@ def test_connector_upstream_accepts_newsapi_with_chinese_description() -> None:
     )
     ok, _ = art.connector_upstream_has_ingest_material(snippet, "newsapi")
     assert ok is True
+
+
+def test_apps_rejects_connector_kv_description_tab() -> None:
+    kv_body = "产品：Wandesk\n标语：Build AI\n投票：400\n官网：https://ph.com/r/x"
+    assert body_is_connector_kv_metadata(kv_body)
+    data = {
+        "title": "Wandesk",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "feed_kind": "apps",
+        "categories": ["应用产品"],
+        "tabs": [
+            {"label": "描述", "summary": _VALID_DESC_SUMMARY, "body_md": kv_body + ("x" * 120)},
+            {
+                "label": FEED_CARD_TAB_REPLICATION,
+                "summary": "变现评估 tab：" + ("评估说明。" * 20),
+                "body_md": "## 评估\n\n" + ("实现路径与付费假设。" * 30),
+            },
+            {
+                "label": "数据支撑",
+                "summary": "指标表",
+                "body_md": "| 产品 | Wandesk |\n| --- | --- |\n" + ("| 投票 | 400 |\n" * 8),
+            },
+        ],
+    }
+    assert art.polish_payload_has_substantive_content(data) is False
+    assert art.validate_llm_polish_for_publish(data, admin_source_key="product_hunt") is False
+
+
+def test_connector_upstream_rejects_thin_product_hunt() -> None:
+    snippet = '{"name":"X","tagline":"Hi","url":"https://ph.com/p"}'
+    ok, msg = art.connector_upstream_has_ingest_material(snippet, "product_hunt")
+    assert ok is False
+    assert "Product Hunt" in msg
 
 
 def test_validate_llm_polish_rejects_link_only_when_tabs_meet_length() -> None:

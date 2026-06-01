@@ -123,8 +123,9 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
         )
     if k == "product_hunt":
         return (
-            "【Product Hunt 上架稿】「描述」按：产品是什么 → 解决什么问题 → 目标用户；"
-            "「数据支撑」表格列：产品名、投票/热度、话题标签、官网、发布日期等可核对字段。"
+            "【Product Hunt 上架稿】「描述」须 2～3 段中文叙述（body_md 至少 150 汉字）："
+            "产品是什么 → 解决什么问题 → 目标用户；禁止用「产品：/标语：/投票：/官网：」四行字段表充当描述或变现评估正文。"
+            "「数据支撑」单独用 Markdown 表格列：产品名、投票/热度、话题标签、官网、发布日期等可核对字段。"
         )
     if k == "hacker_news":
         return (

@@ -119,6 +119,28 @@ def _tab_piece(by_label: dict[str, dict[str, str]], lab: str) -> dict[str, str]:
     return by_label.get(lab) or {"summary": "", "body_md": ""}
 
 
+def _narrative_sources(*parts: str) -> list[str]:
+    """合并叙述用片段：去掉连接器 KV 行，禁止字段表垫字。"""
+    from .text_display import is_connector_kv_field_line, strip_connector_kv_lines
+
+    out: list[str] = []
+    for p in parts:
+        s = strip_connector_kv_lines(p)
+        if not s:
+            continue
+        if all(is_connector_kv_field_line(ln) for ln in s.splitlines() if ln.strip()):
+            continue
+        out.append(s)
+    return out
+
+
+def _usable_plan_line(ln: str) -> bool:
+    from .text_display import is_connector_kv_field_line
+
+    s = ln.strip().lstrip("-*0123456789. ").strip()
+    return len(s) > 8 and not is_connector_kv_field_line(s)
+
+
 def _synthesize_replication_tab(
     by_label: dict[str, dict[str, str]],
     ra: dict[str, Any] | None,
@@ -136,13 +158,14 @@ def _synthesize_replication_tab(
     stack = ra.get("tech_stack") or []
     stack_txt = "、".join(str(x) for x in stack if str(x).strip()) if isinstance(stack, list) else ""
     body = _merge_text(
-        existing.get("body_md") or "",
-        str(ra.get("tier_rationale") or ""),
-        str(ra.get("value_summary") or ""),
-        f"技术栈：{stack_txt}" if stack_txt else "",
-        plan_txt,
-        desc.get("body_md") or "",
-        snippet_plain,
+        *_narrative_sources(
+            existing.get("body_md") or "",
+            str(ra.get("tier_rationale") or ""),
+            str(ra.get("value_summary") or ""),
+            f"技术栈：{stack_txt}" if stack_txt else "",
+            plan_txt,
+            desc.get("body_md") or "",
+        ),
         min_len=180,
     )
     summary = _merge_text(
@@ -205,9 +228,7 @@ def _ensure_replication_analysis_object(
         tier = "B"
     if len(str(ra.get("tier_rationale") or "")) < 20:
         ra["tier_rationale"] = _merge_text(
-            repl.get("body_md") or "",
-            desc.get("body_md") or "",
-            snippet_plain,
+            *_narrative_sources(repl.get("body_md") or "", desc.get("body_md") or ""),
             min_len=20,
         )[:1200]
     if len(str(ra.get("value_summary") or "")) < 16:
@@ -224,11 +245,19 @@ def _ensure_replication_analysis_object(
     prod_max = int(hours.get("prod_max") or 0)
     phases = ra.get("phases")
     if not isinstance(phases, list) or len(phases) < 3:
-        plan_lines = [ln.strip() for ln in (repl.get("body_md") or "").splitlines() if ln.strip()][:6]
+        plan_lines = [
+            ln.strip()
+            for ln in (repl.get("body_md") or "").splitlines()
+            if _usable_plan_line(ln)
+        ][:6]
         synth_phases = []
         defaults_h = [(16, 24), (20, 32), (24, 40)]
         for i, (lo, hi) in enumerate(defaults_h):
-            title = plan_lines[i].lstrip("-*0123456789. ")[:40] if i < len(plan_lines) else f"阶段 {i + 1}"
+            title = (
+                plan_lines[i].lstrip("-*0123456789. ")[:40]
+                if i < len(plan_lines)
+                else f"阶段 {i + 1}"
+            )
             synth_phases.append(
                 {
                     "name": title or f"阶段 {i + 1}",
@@ -247,8 +276,8 @@ def _ensure_replication_analysis_object(
         )
     plan = ra.get("implementation_plan")
     if not isinstance(plan, list) or not [x for x in plan if str(x).strip()]:
-        lines = [ln.strip() for ln in (repl.get("body_md") or "").splitlines() if ln.strip()]
-        steps = [ln.lstrip("-*0123456789. ") for ln in lines if len(ln) > 8][:8]
+        lines = [ln.strip() for ln in (repl.get("body_md") or "").splitlines() if _usable_plan_line(ln)]
+        steps = [ln.lstrip("-*0123456789. ") for ln in lines][:8]
         ra["implementation_plan"] = steps or ["梳理产品边界与核心用户", "搭建 MVP 并验证留存", "补齐数据支撑与变现路径"]
     stack = ra.get("tech_stack")
     if not isinstance(stack, list) or not [x for x in stack if str(x).strip()]:
@@ -336,7 +365,6 @@ def repair_polish_for_publish(
             summary,
             rule_summary,
             str(out.get("body_md") or ""),
-            snippet_plain,
             min_len=36,
         )[:512]
         fixes.append("summary_padded")
@@ -394,8 +422,8 @@ def repair_polish_for_publish(
 
     if FEED_CARD_TAB_DESCRIPTION not in by_label:
         by_label[FEED_CARD_TAB_DESCRIPTION] = {
-            "summary": _merge_text(rule_summary, snippet_plain, min_len=th["desc_summary"])[:512],
-            "body_md": _merge_text(snippet_plain, rule_summary, min_len=th["desc_body"]),
+            "summary": _merge_text(rule_summary, min_len=th["desc_summary"])[:512],
+            "body_md": _merge_text(rule_summary, min_len=th["desc_body"]),
         }
         fixes.append("synth_desc_tab")
 
@@ -424,14 +452,20 @@ def repair_polish_for_publish(
                 min_len=ms,
             )
         else:
-            sources_body = [piece.get("body_md") or "", snippet_plain, rule_summary]
-            sources_sum = [piece.get("summary") or "", piece.get("body_md") or "", rule_summary]
+            narr_body = _narrative_sources(piece.get("body_md") or "")
+            sources_body: list[str] = list(narr_body)
+            sources_body.append(rule_summary)
+            sources_sum = [piece.get("summary") or "", *(narr_body or [piece.get("body_md") or ""]), rule_summary]
             if lab == FEED_CARD_TAB_REPLICATION:
                 ra = out.get("replication_analysis") if isinstance(out.get("replication_analysis"), dict) else {}
-                sources_body.insert(0, str(ra.get("tier_rationale") or ""))
-                sources_sum.insert(0, str(ra.get("value_summary") or ""))
-            new_body = _merge_text(piece.get("body_md") or "", *sources_body, min_len=mb)
-            new_sum = _merge_text(piece.get("summary") or "", *sources_sum, min_len=ms)
+                tier = str(ra.get("tier_rationale") or "").strip()
+                val = str(ra.get("value_summary") or "").strip()
+                if tier:
+                    sources_body.insert(0, tier)
+                if val:
+                    sources_sum.insert(0, val)
+            new_body = _merge_text(*sources_body, min_len=mb)
+            new_sum = _merge_text(*sources_sum, min_len=ms)
         if new_body != piece.get("body_md") or new_sum != piece.get("summary"):
             fixes.append(f"pad_tab:{lab}")
         piece["summary"] = new_sum[:512]

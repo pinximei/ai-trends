@@ -428,6 +428,62 @@ def _strip_inline_json_blobs(text: str) -> str:
     return _strip_github_api_junk_lines(cleaned)
 
 
+_CONNECTOR_KV_FIELD_LABELS: tuple[str, ...] = (
+    "产品",
+    "标语",
+    "投票",
+    "官网",
+    "仓库",
+    "标题",
+    "来源",
+    "时间",
+    "Star 总数",
+    "今日 Star",
+    "主语言",
+    "许可证",
+    "主页",
+    "简介",
+    "票数",
+    "评论",
+    "作者",
+    "链接",
+)
+
+_CONNECTOR_KV_LINE_RE = re.compile(
+    r"^(" + "|".join(re.escape(x) for x in _CONNECTOR_KV_FIELD_LABELS) + r")\s*[:：]\s*\S"
+)
+
+
+def is_connector_kv_field_line(line: str) -> bool:
+    """单行是否为连接器字段表（产品/标语/投票 等），非中文叙述。"""
+    return bool(_CONNECTOR_KV_LINE_RE.match((line or "").strip()))
+
+
+def strip_connector_kv_lines(text: str) -> str:
+    """去掉连接器 KV 行，保留叙述与 Markdown 表格。"""
+    lines = (text or "").splitlines()
+    kept = [ln for ln in lines if ln.strip() and not is_connector_kv_field_line(ln)]
+    return "\n".join(kept).strip()
+
+
+def body_is_connector_kv_metadata(text: str) -> bool:
+    """正文是否主要为连接器字段清单（禁止作为描述/变现评估 body）。"""
+    s = (text or "").strip()
+    if not s:
+        return False
+    lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    kv = sum(1 for ln in lines if is_connector_kv_field_line(ln))
+    if kv >= 3:
+        return True
+    if kv >= 2 and kv >= max(1, len(lines) // 2):
+        return True
+    if len(lines) <= 5 and kv == len(lines):
+        return True
+    return False
+
+
 _API_JSON_LEAK_MARKERS: tuple[str, ...] = (
     '"node_id"',
     '"stargazers_count"',
