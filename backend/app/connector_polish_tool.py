@@ -135,7 +135,8 @@ def build_connector_polish_tools() -> list[dict[str, Any]]:
                 "description": (
                     "提交连接器文章润色结果。必须根据用户提供的原始 API 片段填写；"
                     "禁止编造片段中未出现的名称、数字、URL；不足处写「原文未提供」。"
-                    "全文简体中文（专有名词可保留英文）。禁止输出 API 键值对 JSON 或 ```json 代码块。"
+                    "全文简体中文：英文素材须先翻译再写稿（专有名词与 URL 可保留英文）。"
+                    "禁止输出 API 键值对 JSON 或 ```json 代码块。"
                 ),
                 "parameters": connector_polish_tool_parameters_schema(),
             },

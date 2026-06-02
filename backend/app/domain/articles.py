@@ -1495,6 +1495,11 @@ NEWS_WIRE_UPSTREAM_SOURCES = frozenset(
     {"newsapi", "thenewsapi", "finnhub", "hacker_news", "youtube_data", "mapbox"}
 )
 
+# 上游以英文为主的连接器：润色输出须为简体中文（勿整段保留英文）。
+ENGLISH_CONNECTOR_SOURCES = frozenset(
+    {"newsapi", "thenewsapi", "finnhub", "hacker_news", "arxiv", "acquire", "youtube_data", "mapbox"}
+)
+
 # 上游素材（description / story_text / 二次拉取正文）至少可读字数（汉字 + 英文词），不含标题与 URL。
 # 快讯多为英文，不能用「仅汉字」衡量。
 NEWS_WIRE_UPSTREAM_MIN_CHARS = 60
@@ -1570,6 +1575,25 @@ def polish_substantive_char_count(text: str) -> int:
     cjk = len(re.findall(r"[\u4e00-\u9fff]", s))
     latin = sum(len(w) for w in re.findall(r"[A-Za-z]{3,}", s))
     return cjk + latin
+
+
+def polish_text_needs_zh_translation(text: str, *, min_cjk: int = 24) -> bool:
+    """正文以英文为主、汉字不足时，须先译为简体中文。"""
+    s = strip_urls_and_markdown_links(text or "")
+    if len(s) < 40:
+        return False
+    if polish_substantive_cjk_count(s) >= min_cjk:
+        return False
+    return len(re.findall(r"[A-Za-z]{3,}", s)) >= 8
+
+
+def connector_snippet_likely_english(snippet: str, *, admin_source_key: str = "") -> bool:
+    """连接器片段是否应以英文素材处理（须译成中文写稿）。"""
+    sk = (admin_source_key or "").strip().lower()
+    if sk in ENGLISH_CONNECTOR_SOURCES:
+        return True
+    blob = connector_snippet_upstream_text_blob(snippet)
+    return polish_text_needs_zh_translation(blob) if blob else False
 
 
 def connector_snippet_upstream_text_blob(snippet: str) -> str:

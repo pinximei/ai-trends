@@ -11,7 +11,9 @@ from .domain.articles import (
     CONNECTOR_LLM_SNIPPET_MAX_CHARS,
     FACET_ALL_LABELS,
     FEED_CARD_TAB_DESCRIPTION,
+    PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS,
     canonical_feed_card_tab_label,
+    connector_snippet_likely_english,
     mandatory_feed_card_tab_labels,
     optional_feed_card_tab_labels,
     polish_payload_has_substantive_content,
@@ -162,7 +164,8 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
         )
     if k == "hacker_news":
         return (
-            "【Hacker News 社区帖】「描述」按：帖子主题 → 讨论背景 → 对 AI/技术读者的意义；"
+            "【Hacker News 社区帖】帖子多为英文：须译成简体中文写稿。"
+            "「描述」按：帖子主题 → 讨论背景 → 对 AI/技术读者的意义；"
             "「数据支撑」表格列：标题、票数 points、评论数、作者、讨论链接（url 或 item?id=objectID）。"
         )
     if k == "arxiv":
@@ -172,10 +175,16 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
         )
     if k in ("newsapi", "thenewsapi", "finnhub", "youtube_data", "mapbox"):
         return (
-            "【资讯/API 快讯稿】原文 description 可能很短，须结合 title、url、source_name 扩写，禁止只复述一句。"
+            "【资讯/API 快讯稿】上游 title/description 多为英文：必须先完整译为简体中文再扩写，"
+            "禁止整段保留英文或仅替换标点。"
             "「描述」tab：summary 至少 80 汉字、body_md 至少 150 汉字（分 2～3 段）。"
             "「数据支撑」tab：用 Markdown 表格列：标题、来源、发布时间、原文链接(url)、摘要要点；"
             "categories 必须从系统给定大类中选 1 个（资讯类常用「政策市场」「应用产品」「模型层(谨慎)」「其他」）。"
+        )
+    if k in ("acquire",):
+        return (
+            "【Acquire 交易/创业资讯】原文多为英文：须译成简体中文写稿，禁止英文正文凑字数。"
+            "「描述」tab 汉字须充足；可保留公司/产品英文名与 URL。"
         )
     if k in ("openai", "google_gemini", "mcp_skills"):
         return (
@@ -205,13 +214,22 @@ def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, i
         f"你必须调用工具函数 {CONNECTOR_POLISH_TOOL_NAME} 提交润色结果，不要输出自由文本或裸 JSON。"
         "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL；"
         "不足处写「原文未提供」，但仍须把已有字段写全。"
-        "全文必须使用简体中文（专有名词可保留英文）。"
+        "全文必须使用简体中文（专有名词、产品名、URL 可保留英文）；英文素材须先翻译再写稿，禁止整段英文。"
         "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留可核对链接与数字。"
         f"{commercial} categories 在函数参数中为恰好 1 个规范大类。 "
         f"feed_kind 填 {fk!r}（与用户 feed_hint 一致）。{tabs} "
         f"{src_hint}"
         "summary 首句为吸引点击的钩子，禁止「据悉」「据报道」开头；"
         "描述 tab 的 body_md 第一段先抛结论或悬念；card_value_hook 若填须 ≤28 字。"
+    )
+
+
+def _polish_translation_user_note(*, admin_source_key: str, snippet: str) -> str:
+    if not connector_snippet_likely_english(snippet, admin_source_key=admin_source_key):
+        return ""
+    return (
+        "【语言·必做】上游为英文快讯/素材：你必须先将 title、description 等事实译为简体中文，"
+        "再写 summary、tabs；各 tab 正文须为中文叙述（产品名与 URL 可保留英文），禁止输出整段英文正文。\n"
     )
 
 
@@ -227,17 +245,77 @@ def _build_polish_user(
     fk: str,
     repair_note: str = "",
 ) -> str:
+    lang_note = _polish_translation_user_note(
+        admin_source_key=admin_source_key, snippet=snippet_cut
+    )
     base = (
         f"feed_hint={fk}（news=资讯/apps=应用，输出 feed_kind 须自洽）。\n"
         f"数据源: {admin_source_key} / 连接器: {connector_name} / 板块: {segment_label}\n"
         f"规则价值分(0-100): {value_score:.0f}\n"
         f"占位标题: {rule_title}\n"
         f"占位摘要: {rule_summary}\n\n"
+        f"{lang_note}"
         f"原始片段:\n```\n{snippet_cut}\n```"
     )
     if repair_note:
         return f"{base}\n\n{repair_note}"
     return base
+
+
+def _translate_polish_draft_to_zh(
+    db: Session,
+    draft: dict,
+    *,
+    snippet: str,
+    ref_id: str,
+    fk: str,
+    rule_title: str = "",
+    rule_summary: str = "",
+    admin_source_key: str = "",
+) -> dict | None:
+    """模型输出英文过重时：专用一轮全文译成简体中文并保留结构。"""
+    try:
+        draft_json = json.dumps(draft, ensure_ascii=False)[:10000]
+    except Exception:
+        return None
+    th_gate = publish_polish_length_thresholds(admin_source_key)
+    system = (
+        f"你是科技资讯编辑。用户给出一份连接器文章润色 JSON（多为英文），"
+        f"你必须将其全文译为流畅简体中文后，调用 {CONNECTOR_POLISH_TOOL_NAME} 提交。"
+        "保留 feed_kind、categories、tabs 结构与链接/数字；专有名词可保留英文。"
+        f"「描述」tab summary≥{th_gate['desc_summary']} 汉字、body≥{th_gate['desc_body']} 汉字。"
+        "禁止整段保留英文正文。"
+    )
+    user = (
+        f"【翻译润色】将下列 JSON 中所有可读正文译为简体中文（事实以原始片段为准，勿编造）。\n\n"
+        f"原始片段:\n```\n{(snippet or '')[:6000]}\n```\n\n"
+        f"待翻译润色稿:\n```json\n{draft_json}\n```"
+    )
+    _norm_kw = dict(
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        snippet=snippet,
+        admin_source_key=admin_source_key,
+    )
+    raw, tool_payload = "", None
+    try:
+        raw, tool_payload = _polish_llm_call(
+            db,
+            system=system,
+            user=user,
+            ref_id=(ref_id[:56] + ":zh")[:64],
+            response_json=False,
+            use_tool=True,
+        )
+    except Exception:
+        return None
+    if tool_payload:
+        out, _ = _parse_polish_tool_payload(tool_payload, default_feed_kind=fk, **_norm_kw)
+        return out
+    if raw.strip():
+        out, _ = _parse_polish_response(raw, default_feed_kind=fk, **_norm_kw)
+        return out
+    return None
 
 
 def _polish_llm_call(
@@ -676,6 +754,22 @@ def polish_connector_article(
             if fixed_kv:
                 return fixed_kv, ""
 
+        if "cjk_short" in reject:
+            translated = _translate_polish_draft_to_zh(
+                db,
+                out,
+                snippet=snippet_for_compat,
+                ref_id=ref_id,
+                fk=fk,
+                rule_title=rule_title,
+                rule_summary=rule_summary,
+                admin_source_key=admin_source_key,
+            )
+            if translated:
+                published_zh, _ = _try_publish(translated)
+                if published_zh:
+                    return published_zh, ""
+
         try:
             from .connector_ingest_diagnostics import diagnose_polish_failure
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
@@ -701,6 +795,13 @@ def polish_connector_article(
             f"请再次调用 {CONNECTOR_POLISH_TOOL_NAME}，满足字数门槛；全文简体中文。"
             f"categories 须为 1 个元素，取自：{', '.join(sorted(FACET_ALL_LABELS))}。"
         )
+        if "cjk_short" in reject:
+            repair_note = (
+                f"【校验未通过】{reject}\n"
+                f"【必须】将英文正文全部译为简体中文；描述 tab 至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS} 个汉字。"
+                f"请调用 {CONNECTOR_POLISH_TOOL_NAME} 重新提交。"
+                f"categories 须为 1 个元素，取自：{', '.join(sorted(FACET_ALL_LABELS))}。"
+            )
         repair_user = _build_polish_user(
             snippet_cut=repair_snip,
             admin_source_key=admin_source_key,
