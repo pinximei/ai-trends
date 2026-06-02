@@ -53,6 +53,24 @@ def _absorb_top_level_body_into_desc(out: dict) -> None:
             tabs.append({"label": FEED_CARD_TAB_DESCRIPTION, **by_desc})
 
 
+def _sanitize_polish_desc_kv(out: dict) -> None:
+    """描述 Tab 若为字段表体，改写成叙述（全数据源；避免 newsapi/PH 等误杀）。"""
+    from .text_display import body_is_connector_kv_metadata, expand_connector_kv_lines_to_narrative
+
+    tabs = out.get("tabs")
+    if not isinstance(tabs, list):
+        return
+    for t in tabs:
+        if not isinstance(t, dict):
+            continue
+        if canonical_feed_card_tab_label(str(t.get("label") or "")) != FEED_CARD_TAB_DESCRIPTION:
+            continue
+        for key in ("summary", "body_md"):
+            val = str(t.get(key) or "").strip()
+            if val and body_is_connector_kv_metadata(val):
+                t[key] = expand_connector_kv_lines_to_narrative(val)[:512 if key == "summary" else 50000]
+
+
 def coerce_polish_output(out: dict) -> dict:
     """规整 feed_kind、单分类、Tab 顺序；将模型误用的 Tab 名映射为规范名。"""
     fk = str(out.get("feed_kind") or "news").strip().lower()
@@ -97,6 +115,7 @@ def coerce_polish_output(out: dict) -> dict:
         ordered.append({"label": FEED_CARD_TAB_DESCRIPTION, **by_label[FEED_CARD_TAB_DESCRIPTION]})
     if ordered:
         out["tabs"] = ordered
+    _sanitize_polish_desc_kv(out)
     if fk == "apps":
         norm = normalize_replication_analysis(out.get("replication_analysis"))
         if norm:
@@ -561,11 +580,13 @@ def repair_polish_for_publish(
             ms, mb = th["desc_summary"], th["desc_body"]
             from .text_display import body_is_connector_kv_metadata, expand_connector_kv_lines_to_narrative
 
-            desc_bd = piece.get("body_md") or ""
-            if body_is_connector_kv_metadata(desc_bd) or (
-                sk_low == "product_hunt" and desc_bd and "：" in desc_bd
-            ):
-                piece["body_md"] = expand_connector_kv_lines_to_narrative(desc_bd)
+            kv_fixed = False
+            for key in ("summary", "body_md"):
+                val = piece.get(key) or ""
+                if val and body_is_connector_kv_metadata(val):
+                    piece[key] = expand_connector_kv_lines_to_narrative(val)
+                    kv_fixed = True
+            if kv_fixed:
                 fixes.append("desc_kv_to_narrative")
         elif lab == FEED_CARD_TAB_REPLICATION:
             ms, mb = th.get("repl_summary", 52), th.get("repl_body", 180)

@@ -665,6 +665,17 @@ def polish_connector_article(
         if published:
             return published, ""
 
+        if "kv_metadata" in reject:
+            fixed_kv = ensure_publishable_polish(
+                out,
+                admin_source_key=admin_source_key,
+                snippet=snippet_for_compat,
+                rule_title=rule_title,
+                rule_summary=rule_summary,
+            )
+            if fixed_kv:
+                return fixed_kv, ""
+
         try:
             from .connector_ingest_diagnostics import diagnose_polish_failure
             from .sync_diagnostic_log import commit_diagnostics, get_current_run_id, write as diag_write
@@ -701,6 +712,8 @@ def polish_connector_article(
             fk=fk,
             repair_note=repair_note,
         )
+        raw2, tool2 = "", None
+        repair_http_err = ""
         try:
             raw2, tool2 = _polish_llm_call(
                 db,
@@ -711,15 +724,35 @@ def polish_connector_article(
                 use_tool=True,
             )
         except httpx.HTTPStatusError as e2:
-            return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
+            repair_http_err = f"repair_http={type(e2).__name__}: {str(e2)[:120]}"
         except Exception as e2:
-            return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
+            repair_http_err = f"repair_http={type(e2).__name__}: {str(e2)[:120]}"
         if tool2:
             out2, parse_err2 = _parse_polish_tool_payload(tool2, default_feed_kind=fk, **_norm_kw)
         else:
             out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk, **_norm_kw)
         if not out2:
-            return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
+            for candidate in (out,):
+                fixed_pre = ensure_publishable_polish(
+                    candidate,
+                    admin_source_key=admin_source_key,
+                    snippet=snippet_for_compat,
+                    rule_title=rule_title,
+                    rule_summary=rule_summary,
+                )
+                if fixed_pre:
+                    return fixed_pre, ""
+            fb_pre = _rule_fallback_polish(
+                admin_source_key=admin_source_key,
+                snippet=snippet_for_compat,
+                rule_title=rule_title,
+                rule_summary=rule_summary,
+                feed_kind=fk,
+            )
+            if fb_pre:
+                return fb_pre, ""
+            tail = repair_http_err or f"repair_parse={parse_err2}"
+            return None, f"validate_failed: {reject}; {tail}"
         published2, reject2 = _try_publish(out2)
         if published2:
             return published2, ""

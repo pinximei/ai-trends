@@ -571,6 +571,12 @@ def _log_news_fetch_stats(
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
     packed = int(stats.get("packed") or 0)
+    try:
+        items = obj.get("connector_sync_items_v1") if isinstance(obj, dict) else None
+        if isinstance(items, list) and len(items) > 0:
+            packed = max(packed, len(items))
+    except Exception:
+        pass
     if http_status and 200 <= http_status < 300 and packed > 0:
         return
     msg = f"HTTP {http_status} {_news_fetch_diag_message(sk, note or '—', stats)}"

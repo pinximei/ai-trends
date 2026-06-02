@@ -718,7 +718,7 @@ def prepare_description_tab_body(body_md: str, *, admin_source_key: str = "") ->
     raw = sanitize_stored_text_field(body_md)
     if not raw.strip():
         return ""
-    if sk == "product_hunt" and body_is_connector_kv_metadata(raw):
+    if body_is_connector_kv_metadata(raw):
         raw = expand_connector_kv_lines_to_narrative(raw)
     cleaned = _strip_tab_markdown_junk(raw)
     cleaned = _strip_tab_section_headings(cleaned)

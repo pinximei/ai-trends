@@ -19,11 +19,11 @@ def _minimal_apps_raw() -> dict:
     }
 
 
-def test_coerce_maps_legacy_tab_to_data():
-    out = coerce_polish_output(_minimal_apps_raw())
-    labels = [t["label"] for t in out["tabs"]]
-    assert "数据支撑" in labels
-    assert "功能亮点" not in labels
+def test_legacy_tab_maps_to_data_support_label():
+    from backend.app.domain.articles import FEED_CARD_TAB_DATA, canonical_feed_card_tab_label
+
+    assert canonical_feed_card_tab_label("功能亮点") == FEED_CARD_TAB_DATA
+    assert canonical_feed_card_tab_label("highlights") == FEED_CARD_TAB_DATA
 
 
 def test_repair_makes_borderline_apps_publishable():
@@ -80,6 +80,26 @@ def test_repair_does_not_pad_ph_kv_into_description() -> None:
     desc = next(t for t in fixed["tabs"] if t["label"] == "描述")
     assert not body_is_connector_kv_metadata(desc["body_md"])
     assert "产品：Wandesk" not in desc["body_md"]
+
+
+def test_coerce_expands_kv_for_newsapi() -> None:
+    raw = {
+        "title": "AI News",
+        "summary": "短",
+        "feed_kind": "news",
+        "categories": ["行业动态"],
+        "tabs": [
+            {
+                "label": "描述",
+                "summary": "标题：Breaking\n来源：Reuters\n" + ("x" * 400),
+                "body_md": "标题：Breaking\n来源：Reuters\n正文：" + ("y" * 200),
+            },
+        ],
+    }
+    out = coerce_polish_output(raw)
+    desc = next(t for t in out["tabs"] if t["label"] == "描述")
+    assert not body_is_connector_kv_metadata(desc["body_md"])
+    assert "标题：" not in desc["body_md"]
 
 
 def test_ensure_publishable_rejects_ph_kv_only_tabs() -> None:
