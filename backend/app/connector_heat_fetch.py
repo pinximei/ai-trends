@@ -552,15 +552,15 @@ def _ph_parse_post_nodes(body: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 
 def _ph_fetch_daily_featured_posts(
-    client: httpx.Client, headers: dict[str, str], *, n: int
+    client: httpx.Client, headers: dict[str, str], *, n: int, days_ago: int = 1
 ) -> tuple[int, list[dict[str, Any]], str]:
     """
-    对齐 PH 邮件/Leaderboard「昨日 Top launches」：PT 昨日 00:00–今日 00:00 窗口内精选按票数 Top N。
-    （须 postedBefore，否则会把今日 featured 产品混进昨日榜。）
+    对齐 PH Leaderboard：PT ``days_ago`` 日 00:00–次日 00:00 窗口内精选按票数 Top N。
+    ``days_ago=0`` 为今日榜，``1`` 为昨日榜（须 postedBefore，避免跨日混榜）。
     返回 (http_code, nodes, note)。
     """
-    posted_after = _ph_day_start_utc_iso(days_ago=1)
-    posted_before = _ph_day_start_utc_iso(days_ago=0)
+    posted_after = _ph_day_start_utc_iso(days_ago=days_ago)
+    posted_before = _ph_day_start_utc_iso(days_ago=days_ago - 1)
     code, body = _post_ph_graphql(
         client,
         headers,
@@ -576,21 +576,33 @@ def _ph_fetch_daily_featured_posts(
 
 
 def sync_product_hunt_top_details(headers: dict[str, str], *, limit: int | None = None) -> tuple[int, str]:
-    """PT 日榜精选 + 按票数 Top N（对齐官网 Daily / 邮件），再对每个 slug 拉详情。"""
+    """PT 今日 + 昨日精选榜合并（按 slug 去重），再逐条拉详情入库。"""
     n = normalize_fetch_limit(limit, source="product_hunt")
     item_max = per_item_snippet_max(n)
     try:
         with httpx.Client(timeout=45.0) as client:
-            code, nodes, list_note = _ph_fetch_daily_featured_posts(client, headers, n=n)
-            if list_note.startswith("{") and "errors" in list_note:
-                return (code or 502, list_note)
-            if not nodes:
+            code = 200
+            list_note = "ph_leaderboard_pt_today_and_yesterday"
+            nodes_all: list[dict[str, Any]] = []
+            seen_slugs: set[str] = set()
+            for days_ago in (0, 1):
+                c1, nodes, note = _ph_fetch_daily_featured_posts(client, headers, n=n, days_ago=days_ago)
+                if note.startswith("{") and "errors" in note:
+                    return (c1 or 502, note)
+                code = c1 or code
+                list_note = note or list_note
+                for node in nodes:
+                    if not isinstance(node, dict):
+                        continue
+                    slug = str(node.get("slug") or "").strip()
+                    if slug and slug not in seen_slugs:
+                        seen_slugs.add(slug)
+                        nodes_all.append(node)
+            if not nodes_all:
                 return code, json.dumps({"connector_sync_items_v1": [], "note": "no_posts"}, ensure_ascii=False)
 
             slugs: list[str] = []
-            for node in nodes:
-                if not isinstance(node, dict):
-                    continue
+            for node in nodes_all:
                 slug = str(node.get("slug") or "").strip()
                 if slug:
                     slugs.append(slug)
@@ -613,6 +625,8 @@ def sync_product_hunt_top_details(headers: dict[str, str], *, limit: int | None 
                 post = (b2.get("data") or {}).get("post")
                 if not isinstance(post, dict):
                     continue
+                post = dict(post)
+                post["source"] = "product_hunt"
                 payloads.append(post)
 
             if not payloads:
@@ -1345,7 +1359,10 @@ def _parse_acquire_api_rows(rows: list[dict[str, Any]], *, limit: int) -> list[d
         out.append(
             {
                 "source": "acquire",
+                "id": link[:512],
                 "name": headline[:200],
+                "title": headline[:200],
+                "description": headline[:800],
                 "url": link[:2048],
                 "asking_price_usd": ask_usd,
                 "arr_usd": ask_usd,

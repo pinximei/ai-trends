@@ -60,7 +60,7 @@ def _valid_tabs_apps() -> list[dict]:
 
 
 def test_validate_llm_polish_relaxed_for_newsapi() -> None:
-    """NewsAPI 原文偏短：略放宽「描述」tab 字数，仍须双 tab + 合法大类。"""
+    """NewsAPI 原文偏短：略放宽「描述」tab 字数；仅强制「描述」Tab。"""
     tabs = _valid_tabs_news()
     tabs[0]["summary"] = tabs[0]["summary"][:65]
     tabs[0]["body_md"] = tabs[0]["body_md"][:100]
@@ -152,16 +152,22 @@ def test_validate_llm_polish_rejects_wrong_tab_labels() -> None:
     assert art.validate_llm_polish_for_publish(data) is False
 
 
-def test_validate_llm_polish_rejects_single_tab() -> None:
+def test_validate_llm_polish_accepts_desc_only_tab() -> None:
     data = {
         "title": "测试标题",
         "summary": _VALID_SUMMARY,
         "body_md": _VALID_BODY,
         "categories": ["Agent"],
         "feed_kind": "news",
-        "tabs": [{"label": "描述", "summary": "概要足够长度用于校验通过最低门槛要求", "body_md": "## 描述\n\n" + "正文" * 40}],
+        "tabs": [
+            {
+                "label": "描述",
+                "summary": _VALID_DESC_SUMMARY,
+                "body_md": "## 描述\n\n" + "事件背景与参与方说明。" * 28,
+            },
+        ],
     }
-    assert art.validate_llm_polish_for_publish(data) is False
+    assert art.validate_llm_polish_for_publish(data) is True
 
 
 def test_validate_llm_polish_rejects_api_json_in_tabs() -> None:
@@ -388,7 +394,7 @@ def test_normalize_polish_tabs_renames_legacy_and_strips_json() -> None:
     assert "```json" not in tabs[0]["body_md"]
 
 
-def test_validate_llm_polish_rejects_wrong_news_tab_labels() -> None:
+def test_validate_llm_polish_ignores_unknown_extra_tabs() -> None:
     data = {
         "title": "测试标题",
         "summary": _VALID_SUMMARY,
@@ -403,12 +409,12 @@ def test_validate_llm_polish_rejects_wrong_news_tab_labels() -> None:
             },
             {
                 "label": "要点",
-                "summary": "要点 tab：概括关键事实与数字，错误 label 应被拒绝。",
-                "body_md": "## 要点\n\n" + "- 要点条目一\n- 要点条目二\n" * 18,
+                "summary": "非规范 Tab 名会被忽略，不影响仅有「描述」的发布校验。",
+                "body_md": "## 要点\n\n" + "- 要点\n" * 18,
             },
         ],
     }
-    assert art.validate_llm_polish_for_publish(data) is False
+    assert art.validate_llm_polish_for_publish(data) is True
 
 
 def test_extract_source_original_url_json_html_url() -> None:

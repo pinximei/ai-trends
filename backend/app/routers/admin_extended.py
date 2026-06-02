@@ -805,15 +805,21 @@ def run_connector_sync(
     bypass_rate_limit: bool = False,
     theme: str | None = None,
 ) -> dict:
-    from ..sync_diagnostic_log import begin_connector_run, commit_diagnostics, get_current_run_id, write as diag_write
+    from ..sync_diagnostic_log import (
+        begin_connector_run,
+        commit_diagnostics,
+        end_connector_run,
+        get_current_run_id,
+        write as diag_write,
+    )
 
     c = db.get(ProductConnector, connector_id)
     if not c:
         raise HTTPException(404, "not found")
     now = datetime.utcnow()
     ask_preview = (c.admin_source_key or "").strip().lower()
-    if not get_current_run_id():
-        begin_connector_run(db, actor=actor, connector_id=connector_id, source_key=ask_preview)
+    begin_connector_run(db, actor=actor, connector_id=connector_id, source_key=ask_preview)
+    run_id_for_return: str | None = None
     # 定时任务整批同步须绕过「最短间隔」，否则会 429 并被静默吞掉，表现为「从未自动拉取」。
     if not bypass_rate_limit and c.last_sync_at and c.min_interval_seconds:
         delta = (now - c.last_sync_at).total_seconds()
@@ -827,6 +833,7 @@ def run_connector_sync(
                 source_key=ask_preview or None,
             )
             commit_diagnostics(db)
+            end_connector_run()
             raise HTTPException(429, f"rate limited: min_interval_seconds={c.min_interval_seconds}")
     log = ProductConnectorLog(connector_id=c.id, started_at=now, status="running")
     db.add(log)
@@ -876,8 +883,10 @@ def run_connector_sync(
             )
             commit_diagnostics(db)
             db.commit()
+            rid = get_current_run_id()
+            end_connector_run()
             return {
-                "diagnostic_run_id": get_current_run_id(),
+                "diagnostic_run_id": rid,
                 "connector_id": c.id,
                 "http_status": 0,
                 "rows_ingested": 0,
@@ -1059,17 +1068,18 @@ def run_connector_sync(
         commit_diagnostics(db)
         raise
     audit(db, actor=actor, action="product.connector.sync", target=str(connector_id))
-    run_id = get_current_run_id()
+    run_id_for_return = get_current_run_id()
+    end_connector_run()
     return {
-        "diagnostic_run_id": run_id,
+        "diagnostic_run_id": run_id_for_return,
         "connector_id": c.id,
         "http_status": status_code,
         "rows_ingested": rows_ingested,
         "articles_created": articles_created,
         "error": err,
         "log_hint": (
-            f"请到「同步日志」选择 run_id={run_id} 后点「复制本批日志」发给运维排查"
-            if run_id
+            f"请到「同步日志」选择 run_id={run_id_for_return} 后点「复制本批日志」发给运维排查"
+            if run_id_for_return
             else "请到「同步日志」页复制最近日志"
         ),
     }

@@ -181,8 +181,20 @@ def diagnose_polish_failure(
         lines.append(f"根因=Tab 名称/顺序不符合规范。{code}")
         return " ".join(lines)
 
+    if code.startswith("tabs_missing"):
+        from .domain.articles import mandatory_feed_card_tab_labels, optional_feed_card_tab_labels
+
+        man = mandatory_feed_card_tab_labels(fk)
+        opt = optional_feed_card_tab_labels(fk)
+        lines.append(
+            f"根因=缺少必需 Tab「描述」。硬性要求={list(man)!r}，可选={list(opt)!r}。"
+            "常见：模型把正文写在顶层 body_md 未写 tabs（解析层会尝试吸收）；或 JSON 被截断。"
+            f" {code}"
+        )
+        return " ".join(lines)
+
     if code.startswith("tabs_count="):
-        lines.append(f"根因=Tab 个数不对。{code} 要求={list(need)!r}。")
+        lines.append(f"根因=Tab 个数不对（旧码）。{code} 现行仅强制「描述」Tab。")
         return " ".join(lines)
 
     if code.startswith("bad_categories"):

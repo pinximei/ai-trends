@@ -70,6 +70,11 @@ def begin_connector_run(db: Session, *, actor: str, connector_id: int, source_ke
     return run_id
 
 
+def end_connector_run() -> None:
+    """整批同步中每个连接器结束后清空 run_id，避免 skip 日志串到其它源。"""
+    _current_run_id.set(None)
+
+
 def end_run(db: Session, *, run_id: str, ok: int, fail: int, total: int) -> None:
     if fail > 0:
         write(

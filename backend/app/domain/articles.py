@@ -66,6 +66,23 @@ def _published_at_from_item_dict(data: dict) -> datetime | None:
     return None
 
 
+def published_at_for_connector_ingest(snippet: str, *, now: datetime) -> datetime:
+    """
+    入库发布时间：优先源站时间；若落在当前美东内容日窗口外则用同步时刻。
+
+    避免 HN/NewsAPI 条目的旧 ``published_at`` 导致「当日已同步但摘要池为空」。
+    """
+    from ..us_content_calendar import us_calendar_today, utc_naive_bounds_for_us_date
+
+    parsed = connector_snippet_published_at_utc(snippet)
+    if parsed is None:
+        return now
+    start_utc, end_utc = utc_naive_bounds_for_us_date(us_calendar_today())
+    if parsed < start_utc or parsed >= end_utc:
+        return now
+    return parsed
+
+
 def connector_snippet_published_at_utc(snippet: str) -> datetime | None:
     """从连接器单条 JSON 片段解析源站发布时间；失败则返回 None（入库用同步时刻）。"""
     s = (snippet or "").strip()[:CONNECTOR_SNIPPET_MAX_CHARS]
@@ -358,8 +375,13 @@ def _normalize_upstream_id_value(val: object) -> str | None:
     return None
 
 
-def _extract_external_id_from_dict(d: dict) -> str | None:
+def _extract_external_id_from_dict(d: dict, *, admin_source_key: str = "") -> str | None:
     """从单条业务对象上取常见主键字段（浅层）。"""
+    sk = (admin_source_key or str(d.get("source") or "")).strip().lower()
+    if sk == "product_hunt":
+        slug = str(d.get("slug") or "").strip()
+        if 1 <= len(slug) <= 200:
+            return slug
     for k in (
         "node_id",
         "objectID",
@@ -384,6 +406,9 @@ def _extract_external_id_from_dict(d: dict) -> str | None:
         s = str(d.get("slug") or "").strip()
         if 1 <= len(s) <= 200:
             return s
+    link = str(d.get("url") or d.get("link") or "").strip()
+    if link.startswith(("http://", "https://")) and len(link) >= 12:
+        return link[:512]
     return None
 
 
@@ -598,6 +623,10 @@ def extract_source_external_id_from_connector_snippet(snippet: str) -> str | Non
                     return sid
         return None
     if isinstance(payload, dict):
+        sk = str(payload.get("source") or "").strip().lower()
+        sid = _extract_external_id_from_dict(payload, admin_source_key=sk)
+        if sid:
+            return sid
         hits = payload.get("hits")
         if isinstance(hits, list) and hits:
             h0 = hits[0]
@@ -617,13 +646,28 @@ def extract_source_external_id_from_connector_snippet(snippet: str) -> str | Non
             sid = _extract_external_id_from_dict(data)
             if sid:
                 return sid
-        return _extract_external_id_from_dict(payload)
+        return _extract_external_id_from_dict(payload, admin_source_key=sk if isinstance(payload, dict) else "")
     return None
 
 
 # —— 价值（规则，非 LLM）——
 
 VALUE_SCORE_MIN = 38.0
+
+# 单条 pack JSON 常不足 80 字符，按源略降规则分门槛（仍须通过上游素材与润色校验）。
+_VALUE_SCORE_MIN_BY_SOURCE: dict[str, float] = {
+    "product_hunt": 28.0,
+    "acquire": 28.0,
+    "hacker_news": 32.0,
+    "newsapi": 32.0,
+    "thenewsapi": 32.0,
+    "github": 34.0,
+}
+
+
+def value_score_min_for_source(admin_source_key: str | None) -> float:
+    sk = (admin_source_key or "").strip().lower()
+    return float(_VALUE_SCORE_MIN_BY_SOURCE.get(sk, VALUE_SCORE_MIN))
 
 # 前台筛选与入库：固定 10 个大类 + 「其他」，每篇文章只展示/归入其中一类（合并细标签）
 # 公开应用泳道额外纳入：变现向主类（原先进资讯泳道）及对应数据源
@@ -743,6 +787,26 @@ def rule_value_score(*, snippet: str, summary: str, http_status: int) -> float:
         return 0.0
     s = (snippet or "").strip()
     if len(s) < 80:
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError:
+            obj = None
+        if isinstance(obj, dict):
+            title = str(obj.get("title") or obj.get("name") or "").strip()
+            bodyish = " ".join(
+                str(obj.get(k) or "").strip()
+                for k in (
+                    "description",
+                    "tagline",
+                    "story_text",
+                    "summary",
+                    "readme_md",
+                    "listingHeadline",
+                )
+            ).strip()
+            material = polish_substantive_char_count(f"{title}\n{bodyish}")
+            if title and material >= 35:
+                return max(42.0, min(100.0, 36.0 + material * 0.35))
         return 0.0
     score = 32.0
     if len(s) >= 400:
@@ -1008,6 +1072,7 @@ def ingest_duplicate_by_source_external_id_exists(
     q = select(Article.id).where(
         Article.industry_id == industry_id,
         Article.source_external_id == sid,
+        Article.status == "published",
     ).limit(1)
     return db.scalar(q) is not None
 
@@ -1357,10 +1422,33 @@ TAB_LABEL_ALIASES: dict[str, str] = {
     "要点": "数据支撑",
 }
 
+# 模型常用英文 Tab 名 → 规范中文（避免解析后 tabs 被静默清空，误判为「格式错误」）
+_TAB_LABEL_ALIASES_EN: dict[str, str] = {
+    "description": FEED_CARD_TAB_DESCRIPTION,
+    "overview": FEED_CARD_TAB_DESCRIPTION,
+    "summary": FEED_CARD_TAB_DESCRIPTION,
+    "about": FEED_CARD_TAB_DESCRIPTION,
+    "data": FEED_CARD_TAB_DATA,
+    "data support": FEED_CARD_TAB_DATA,
+    "data_support": FEED_CARD_TAB_DATA,
+    "highlights": FEED_CARD_TAB_DATA,
+    "metrics": FEED_CARD_TAB_DATA,
+    "monetization": "变现评估",
+    "replication": "变现评估",
+    "business": "变现评估",
+}
+
 
 def normalize_tab_label(raw_label: str) -> str:
     lab = (raw_label or "").strip()
-    return TAB_LABEL_ALIASES.get(lab, lab)
+    if not lab:
+        return ""
+    if lab in TAB_LABEL_ALIASES:
+        return TAB_LABEL_ALIASES[lab]
+    en = _TAB_LABEL_ALIASES_EN.get(lab.lower())
+    if en:
+        return en
+    return lab
 
 
 def canonical_feed_card_tab_label(raw_label: str) -> str:
@@ -1368,14 +1456,29 @@ def canonical_feed_card_tab_label(raw_label: str) -> str:
     return normalize_tab_label(raw_label)
 
 
-def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
-    """应用泳道：描述 + 变现评估 + 数据支撑；资讯仍为描述 + 数据支撑。"""
+def mandatory_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
+    """入库硬性要求：仅「描述」Tab 须有正文；其余 Tab 可缺省由规则层补全。"""
+    del feed_kind
+    return (FEED_CARD_TAB_DESCRIPTION,)
+
+
+def optional_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
+    """可选 Tab：有则校验字数；无则不拦发布。"""
     from .replication_analysis import FEED_CARD_TAB_REPLICATION
 
     fk = (feed_kind or "news").strip().lower()
     if fk == "apps":
-        return (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_REPLICATION, FEED_CARD_TAB_DATA)
-    return (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_DATA)
+        return (FEED_CARD_TAB_REPLICATION, FEED_CARD_TAB_DATA)
+    return (FEED_CARD_TAB_DATA,)
+
+
+def required_feed_card_tab_labels(feed_kind: str) -> tuple[str, ...]:
+    """前台展示顺序：必需 + 可选（可选可不在 LLM 输出中出现）。"""
+    return mandatory_feed_card_tab_labels(feed_kind) + optional_feed_card_tab_labels(feed_kind)
+
+
+def allowed_feed_card_tab_labels(feed_kind: str) -> frozenset[str]:
+    return frozenset(required_feed_card_tab_labels(feed_kind))
 
 
 def feed_card_highlights_tab_label(raw_label: str) -> bool:
@@ -1415,6 +1518,8 @@ _CONNECTOR_UPSTREAM_TEXT_KEYS = (
     "abstract",
     "summary",
     "article_body",
+    "tagline",
+    "listingHeadline",
 )
 
 
@@ -1483,6 +1588,9 @@ def connector_snippet_upstream_text_blob(snippet: str) -> str:
         v = obj.get(key)
         if isinstance(v, str) and v.strip():
             parts.append(v.strip())
+    title = str(obj.get("title") or obj.get("name") or obj.get("story_title") or "").strip()
+    if title and title not in parts:
+        parts.insert(0, title)
     return "\n".join(parts)
 
 
@@ -1531,13 +1639,16 @@ def connector_upstream_has_ingest_material(
         )
     if sk not in NEWS_WIRE_UPSTREAM_SOURCES:
         return True, ""
+    need = int(min_chars)
+    if sk == "hacker_news":
+        need = min(need, 45)
     got = connector_upstream_material_char_count(snippet)
-    if got >= int(min_chars):
+    if got >= need:
         return True, ""
     return (
         False,
         f"上游素材过薄（description/story_text 等去 URL 后仅 {got} 字可读内容，"
-        f"快讯源至少需 {min_chars} 字才入库）",
+        f"快讯源至少需 {need} 字才入库）",
     )
 
 
@@ -1599,10 +1710,11 @@ def polish_payload_has_substantive_content(
         from .replication_analysis import FEED_CARD_TAB_REPLICATION
 
         repl_body = polish_tab_body_by_label(data, FEED_CARD_TAB_REPLICATION)
-        if polish_substantive_cjk_count(repl_body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
-            return False
-        if body_is_connector_kv_metadata(repl_body):
-            return False
+        if repl_body:
+            if polish_substantive_cjk_count(repl_body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
+                return False
+            if body_is_connector_kv_metadata(repl_body):
+                return False
     return True
 
 
@@ -1665,8 +1777,8 @@ def substantive_content_reject_message(
         )
     elif fk == "apps":
         extra = (
-            f" 应用稿「描述」须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC} 个汉字，"
-            f"「变现评估」须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL} 个汉字，"
+            f" 应用稿「描述」须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC} 个汉字；"
+            f"若含「变现评估」Tab 则该 Tab 须至少 {PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL} 个汉字，"
             "且不得用产品/标语/投票/官网等字段表充当正文。"
         )
     return (
@@ -1703,8 +1815,18 @@ def publish_polish_length_thresholds(admin_source_key: str | None = None) -> dic
     }
 
 
+def _tab_piece_min_lengths(lab: str, *, th: dict[str, int]) -> tuple[int, int]:
+    from .replication_analysis import FEED_CARD_TAB_REPLICATION
+
+    if lab == FEED_CARD_TAB_DESCRIPTION:
+        return th["desc_summary"], th["desc_body"]
+    if lab == FEED_CARD_TAB_REPLICATION:
+        return th.get("repl_summary", 52), th.get("repl_body", 180)
+    return th["hi_summary"], th["hi_body"]
+
+
 def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None = None) -> bool:
-    """连接器入库：必须含合格分类、可读摘要与足够厚的总览/分 tab 正文。"""
+    """连接器入库：单分类 + 摘要；仅强制「描述」Tab，可选 Tab / replication_analysis 可缺省。"""
     th = publish_polish_length_thresholds(admin_source_key)
     title = str(data.get("title") or "").strip()
     summary = str(data.get("summary") or "").strip()
@@ -1727,66 +1849,75 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     fk = str(data.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    need_labels = required_feed_card_tab_labels(fk)
-    from .replication_analysis import (
-        FEED_CARD_TAB_REPLICATION,
-        normalize_replication_analysis,
-        validate_replication_analysis_for_publish,
-    )
-
-    tabs = data.get("tabs")
-    if not isinstance(tabs, list):
-        return False
-    if len(tabs) != len(need_labels):
-        return False
+    mandatory = mandatory_feed_card_tab_labels(fk)
+    optional = optional_feed_card_tab_labels(fk)
+    allowed = allowed_feed_card_tab_labels(fk)
+    from .replication_analysis import FEED_CARD_TAB_REPLICATION
     from ..text_display import (
         body_is_connector_kv_metadata,
         polish_content_has_connector_api_leak,
     )
 
-    tab_body_total = 0
-    labels: list[str] = []
+    tabs = data.get("tabs")
+    if not isinstance(tabs, list) or not tabs:
+        return False
+
+    by_label: dict[str, dict[str, str]] = {}
     for t in tabs:
         if not isinstance(t, dict):
             return False
-        lab = str(t.get("label") or "").strip()
+        lab = canonical_feed_card_tab_label(str(t.get("label") or ""))
+        if lab not in allowed:
+            continue
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
-        labels.append(lab)
-        if lab == need_labels[0]:
-            min_summ, min_body = th["desc_summary"], th["desc_body"]
-        elif lab == FEED_CARD_TAB_REPLICATION:
-            min_summ, min_body = th.get("repl_summary", 64), th.get("repl_body", 180)
+        if not summ and not body:
+            continue
+        prev = by_label.get(lab)
+        if prev:
+            if len(body) > len(prev.get("body_md") or ""):
+                prev["body_md"] = body
+            if len(summ) > len(prev.get("summary") or ""):
+                prev["summary"] = summ
         else:
-            min_summ, min_body = th["hi_summary"], th["hi_body"]
-        if len(lab) < 2 or len(summ) < min_summ or len(body) < min_body:
+            by_label[lab] = {"summary": summ, "body_md": body}
+
+    desc = by_label.get(FEED_CARD_TAB_DESCRIPTION)
+    if not desc:
+        return False
+    min_summ, min_body = _tab_piece_min_lengths(FEED_CARD_TAB_DESCRIPTION, th=th)
+    if len(desc.get("summary") or "") < min_summ or len(desc.get("body_md") or "") < min_body:
+        return False
+    if polish_content_has_connector_api_leak(desc.get("summary") or "") or polish_content_has_connector_api_leak(
+        desc.get("body_md") or ""
+    ):
+        return False
+    if body_is_connector_kv_metadata(desc.get("body_md") or ""):
+        return False
+    if fk == "news" and polish_substantive_cjk_count(desc.get("body_md") or "") < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+        return False
+    if fk == "apps" and polish_substantive_cjk_count(desc.get("body_md") or "") < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC:
+        return False
+
+    tab_body_total = len(desc.get("body_md") or "")
+    for lab in optional:
+        piece = by_label.get(lab)
+        if not piece:
+            continue
+        min_summ, min_body = _tab_piece_min_lengths(lab, th=th)
+        summ = piece.get("summary") or ""
+        body = piece.get("body_md") or ""
+        if len(summ) < min_summ or len(body) < min_body:
             return False
         if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
             return False
-        if lab in (FEED_CARD_TAB_DESCRIPTION, FEED_CARD_TAB_REPLICATION):
-            if body_is_connector_kv_metadata(body):
-                return False
-            min_cjk = (
-                PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC
-                if lab == FEED_CARD_TAB_DESCRIPTION
-                else PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL
-            )
-            if fk == "apps" and polish_substantive_cjk_count(body) < min_cjk:
-                return False
-            if fk == "news" and lab == FEED_CARD_TAB_DESCRIPTION:
-                if polish_substantive_cjk_count(body) < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
-                    return False
-        tab_body_total += len(body)
-    if labels != list(need_labels):
-        return False
-    if fk == "apps":
-        norm = normalize_replication_analysis(data.get("replication_analysis"))
-        if not validate_replication_analysis_for_publish(norm):
+        if lab == FEED_CARD_TAB_REPLICATION and body_is_connector_kv_metadata(body):
             return False
-    if tab_body_total < th["tab_body_total"]:
-        return False
-    if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
-        return False
+        if fk == "apps" and lab == FEED_CARD_TAB_REPLICATION:
+            if polish_substantive_cjk_count(body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
+                return False
+        tab_body_total += len(body)
+
     if polish_content_has_connector_api_leak(body_md):
         return False
     if not polish_payload_has_substantive_content(data):

@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 from .domain.articles import (
     CONNECTOR_LLM_SNIPPET_MAX_CHARS,
     FACET_ALL_LABELS,
+    FEED_CARD_TAB_DESCRIPTION,
     canonical_feed_card_tab_label,
+    mandatory_feed_card_tab_labels,
+    optional_feed_card_tab_labels,
+    polish_payload_has_substantive_content,
+    polish_substantive_cjk_count,
     publish_polish_length_thresholds,
     required_feed_card_tab_labels,
     validate_llm_polish_for_publish,
@@ -99,17 +104,30 @@ def _extract_json_object(raw: str) -> dict | None:
     s = (raw or "").strip()
     if not s:
         return None
-    try:
-        return json.loads(s)
-    except Exception:
-        pass
+
+    def _try_load(text: str) -> dict | None:
+        try:
+            data = json.loads(text)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    hit = _try_load(s)
+    if hit:
+        return hit
     m = re.search(r"\{[\s\S]*\}", s)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group())
-    except Exception:
-        return None
+    if m:
+        hit = _try_load(m.group())
+        if hit:
+            return hit
+    # 模型输出常被截断：尝试补齐闭合括号
+    core = (m.group() if m else s).strip()
+    if core.startswith("{"):
+        for suffix in ('"}', '"}]}', '"}]}]}', "}"):
+            hit = _try_load(core + suffix)
+            if hit:
+                return hit
+    return None
 
 
 def _source_detail_structure_hint(admin_source_key: str) -> str:
@@ -165,18 +183,16 @@ def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, i
     src_hint = _source_detail_structure_hint(admin_source_key)
     if fk == "apps":
         tabs = (
-            f"tabs 恰好 3 个：描述、变现评估、数据支撑。"
-            f"描述 summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}；"
-            f"变现评估 summary≥{th_gate['repl_summary']} body≥{th_gate['repl_body']}（含变现+工时表）；"
-            f"数据支撑 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
-            "另输出 replication_analysis：verdict、worth_score(1-10)、difficulty、phases≥3、"
-            "estimated_hours、market_position.monetization_hypothesis、risks≥1、platform_fit 等，与 tabs 一致。"
+            f"tabs 至少含 1 个必需项「描述」（summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}）。"
+            f"「变现评估」「数据支撑」为可选，可省略 tabs 中对应项；若写则分别满足 summary/body 字数。"
+            "勿把长文只写在顶层 body_md：正文应放在「描述」tab 的 body_md。"
+            "replication_analysis 可选；缺省时由系统规则补全，勿因此省略「描述」tab。"
         )
     else:
         tabs = (
-            f"tabs 恰好 2 个：描述、数据支撑。"
-            f"描述 summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}；"
-            f"数据支撑 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
+            f"tabs 至少含 1 个必需项「描述」（summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}）。"
+            f"「数据支撑」可选；若写则 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
+            "勿把长文只写在顶层 body_md：正文应放在「描述」tab 的 body_md。"
         )
     return (
         "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL；"
@@ -186,8 +202,8 @@ def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, i
         "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留可核对链接与数字；"
         "禁止在 body_md 或任一 tab 中输出 ```json、整段原始 API 或未翻译的键值对 JSON。"
         f"{commercial} {category_rule} "
-        f"输出单个 JSON：title, summary, body_md, categories, feed_kind, replication_tier(S/A/B/C), tabs"
-        + ("；apps 另含 replication_analysis。" if fk == "apps" else "")
+        f"输出单个 JSON：title, summary, body_md(可短), categories, feed_kind, replication_tier(S/A/B/C), tabs(数组，至少 1 项)"
+        + ("；apps 可另含 replication_analysis（可选）。" if fk == "apps" else "")
         + f"。{tabs} "
         f"{src_hint}"
         "feed_kind 仅 news 或 apps；title/summary 信息密度高、勿重复；禁止空洞 tab。"
@@ -251,8 +267,14 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
     if not data:
         preview = (raw or "").strip().replace("\n", " ")[:120]
         return None, f"json_parse_failed raw_preview={preview!r}"
-    title = str(data.get("title") or "").strip()
-    summary = str(data.get("summary") or "").strip()
+    title = str(data.get("title") or data.get("name") or "").strip()
+    summary = str(
+        data.get("summary")
+        or data.get("description")
+        or data.get("tagline")
+        or data.get("body_md")
+        or ""
+    ).strip()
     body_md = str(data.get("body_md") or "").strip()
     if not title or not summary:
         return None, f"empty_title_or_summary title={bool(title)} summary_len={len(summary)}"
@@ -274,10 +296,6 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
             bd = str(t.get("body_md") or "").strip()
             if lab and (sm or bd):
                 norm_tabs.append({"label": lab, "summary": sm, "body_md": bd})
-    need_n = len(required_feed_card_tab_labels(fk))
-    if len(norm_tabs) == 0 and not body_md:
-        n_raw = len(raw_tabs) if isinstance(raw_tabs, list) else 0
-        return None, f"tabs_incomplete parsed=0 need={need_n} raw_tabs={n_raw}"
     from .domain.articles import normalize_replication_tier
 
     tier = normalize_replication_tier(data.get("replication_tier"))
@@ -294,6 +312,26 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
     if repl_analysis:
         out["replication_analysis"] = repl_analysis
     return coerce_polish_output(out), ""
+
+
+def _rule_fallback_polish(
+    *,
+    admin_source_key: str,
+    snippet: str,
+    rule_title: str,
+    rule_summary: str,
+    feed_kind: str,
+) -> dict | None:
+    """LLM 解析/校验失败时：用上游片段 + 规则摘要合成可发布稿（不再次调用模型）。"""
+    from .polish_publish_compat import build_rule_fallback_polish_from_snippet
+
+    return build_rule_fallback_polish_from_snippet(
+        admin_source_key=admin_source_key,
+        snippet=snippet,
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        feed_kind=feed_kind,
+    )
 
 
 def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) -> str:
@@ -318,74 +356,103 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
     fk = str(data.get("feed_kind") or "news").strip().lower()
     if fk not in ("news", "apps"):
         fk = "news"
-    need_labels = required_feed_card_tab_labels(fk)
+    from .domain.articles import (
+        _tab_piece_min_lengths,
+        allowed_feed_card_tab_labels,
+        polish_tab_body_by_label,
+        strip_urls_and_markdown_links,
+        collect_polish_text_blob,
+        polish_substantive_char_count,
+        PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC,
+        PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL,
+        PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS,
+    )
+    from .text_display import (
+        body_is_connector_kv_metadata,
+        polish_content_has_connector_api_leak,
+    )
+
+    mandatory = mandatory_feed_card_tab_labels(fk)
+    optional = optional_feed_card_tab_labels(fk)
+    allowed = allowed_feed_card_tab_labels(fk)
     tabs = data.get("tabs")
-    need_n = len(need_labels)
-    if not isinstance(tabs, list) or len(tabs) != need_n:
-        return f"tabs_count={len(tabs) if isinstance(tabs, list) else 'not_list'} need={need_n}"
-    labels: list[str] = []
+    if not isinstance(tabs, list) or not tabs:
+        return (
+            f"tabs_missing need_mandatory={list(mandatory)!r} optional={list(optional)!r}"
+        )
+
+    by_label: dict[str, dict[str, str]] = {}
     for t in tabs:
         if not isinstance(t, dict):
             return "tab_not_object"
-        lab = str(t.get("label") or "").strip()
+        lab = canonical_feed_card_tab_label(str(t.get("label") or ""))
+        if lab not in allowed:
+            continue
         summ = str(t.get("summary") or "").strip()
         body = str(t.get("body_md") or "").strip()
-        labels.append(lab)
-        if lab == need_labels[0]:
-            min_summ, min_body = th["desc_summary"], th["desc_body"]
-        elif lab == FEED_CARD_TAB_REPLICATION:
-            min_summ, min_body = th.get("repl_summary", 64), th.get("repl_body", 180)
+        if not summ and not body:
+            continue
+        prev = by_label.get(lab)
+        if prev:
+            if len(body) > len(prev.get("body_md") or ""):
+                prev["body_md"] = body
+            if len(summ) > len(prev.get("summary") or ""):
+                prev["summary"] = summ
         else:
-            min_summ, min_body = th["hi_summary"], th["hi_body"]
+            by_label[lab] = {"summary": summ, "body_md": body}
+
+    desc = by_label.get(FEED_CARD_TAB_DESCRIPTION)
+    if not desc:
+        got = [canonical_feed_card_tab_label(str(t.get("label") or "")) for t in tabs if isinstance(t, dict)]
+        return f"tabs_missing_desc got_labels={got!r} need_mandatory={list(mandatory)!r}"
+
+    min_summ, min_body = _tab_piece_min_lengths(FEED_CARD_TAB_DESCRIPTION, th=th)
+    ds, db = desc.get("summary") or "", desc.get("body_md") or ""
+    if len(ds) < min_summ:
+        return f"tab_{FEED_CARD_TAB_DESCRIPTION}_summary_short len={len(ds)} need>={min_summ}"
+    if len(db) < min_body:
+        return f"tab_{FEED_CARD_TAB_DESCRIPTION}_body_short len={len(db)} need>={min_body}"
+    if polish_content_has_connector_api_leak(ds) or polish_content_has_connector_api_leak(db):
+        return f"tab_{FEED_CARD_TAB_DESCRIPTION}_api_json_leak"
+    if body_is_connector_kv_metadata(db):
+        return f"tab_{FEED_CARD_TAB_DESCRIPTION}_kv_metadata"
+    if fk == "news" and polish_substantive_cjk_count(db) < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+        return f"tab_{FEED_CARD_TAB_DESCRIPTION}_cjk_short got_cjk={polish_substantive_cjk_count(db)} need>={PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS}"
+    if fk == "apps" and polish_substantive_cjk_count(db) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC:
+        return f"tab_{FEED_CARD_TAB_DESCRIPTION}_cjk_short got_cjk={polish_substantive_cjk_count(db)} need>={PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC}"
+
+    for lab in optional:
+        piece = by_label.get(lab)
+        if not piece:
+            continue
+        min_summ, min_body = _tab_piece_min_lengths(lab, th=th)
+        summ, body = piece.get("summary") or "", piece.get("body_md") or ""
         if len(summ) < min_summ:
             return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
         if len(body) < min_body:
             return f"tab_{lab}_body_short len={len(body)} need>={min_body}"
-        from .text_display import polish_content_has_connector_api_leak
-
         if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
             return f"tab_{lab}_api_json_leak"
-    if labels != list(need_labels):
-        return f"tab_labels={labels!r} need={list(need_labels)!r}"
-    if fk == "apps" and len(need_labels) == 3:
-        from .domain.replication_analysis import (
-            describe_replication_analysis_reject,
-            normalize_replication_analysis,
-            validate_replication_analysis_for_publish,
-        )
-
-        norm_ra = normalize_replication_analysis(data.get("replication_analysis"))
-        if not validate_replication_analysis_for_publish(norm_ra):
-            detail = describe_replication_analysis_reject(norm_ra)
-            return f"replication_analysis_invalid:{detail}"
-    tab_body_total = sum(len(str(t.get("body_md") or "")) for t in tabs if isinstance(t, dict))
-    if tab_body_total < th["tab_body_total"]:
-        return f"tab_body_total_short len={tab_body_total} need>={th['tab_body_total']}"
-    if len(body_md) < th["body_md_min"] and tab_body_total < th["body_md_short_tabs_total"]:
-        return f"body_md_short body={len(body_md)} tabs_total={tab_body_total}"
-    from .text_display import polish_content_has_connector_api_leak
+        if lab == FEED_CARD_TAB_REPLICATION and body_is_connector_kv_metadata(body):
+            return f"tab_{lab}_kv_metadata"
+        if fk == "apps" and lab == FEED_CARD_TAB_REPLICATION:
+            cjk = polish_substantive_cjk_count(body)
+            if cjk < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
+                return f"tab_{lab}_cjk_short got_cjk={cjk} need>={PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL}"
 
     if polish_content_has_connector_api_leak(body_md):
         return "body_md_api_json_leak"
-    from .domain.articles import (
-        collect_polish_text_blob,
-        polish_payload_has_substantive_content,
-        polish_substantive_char_count,
-    )
 
     if not polish_payload_has_substantive_content(data):
-        from .domain.articles import (
-            collect_polish_text_blob,
-            polish_substantive_cjk_count,
-            strip_urls_and_markdown_links,
-        )
-
         stripped = strip_urls_and_markdown_links(collect_polish_text_blob(data))
         got = polish_substantive_char_count(stripped)
         cjk = polish_substantive_cjk_count(stripped)
-        fk = str(data.get("feed_kind") or "news").strip().lower()
-        if fk == "news" and cjk < 48:
-            return f"no_content_substantive_cjk got_cjk={cjk} need>=48"
+        if fk == "news" and cjk < PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS:
+            return f"no_content_substantive_cjk got_cjk={cjk} need>={PUBLISH_MIN_SUBSTANTIVE_CJK_NEWS}"
+        if fk == "apps":
+            repl_body = polish_tab_body_by_label(data, FEED_CARD_TAB_REPLICATION)
+            if repl_body and polish_substantive_cjk_count(repl_body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
+                return f"no_content_substantive_repl_cjk got_cjk={polish_substantive_cjk_count(repl_body)} need>={PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL}"
         return f"no_content_substantive got={got} need>=80"
     return "validate_unknown"
 
@@ -469,6 +536,15 @@ def polish_connector_article(
                 return None, f"llm_http_failed retry_after_json_mode failed={type(e1).__name__}; {err}"
         out, parse_err = _parse_polish_response(raw, default_feed_kind=fk)
         if not out:
+            fb = _rule_fallback_polish(
+                admin_source_key=admin_source_key,
+                snippet=snippet_for_compat,
+                rule_title=rule_title,
+                rule_summary=rule_summary,
+                feed_kind=fk,
+            )
+            if fb:
+                return fb, ""
             return None, parse_err
         published, reject = _try_publish(out)
         if published:
@@ -573,6 +649,15 @@ def polish_connector_article(
             )
             if fixed:
                 return fixed, ""
+        fb = _rule_fallback_polish(
+            admin_source_key=admin_source_key,
+            snippet=snippet_for_compat,
+            rule_title=rule_title,
+            rule_summary=rule_summary,
+            feed_kind=fk,
+        )
+        if fb:
+            return fb, ""
         return None, f"validate_failed_after_retry: {reject2}"
     except Exception as e:
         err = f"{type(e).__name__}: {str(e)[:240]}"

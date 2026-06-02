@@ -16,13 +16,13 @@ from sqlalchemy.orm import Session
 from .domain.articles import (
     CONNECTOR_HEAT_TOP_N,
     CONNECTOR_SNIPPET_MAX_CHARS,
-    VALUE_SCORE_MIN,
+    value_score_min_for_source,
     parse_connector_sync_item_snippets,
     display_fingerprint,
     extract_cover_image_url,
     extract_connector_primary_url,
     ensure_connector_links_in_polish_tabs,
-    connector_snippet_published_at_utc,
+    published_at_for_connector_ingest,
     extract_github_engagement_from_snippet,
     extract_source_external_id_from_connector_snippet,
     feed_lane,
@@ -209,6 +209,7 @@ def _refresh_article_heat_if_duplicate_external_id(
         http_status=http_status,
         now=ts,
     )
+    row.published_at = published_at_for_connector_ingest(single_snippet, now=ts)
     db.flush()
     return 1
 
@@ -257,10 +258,6 @@ def _create_one_published_article_from_connector_targets(
     def _skip(step: str, msg: str) -> None:
         _diag("error", step, f"「{title_prev}」{msg}")
 
-    if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
-        _skip("skip_dup_fp", "跳过：内容指纹重复（ingest_fingerprint）")
-        return 0
-
     source_external_id = extract_source_external_id_from_connector_snippet(safe)
     if ingest_duplicate_by_source_external_id_exists(
         db, industry_id=industry_id, source_external_id=source_external_id
@@ -274,8 +271,42 @@ def _create_one_published_article_from_connector_targets(
             http_status=http_status,
             now=now,
         )
-        _skip("skip_dup_ext", f"重复上游 id={source_external_id or '—'}：已刷新热度/star，未新建")
+        _skip(
+            "skip_dup_ext",
+            f"重复上游 id={source_external_id or '—'}：已刷新热度/star 与 published_at，未新建",
+        )
         return n
+
+    if ingest_duplicate_exists(db, industry_id=industry_id, ingest_fp=ing_fp):
+        sid = (source_external_id or "").strip()
+        if sid and not ingest_duplicate_by_source_external_id_exists(
+            db, industry_id=industry_id, source_external_id=sid
+        ):
+            legacy = db.scalar(
+                select(Article)
+                .where(
+                    Article.industry_id == industry_id,
+                    Article.status == "published",
+                    Article.source_original_url == sid[:2048],
+                )
+                .order_by(desc(Article.id))
+                .limit(1)
+            )
+            if legacy:
+                _apply_github_engagement_to_article(
+                    legacy,
+                    admin_source_key=admin_source_key,
+                    single_snippet=safe,
+                    http_status=http_status,
+                    now=now,
+                )
+                legacy.source_external_id = sid[:512]
+                legacy.published_at = published_at_for_connector_ingest(safe, now=now)
+                db.flush()
+                _skip("skip_dup_fp", f"指纹重复但已按 url 刷新旧稿 id={legacy.id}")
+                return 1
+        _skip("skip_dup_fp", "跳过：内容指纹重复（ingest_fingerprint）")
+        return 0
 
     summary_base, readable_body = _render_readable_snapshot(safe)
     summary_base = (summary_base or f"HTTP {http_status}")[:512]
@@ -287,8 +318,9 @@ def _create_one_published_article_from_connector_targets(
         _skip("skip_thin_upstream", f"跳过：{upstream_msg}")
         return 0
 
+    score_min = value_score_min_for_source(admin_source_key)
     vs = rule_value_score(snippet=safe, summary=summary_base, http_status=http_status or 0)
-    if vs < VALUE_SCORE_MIN:
+    if vs < score_min:
         hint = ""
         if len((safe or "").strip()) < 80:
             hint = f" 响应过短（{len((safe or '').strip())} 字符）"
@@ -297,7 +329,7 @@ def _create_one_published_article_from_connector_targets(
             preview = (safe or "").strip().replace("\n", " ")[:120]
             if preview:
                 hint += f" 片段={preview!r}"
-        _skip("skip_score", f"跳过：规则价值分 {vs:.0f} < 门槛 {VALUE_SCORE_MIN:.0f}{hint}")
+        _skip("skip_score", f"跳过：规则价值分 {vs:.0f} < 门槛 {score_min:.0f}{hint}")
         return 0
 
     fk = feed_lane(src_tag)
@@ -486,7 +518,7 @@ def _create_one_published_article_from_connector_targets(
             return 0
 
     cover_image_url = extract_cover_image_url(src_tag, safe)
-    published_at = connector_snippet_published_at_utc(safe) or now
+    published_at = published_at_for_connector_ingest(safe, now=now)
     art = Article(
         title=title,
         slug=slug,

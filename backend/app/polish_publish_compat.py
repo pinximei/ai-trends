@@ -12,6 +12,8 @@ from .domain.articles import (
     FEED_CARD_TAB_DATA,
     FEED_CARD_TAB_DESCRIPTION,
     canonical_feed_card_tab_label,
+    mandatory_feed_card_tab_labels,
+    optional_feed_card_tab_labels,
     primary_canonical_from_raw_labels,
     publish_polish_length_thresholds,
     required_feed_card_tab_labels,
@@ -22,6 +24,33 @@ from .domain.replication_analysis import (
     normalize_replication_analysis,
     validate_replication_analysis_for_publish,
 )
+
+
+def _absorb_top_level_body_into_desc(out: dict) -> None:
+    """模型常把正文写在 body_md 而不写 tabs：归入「描述」，避免 tabs_count=0 误判。"""
+    body_md = str(out.get("body_md") or "").strip()
+    summary = str(out.get("summary") or "").strip()
+    tabs = out.get("tabs")
+    by_desc: dict[str, str] = {"summary": "", "body_md": ""}
+    if isinstance(tabs, list):
+        for t in tabs:
+            if isinstance(t, dict) and canonical_feed_card_tab_label(str(t.get("label") or "")) == FEED_CARD_TAB_DESCRIPTION:
+                by_desc["summary"] = str(t.get("summary") or "").strip()
+                by_desc["body_md"] = str(t.get("body_md") or "").strip()
+                break
+    if not by_desc["body_md"] and body_md:
+        by_desc["body_md"] = body_md
+    if not by_desc["summary"] and summary:
+        by_desc["summary"] = summary
+    if by_desc["body_md"] or by_desc["summary"]:
+        if not isinstance(tabs, list):
+            tabs = []
+            out["tabs"] = tabs
+        if not any(
+            isinstance(t, dict) and canonical_feed_card_tab_label(str(t.get("label") or "")) == FEED_CARD_TAB_DESCRIPTION
+            for t in tabs
+        ):
+            tabs.append({"label": FEED_CARD_TAB_DESCRIPTION, **by_desc})
 
 
 def coerce_polish_output(out: dict) -> dict:
@@ -35,7 +64,8 @@ def coerce_polish_output(out: dict) -> dict:
     if not raw_labels:
         raw_labels = [str(out.get("title") or "").strip() or "其他"]
     out["categories"] = [primary_canonical_from_raw_labels(raw_labels)]
-    need_labels = required_feed_card_tab_labels(fk)
+    _absorb_top_level_body_into_desc(out)
+    display_order = required_feed_card_tab_labels(fk)
     tabs = out.get("tabs")
     by_label: dict[str, dict[str, str]] = {}
     if isinstance(tabs, list):
@@ -59,10 +89,12 @@ def coerce_polish_output(out: dict) -> dict:
             else:
                 by_label[lab] = piece
     ordered: list[dict[str, str]] = []
-    for lab in need_labels:
+    for lab in display_order:
         piece = by_label.get(lab)
         if piece:
             ordered.append({"label": lab, **piece})
+    if not ordered and FEED_CARD_TAB_DESCRIPTION in by_label:
+        ordered.append({"label": FEED_CARD_TAB_DESCRIPTION, **by_label[FEED_CARD_TAB_DESCRIPTION]})
     if ordered:
         out["tabs"] = ordered
     if fk == "apps":
@@ -107,11 +139,15 @@ def _title_from_snippet(snippet: str) -> str:
     try:
         obj = json.loads((snippet or "").strip()[:8000])
         if isinstance(obj, dict):
-            t = (obj.get("title") or obj.get("name") or "").strip()
+            t = (obj.get("title") or obj.get("name") or obj.get("listingHeadline") or "").strip()
             if t:
                 return t[:500]
     except json.JSONDecodeError:
         pass
+    raw = (snippet or "")[:8000]
+    m = re.search(r'"(?:title|name)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+    if m:
+        return m.group(1).replace('\\"', '"')[:500]
     return ""
 
 
@@ -316,6 +352,11 @@ def _ensure_replication_analysis_object(
         vs = str(ra.get("value_summary") or "").strip()
         if monetization_hypothesis_is_substantive(vs):
             mp["monetization_hypothesis"] = vs[:800]
+        else:
+            mp["monetization_hypothesis"] = (
+                f"「{title_guess}」类 SaaS/工具产品：可先对照 Product Hunt 页与官网验证订阅、买断或用量计费，"
+                "再小范围试投放（需人工核对，非自动定价结论）"
+            )[:800]
     ra["market_position"] = mp
     risks = ra.get("risks")
     if not isinstance(risks, list) or not [x for x in risks if str(x).strip()]:
@@ -349,7 +390,8 @@ def repair_polish_for_publish(
     if fk not in ("news", "apps"):
         fk = "news"
     out["feed_kind"] = fk
-    need_labels = required_feed_card_tab_labels(fk)
+    mandatory = mandatory_feed_card_tab_labels(fk)
+    optional = optional_feed_card_tab_labels(fk)
 
     title = str(out.get("title") or "").strip()
     if (not title or ("同步资源" in title and "·" in title)) and _title_from_snippet(snippet):
@@ -373,7 +415,8 @@ def repair_polish_for_publish(
     if sk_low == "github":
         out["feed_kind"] = "apps"
         fk = "apps"
-        need_labels = required_feed_card_tab_labels(fk)
+        mandatory = mandatory_feed_card_tab_labels(fk)
+        optional = optional_feed_card_tab_labels(fk)
         from .domain.articles import normalize_replication_tier
 
         out["categories"] = [primary_canonical_from_raw_labels(["开源客户端(好抄)"])]
@@ -401,25 +444,6 @@ def repair_polish_for_publish(
                     "body_md": str(t.get("body_md") or "").strip(),
                 }
 
-    if fk == "apps" and FEED_CARD_TAB_REPLICATION not in by_label:
-        by_label[FEED_CARD_TAB_REPLICATION] = _synthesize_replication_tab(
-            by_label,
-            normalize_replication_analysis(out.get("replication_analysis")),
-            snippet_plain=snippet_plain,
-            rule_summary=rule_summary,
-        )
-        fixes.append("synth_replication_tab")
-
-    if FEED_CARD_TAB_DATA not in by_label:
-        by_label[FEED_CARD_TAB_DATA] = _synthesize_data_tab(
-            by_label,
-            snippet_plain=snippet_plain,
-            rule_summary=rule_summary,
-            admin_source_key=sk_low,
-            snippet=snippet,
-        )
-        fixes.append("synth_data_tab")
-
     if FEED_CARD_TAB_DESCRIPTION not in by_label:
         by_label[FEED_CARD_TAB_DESCRIPTION] = {
             "summary": _merge_text(rule_summary, min_len=th["desc_summary"])[:512],
@@ -430,8 +454,10 @@ def repair_polish_for_publish(
     if fk == "apps":
         _ensure_replication_analysis_object(out, by_label, snippet_plain=snippet_plain)
 
-    for lab in need_labels:
-        piece = by_label.setdefault(lab, {"summary": "", "body_md": ""})
+    for lab in mandatory + optional:
+        if lab not in by_label:
+            continue
+        piece = by_label[lab]
         if lab == FEED_CARD_TAB_DESCRIPTION:
             ms, mb = th["desc_summary"], th["desc_body"]
         elif lab == FEED_CARD_TAB_REPLICATION:
@@ -473,7 +499,11 @@ def repair_polish_for_publish(
 
     from .text_display import normalize_article_tabs_for_display
 
-    tabs_list = [{"label": lab, **by_label[lab]} for lab in need_labels if lab in by_label]
+    tabs_list = []
+    for lab in required_feed_card_tab_labels(fk):
+        piece = by_label.get(lab)
+        if piece and (piece.get("summary") or piece.get("body_md")):
+            tabs_list.append({"label": lab, **piece})
     out["tabs"] = normalize_article_tabs_for_display(
         tabs_list,
         admin_source_key=sk_low,
@@ -491,6 +521,65 @@ def repair_polish_for_publish(
         fixes.append("body_md_padded")
 
     return coerce_polish_output(out), fixes
+
+
+def build_rule_fallback_polish_from_snippet(
+    *,
+    admin_source_key: str,
+    snippet: str,
+    rule_title: str = "",
+    rule_summary: str = "",
+    feed_kind: str = "news",
+) -> dict | None:
+    """
+    连接器入库兜底：不调用 LLM，从上游 JSON + 规则摘要合成 Tab 并走 repair/校验。
+    用于模型 JSON 损坏、tabs 为空或多次修复仍失败时，避免整批 0 入库。
+    """
+    sk = (admin_source_key or "").strip()
+    fk = (feed_kind or "news").strip().lower()
+    if sk.lower() == "github":
+        fk = "apps"
+    elif fk not in ("news", "apps"):
+        fk = "news"
+
+    title = _title_from_snippet(snippet)
+    if not title or ("同步资源" in title and "·" in title):
+        rt = (rule_title or "").strip()
+        if "·" in rt:
+            title = rt.rsplit("·", 1)[-1].strip()
+        elif rt:
+            title = rt.replace("同步资源 ·", "").strip()
+    if not title:
+        title = "未命名条目"
+
+    plain = _snippet_plain(snippet, admin_source_key=sk)
+    summary = (rule_summary or "").strip()
+    if len(summary) < 36:
+        summary = _merge_text(summary, plain, min_len=36)[:512]
+    if not summary:
+        return None
+
+    default_cat = "应用产品" if fk == "apps" else "其他"
+    if sk.lower() == "product_hunt":
+        fk = "apps"
+        default_cat = "应用产品"
+    raw: dict[str, Any] = {
+        "title": title[:500],
+        "summary": summary[:512],
+        "body_md": summary,
+        "feed_kind": fk,
+        "categories": [default_cat],
+        "tabs": [],
+    }
+    if fk == "apps":
+        raw["replication_tier"] = "B"
+    return ensure_publishable_polish(
+        raw,
+        admin_source_key=sk,
+        snippet=snippet,
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+    )
 
 
 def ensure_publishable_polish(
