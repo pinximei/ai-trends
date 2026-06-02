@@ -53,7 +53,7 @@ const STRINGS: Record<string, string> = {
   homeMainHeroDesc:
     "跨源聚合热门应用与资讯；按变现价值分（1–10）排序与筛选，帮你看清产品有没有真实付费场景、值不值得做。",
   homeEditorialPicksTitle: "今日精选",
-  homeEditorialPicksSub: "近两周：资讯按热度；应用按变现价值分（须完整评估）",
+  homeEditorialPicksSub: "美东当日：资讯按热度；应用按变现价值分（须完整评估）",
   homeEditorialApps: "应用",
   homeEditorialNews: "资讯",
   homeMainHeroCta1: "浏览 AI 资讯",

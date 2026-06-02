@@ -17,7 +17,6 @@ HOME_MONETIZATION_HIGHLIGHT_DEFAULT = 4
 # 首页热度池：缩小指纹扫描上限（原 96×2 过重）
 HOME_HEAT_POOL_CAP = 36
 HOME_HEAT_PAGE_SIZE = 24
-HOME_EDITORIAL_PICK_DAYS = 14
 HOME_DASHBOARD_CACHE_KEY = "home_dashboard_public"
 HOME_DASHBOARD_CACHE_TTL_SECONDS = 300
 
@@ -241,19 +240,58 @@ def _parse_feed_card_iso_dt(raw: str | None) -> datetime | None:
         return None
 
 
-def _filter_feed_items_within_days(items: list[dict], *, within_days: int) -> list[dict]:
-    cutoff = datetime.utcnow() - timedelta(days=max(1, int(within_days)))
+def _feed_item_freshness_dt(item: dict) -> datetime | None:
+    return _parse_feed_card_iso_dt(item.get("display_at")) or _parse_feed_card_iso_dt(item.get("published_at"))
+
+
+def _filter_feed_items_us_content_today(items: list[dict]) -> list[dict]:
+    """卡片层二次过滤：仅保留美东当日的展示时效（与 SQL published_on_us_content_day 一致）。"""
+    from ..us_content_calendar import us_calendar_today, utc_naive_bounds_for_us_date
+
+    start_utc, end_utc = utc_naive_bounds_for_us_date(us_calendar_today())
     out: list[dict] = []
     for it in items:
-        dt = _parse_feed_card_iso_dt(it.get("published_at")) or _parse_feed_card_iso_dt(it.get("display_at"))
-        if dt is None or dt >= cutoff:
+        dt = _feed_item_freshness_dt(it)
+        if dt is not None and start_utc <= dt < end_utc:
             out.append(it)
     return out
 
 
-def _editorial_from_heat_pool(items: list[dict], *, limit: int, within_days: int) -> list[dict]:
+def _editorial_heat_query_kw(*, industry_slug: str, limit: int) -> dict:
     lim = max(1, min(int(limit), 20))
-    return _select_home_picks(_filter_feed_items_within_days(items, within_days=within_days), lim)
+    return dict(
+        industry_slug=industry_slug,
+        segment_id=None,
+        segment_ids=None,
+        published_within_days=None,
+        published_on_latest_day=False,
+        published_on_us_content_day=True,
+        heat_offset=0,
+        heat_page_size=min(HOME_HEAT_PAGE_SIZE, lim * 4),
+        heat_max_ranked=min(HOME_HEAT_POOL_CAP, lim * 6),
+    )
+
+
+def _editorial_from_us_today_pool(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    limit: int,
+    sort_by_value: bool = False,
+    replication_complete: bool = False,
+) -> list[dict]:
+    from .article_public import list_articles_feed_by_heat_top
+
+    raw = list_articles_feed_by_heat_top(
+        db,
+        feed=feed,
+        sort_by_value=sort_by_value,
+        replication_complete=replication_complete,
+        **_editorial_heat_query_kw(industry_slug=industry_slug, limit=limit),
+    )
+    items = _filter_feed_items_us_content_today(raw.get("items") or [])
+    return _select_home_picks(items, limit)
 
 
 def get_home_editorial_picks(
@@ -262,48 +300,31 @@ def get_home_editorial_picks(
     industry_slug: str = "ai",
     news_limit: int = 8,
     apps_limit: int = 6,
-    published_within_days: int = 30,
+    published_within_days: int | None = None,
 ) -> dict:
-    """首页编辑推荐：资讯按热度；应用按变现价值分（须完整评估）。"""
-    from .article_public import list_articles_feed_by_heat_top
+    """首页今日精选：美东内容日当日；资讯按热度，应用按变现价值分（须完整评估）。"""
+    from ..us_content_calendar import US_TIMEZONE_LABEL, us_calendar_today
 
+    del published_within_days
     nl = max(1, min(int(news_limit), 20))
     al = max(1, min(int(apps_limit), 20))
-    days = max(1, min(int(published_within_days), 120))
-
-    news_raw = list_articles_feed_by_heat_top(
-        db,
-        feed="news",
-        industry_slug=industry_slug,
-        segment_id=None,
-        segment_ids=None,
-        published_within_days=days,
-        published_on_latest_day=False,
-        heat_offset=0,
-        heat_page_size=min(HOME_HEAT_PAGE_SIZE, nl * 2),
-        heat_max_ranked=min(HOME_HEAT_POOL_CAP, nl * 4),
-    )
-    apps_raw = list_articles_feed_by_heat_top(
+    news_items = _editorial_from_us_today_pool(db, feed="news", industry_slug=industry_slug, limit=nl)
+    apps_items = _editorial_from_us_today_pool(
         db,
         feed="apps",
         industry_slug=industry_slug,
-        segment_id=None,
-        segment_ids=None,
-        published_within_days=days,
-        published_on_latest_day=False,
-        heat_offset=0,
-        heat_page_size=min(HOME_HEAT_PAGE_SIZE, al * 2),
-        heat_max_ranked=min(HOME_HEAT_POOL_CAP, al * 4),
+        limit=al,
         sort_by_value=True,
         replication_complete=True,
     )
-    news_items = _select_home_picks(news_raw.get("items") or [], nl)
-    apps_items = _select_home_picks(apps_raw.get("items") or [], al)
+    us_day = us_calendar_today().isoformat()
     return {
         "news": news_items,
         "apps": apps_items,
         "featured_news_id": news_items[0]["id"] if news_items else None,
-        "pick_window_days": days,
+        "pick_window": "us_content_today",
+        "pick_us_date": us_day,
+        "pick_timezone": US_TIMEZONE_LABEL,
         "scoring_note": "news: heat_score; apps: worth_score then heat (replication_complete)",
     }
 
@@ -690,7 +711,7 @@ def _home_dashboard_cache_params(
     published_within_days: int,
 ) -> dict:
     return {
-        "v": 6,
+        "v": 7,
         "industry_slug": industry_slug.strip().lower(),
         "news_limit": int(news_limit),
         "apps_limit": int(apps_limit),
@@ -783,11 +804,14 @@ def _build_home_dashboard(
     news_raw_items = news_raw.get("items") or []
     apps_raw_items = apps_raw.get("items") or []
 
-    editorial_news = _editorial_from_heat_pool(
-        news_raw_items, limit=en, within_days=HOME_EDITORIAL_PICK_DAYS
-    )
-    editorial_apps = _editorial_from_heat_pool(
-        apps_raw_items, limit=ea, within_days=HOME_EDITORIAL_PICK_DAYS
+    editorial_news = _editorial_from_us_today_pool(db, feed="news", industry_slug=industry_slug, limit=en)
+    editorial_apps = _editorial_from_us_today_pool(
+        db,
+        feed="apps",
+        industry_slug=industry_slug,
+        limit=ea,
+        sort_by_value=True,
+        replication_complete=True,
     )
 
     highlight_replicable_apps = list_highlight_replicable_apps(
@@ -822,6 +846,8 @@ def _build_home_dashboard(
     apps_sources = list_article_source_facets(db, feed="apps", **facet_kw)
     top_categories = list_article_category_facets(db, feed="news", **facet_kw)[:10]
 
+    from ..us_content_calendar import us_calendar_today
+
     scoring = "news: heat_score; apps: worth_score (replication_complete)"
     return {
         "news": news_items,
@@ -832,7 +858,8 @@ def _build_home_dashboard(
         "highlight_monetization_apps": highlight_monetization_apps,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
-        "editorial_pick_window_days": HOME_EDITORIAL_PICK_DAYS,
+        "editorial_pick_window": "us_content_today",
+        "editorial_pick_us_date": us_calendar_today().isoformat(),
         "scoring_note": scoring,
         "trend": trend,
         "news_source_lanes": _home_radar_lanes_for_feed(

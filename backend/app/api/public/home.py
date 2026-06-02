@@ -68,7 +68,7 @@ def home_editorial_picks(
     published_within_days: int = 30,
     db: Session = Depends(get_db),
 ):
-    """首页焦点区：按 heat_score 精选资讯与应用（非按 published_at 最新）。"""
+    """首页今日精选：美东内容日当日，资讯按热度、应用按变现价值分。"""
     data = get_home_editorial_picks(
         db,
         industry_slug=industry_slug,

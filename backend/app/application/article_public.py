@@ -412,6 +412,7 @@ def _base_article_query_for_scope(
     segment_ids: list[int] | None,
     published_within_days: int | None,
     published_on_latest_day: bool,
+    published_on_us_content_day: bool = False,
 ) -> tuple[Industry | None, Select]:
     """已发布 + 行业/板块 + 时间窗；不含泳道、类别、游标。"""
     ind: Industry | None
@@ -439,7 +440,11 @@ def _base_article_query_for_scope(
     since_pub: datetime | None = None
     utc_day_start: datetime | None = None
     utc_day_end: datetime | None = None
-    if published_within_days is not None:
+    if published_on_us_content_day:
+        from ..us_content_calendar import us_calendar_today, utc_naive_bounds_for_us_date
+
+        utc_day_start, utc_day_end = utc_naive_bounds_for_us_date(us_calendar_today())
+    elif published_within_days is not None:
         since_pub = datetime.utcnow() - timedelta(days=published_within_days)
     elif published_on_latest_day:
         # 「最新一日」= 自然日「今天」（UTC），按展示时效（入库/最近同步）而非仅源站发布时间。
@@ -815,6 +820,7 @@ def list_articles_feed_by_heat_top(
     segment_ids: list[int] | None,
     published_within_days: int | None,
     published_on_latest_day: bool,
+    published_on_us_content_day: bool = False,
     category: str | None = None,
     source: str | None = None,
     search: str | None = None,
@@ -858,6 +864,7 @@ def list_articles_feed_by_heat_top(
         segment_ids=segment_ids,
         published_within_days=published_within_days,
         published_on_latest_day=published_on_latest_day,
+        published_on_us_content_day=published_on_us_content_day,
     )
     empty = {
         "items": [],
