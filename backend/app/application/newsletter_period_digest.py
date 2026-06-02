@@ -147,7 +147,7 @@ def _build_period_digest_text(
     _base, llm_key, _model = resolve_llm_http_config(db)
     if (llm_apps or llm_news) and llm_key:
         user = _build_llm_subject_payload(apps[:llm_apps], news[:llm_news], f"{range_label} ({period_suffix or '精选'})")
-        raw, _it, _ot = chat_completion(
+        raw, _it, _ot, _ = chat_completion(
             db,
             system=DIGEST_SUBJECT_LLM_SYSTEM,
             user=user,

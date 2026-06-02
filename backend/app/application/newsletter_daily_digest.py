@@ -420,7 +420,7 @@ def generate_digest_content(
     _base, llm_key, model_resolved = resolve_llm_http_config(db)
     if (llm_apps or llm_news) and llm_key:
         user = _build_llm_subject_payload(apps[:llm_apps], news[:llm_news], digest_date)
-        raw, it, ot = chat_completion(
+        raw, it, ot, _ = chat_completion(
             db,
             system=DIGEST_SUBJECT_LLM_SYSTEM,
             user=user,

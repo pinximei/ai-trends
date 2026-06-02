@@ -20,6 +20,12 @@ from .domain.articles import (
     required_feed_card_tab_labels,
     validate_llm_polish_for_publish,
 )
+from .connector_polish_tool import (
+    CONNECTOR_POLISH_TOOL_NAME,
+    build_connector_polish_tools,
+    connector_polish_tool_choice,
+    extract_polish_payload_from_chat_message,
+)
 from .polish_publish_compat import coerce_polish_output, ensure_publishable_polish
 from .domain.replication_analysis import FEED_CARD_TAB_REPLICATION, normalize_replication_analysis
 from .llm_settings_service import resolve_llm_http_config
@@ -70,8 +76,10 @@ def chat_completion(
     admin_user_id: int | None = None,
     response_json: bool = False,
     max_tokens: int | None = None,
-) -> tuple[str, int, int]:
-    """OpenAI 兼容 Chat Completions；仅使用库内「AI 资讯」LLM 配置（product_settings_kv.llm）。"""
+    tools: list[dict] | None = None,
+    tool_choice: dict | str | None = None,
+) -> tuple[str, int, int, dict]:
+    """OpenAI 兼容 Chat Completions；返回 (content, in_tok, out_tok, message)。"""
     base, key, model = resolve_llm_http_config(db)
     if not key:
         raise RuntimeError(
@@ -79,25 +87,32 @@ def chat_completion(
         )
 
     url = base.rstrip("/") + "/chat/completions"
-    body = {
+    body: dict = {
         "model": model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "temperature": 0.4,
     }
     if max_tokens is not None and max_tokens > 0:
         body["max_tokens"] = max_tokens
-    if response_json:
+    if tools:
+        body["tools"] = tools
+        if tool_choice is not None:
+            body["tool_choice"] = tool_choice
+    elif response_json:
         body["response_format"] = {"type": "json_object"}
     with httpx.Client(timeout=120.0) as client:
         r = client.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, json=body)
         r.raise_for_status()
         data = r.json()
-    text = data["choices"][0]["message"]["content"]
+    msg = data["choices"][0]["message"]
+    if not isinstance(msg, dict):
+        msg = {}
+    text = str(msg.get("content") or "")
     usage = data.get("usage") or {}
     it = int(usage.get("prompt_tokens") or 0)
     ot = int(usage.get("completion_tokens") or 0)
     _log_usage(db, scenario, model, it, ot, True, ref_type, ref_id, admin_user_id)
-    return text, it, ot
+    return text, it, ot, msg
 
 
 def _extract_json_object(raw: str) -> dict | None:
@@ -171,46 +186,32 @@ def _source_detail_structure_hint(admin_source_key: str) -> str:
 
 
 def _build_polish_system(*, fk: str, admin_source_key: str, th_gate: dict[str, int]) -> str:
-    """连接器润色 system（各数据源共用；含简体中文与反 JSON 泄漏约束）。"""
-    category_rule = (
-        "categories 为恰好 1 个元素的数组，元素须为固定大类之一："
-        "模型层(谨慎)、开源客户端(好抄)、应用产品、高价值复刻、已验证变现、变现案例、"
-        "数据算力、安全合规、政策市场、Agent、多模态、其他。"
-    )
+    """连接器润色 system：内容规则；结构由注册的 submit_connector_polish 函数参数约束。"""
     commercial = (
         "独立开发者变现向：写清谁付钱、定价/营收线索；star 多≠值得做；禁止 API 字段名与 ```json。"
     )
     src_hint = _source_detail_structure_hint(admin_source_key)
     if fk == "apps":
         tabs = (
-            f"tabs 至少含 1 个必需项「描述」（summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}）。"
-            f"「变现评估」「数据支撑」为可选，可省略 tabs 中对应项；若写则分别满足 summary/body 字数。"
-            "勿把长文只写在顶层 body_md：正文应放在「描述」tab 的 body_md。"
-            "replication_analysis 可选；缺省时由系统规则补全，勿因此省略「描述」tab。"
+            f"函数参数 tabs 至少 1 项且必须含 label=描述（summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}）。"
+            f"变现评估、数据支撑为可选 tab；replication_analysis 可选。"
         )
     else:
         tabs = (
-            f"tabs 至少含 1 个必需项「描述」（summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}）。"
-            f"「数据支撑」可选；若写则 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}。"
-            "勿把长文只写在顶层 body_md：正文应放在「描述」tab 的 body_md。"
+            f"函数参数 tabs 至少 1 项且必须含 label=描述（summary≥{th_gate['desc_summary']} body≥{th_gate['desc_body']}）。"
+            f"数据支撑 tab 可选（若写 summary≥{th_gate['hi_summary']} body≥{th_gate['hi_body']}）。"
         )
     return (
+        f"你必须调用工具函数 {CONNECTOR_POLISH_TOOL_NAME} 提交润色结果，不要输出自由文本或裸 JSON。"
         "只根据用户提供的原始 API 片段写稿，禁止编造片段中未出现的名称、数字、URL；"
         "不足处写「原文未提供」，但仍须把已有字段写全。"
-        "全文必须使用简体中文：title、summary、body_md、各 tab 的 summary 与 body_md 均用中文撰写；"
-        "专有名词/产品名/仓库名可保留英文，但说明句须为中文。"
-        "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留可核对链接与数字；"
-        "禁止在 body_md 或任一 tab 中输出 ```json、整段原始 API 或未翻译的键值对 JSON。"
-        f"{commercial} {category_rule} "
-        f"输出单个 JSON：title, summary, body_md(可短), categories, feed_kind, replication_tier(S/A/B/C), tabs(数组，至少 1 项)"
-        + ("；apps 可另含 replication_analysis（可选）。" if fk == "apps" else "")
-        + f"。{tabs} "
+        "全文必须使用简体中文（专有名词可保留英文）。"
+        "若片段为 JSON/数组，须翻译成中文叙述或 Markdown 表格，保留可核对链接与数字。"
+        f"{commercial} categories 在函数参数中为恰好 1 个规范大类。 "
+        f"feed_kind 填 {fk!r}（与用户 feed_hint 一致）。{tabs} "
         f"{src_hint}"
-        "feed_kind 仅 news 或 apps；title/summary 信息密度高、勿重复；禁止空洞 tab。"
-        "summary 第一句必须是吸引点击的钩子（疑问/反差/数字/利益），≤36 汉字，禁止「据悉」「据报道」开头；"
-        "禁止把 value_summary 原样当作 summary 首句（须改写为更短、更有悬念的问句）；"
-        "「描述」tab 的 body_md 第一段须先抛结论或悬念，再展开细节；"
-        "card_value_hook 若填写须 ≤28 字且含疑问或数字，与 summary 首句可呼应但不得长段说明体。"
+        "summary 首句为吸引点击的钩子，禁止「据悉」「据报道」开头；"
+        "描述 tab 的 body_md 第一段先抛结论或悬念；card_value_hook 若填须 ≤28 字。"
     )
 
 
@@ -247,8 +248,33 @@ def _polish_llm_call(
     ref_id: str,
     response_json: bool,
     max_tokens: int = POLISH_MAX_OUTPUT_TOKENS,
-) -> str:
-    raw, _, _ = chat_completion(
+    use_tool: bool = False,
+) -> tuple[str, dict | None]:
+    """调用润色模型；use_tool 时优先 function call，返回 (fallback_text, tool_payload)。"""
+    if use_tool:
+        try:
+            _, _, _, msg = chat_completion(
+                db,
+                system=system,
+                user=user,
+                scenario="article_ingest_polish",
+                ref_type="connector_article",
+                ref_id=ref_id[:64],
+                max_tokens=max_tokens,
+                tools=build_connector_polish_tools(),
+                tool_choice=connector_polish_tool_choice(),
+            )
+            payload = extract_polish_payload_from_chat_message(msg)
+            if payload:
+                return "", payload
+            content = str(msg.get("content") or "")
+            return content, None
+        except httpx.HTTPStatusError as e:
+            # 部分端点不支持 tools：由上层回退 json_object
+            if e.response is not None and e.response.status_code in (400, 404, 422):
+                raise
+            raise
+    raw, _, _, _ = chat_completion(
         db,
         system=system,
         user=user,
@@ -258,15 +284,11 @@ def _polish_llm_call(
         response_json=response_json,
         max_tokens=max_tokens,
     )
-    return raw
+    return raw, None
 
 
-def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | None, str]:
-    """从模型原文解析润色 JSON；失败时返回 (None, 原因)。"""
-    data = _extract_json_object(raw)
-    if not data:
-        preview = (raw or "").strip().replace("\n", " ")[:120]
-        return None, f"json_parse_failed raw_preview={preview!r}"
+def _normalize_polish_payload(data: dict, *, default_feed_kind: str) -> tuple[dict | None, str]:
+    """将 tool 参数或 JSON 对象规整为入库润色 dict。"""
     title = str(data.get("title") or data.get("name") or "").strip()
     summary = str(
         data.get("summary")
@@ -300,7 +322,8 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
 
     tier = normalize_replication_tier(data.get("replication_tier"))
     repl_analysis = normalize_replication_analysis(data.get("replication_analysis"))
-    out = {
+    hook = str(data.get("card_value_hook") or "").strip()
+    out: dict = {
         "title": title,
         "summary": summary,
         "body_md": body_md or summary,
@@ -309,9 +332,26 @@ def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | 
         "replication_tier": tier,
         "tabs": norm_tabs,
     }
+    if hook:
+        out["card_value_hook"] = hook[:28]
     if repl_analysis:
         out["replication_analysis"] = repl_analysis
     return coerce_polish_output(out), ""
+
+
+def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | None, str]:
+    """从模型原文解析润色 JSON；失败时返回 (None, 原因)。"""
+    data = _extract_json_object(raw)
+    if not data:
+        preview = (raw or "").strip().replace("\n", " ")[:120]
+        return None, f"json_parse_failed raw_preview={preview!r}"
+    return _normalize_polish_payload(data, default_feed_kind=default_feed_kind)
+
+
+def _parse_polish_tool_payload(data: dict | None, *, default_feed_kind: str) -> tuple[dict | None, str]:
+    if not data:
+        return None, "tool_call_empty"
+    return _normalize_polish_payload(data, default_feed_kind=default_feed_kind)
 
 
 def _rule_fallback_polish(
@@ -487,7 +527,7 @@ def polish_connector_article(
     # 指纹/去重仍用完整 snippet；送模型与 78b3a4b 前一致为截断后的完整 JSON（不做 per-source compact 白名单裁剪）。
     snippet_cut = (snippet or "")[:CONNECTOR_LLM_SNIPPET_MAX_CHARS]
     system = _build_polish_system(fk=fk, admin_source_key=admin_source_key, th_gate=th_gate)
-    system_json = system + " 只输出一个 JSON 对象，不要其它文字。"
+    system_json = system + f" 若无法调用 {CONNECTOR_POLISH_TOOL_NAME}，则只输出一个 JSON 对象。"
     user = _build_polish_user(
         snippet_cut=snippet_cut,
         admin_source_key=admin_source_key,
@@ -512,13 +552,29 @@ def polish_connector_article(
         )
         return (fixed, "") if fixed else (None, _describe_polish_reject(data, admin_source_key=admin_source_key))
 
-    try:
+    def _first_pass_llm() -> tuple[dict | None, str, str]:
+        """返回 (tool_or_parsed_dict, parse_err, mode) mode=tool|json|fail。"""
+        tool_payload: dict | None = None
+        raw = ""
         try:
-            raw = _polish_llm_call(db, system=system, user=user, ref_id=ref_id, response_json=True)
+            raw, tool_payload = _polish_llm_call(
+                db, system=system, user=user, ref_id=ref_id, response_json=False, use_tool=True
+            )
+        except httpx.HTTPStatusError as e_tool:
+            if e_tool.response is None or e_tool.response.status_code not in (400, 404, 422):
+                raise
+        if tool_payload:
+            out_t, _err_t = _parse_polish_tool_payload(tool_payload, default_feed_kind=fk)
+            if out_t:
+                return out_t, "", "tool"
+        try:
+            raw, _ = _polish_llm_call(
+                db, system=system_json, user=user, ref_id=ref_id, response_json=True, use_tool=False
+            )
         except Exception as e1:
             try:
-                raw = _polish_llm_call(
-                    db, system=system_json, user=user, ref_id=ref_id, response_json=False
+                raw, _ = _polish_llm_call(
+                    db, system=system_json, user=user, ref_id=ref_id, response_json=False, use_tool=False
                 )
             except Exception as e2:
                 err = f"{type(e2).__name__}: {str(e2)[:240]}"
@@ -533,8 +589,14 @@ def polish_connector_article(
                     ref_id[:64],
                     err=err,
                 )
-                return None, f"llm_http_failed retry_after_json_mode failed={type(e1).__name__}; {err}"
-        out, parse_err = _parse_polish_response(raw, default_feed_kind=fk)
+                return None, f"llm_http_failed retry_after_json_mode failed={type(e1).__name__}; {err}", "fail"
+        out_j, err_j = _parse_polish_response(raw, default_feed_kind=fk)
+        if out_j:
+            return out_j, "", "json"
+        return None, err_j, "json"
+
+    try:
+        out, parse_err, _mode = _first_pass_llm()
         if not out:
             fb = _rule_fallback_polish(
                 admin_source_key=admin_source_key,
@@ -572,7 +634,7 @@ def polish_connector_article(
         repair_snip = snippet_cut[:POLISH_REPAIR_SNIPPET_MAX]
         repair_note = (
             f"【校验未通过】{reject}\n"
-            f"请重新输出完整 JSON，满足字数门槛与 tab 结构；全文简体中文。"
+            f"请再次调用 {CONNECTOR_POLISH_TOOL_NAME}，满足字数门槛；全文简体中文。"
             f"categories 须为 1 个元素，取自：{', '.join(sorted(FACET_ALL_LABELS))}。"
         )
         repair_user = _build_polish_user(
@@ -587,16 +649,20 @@ def polish_connector_article(
             repair_note=repair_note,
         )
         try:
-            raw2 = _polish_llm_call(
+            raw2, tool2 = _polish_llm_call(
                 db,
-                system=system_json,
+                system=system,
                 user=repair_user,
                 ref_id=(ref_id[:60] + ":r1")[:64],
                 response_json=False,
+                use_tool=True,
             )
         except Exception as e2:
             return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
-        out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
+        if tool2:
+            out2, parse_err2 = _parse_polish_tool_payload(tool2, default_feed_kind=fk)
+        else:
+            out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
         if not out2:
             return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
         published2, reject2 = _try_publish(out2)
@@ -609,7 +675,7 @@ def polish_connector_article(
                 f"请在「描述」summary 写满≥{th_gate['desc_summary']} 字、body_md≥{th_gate['desc_body']} 字；"
                 f"「变现评估」summary≥{th_gate['repl_summary']}、body≥{th_gate['repl_body']}；"
                 f"「数据支撑」summary≥{th_gate['hi_summary']}、body≥{th_gate['hi_body']}（含表格与链接）。"
-                "全文简体中文。只输出 JSON。"
+                f"全文简体中文。请调用 {CONNECTOR_POLISH_TOOL_NAME}。"
             )
             repair2_user = _build_polish_user(
                 snippet_cut=snippet_cut[:POLISH_REPAIR_SNIPPET_MAX],
@@ -623,14 +689,18 @@ def polish_connector_article(
                 repair_note=repair2_note,
             )
             try:
-                raw3 = _polish_llm_call(
+                raw3, tool3 = _polish_llm_call(
                     db,
-                    system=system_json,
+                    system=system,
                     user=repair2_user,
                     ref_id=(ref_id[:60] + ":r2")[:64],
                     response_json=False,
+                    use_tool=True,
                 )
-                out3, _ = _parse_polish_response(raw3, default_feed_kind=fk)
+                if tool3:
+                    out3, _ = _parse_polish_tool_payload(tool3, default_feed_kind=fk)
+                else:
+                    out3, _ = _parse_polish_response(raw3, default_feed_kind=fk)
                 if out3:
                     published3, reject2 = _try_publish(out3)
                     if published3:

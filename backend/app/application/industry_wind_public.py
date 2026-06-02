@@ -428,7 +428,7 @@ def _generate_wind_llm(
     )
     user = _build_llm_user_payload(candidates, recent_days=recent_days)
     try:
-        raw, _, _ = chat_completion(
+        raw, _, _, _ = chat_completion(
             db,
             system=system,
             user=user,
