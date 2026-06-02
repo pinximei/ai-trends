@@ -180,10 +180,28 @@ def test_validate_llm_polish_rejects_api_json_in_tabs() -> None:
         "tabs": _valid_tabs_apps(),
         "replication_analysis": _valid_replication_analysis(),
     }
-    data["tabs"][2]["body_md"] = (
+    data["tabs"][0]["body_md"] = (
         '{"id": 1, "node_id": "MDEwOlJlcG9zaXRvcnk=", "followers_url": "https://api.github.com/users/x/followers"}'
     )
     assert art.validate_llm_polish_for_publish(data) is False
+
+
+def test_validate_llm_polish_drops_api_leak_in_optional_tab() -> None:
+    data = {
+        "title": "测试标题",
+        "summary": _VALID_SUMMARY,
+        "body_md": _VALID_BODY,
+        "categories": ["应用产品"],
+        "feed_kind": "apps",
+        "tabs": _valid_tabs_apps(),
+        "replication_analysis": _valid_replication_analysis(),
+    }
+    data["tabs"][2]["body_md"] = (
+        '{"id": 1, "node_id": "MDEwOlJlcG9zaXRvcnk=", "followers_url": "https://api.github.com/users/x/followers"}'
+    )
+    pruned = art.prune_substandard_optional_tabs(data)
+    assert art.validate_llm_polish_for_publish(pruned) is True
+    assert len(pruned["tabs"]) == 2
 
 
 def test_validate_llm_polish_rejects_placeholder_title() -> None:

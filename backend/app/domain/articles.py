@@ -1825,6 +1825,56 @@ def _tab_piece_min_lengths(lab: str, *, th: dict[str, int]) -> tuple[int, int]:
     return th["hi_summary"], th["hi_body"]
 
 
+def prune_substandard_optional_tabs(
+    data: dict,
+    *,
+    admin_source_key: str | None = None,
+) -> dict:
+    """可选 Tab 未达门槛则丢弃（不拦整篇发布）；「描述」Tab 保留。"""
+    from .replication_analysis import FEED_CARD_TAB_REPLICATION
+    from ..text_display import (
+        body_is_connector_kv_metadata,
+        polish_content_has_connector_api_leak,
+    )
+
+    fk = str(data.get("feed_kind") or "news").strip().lower()
+    if fk not in ("news", "apps"):
+        fk = "news"
+    optional = set(optional_feed_card_tab_labels(fk))
+    th = publish_polish_length_thresholds(admin_source_key)
+    tabs = data.get("tabs")
+    if not isinstance(tabs, list):
+        return data
+    kept: list[dict] = []
+    for t in tabs:
+        if not isinstance(t, dict):
+            continue
+        lab = canonical_feed_card_tab_label(str(t.get("label") or ""))
+        summ = str(t.get("summary") or "").strip()
+        body = str(t.get("body_md") or "").strip()
+        if lab == FEED_CARD_TAB_DESCRIPTION:
+            kept.append({"label": lab, "summary": summ, "body_md": body})
+            continue
+        if lab not in optional:
+            continue
+        if not summ and not body:
+            continue
+        min_summ, min_body = _tab_piece_min_lengths(lab, th=th)
+        if len(summ) < min_summ or len(body) < min_body:
+            continue
+        if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
+            continue
+        if lab == FEED_CARD_TAB_REPLICATION and body_is_connector_kv_metadata(body):
+            continue
+        if fk == "apps" and lab == FEED_CARD_TAB_REPLICATION:
+            if polish_substantive_cjk_count(body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
+                continue
+        kept.append({"label": lab, "summary": summ, "body_md": body})
+    if kept:
+        data["tabs"] = kept
+    return data
+
+
 def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None = None) -> bool:
     """连接器入库：单分类 + 摘要；仅强制「描述」Tab，可选 Tab / replication_analysis 可缺省。"""
     th = publish_polish_length_thresholds(admin_source_key)
@@ -1899,7 +1949,6 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
     if fk == "apps" and polish_substantive_cjk_count(desc.get("body_md") or "") < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_DESC:
         return False
 
-    tab_body_total = len(desc.get("body_md") or "")
     for lab in optional:
         piece = by_label.get(lab)
         if not piece:
@@ -1908,15 +1957,14 @@ def validate_llm_polish_for_publish(data: dict, *, admin_source_key: str | None 
         summ = piece.get("summary") or ""
         body = piece.get("body_md") or ""
         if len(summ) < min_summ or len(body) < min_body:
-            return False
+            continue
         if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
-            return False
+            continue
         if lab == FEED_CARD_TAB_REPLICATION and body_is_connector_kv_metadata(body):
-            return False
+            continue
         if fk == "apps" and lab == FEED_CARD_TAB_REPLICATION:
             if polish_substantive_cjk_count(body) < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
-                return False
-        tab_body_total += len(body)
+                continue
 
     if polish_content_has_connector_api_leak(body_md):
         return False

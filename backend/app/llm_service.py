@@ -287,8 +287,25 @@ def _polish_llm_call(
     return raw, None
 
 
-def _normalize_polish_payload(data: dict, *, default_feed_kind: str) -> tuple[dict | None, str]:
+def _normalize_polish_payload(
+    data: dict,
+    *,
+    default_feed_kind: str,
+    rule_title: str = "",
+    rule_summary: str = "",
+    snippet: str = "",
+    admin_source_key: str = "",
+) -> tuple[dict | None, str]:
     """将 tool 参数或 JSON 对象规整为入库润色 dict。"""
+    from .polish_publish_compat import fill_polish_header_from_fallbacks
+
+    data = fill_polish_header_from_fallbacks(
+        data,
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        snippet=snippet,
+        admin_source_key=admin_source_key,
+    )
     title = str(data.get("title") or data.get("name") or "").strip()
     summary = str(
         data.get("summary")
@@ -298,8 +315,11 @@ def _normalize_polish_payload(data: dict, *, default_feed_kind: str) -> tuple[di
         or ""
     ).strip()
     body_md = str(data.get("body_md") or "").strip()
-    if not title or not summary:
-        return None, f"empty_title_or_summary title={bool(title)} summary_len={len(summary)}"
+    if not title or len(summary) < 36:
+        return (
+            None,
+            f"empty_title_or_summary title={bool(title)} summary_len={len(summary)}",
+        )
     cats = data.get("categories")
     if not isinstance(cats, list):
         cats = []
@@ -339,19 +359,49 @@ def _normalize_polish_payload(data: dict, *, default_feed_kind: str) -> tuple[di
     return coerce_polish_output(out), ""
 
 
-def _parse_polish_response(raw: str, *, default_feed_kind: str) -> tuple[dict | None, str]:
+def _parse_polish_response(
+    raw: str,
+    *,
+    default_feed_kind: str,
+    rule_title: str = "",
+    rule_summary: str = "",
+    snippet: str = "",
+    admin_source_key: str = "",
+) -> tuple[dict | None, str]:
     """从模型原文解析润色 JSON；失败时返回 (None, 原因)。"""
     data = _extract_json_object(raw)
     if not data:
         preview = (raw or "").strip().replace("\n", " ")[:120]
         return None, f"json_parse_failed raw_preview={preview!r}"
-    return _normalize_polish_payload(data, default_feed_kind=default_feed_kind)
+    return _normalize_polish_payload(
+        data,
+        default_feed_kind=default_feed_kind,
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        snippet=snippet,
+        admin_source_key=admin_source_key,
+    )
 
 
-def _parse_polish_tool_payload(data: dict | None, *, default_feed_kind: str) -> tuple[dict | None, str]:
+def _parse_polish_tool_payload(
+    data: dict | None,
+    *,
+    default_feed_kind: str,
+    rule_title: str = "",
+    rule_summary: str = "",
+    snippet: str = "",
+    admin_source_key: str = "",
+) -> tuple[dict | None, str]:
     if not data:
         return None, "tool_call_empty"
-    return _normalize_polish_payload(data, default_feed_kind=default_feed_kind)
+    return _normalize_polish_payload(
+        data,
+        default_feed_kind=default_feed_kind,
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        snippet=snippet,
+        admin_source_key=admin_source_key,
+    )
 
 
 def _rule_fallback_polish(
@@ -467,18 +517,16 @@ def _describe_polish_reject(data: dict, *, admin_source_key: str | None = None) 
             continue
         min_summ, min_body = _tab_piece_min_lengths(lab, th=th)
         summ, body = piece.get("summary") or "", piece.get("body_md") or ""
-        if len(summ) < min_summ:
-            return f"tab_{lab}_summary_short len={len(summ)} need>={min_summ}"
-        if len(body) < min_body:
-            return f"tab_{lab}_body_short len={len(body)} need>={min_body}"
+        if len(summ) < min_summ or len(body) < min_body:
+            continue
         if polish_content_has_connector_api_leak(summ) or polish_content_has_connector_api_leak(body):
-            return f"tab_{lab}_api_json_leak"
+            continue
         if lab == FEED_CARD_TAB_REPLICATION and body_is_connector_kv_metadata(body):
-            return f"tab_{lab}_kv_metadata"
+            continue
         if fk == "apps" and lab == FEED_CARD_TAB_REPLICATION:
             cjk = polish_substantive_cjk_count(body)
             if cjk < PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL:
-                return f"tab_{lab}_cjk_short got_cjk={cjk} need>={PUBLISH_MIN_SUBSTANTIVE_CJK_APPS_REPL}"
+                continue
 
     if polish_content_has_connector_api_leak(body_md):
         return "body_md_api_json_leak"
@@ -539,6 +587,12 @@ def polish_connector_article(
         fk=fk,
     )
     snippet_for_compat = snippet_cut
+    _norm_kw = dict(
+        rule_title=rule_title,
+        rule_summary=rule_summary,
+        snippet=snippet_for_compat,
+        admin_source_key=admin_source_key,
+    )
 
     def _try_publish(data: dict | None) -> tuple[dict | None, str]:
         if not data:
@@ -564,7 +618,7 @@ def polish_connector_article(
             if e_tool.response is None or e_tool.response.status_code not in (400, 404, 422):
                 raise
         if tool_payload:
-            out_t, _err_t = _parse_polish_tool_payload(tool_payload, default_feed_kind=fk)
+            out_t, _err_t = _parse_polish_tool_payload(tool_payload, default_feed_kind=fk, **_norm_kw)
             if out_t:
                 return out_t, "", "tool"
         try:
@@ -590,7 +644,7 @@ def polish_connector_article(
                     err=err,
                 )
                 return None, f"llm_http_failed retry_after_json_mode failed={type(e1).__name__}; {err}", "fail"
-        out_j, err_j = _parse_polish_response(raw, default_feed_kind=fk)
+        out_j, err_j = _parse_polish_response(raw, default_feed_kind=fk, **_norm_kw)
         if out_j:
             return out_j, "", "json"
         return None, err_j, "json"
@@ -660,9 +714,9 @@ def polish_connector_article(
         except Exception as e2:
             return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
         if tool2:
-            out2, parse_err2 = _parse_polish_tool_payload(tool2, default_feed_kind=fk)
+            out2, parse_err2 = _parse_polish_tool_payload(tool2, default_feed_kind=fk, **_norm_kw)
         else:
-            out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk)
+            out2, parse_err2 = _parse_polish_response(raw2, default_feed_kind=fk, **_norm_kw)
         if not out2:
             return None, f"validate_failed: {reject}; repair_parse={parse_err2}"
         published2, reject2 = _try_publish(out2)
@@ -698,9 +752,9 @@ def polish_connector_article(
                     use_tool=True,
                 )
                 if tool3:
-                    out3, _ = _parse_polish_tool_payload(tool3, default_feed_kind=fk)
+                    out3, _ = _parse_polish_tool_payload(tool3, default_feed_kind=fk, **_norm_kw)
                 else:
-                    out3, _ = _parse_polish_response(raw3, default_feed_kind=fk)
+                    out3, _ = _parse_polish_response(raw3, default_feed_kind=fk, **_norm_kw)
                 if out3:
                     published3, reject2 = _try_publish(out3)
                     if published3:

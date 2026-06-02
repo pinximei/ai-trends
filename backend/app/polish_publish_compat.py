@@ -101,7 +101,9 @@ def coerce_polish_output(out: dict) -> dict:
         norm = normalize_replication_analysis(out.get("replication_analysis"))
         if norm:
             out["replication_analysis"] = norm
-    return out
+    from .domain.articles import prune_substandard_optional_tabs
+
+    return prune_substandard_optional_tabs(out)
 
 
 def _merge_text(*parts: str, min_len: int = 0) -> str:
@@ -139,16 +141,107 @@ def _title_from_snippet(snippet: str) -> str:
     try:
         obj = json.loads((snippet or "").strip()[:8000])
         if isinstance(obj, dict):
-            t = (obj.get("title") or obj.get("name") or obj.get("listingHeadline") or "").strip()
+            t = (
+                obj.get("title")
+                or obj.get("name")
+                or obj.get("listingHeadline")
+                or obj.get("productName")
+                or ""
+            ).strip()
             if t:
                 return t[:500]
     except json.JSONDecodeError:
         pass
     raw = (snippet or "")[:8000]
-    m = re.search(r'"(?:title|name)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-    if m:
-        return m.group(1).replace('\\"', '"')[:500]
+    for key in ("title", "name", "listingHeadline", "tagline"):
+        m = re.search(rf'"{key}"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+        if m:
+            return m.group(1).replace('\\"', '"')[:500]
     return ""
+
+
+def _summary_from_snippet(snippet: str) -> str:
+    try:
+        obj = json.loads((snippet or "").strip()[:8000])
+        if isinstance(obj, dict):
+            s = (
+                obj.get("tagline")
+                or obj.get("description")
+                or obj.get("listingHeadline")
+                or ""
+            ).strip()
+            if s:
+                return s[:512]
+    except json.JSONDecodeError:
+        pass
+    return ""
+
+
+def fill_polish_header_from_fallbacks(
+    data: dict,
+    *,
+    rule_title: str = "",
+    rule_summary: str = "",
+    snippet: str = "",
+    admin_source_key: str = "",
+) -> dict:
+    """tool/JSON 缺 title 或 summary 时，从上游片段与规则占位回填（避免 empty_title_or_summary）。"""
+    out = dict(data)
+    title = str(out.get("title") or out.get("name") or "").strip()
+    summary = str(
+        out.get("summary")
+        or out.get("description")
+        or out.get("tagline")
+        or ""
+    ).strip()
+    desc_summ = ""
+    desc_body = ""
+    tabs = out.get("tabs")
+    if isinstance(tabs, list):
+        for t in tabs:
+            if not isinstance(t, dict):
+                continue
+            if canonical_feed_card_tab_label(str(t.get("label") or "")) != FEED_CARD_TAB_DESCRIPTION:
+                continue
+            desc_summ = str(t.get("summary") or "").strip()
+            desc_body = str(t.get("body_md") or "").strip()
+            break
+
+    if not title:
+        title = _title_from_snippet(snippet)
+    if not title or ("同步资源" in title and "·" in title):
+        rt = (rule_title or "").strip()
+        if "·" in rt:
+            title = rt.rsplit("·", 1)[-1].strip()
+        elif rt:
+            title = rt.replace("同步资源 ·", "").strip()
+    if not title and desc_summ:
+        title = desc_summ.split("。")[0].split("\n")[0].strip()[:120]
+    if not title:
+        title = "未命名条目"
+
+    plain = _snippet_plain(snippet, admin_source_key=admin_source_key)
+    if len(summary) < 36:
+        summary = _merge_text(
+            summary,
+            rule_summary,
+            _summary_from_snippet(snippet),
+            desc_summ,
+            plain,
+            min_len=36,
+        )[:512]
+    if not summary and desc_body:
+        from .text_display import markdown_to_plain_preview
+
+        summary = markdown_to_plain_preview(desc_body, max_len=200)
+        if len(summary) < 36:
+            summary = _merge_text(summary, desc_body, min_len=36)[:512]
+
+    out["title"] = title[:500]
+    out["summary"] = summary[:512]
+    if not str(out.get("body_md") or "").strip():
+        out["body_md"] = summary
+    return out
 
 
 def _tab_piece(by_label: dict[str, dict[str, str]], lab: str) -> dict[str, str]:
