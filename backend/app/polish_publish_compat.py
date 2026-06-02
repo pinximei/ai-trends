@@ -559,6 +559,14 @@ def repair_polish_for_publish(
         piece = by_label[lab]
         if lab == FEED_CARD_TAB_DESCRIPTION:
             ms, mb = th["desc_summary"], th["desc_body"]
+            from .text_display import body_is_connector_kv_metadata, expand_connector_kv_lines_to_narrative
+
+            desc_bd = piece.get("body_md") or ""
+            if body_is_connector_kv_metadata(desc_bd) or (
+                sk_low == "product_hunt" and desc_bd and "：" in desc_bd
+            ):
+                piece["body_md"] = expand_connector_kv_lines_to_narrative(desc_bd)
+                fixes.append("desc_kv_to_narrative")
         elif lab == FEED_CARD_TAB_REPLICATION:
             ms, mb = th.get("repl_summary", 52), th.get("repl_body", 180)
         else:

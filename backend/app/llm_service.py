@@ -250,7 +250,7 @@ def _polish_llm_call(
     max_tokens: int = POLISH_MAX_OUTPUT_TOKENS,
     use_tool: bool = False,
 ) -> tuple[str, dict | None]:
-    """调用润色模型；use_tool 时优先 function call，返回 (fallback_text, tool_payload)。"""
+    """调用润色模型；use_tool 时优先 function call，失败则回退 json_object。"""
     if use_tool:
         try:
             _, _, _, msg = chat_completion(
@@ -268,12 +268,11 @@ def _polish_llm_call(
             if payload:
                 return "", payload
             content = str(msg.get("content") or "")
-            return content, None
+            if content.strip():
+                return content, None
         except httpx.HTTPStatusError as e:
-            # 部分端点不支持 tools：由上层回退 json_object
-            if e.response is not None and e.response.status_code in (400, 404, 422):
+            if e.response is None or e.response.status_code not in (400, 404, 422):
                 raise
-            raise
     raw, _, _, _ = chat_completion(
         db,
         system=system,
@@ -281,7 +280,7 @@ def _polish_llm_call(
         scenario="article_ingest_polish",
         ref_type="connector_article",
         ref_id=ref_id[:64],
-        response_json=response_json,
+        response_json=True if use_tool else response_json,
         max_tokens=max_tokens,
     )
     return raw, None
@@ -705,12 +704,14 @@ def polish_connector_article(
         try:
             raw2, tool2 = _polish_llm_call(
                 db,
-                system=system,
+                system=system_json,
                 user=repair_user,
                 ref_id=(ref_id[:60] + ":r1")[:64],
                 response_json=False,
                 use_tool=True,
             )
+        except httpx.HTTPStatusError as e2:
+            return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
         except Exception as e2:
             return None, f"validate_failed: {reject}; repair_http={type(e2).__name__}: {str(e2)[:180]}"
         if tool2:
@@ -745,7 +746,7 @@ def polish_connector_article(
             try:
                 raw3, tool3 = _polish_llm_call(
                     db,
-                    system=system,
+                    system=system_json,
                     user=repair2_user,
                     ref_id=(ref_id[:60] + ":r2")[:64],
                     response_json=False,

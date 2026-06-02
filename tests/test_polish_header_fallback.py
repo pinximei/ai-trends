@@ -63,6 +63,27 @@ def test_normalize_accepts_tool_without_title_when_snippet_has_name() -> None:
     assert out["title"] == "Dune Keypad"
 
 
+def test_ph_kv_field_lines_expand_passes_metadata_check() -> None:
+    from backend.app.text_display import (
+        body_is_connector_kv_metadata,
+        expand_connector_kv_lines_to_narrative,
+        prepare_description_tab_body,
+    )
+
+    raw = (
+        "产品：Databox MCP\n"
+        "标语：Analytics in Slack\n"
+        "投票：128\n"
+        "官网：https://databox.com\n"
+    )
+    assert body_is_connector_kv_metadata(raw)
+    narr = expand_connector_kv_lines_to_narrative(raw)
+    assert not body_is_connector_kv_metadata(narr)
+    prepared = prepare_description_tab_body(raw, admin_source_key="product_hunt")
+    assert not body_is_connector_kv_metadata(prepared)
+    assert "Databox" in prepared
+
+
 def test_prune_drops_weak_optional_replication_tab() -> None:
     data = {
         "title": "某仓库",

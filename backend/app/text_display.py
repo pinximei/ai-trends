@@ -466,6 +466,49 @@ def strip_connector_kv_lines(text: str) -> str:
     return "\n".join(kept).strip()
 
 
+_PH_KV_NARRATIVE_PREFIX: dict[str, str] = {
+    "产品": "该产品为",
+    "标语": "产品标语指出",
+    "投票": "社区投票约",
+    "官网": "官网链接为",
+    "仓库": "代码仓库为",
+    "标题": "标题为",
+    "来源": "信息来源为",
+    "时间": "发布时间为",
+    "票数": "票数为",
+    "评论": "评论数为",
+    "作者": "作者为",
+    "链接": "相关链接为",
+}
+
+
+def expand_connector_kv_lines_to_narrative(text: str) -> str:
+    """将「产品：/标语：」字段行改写成中文叙述，避免 PH 稿被 tab_描述_kv_metadata 拒收。"""
+    lines = (text or "").splitlines()
+    paras: list[str] = []
+    buf: list[str] = []
+    for ln in lines:
+        s = ln.strip()
+        if not s:
+            if buf:
+                paras.append("\n".join(buf))
+                buf = []
+            continue
+        m = _CONNECTOR_KV_LINE_RE.match(s)
+        if m:
+            lab_val = re.split(r"[:：]", s, maxsplit=1)
+            if len(lab_val) == 2:
+                lab, val = lab_val[0].strip(), lab_val[1].strip()
+                prefix = _PH_KV_NARRATIVE_PREFIX.get(lab, f"{lab}为")
+                paras.append(f"{prefix}{val}。")
+            continue
+        buf.append(s)
+    if buf:
+        paras.append("\n".join(buf))
+    out = "\n\n".join(p for p in paras if p.strip()).strip()
+    return _ensure_paragraph_breaks(out) if out else (text or "").strip()
+
+
 def body_is_connector_kv_metadata(text: str) -> bool:
     """正文是否主要为连接器字段清单（禁止作为描述/变现评估 body）。"""
     s = (text or "").strip()
@@ -671,10 +714,12 @@ def _ensure_paragraph_breaks(md: str) -> str:
 
 def prepare_description_tab_body(body_md: str, *, admin_source_key: str = "") -> str:
     """描述 Tab：去残渣、修表格与段落，避免混入连接器 JSON。"""
-    _ = admin_source_key
+    sk = (admin_source_key or "").strip().lower()
     raw = sanitize_stored_text_field(body_md)
     if not raw.strip():
         return ""
+    if sk == "product_hunt" and body_is_connector_kv_metadata(raw):
+        raw = expand_connector_kv_lines_to_narrative(raw)
     cleaned = _strip_tab_markdown_junk(raw)
     cleaned = _strip_tab_section_headings(cleaned)
     if is_degraded_data_tab_body(cleaned):

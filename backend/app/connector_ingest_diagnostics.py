@@ -5,9 +5,10 @@ import re
 
 from .domain.articles import (
     TAB_LABEL_ALIASES,
+    mandatory_feed_card_tab_labels,
     normalize_tab_label,
+    optional_feed_card_tab_labels,
     publish_polish_length_thresholds,
-    required_feed_card_tab_labels,
 )
 from .domain.replication_analysis import (
     FEED_CARD_TAB_REPLICATION,
@@ -129,7 +130,8 @@ def diagnose_polish_failure(
         fk = str(data.get("feed_kind") or "news").strip().lower()
         if fk not in ("news", "apps"):
             fk = "news"
-    need = required_feed_card_tab_labels(fk)
+    need_mandatory = mandatory_feed_card_tab_labels(fk)
+    need_optional = optional_feed_card_tab_labels(fk)
 
     if isinstance(data, dict):
         leg = _wrong_tab_label_warning(data)
@@ -140,10 +142,14 @@ def diagnose_polish_failure(
             parts = [f"{k}(summary={v['summary']},body={v['body']})" for k, v in measured.items()]
             lines.append(f"实测 Tab 字数：{'；'.join(parts)}。")
         labels = [str(t.get("label") or "").strip() for t in (data.get("tabs") or []) if isinstance(t, dict)]
-        if labels and list(labels) != list(need) and fk == "apps":
-            canon = [normalize_tab_label(x) for x in labels]
-            if canon != list(need):
-                lines.append(f"Tab 名称不符：模型={labels!r}，要求={list(need)!r}。")
+        canon = [normalize_tab_label(x) for x in labels if x]
+        missing_m = [m for m in need_mandatory if m not in canon]
+        if missing_m:
+            lines.append(f"缺少必需 Tab：{missing_m!r}（当前 {canon!r}）。")
+        else:
+            missing_o = [o for o in need_optional if o not in canon]
+            if missing_o and fk == "apps":
+                lines.append(f"可选 Tab 未提供：{missing_o!r}（仅「描述」为必需）。")
 
     if code.startswith("replication_analysis_invalid"):
         detail = code.split(":", 1)[-1].strip() if ":" in code else ""
@@ -185,8 +191,6 @@ def diagnose_polish_failure(
         return " ".join(lines)
 
     if code.startswith("tabs_missing"):
-        from .domain.articles import mandatory_feed_card_tab_labels, optional_feed_card_tab_labels
-
         man = mandatory_feed_card_tab_labels(fk)
         opt = optional_feed_card_tab_labels(fk)
         lines.append(
