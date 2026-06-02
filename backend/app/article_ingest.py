@@ -255,8 +255,8 @@ def _create_one_published_article_from_connector_targets(
         except Exception:
             pass
 
-    def _skip(step: str, msg: str) -> None:
-        _diag("error", step, f"「{title_prev}」{msg}")
+    def _skip(step: str, msg: str, *, level: str = "error") -> None:
+        _diag(level, step, f"「{title_prev}」{msg}")
 
     source_external_id = extract_source_external_id_from_connector_snippet(safe)
     if ingest_duplicate_by_source_external_id_exists(
@@ -274,6 +274,7 @@ def _create_one_published_article_from_connector_targets(
         _skip(
             "skip_dup_ext",
             f"重复上游 id={source_external_id or '—'}：已刷新热度/star 与 published_at，未新建",
+            level="info",
         )
         return n
 

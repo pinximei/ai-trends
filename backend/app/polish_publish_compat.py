@@ -222,20 +222,26 @@ def fill_polish_header_from_fallbacks(
 
     plain = _snippet_plain(snippet, admin_source_key=admin_source_key)
     if len(summary) < 36:
+        from .text_display import markdown_to_plain_preview
+
+        desc_plain = markdown_to_plain_preview(desc_body, max_len=400) if desc_body else ""
         summary = _merge_text(
             summary,
             rule_summary,
             _summary_from_snippet(snippet),
             desc_summ,
+            desc_plain,
             plain,
             min_len=36,
         )[:512]
-    if not summary and desc_body:
+    if len(summary) < 36 and desc_body:
         from .text_display import markdown_to_plain_preview
 
-        summary = markdown_to_plain_preview(desc_body, max_len=200)
-        if len(summary) < 36:
-            summary = _merge_text(summary, desc_body, min_len=36)[:512]
+        summary = _merge_text(
+            markdown_to_plain_preview(desc_body, max_len=400),
+            desc_body,
+            min_len=36,
+        )[:512]
 
     out["title"] = title[:500]
     out["summary"] = summary[:512]

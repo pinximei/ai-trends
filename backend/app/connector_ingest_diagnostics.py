@@ -111,7 +111,10 @@ def diagnose_polish_failure(
         return " ".join(lines)
 
     if err and not code:
-        lines.append(_diagnose_polish_err_only(err, admin_source_key=admin_source_key))
+        if err.startswith("validate_failed"):
+            lines.append(f"根因=润色校验未通过。{_strip_reject_code(err) or err[:400]}")
+        else:
+            lines.append(err[:500])
         return " ".join(lines)
 
     if "repair_http=" in err or "repair_parse=" in err:
@@ -218,11 +221,8 @@ def diagnose_polish_failure(
         )
         return " ".join(lines)
 
-    # 回退：仍带校验码
-    brief = explain_polish_reject(code, admin_source_key=admin_source_key)
-    lines.append(brief)
-    if code:
-        lines.append(f"校验码:{code}")
+    # 回退：仍带校验码（勿再调 explain_polish_reject，避免循环）
+    lines.append(f"根因=发布校验未通过。{code[:400]}")
     return " ".join(lines)
 
 
@@ -256,15 +256,18 @@ def _length_failure_hints(lab: str, field: str, got: int, need: int, data: dict 
 def _diagnose_polish_err_only(err: str, *, admin_source_key: str | None) -> str:
     if err == "no_llm_key":
         return "根因=未配置 LLM API Key。"
-    if "validate_failed" in err:
-        code = _strip_reject_code(err)
-        return diagnose_polish_failure(None, code, admin_source_key=admin_source_key, polish_err="")
+    if err.startswith("validate_failed"):
+        detail = _strip_reject_code(err) or err
+        return f"根因=润色校验未通过。{detail[:400]}"
     return err[:500]
 
 
 def explain_polish_reject(reason: str, *, admin_source_key: str | None = None) -> str:
     """兼容旧调用：无 data 时仅根据校验码生成简短说明。"""
-    return diagnose_polish_failure(None, _strip_reject_code(reason), admin_source_key=admin_source_key)
+    code = _strip_reject_code(reason)
+    if not code:
+        return _diagnose_polish_err_only((reason or "").strip(), admin_source_key=admin_source_key)
+    return diagnose_polish_failure(None, code, admin_source_key=admin_source_key)
 
 
 def explain_polish_error(polish_err: str, *, admin_source_key: str | None = None) -> str:
