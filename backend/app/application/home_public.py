@@ -757,7 +757,7 @@ def _home_dashboard_cache_params(
     published_within_days: int,
 ) -> dict:
     return {
-        "v": 7,
+        "v": 8,
         "industry_slug": industry_slug.strip().lower(),
         "news_limit": int(news_limit),
         "apps_limit": int(apps_limit),
