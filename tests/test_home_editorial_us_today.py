@@ -3,8 +3,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from unittest.mock import patch
+
 from backend.app.application.home_public import (
+    EDITORIAL_FALLBACK_DAYS,
     _editorial_heat_query_kw,
+    _editorial_picks_for_home,
+    _editorial_recent_query_kw,
     _feed_item_freshness_dt,
     _parse_feed_card_iso_dt,
     _select_editorial_picks,
@@ -42,3 +47,30 @@ def test_select_editorial_picks_allows_low_heat_unassessed() -> None:
     ]
     out = _select_editorial_picks(items, 2)
     assert [x["id"] for x in out] == [2, 1]
+
+
+def test_editorial_recent_query_kw() -> None:
+    kw = _editorial_recent_query_kw(industry_slug="ai", limit=3, days=7)
+    assert kw["published_within_days"] == 7
+    assert kw["published_on_latest_day"] is False
+
+
+def test_editorial_picks_fallback_when_today_empty() -> None:
+    fallback_row = {"id": 99, "title": "fallback", "heat_score": 10}
+
+    class _Db:
+        pass
+
+    with patch(
+        "backend.app.application.home_public._editorial_from_today_pool",
+        return_value=[],
+    ), patch(
+        "backend.app.application.home_public._editorial_from_recent_pool",
+        return_value=[fallback_row],
+    ):
+        items, used_fb = _editorial_picks_for_home(
+            _Db(), feed="news", industry_slug="ai", limit=3
+        )
+    assert used_fb is True
+    assert items[0]["id"] == 99
+    assert EDITORIAL_FALLBACK_DAYS == 7

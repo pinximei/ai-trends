@@ -19,6 +19,8 @@ HOME_HEAT_POOL_CAP = 36
 HOME_HEAT_PAGE_SIZE = 24
 HOME_DASHBOARD_CACHE_KEY = "home_dashboard_public"
 HOME_DASHBOARD_CACHE_TTL_SECONDS = 300
+# 当日精选池为空时，回填近 N 天（与下方资讯墙时间窗一致，避免首页整块空白）
+EDITORIAL_FALLBACK_DAYS = 7
 
 
 def _industry_article_ids(db: Session, *, industry_slug: str) -> list[int]:
@@ -343,6 +345,101 @@ def _editorial_from_today_pool(
     return _select_editorial_picks(raw.get("items") or [], lim)
 
 
+def _editorial_recent_query_kw(*, industry_slug: str, limit: int, days: int | None = None) -> dict:
+    lim = max(1, min(int(limit), 20))
+    win = max(1, min(int(days or EDITORIAL_FALLBACK_DAYS), 30))
+    return dict(
+        industry_slug=industry_slug,
+        segment_id=None,
+        segment_ids=None,
+        published_within_days=win,
+        published_on_latest_day=False,
+        published_on_us_content_day=False,
+        heat_offset=0,
+        heat_page_size=min(HOME_HEAT_PAGE_SIZE, lim * 4),
+        heat_max_ranked=min(HOME_HEAT_POOL_CAP, lim * 6),
+    )
+
+
+def _editorial_from_recent_pool(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    limit: int,
+    sort_by_value: bool = False,
+    days: int | None = None,
+) -> list[dict]:
+    from .article_public import list_articles_feed_by_heat_top
+
+    lim = max(1, min(int(limit), 20))
+    kw = _editorial_recent_query_kw(industry_slug=industry_slug, limit=lim, days=days)
+    if feed == "apps":
+        assessed_raw = list_articles_feed_by_heat_top(
+            db,
+            feed=feed,
+            sort_by_value=True,
+            replication_complete=True,
+            **kw,
+        )
+        picked = _select_editorial_picks(assessed_raw.get("items") or [], lim)
+        if len(picked) >= lim:
+            return picked
+        all_raw = list_articles_feed_by_heat_top(
+            db,
+            feed=feed,
+            sort_by_value=sort_by_value,
+            replication_complete=False,
+            **kw,
+        )
+        seen = {int(x["id"]) for x in picked if x.get("id") is not None}
+        for it in _select_editorial_picks(all_raw.get("items") or [], lim):
+            aid = it.get("id")
+            if aid is None or int(aid) in seen:
+                continue
+            seen.add(int(aid))
+            picked.append(it)
+            if len(picked) >= lim:
+                break
+        return picked[:lim]
+    raw = list_articles_feed_by_heat_top(
+        db,
+        feed=feed,
+        sort_by_value=sort_by_value,
+        replication_complete=False,
+        **kw,
+    )
+    return _select_editorial_picks(raw.get("items") or [], lim)
+
+
+def _editorial_picks_for_home(
+    db: Session,
+    *,
+    feed: str,
+    industry_slug: str,
+    limit: int,
+    sort_by_value: bool = False,
+) -> tuple[list[dict], bool]:
+    """优先 UTC 当日；无稿则近 EDITORIAL_FALLBACK_DAYS 天回填。返回 (items, used_fallback)。"""
+    today = _editorial_from_today_pool(
+        db,
+        feed=feed,
+        industry_slug=industry_slug,
+        limit=limit,
+        sort_by_value=sort_by_value,
+    )
+    if today:
+        return today, False
+    recent = _editorial_from_recent_pool(
+        db,
+        feed=feed,
+        industry_slug=industry_slug,
+        limit=limit,
+        sort_by_value=sort_by_value,
+    )
+    return recent, bool(recent)
+
+
 def get_home_editorial_picks(
     db: Session,
     *,
@@ -355,23 +452,31 @@ def get_home_editorial_picks(
     del published_within_days
     nl = max(1, min(int(news_limit), 20))
     al = max(1, min(int(apps_limit), 20))
-    utc_start, utc_end = _utc_today_bounds()
-    news_items = _editorial_from_today_pool(db, feed="news", industry_slug=industry_slug, limit=nl)
-    apps_items = _editorial_from_today_pool(
+    utc_start, _utc_end = _utc_today_bounds()
+    news_items, news_fb = _editorial_picks_for_home(
+        db, feed="news", industry_slug=industry_slug, limit=nl
+    )
+    apps_items, apps_fb = _editorial_picks_for_home(
         db,
         feed="apps",
         industry_slug=industry_slug,
         limit=al,
         sort_by_value=True,
     )
+    used_fallback = news_fb or apps_fb
     return {
         "news": news_items,
         "apps": apps_items,
         "featured_news_id": news_items[0]["id"] if news_items else None,
-        "pick_window": "utc_freshness_today",
+        "pick_window": "recent_fallback" if used_fallback else "utc_freshness_today",
         "pick_utc_date": utc_start.date().isoformat(),
         "pick_timezone": "UTC",
-        "scoring_note": "news: heat_score; apps: worth_score when assessed else heat (no replication gate)",
+        "pick_fallback_days": EDITORIAL_FALLBACK_DAYS if used_fallback else None,
+        "scoring_note": (
+            "news: heat_score; apps: worth_score when assessed else heat (no replication gate)"
+            if not used_fallback
+            else f"fallback: last {EDITORIAL_FALLBACK_DAYS}d heat/value"
+        ),
     }
 
 
@@ -850,14 +955,17 @@ def _build_home_dashboard(
     news_raw_items = news_raw.get("items") or []
     apps_raw_items = apps_raw.get("items") or []
 
-    editorial_news = _editorial_from_today_pool(db, feed="news", industry_slug=industry_slug, limit=en)
-    editorial_apps = _editorial_from_today_pool(
+    editorial_news, editorial_news_fb = _editorial_picks_for_home(
+        db, feed="news", industry_slug=industry_slug, limit=en
+    )
+    editorial_apps, editorial_apps_fb = _editorial_picks_for_home(
         db,
         feed="apps",
         industry_slug=industry_slug,
         limit=ea,
         sort_by_value=True,
     )
+    editorial_fallback = editorial_news_fb or editorial_apps_fb
 
     highlight_replicable_apps = list_highlight_replicable_apps(
         db,
@@ -903,8 +1011,13 @@ def _build_home_dashboard(
         "highlight_monetization_apps": highlight_monetization_apps,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
-        "editorial_pick_window": "utc_freshness_today",
+        "editorial_pick_window": (
+            "recent_fallback" if editorial_fallback else "utc_freshness_today"
+        ),
         "editorial_pick_utc_date": utc_start.date().isoformat(),
+        "editorial_pick_fallback_days": (
+            EDITORIAL_FALLBACK_DAYS if editorial_fallback else None
+        ),
         "scoring_note": scoring,
         "trend": trend,
         "news_source_lanes": _home_radar_lanes_for_feed(

@@ -54,6 +54,7 @@ const STRINGS: Record<string, string> = {
     "跨源聚合热门应用与资讯；按变现价值分（1–10）排序与筛选，帮你看清产品有没有真实付费场景、值不值得做。",
   homeEditorialPicksTitle: "今日精选",
   homeEditorialPicksSub: "今日入库（UTC 日）：资讯按热度；应用优先有价值评估，未评估的也会展示",
+  homeEditorialPicksSubFallback: "今日尚无新稿，展示近 7 天热度/价值精选",
   homeEditorialApps: "应用",
   homeEditorialNews: "资讯",
   homeMainHeroCta1: "浏览 AI 资讯",

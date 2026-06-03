@@ -373,6 +373,7 @@ export function HomePage() {
   const { email, setEmail, sent, submitting, subscribeErr, clearError, onSubscribe } = useNewsletterSubscribe();
   const [editorialApps, setEditorialApps] = useState<ArticleFeedCard[]>(() => boot?.editorialApps ?? []);
   const [editorialNews, setEditorialNews] = useState<ArticleFeedCard[]>(() => boot?.editorialNews ?? []);
+  const [editorialPickFallback, setEditorialPickFallback] = useState(false);
   const [trendOverview, setTrendOverview] = useState<HomeTrendOverview | null>(
     () => boot?.trendOverview ?? null,
   );
@@ -524,6 +525,7 @@ export function HomePage() {
             }
           }
           if (cancelled) return;
+          setEditorialPickFallback(data.editorial_pick_window === "recent_fallback");
           commitPayload({
             news: nextNews,
             apps: nextApps,
@@ -675,7 +677,9 @@ export function HomePage() {
       <HomeSection
         className="ui-card overflow-hidden p-4 sm:p-5 ring-1 ring-orange-100/80"
         title={t("homeEditorialPicksTitle")}
-        subtitle={t("homeEditorialPicksSub")}
+        subtitle={
+          editorialPickFallback ? t("homeEditorialPicksSubFallback") : t("homeEditorialPicksSub")
+        }
         icon={<Flame className="h-5 w-5 text-orange-500" strokeWidth={2} />}
         action={{ label: t("homeEditorialPicksCta"), to: "/news" }}
       >
