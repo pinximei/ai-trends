@@ -202,6 +202,26 @@ def _exclude_article_ids(items: list[dict], exclude: set[int]) -> list[dict]:
     return [it for it in items if it.get("id") is not None and int(it["id"]) not in exclude]
 
 
+def _select_editorial_picks(items: list[dict], limit: int) -> list[dict]:
+    """今日精选：当日有稿即展示，不要求变现评估或高热门槛。"""
+    lim = max(1, int(limit))
+    pool = sorted(items, key=lambda x: float(x.get("heat_score") or 0.0), reverse=True)
+    out: list[dict] = []
+    seen: set[int] = set()
+    for it in pool:
+        if len(out) >= lim:
+            break
+        title = str(it.get("title") or "").strip()
+        if len(title) < 4:
+            continue
+        aid = it.get("id")
+        if aid is None or int(aid) in seen:
+            continue
+        seen.add(int(aid))
+        out.append(it)
+    return out
+
+
 def _select_home_picks(items: list[dict], limit: int) -> list[dict]:
     """
     优先高质量条目；不足时用热度榜回填，避免首页整块空白。
@@ -273,19 +293,54 @@ def _editorial_from_today_pool(
     industry_slug: str,
     limit: int,
     sort_by_value: bool = False,
-    replication_complete: bool = False,
 ) -> list[dict]:
+    """UTC 当日池；应用不要求变现评估完整，有评估的仍优先按价值分排序。"""
     from .article_public import list_articles_feed_by_heat_top
+
+    lim = max(1, min(int(limit), 20))
+    kw = _editorial_heat_query_kw(industry_slug=industry_slug, limit=lim)
+
+    def _merge_picks(primary: list[dict], secondary: list[dict]) -> list[dict]:
+        out = list(primary)
+        seen = {int(x["id"]) for x in out if x.get("id") is not None}
+        for it in _select_editorial_picks(secondary, lim):
+            aid = it.get("id")
+            if aid is None or int(aid) in seen:
+                continue
+            seen.add(int(aid))
+            out.append(it)
+            if len(out) >= lim:
+                break
+        return out[:lim]
+
+    if feed == "apps":
+        assessed_raw = list_articles_feed_by_heat_top(
+            db,
+            feed=feed,
+            sort_by_value=True,
+            replication_complete=True,
+            **kw,
+        )
+        picked = _select_editorial_picks(assessed_raw.get("items") or [], lim)
+        if len(picked) >= lim:
+            return picked
+        all_raw = list_articles_feed_by_heat_top(
+            db,
+            feed=feed,
+            sort_by_value=sort_by_value,
+            replication_complete=False,
+            **kw,
+        )
+        return _merge_picks(picked, all_raw.get("items") or [])
 
     raw = list_articles_feed_by_heat_top(
         db,
         feed=feed,
         sort_by_value=sort_by_value,
-        replication_complete=replication_complete,
-        **_editorial_heat_query_kw(industry_slug=industry_slug, limit=limit),
+        replication_complete=False,
+        **kw,
     )
-    # 与 list 按日分页同一套 UTC 日历日，不再做美东二次过滤（避免凌晨入库稿被误剔）
-    return _select_home_picks(raw.get("items") or [], limit)
+    return _select_editorial_picks(raw.get("items") or [], lim)
 
 
 def get_home_editorial_picks(
@@ -308,7 +363,6 @@ def get_home_editorial_picks(
         industry_slug=industry_slug,
         limit=al,
         sort_by_value=True,
-        replication_complete=True,
     )
     return {
         "news": news_items,
@@ -317,7 +371,7 @@ def get_home_editorial_picks(
         "pick_window": "utc_freshness_today",
         "pick_utc_date": utc_start.date().isoformat(),
         "pick_timezone": "UTC",
-        "scoring_note": "news: heat_score; apps: worth_score then heat (replication_complete)",
+        "scoring_note": "news: heat_score; apps: worth_score when assessed else heat (no replication gate)",
     }
 
 
@@ -803,7 +857,6 @@ def _build_home_dashboard(
         industry_slug=industry_slug,
         limit=ea,
         sort_by_value=True,
-        replication_complete=True,
     )
 
     highlight_replicable_apps = list_highlight_replicable_apps(
@@ -840,7 +893,7 @@ def _build_home_dashboard(
 
     utc_start, _utc_end = _utc_today_bounds()
 
-    scoring = "news: heat_score; apps: worth_score (replication_complete)"
+    scoring = "news: heat_score; apps: worth_score when assessed else heat"
     return {
         "news": news_items,
         "apps": apps_items,

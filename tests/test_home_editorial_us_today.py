@@ -7,6 +7,7 @@ from backend.app.application.home_public import (
     _editorial_heat_query_kw,
     _feed_item_freshness_dt,
     _parse_feed_card_iso_dt,
+    _select_editorial_picks,
     _utc_today_bounds,
 )
 
@@ -32,3 +33,12 @@ def test_parse_feed_card_iso_dt_z_suffix() -> None:
 def test_feed_freshness_dt_prefers_display_at() -> None:
     item = {"display_at": "2026-06-03T08:00:00Z", "published_at": "2026-06-01T00:00:00Z"}
     assert _feed_item_freshness_dt(item) == datetime(2026, 6, 3, 8, 0, 0)
+
+
+def test_select_editorial_picks_allows_low_heat_unassessed() -> None:
+    items = [
+        {"id": 1, "title": "低热应用甲", "heat_score": 1.0, "summary": "x" * 40},
+        {"id": 2, "title": "高热应用乙", "heat_score": 99.0, "summary": "y" * 40},
+    ]
+    out = _select_editorial_picks(items, 2)
+    assert [x["id"] for x in out] == [2, 1]
