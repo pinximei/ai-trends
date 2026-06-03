@@ -244,17 +244,11 @@ def _feed_item_freshness_dt(item: dict) -> datetime | None:
     return _parse_feed_card_iso_dt(item.get("display_at")) or _parse_feed_card_iso_dt(item.get("published_at"))
 
 
-def _filter_feed_items_us_content_today(items: list[dict]) -> list[dict]:
-    """卡片层二次过滤：仅保留美东当日的展示时效（与 SQL published_on_us_content_day 一致）。"""
-    from ..us_content_calendar import us_calendar_today, utc_naive_bounds_for_us_date
-
-    start_utc, end_utc = utc_naive_bounds_for_us_date(us_calendar_today())
-    out: list[dict] = []
-    for it in items:
-        dt = _feed_item_freshness_dt(it)
-        if dt is not None and start_utc <= dt < end_utc:
-            out.append(it)
-    return out
+def _utc_today_bounds() -> tuple[datetime, datetime]:
+    """与资讯/应用列表按日分页一致：展示时效落在 UTC 自然日「今天」。"""
+    now = datetime.utcnow()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start, start + timedelta(days=1)
 
 
 def _editorial_heat_query_kw(*, industry_slug: str, limit: int) -> dict:
@@ -264,15 +258,15 @@ def _editorial_heat_query_kw(*, industry_slug: str, limit: int) -> dict:
         segment_id=None,
         segment_ids=None,
         published_within_days=None,
-        published_on_latest_day=False,
-        published_on_us_content_day=True,
+        published_on_latest_day=True,
+        published_on_us_content_day=False,
         heat_offset=0,
         heat_page_size=min(HOME_HEAT_PAGE_SIZE, lim * 4),
         heat_max_ranked=min(HOME_HEAT_POOL_CAP, lim * 6),
     )
 
 
-def _editorial_from_us_today_pool(
+def _editorial_from_today_pool(
     db: Session,
     *,
     feed: str,
@@ -290,8 +284,8 @@ def _editorial_from_us_today_pool(
         replication_complete=replication_complete,
         **_editorial_heat_query_kw(industry_slug=industry_slug, limit=limit),
     )
-    items = _filter_feed_items_us_content_today(raw.get("items") or [])
-    return _select_home_picks(items, limit)
+    # 与 list 按日分页同一套 UTC 日历日，不再做美东二次过滤（避免凌晨入库稿被误剔）
+    return _select_home_picks(raw.get("items") or [], limit)
 
 
 def get_home_editorial_picks(
@@ -302,14 +296,13 @@ def get_home_editorial_picks(
     apps_limit: int = 6,
     published_within_days: int | None = None,
 ) -> dict:
-    """首页今日精选：美东内容日当日；资讯按热度，应用按变现价值分（须完整评估）。"""
-    from ..us_content_calendar import US_TIMEZONE_LABEL, us_calendar_today
-
+    """首页今日精选：UTC 当日展示时效（与列表「按日」一致）；资讯按热度，应用按变现价值分。"""
     del published_within_days
     nl = max(1, min(int(news_limit), 20))
     al = max(1, min(int(apps_limit), 20))
-    news_items = _editorial_from_us_today_pool(db, feed="news", industry_slug=industry_slug, limit=nl)
-    apps_items = _editorial_from_us_today_pool(
+    utc_start, utc_end = _utc_today_bounds()
+    news_items = _editorial_from_today_pool(db, feed="news", industry_slug=industry_slug, limit=nl)
+    apps_items = _editorial_from_today_pool(
         db,
         feed="apps",
         industry_slug=industry_slug,
@@ -317,14 +310,13 @@ def get_home_editorial_picks(
         sort_by_value=True,
         replication_complete=True,
     )
-    us_day = us_calendar_today().isoformat()
     return {
         "news": news_items,
         "apps": apps_items,
         "featured_news_id": news_items[0]["id"] if news_items else None,
-        "pick_window": "us_content_today",
-        "pick_us_date": us_day,
-        "pick_timezone": US_TIMEZONE_LABEL,
+        "pick_window": "utc_freshness_today",
+        "pick_utc_date": utc_start.date().isoformat(),
+        "pick_timezone": "UTC",
         "scoring_note": "news: heat_score; apps: worth_score then heat (replication_complete)",
     }
 
@@ -804,8 +796,8 @@ def _build_home_dashboard(
     news_raw_items = news_raw.get("items") or []
     apps_raw_items = apps_raw.get("items") or []
 
-    editorial_news = _editorial_from_us_today_pool(db, feed="news", industry_slug=industry_slug, limit=en)
-    editorial_apps = _editorial_from_us_today_pool(
+    editorial_news = _editorial_from_today_pool(db, feed="news", industry_slug=industry_slug, limit=en)
+    editorial_apps = _editorial_from_today_pool(
         db,
         feed="apps",
         industry_slug=industry_slug,
@@ -846,7 +838,7 @@ def _build_home_dashboard(
     apps_sources = list_article_source_facets(db, feed="apps", **facet_kw)
     top_categories = list_article_category_facets(db, feed="news", **facet_kw)[:10]
 
-    from ..us_content_calendar import us_calendar_today
+    utc_start, _utc_end = _utc_today_bounds()
 
     scoring = "news: heat_score; apps: worth_score (replication_complete)"
     return {
@@ -858,8 +850,8 @@ def _build_home_dashboard(
         "highlight_monetization_apps": highlight_monetization_apps,
         "featured_news_id": news_items[0]["id"] if news_items else None,
         "pick_window_days": days,
-        "editorial_pick_window": "us_content_today",
-        "editorial_pick_us_date": us_calendar_today().isoformat(),
+        "editorial_pick_window": "utc_freshness_today",
+        "editorial_pick_utc_date": utc_start.date().isoformat(),
         "scoring_note": scoring,
         "trend": trend,
         "news_source_lanes": _home_radar_lanes_for_feed(

@@ -3,7 +3,7 @@ import type { IndustryWindData } from "@/components/home/IndustryWindPanel";
 import type { SourceLane } from "@/components/home/homeUtils";
 import { readSsrHomeBootstrap } from "@/lib/ssrHomeBootstrap";
 
-const CACHE_KEY = "aitrends_home_dashboard_v13";
+const CACHE_KEY = "aitrends_home_dashboard_v14";
 /** 同一会话内复用首页数据（含今日精选），减少切页回首页时的重复加载 */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
