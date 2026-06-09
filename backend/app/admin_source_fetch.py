@@ -10,6 +10,7 @@ CONNECTOR_FETCH_LIMIT_MAX = 80
 PRESET_FETCH_LIMIT: dict[str, int] = {
     "product_hunt": 30,
     "github": 10,
+    "github_weekly": 10,
     "hacker_news": 10,
     "newsapi": 20,
     "thenewsapi": 10,

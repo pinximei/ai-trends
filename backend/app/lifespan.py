@@ -38,9 +38,13 @@ def _startup_sync() -> None:
         from .newsletter_settings_service import ensure_newsletter_settings_row
         from .product_settings_seed import seed_product_settings_from_environment
         from .runtime_settings_service import assert_production_security, demo_seed_enabled_effective, refresh_runtime_snapshot
-        from .scheduler_settings_service import ensure_scheduler_settings_row
+        from .scheduler_settings_service import (
+            ensure_scheduler_settings_row,
+            repair_connector_sync_interval_12h_once,
+        )
 
         ensure_scheduler_settings_row(db)
+        repair_connector_sync_interval_12h_once(db)
         ensure_newsletter_settings_row(db)
         seeded = seed_product_settings_from_environment(db)
         if seeded.get("llm_model_flash"):
@@ -63,6 +67,7 @@ def _startup_sync() -> None:
             enable_auto_pull_admin_sources_and_connectors,
             repair_auto_enable_builtin_sources,
             ensure_core_admin_connectors,
+            ensure_github_weekly_source_and_connector,
             prune_admin_sources_outside_mainstream,
             prune_disabled_admin_sources,
             prune_discontinued_bootstrap_admin_sources,
@@ -88,6 +93,7 @@ def _startup_sync() -> None:
         repair_mainstream_heat_fetch_admin_sources(db)
         repair_short_probe_admin_sources(db)
         ensure_core_admin_connectors(db)
+        ensure_github_weekly_source_and_connector(db)
         from .product_connectors_bootstrap import (
             migrate_legacy_thenewsapi_scheduler_to_source,
             repair_custom_sync_connector_intervals,
@@ -189,7 +195,12 @@ def _job_connector_sync_gate() -> None:
             logger.debug("connector scheduler disabled, skip gate")
             return
 
-        interval_h = max(1, min(168, int(settings.get("connector_sync_interval_hours") or 6)))
+        from .scheduler_settings_service import DEFAULT_CONNECTOR_SYNC_INTERVAL_HOURS
+
+        interval_h = max(
+            1,
+            min(168, int(settings.get("connector_sync_interval_hours") or DEFAULT_CONNECTOR_SYNC_INTERVAL_HOURS)),
+        )
         last_dt = parse_last_batch_at(settings.get("last_connector_batch_at"))
         now_local = datetime.now(CONNECTOR_SCHEDULER_TZ)
         if not connector_batch_due_now(interval_hours=interval_h, last_batch_at=last_dt, now=now_local):

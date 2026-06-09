@@ -62,7 +62,7 @@ def mainstream_heat_fetch_url_ok(source: str, url: str) -> bool:
     u = (url or "").strip()
     if not u:
         return False
-    if src == "github":
+    if src in ("github", "github_weekly"):
         return github_trending_is_discovery_url(u)
     if src == "product_hunt":
         low = u.lower()
@@ -304,6 +304,68 @@ def repair_connector_urls_from_admin_sources(db: Session) -> int:
     if n:
         db.commit()
     return n
+
+
+def ensure_github_weekly_source_and_connector(db: Session) -> None:
+    """GitHub 周榜：独立数据源 + 连接器，不参与整批日同步，走 custom_sync（默认 7 天）。"""
+    from .connector_sync_policy import clamp_custom_sync_interval_hours
+    from .services import GITHUB_WEEKLY_SOURCE, OPTIONAL_GITHUB_WEEKLY_PRESET
+
+    preset = OPTIONAL_GITHUB_WEEKLY_PRESET
+    src = db.scalar(select(AdminSourceConfig).where(AdminSourceConfig.source == GITHUB_WEEKLY_SOURCE))
+    if not src:
+        from .scope_labels_util import apply_scope_labels_to_row
+
+        src = AdminSourceConfig(
+            source=GITHUB_WEEKLY_SOURCE,
+            preset_label=preset["preset_label"],
+            enabled=True,
+            api_base=preset["api_base"],
+            scope_label=preset["scope_label"],
+            content_role=preset["content_role"],
+            notes=preset["notes"],
+            fetch_limit=int(preset.get("fetch_limit") or 10),
+            custom_sync_enabled=True,
+            custom_sync_interval_hours=168,
+        )
+        apply_scope_labels_to_row(src, [preset["scope_label"]])
+        db.add(src)
+        db.flush()
+    else:
+        if not src.custom_sync_enabled:
+            src.custom_sync_enabled = True
+        if not src.custom_sync_interval_hours:
+            src.custom_sync_interval_hours = 168
+        src.custom_sync_interval_hours = clamp_custom_sync_interval_hours(src.custom_sync_interval_hours)
+        if not (src.api_base or "").strip():
+            src.api_base = preset["api_base"]
+        src.enabled = True
+        src.updated_at = datetime.utcnow()
+
+    conn = db.scalar(
+        select(ProductConnector)
+        .where(ProductConnector.admin_source_key == GITHUB_WEEKLY_SOURCE)
+        .order_by(ProductConnector.id)
+        .limit(1)
+    )
+    if not conn:
+        db.add(
+            ProductConnector(
+                name="GitHub Trending 周榜",
+                provider_name=GITHUB_WEEKLY_SOURCE,
+                type="api",
+                config_json={"method": "GET", "url": preset["api_base"]},
+                enabled=True,
+                min_interval_seconds=CUSTOM_SYNC_MIN_INTERVAL_SECONDS,
+                admin_source_key=GITHUB_WEEKLY_SOURCE,
+            )
+        )
+    else:
+        conn.enabled = True
+        cfg = dict(conn.config_json or {})
+        cfg["url"] = preset["api_base"]
+        conn.config_json = cfg
+    db.commit()
 
 
 def ensure_core_admin_connectors(db: Session) -> None:

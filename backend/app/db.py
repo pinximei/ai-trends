@@ -213,6 +213,48 @@ def ensure_schema_compatibility() -> None:
         cols = _column_names(conn, "newsletter_daily_digests")
         if cols and "feishu_sent_at" not in cols:
             conn.execute(text("ALTER TABLE newsletter_daily_digests ADD COLUMN feishu_sent_at TIMESTAMP"))
+        if not _column_names(conn, "github_trending_snapshots"):
+            conn.execute(
+                text(
+                    "CREATE TABLE github_trending_snapshots ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    "industry_slug VARCHAR(32) DEFAULT 'ai', "
+                    "since VARCHAR(16) NOT NULL, "
+                    "period_date VARCHAR(10) NOT NULL, "
+                    "connector_sync_log_id INTEGER, "
+                    "discovery_url VARCHAR(512) DEFAULT '', "
+                    "items_json TEXT DEFAULT '[]', "
+                    "item_count INTEGER DEFAULT 0, "
+                    "created_at TIMESTAMP"
+                    ")"
+                )
+                if DATABASE_URL.startswith("sqlite")
+                else text(
+                    "CREATE TABLE github_trending_snapshots ("
+                    "id SERIAL PRIMARY KEY, "
+                    "industry_slug VARCHAR(32) DEFAULT 'ai', "
+                    "since VARCHAR(16) NOT NULL, "
+                    "period_date VARCHAR(10) NOT NULL, "
+                    "connector_sync_log_id INTEGER, "
+                    "discovery_url VARCHAR(512) DEFAULT '', "
+                    "items_json JSONB DEFAULT '[]', "
+                    "item_count INTEGER DEFAULT 0, "
+                    "created_at TIMESTAMP"
+                    ")"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_github_trending_snap_lookup "
+                    "ON github_trending_snapshots (industry_slug, since, period_date)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_github_trending_snap_created "
+                    "ON github_trending_snapshots (created_at)"
+                )
+            )
         cols = _column_names(conn, "admin_source_configs")
         if cols:
             if "fetch_limit" not in cols:

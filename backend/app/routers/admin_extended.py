@@ -690,21 +690,26 @@ def _run_connector_request(
                     db, code=code or 0, text=out, connector_id=connector_id, source_key=sk,
                 )
                 return code, out
-            if source_key == "github":
+            if source_key in ("github", "github_weekly"):
                 from ..connector_heat_fetch import GITHUB_TRENDING_DEFAULT
 
+                default_url = (
+                    "https://github.com/trending?since=weekly"
+                    if source_key == "github_weekly"
+                    else GITHUB_TRENDING_DEFAULT
+                )
                 if not github_trending_is_discovery_url(url):
                     _connector_req_diag(
                         db,
                         level="error",
                         step="github_url_repair",
                         message=(
-                            f"GitHub 数据源 URL 非 Trending 发现页，已改用默认日榜：{GITHUB_TRENDING_DEFAULT}"
+                            f"GitHub 数据源 URL 非 Trending 发现页，已改用默认：{default_url}"
                         ),
                         connector_id=connector_id,
                         source_key=sk,
                     )
-                    url = GITHUB_TRENDING_DEFAULT
+                    url = default_url
                 code, text = sync_github_trending_top_details(url, headers, limit=fetch_n)
                 out = (text or "")[:CONNECTOR_SNIPPET_MAX_CHARS]
                 _connector_log_fetch_outcome(
@@ -1020,6 +1025,26 @@ def run_connector_sync(
             log.error_message = err
         else:
             log.status = "ok"
+        if ask in ("github", "github_weekly") and snippet and log.status == "ok":
+            from ..application.github_trending_snapshot import save_github_trending_snapshot_from_pack
+
+            try:
+                save_github_trending_snapshot_from_pack(
+                    db,
+                    snippet=snippet,
+                    connector_sync_log_id=log.id,
+                    when=now,
+                    discovery_url=str(cfg.get("url") or "").strip(),
+                )
+            except Exception as snap_exc:
+                diag_write(
+                    db,
+                    level="error",
+                    step="github_snapshot",
+                    message=f"GitHub 榜单快照写入失败: {type(snap_exc).__name__}: {str(snap_exc)[:300]}",
+                    connector_id=c.id,
+                    source_key=ask,
+                )
     else:
         err = f"HTTP {status_code or 'error'}"
         c.last_error = err

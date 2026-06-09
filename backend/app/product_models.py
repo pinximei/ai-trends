@@ -237,6 +237,25 @@ class ProductConnectorLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class GithubTrendingSnapshot(Base):
+    """GitHub Trending 日榜/周榜有序快照（供 VSA 蒙太奇与单条成片对齐官方榜单）。"""
+
+    __tablename__ = "github_trending_snapshots"
+    __table_args__ = (
+        Index("ix_github_trending_snap_lookup", "industry_slug", "since", "period_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    industry_slug: Mapped[str] = mapped_column(String(32), default="ai", index=True)
+    since: Mapped[str] = mapped_column(String(16), index=True)  # daily | weekly
+    period_date: Mapped[str] = mapped_column(String(10), index=True)  # YYYY-MM-DD
+    connector_sync_log_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    discovery_url: Mapped[str] = mapped_column(String(512), default="")
+    items_json: Mapped[list] = mapped_column(JSONType, default=list)
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class AnomalyEvent(Base):
     __tablename__ = "product_anomaly_events"
 

@@ -82,6 +82,20 @@ MAINSTREAM_ADMIN_SOURCE_PRESETS: list[dict] = [
 ]
 
 # 变现向内置 1 路（无 Key；参与默认定时整批同步）
+GITHUB_WEEKLY_SOURCE = "github_weekly"
+
+OPTIONAL_GITHUB_WEEKLY_PRESET: dict = {
+    "source": GITHUB_WEEKLY_SOURCE,
+    "preset_label": "GitHub（周榜）",
+    "enabled": True,
+    "api_base": "https://github.com/trending?since=weekly",
+    "api_key_masked": "",
+    "scope_label": "AI｜客户端·开源",
+    "content_role": "daily_editorial",
+    "notes": "Trending 周榜 Top10；单独同步（默认每 7 天），快照供 VSA 周报蒙太奇使用。",
+    "fetch_limit": PRESET_FETCH_LIMIT["github"],
+}
+
 OPTIONAL_MONETIZATION_SOURCE_PRESETS: list[dict] = [
     {
         "source": "acquire",
@@ -96,7 +110,9 @@ OPTIONAL_MONETIZATION_SOURCE_PRESETS: list[dict] = [
     },
 ]
 
-BUILTIN_ADMIN_SOURCE_PRESETS: list[dict] = MAINSTREAM_ADMIN_SOURCE_PRESETS + OPTIONAL_MONETIZATION_SOURCE_PRESETS
+BUILTIN_ADMIN_SOURCE_PRESETS: list[dict] = (
+    MAINSTREAM_ADMIN_SOURCE_PRESETS + OPTIONAL_MONETIZATION_SOURCE_PRESETS + [OPTIONAL_GITHUB_WEEKLY_PRESET]
+)
 
 # 当前产品保留的内置数据源标识；启动时用于删库中「多余」行（含可选变现源）。
 BUILTIN_ADMIN_SOURCE_KEYS: frozenset[str] = frozenset(row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS)
@@ -114,7 +130,9 @@ OPTIONAL_MONETIZATION_SOURCE_KEYS: frozenset[str] = frozenset(
 )
 
 AUTO_ENABLE_PULL_SOURCE_KEYS: frozenset[str] = frozenset(
-    row["source"] for row in BUILTIN_ADMIN_SOURCE_PRESETS if row.get("enabled")
+    row["source"]
+    for row in BUILTIN_ADMIN_SOURCE_PRESETS
+    if row.get("enabled") and row["source"] != GITHUB_WEEKLY_SOURCE
 )
 
 # 历史上由 ensure_mainstream_admin_sources 写入、但已从产品移除的 source；启动时删库内对应行及同 admin_source_key 的连接器。
