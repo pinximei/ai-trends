@@ -111,39 +111,52 @@ def _lookup_article_id(
     source_external_id: str | None,
     full_name: str,
 ) -> int | None:
-    sid = (source_external_id or "").strip()
-    if sid:
+    """按 external_id / repo 名匹配已发布文章；行业过滤未命中时回退全局匹配。"""
+
+    def _by_external_id(ind_id: int | None) -> int | None:
+        sid = (source_external_id or "").strip()
+        if not sid:
+            return None
         q = select(Article.id).where(
             Article.status == "published",
             Article.source_external_id == sid[:512],
         )
-        if industry_id is not None:
-            q = q.where(Article.industry_id == industry_id)
+        if ind_id is not None:
+            q = q.where(Article.industry_id == ind_id)
         row = db.scalar(q.order_by(desc(Article.id)).limit(1))
-        if row:
-            return int(row)
-    slug = (full_name or "").strip().lower()
-    if slug:
+        return int(row) if row else None
+
+    def _by_repo_slug(ind_id: int | None) -> int | None:
+        slug = (full_name or "").strip().lower()
+        if not slug:
+            return None
         url_q = select(Article.id).where(
             Article.status == "published",
             Article.source_original_url.ilike(f"%{slug}%"),
         )
-        if industry_id is not None:
-            url_q = url_q.where(Article.industry_id == industry_id)
+        if ind_id is not None:
+            url_q = url_q.where(Article.industry_id == ind_id)
         by_url = db.scalar(url_q.order_by(desc(Article.id)).limit(1))
         if by_url:
             return int(by_url)
-    if not slug:
+        q2 = select(Article).where(Article.status == "published")
+        if ind_id is not None:
+            q2 = q2.where(Article.industry_id == ind_id)
+        candidates = db.scalars(q2.order_by(desc(Article.updated_at)).limit(400)).all()
+        for art_row in candidates:
+            url = (getattr(art_row, "source_original_url", None) or "").lower()
+            title = (art_row.title or "").lower()
+            if slug in url or slug in title:
+                return int(art_row.id)
         return None
-    q2 = select(Article).where(Article.status == "published")
-    if industry_id is not None:
-        q2 = q2.where(Article.industry_id == industry_id)
-    candidates = db.scalars(q2.order_by(desc(Article.updated_at)).limit(400)).all()
-    for art_row in candidates:
-        url = (getattr(art_row, "source_original_url", None) or "").lower()
-        title = (art_row.title or "").lower()
-        if slug in url or slug in title:
-            return int(art_row.id)
+
+    for ind_id in (industry_id, None):
+        found = _by_external_id(ind_id)
+        if found:
+            return found
+        found = _by_repo_slug(ind_id)
+        if found:
+            return found
     return None
 
 
