@@ -23,6 +23,7 @@ def _load_db_url_from_systemd(unit: str = "aisoul-backend") -> None:
 _load_db_url_from_systemd()
 
 from sqlalchemy import desc, select
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.app.application.github_trending_snapshot import _lookup_article_id
 from backend.app.db import SessionLocal
@@ -58,6 +59,7 @@ def main() -> int:
                     fixed += 1
             if changed:
                 snap.items_json = items
+                flag_modified(snap, "items_json")
         db.commit()
         print(f"backfilled article_id links: {fixed}")
         return 0
