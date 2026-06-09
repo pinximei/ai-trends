@@ -20,8 +20,9 @@ router = APIRouter(tags=["public-github-trending"])
 @router.get("/github/trending")
 def get_github_trending(
     since: str = Query("daily", pattern="^(daily|weekly)$"),
-    date: str | None = Query(
+    on_date: str | None = Query(
         None,
+        alias="date",
         description="日榜 YYYY-MM-DD；周榜为当周周日 YYYY-MM-DD，缺省为今天/本周",
     ),
     industry_slug: str = Query("ai"),
@@ -30,9 +31,9 @@ def get_github_trending(
 ):
     """返回 GitHub Trending 有序快照（与官方 since=daily|weekly 对齐）。"""
     period: str | date | None = None
-    if date:
+    if on_date:
         try:
-            period = date.fromisoformat(date.strip())
+            period = date.fromisoformat(on_date.strip())
         except ValueError as exc:
             raise HTTPException(400, "invalid date, use YYYY-MM-DD") from exc
         if since == "weekly":
