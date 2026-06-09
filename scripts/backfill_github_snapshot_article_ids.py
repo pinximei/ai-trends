@@ -33,9 +33,7 @@ def main() -> int:
     db = SessionLocal()
     try:
         industry = db.scalar(select(Industry).where(Industry.slug == "ai").limit(1))
-        if not industry:
-            print("no industry ai")
-            return 1
+        industry_id = int(industry.id) if industry else None
         snaps = db.scalars(
             select(GithubTrendingSnapshot).order_by(desc(GithubTrendingSnapshot.created_at)).limit(20)
         ).all()
@@ -50,7 +48,7 @@ def main() -> int:
                     continue
                 aid = _lookup_article_id(
                     db,
-                    industry_id=int(industry.id),
+                    industry_id=industry_id,
                     source_external_id=row.get("source_external_id"),
                     full_name=str(row.get("full_name") or ""),
                 )

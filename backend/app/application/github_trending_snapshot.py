@@ -107,36 +107,38 @@ def _ranked_rows_from_pack(snippet: str) -> list[dict[str, Any]]:
 def _lookup_article_id(
     db: Session,
     *,
-    industry_id: int,
+    industry_id: int | None,
     source_external_id: str | None,
     full_name: str,
 ) -> int | None:
     sid = (source_external_id or "").strip()
     if sid:
-        row = db.scalar(
-            select(Article.id)
-            .where(
-                Article.industry_id == industry_id,
-                Article.status == "published",
-                Article.source_external_id == sid[:512],
-            )
-            .order_by(desc(Article.id))
-            .limit(1)
+        q = select(Article.id).where(
+            Article.status == "published",
+            Article.source_external_id == sid[:512],
         )
+        if industry_id is not None:
+            q = q.where(Article.industry_id == industry_id)
+        row = db.scalar(q.order_by(desc(Article.id)).limit(1))
         if row:
             return int(row)
     slug = (full_name or "").strip().lower()
+    if slug:
+        url_q = select(Article.id).where(
+            Article.status == "published",
+            Article.source_original_url.ilike(f"%{slug}%"),
+        )
+        if industry_id is not None:
+            url_q = url_q.where(Article.industry_id == industry_id)
+        by_url = db.scalar(url_q.order_by(desc(Article.id)).limit(1))
+        if by_url:
+            return int(by_url)
     if not slug:
         return None
-    candidates = db.scalars(
-        select(Article)
-        .where(
-            Article.industry_id == industry_id,
-            Article.status == "published",
-        )
-        .order_by(desc(Article.updated_at))
-        .limit(400)
-    ).all()
+    q2 = select(Article).where(Article.status == "published")
+    if industry_id is not None:
+        q2 = q2.where(Article.industry_id == industry_id)
+    candidates = db.scalars(q2.order_by(desc(Article.updated_at)).limit(400)).all()
     for art_row in candidates:
         url = (getattr(art_row, "source_original_url", None) or "").lower()
         title = (art_row.title or "").lower()
